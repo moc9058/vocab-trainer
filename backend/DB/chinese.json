@@ -1,0 +1,83 @@
+{
+  "words": [
+    {
+      "id": "zh-greet-001",
+      "term": "你好",
+      "transliteration": "nǐ hǎo",
+      "definition": {
+        "Japanese": "こんにちは",
+        "English": "hello"
+      },
+      "grammaticalCategory": "interjection",
+      "examples": [
+        {
+          "sentence": "你好，你怎么样？",
+          "translation": "こんにちは、お元気ですか？"
+        }
+      ],
+      "topics": [
+        "Greetings & Introductions"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "zh-greet-002",
+      "term": "谢谢",
+      "transliteration": "xiè xiè",
+      "definition": {
+        "Japanese": "ありがとう",
+        "English": "thank you"
+      },
+      "grammaticalCategory": "interjection",
+      "examples": [
+        {
+          "sentence": "谢谢你的帮助。",
+          "translation": "助けてくれてありがとう。"
+        }
+      ],
+      "topics": [
+        "Greetings & Introductions"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "zh-greet-003",
+      "term": "再见",
+      "transliteration": "zài jiàn",
+      "definition": {
+        "Japanese": "さようなら",
+        "English": "goodbye"
+      },
+      "grammaticalCategory": "interjection",
+      "examples": [
+        {
+          "sentence": "再见，明天见！",
+          "translation": "さようなら、また明日！"
+        }
+      ],
+      "topics": [
+        "Greetings & Introductions"
+      ],
+      "notes": ""
+    },
+    {
+      "id": "chi-greetings-004",
+      "term": "早上好",
+      "transliteration": "zǎo shàng hǎo",
+      "definition": {
+        "Japanese": "おはようございます",
+        "English": "good morning"
+      },
+      "grammaticalCategory": "interjection",
+      "examples": [
+        {
+          "sentence": "早上好，今天天气真好！",
+          "translation": "おはようございます、今日はいい天気ですね！"
+        }
+      ],
+      "topics": [
+        "Greetings & Introductions"
+      ]
+    }
+  ]
+}

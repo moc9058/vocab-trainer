@@ -1,0 +1,44 @@
+import Fastify from "fastify";
+import cors from "@fastify/cors";
+import sensible from "@fastify/sensible";
+import { mkdirSync } from "node:fs";
+import { resolve, join } from "node:path";
+import languagesRoutes from "./routes/languages.js";
+import vocabRoutes from "./routes/vocab.js";
+import quizRoutes from "./routes/quiz.js";
+import progressRoutes from "./routes/progress.js";
+
+const LOG_DIR = resolve(import.meta.dirname, "..", "logs");
+mkdirSync(LOG_DIR, { recursive: true });
+
+const timestamp = new Date().toISOString().replace(/:/g, "-");
+const logFile = join(LOG_DIR, `app-${timestamp}.log`);
+
+const fastify = Fastify({
+  logger: {
+    transport: {
+      targets: [
+        { target: "pino/file", level: "info", options: { destination: 1 } },
+        { target: "pino/file", level: "info", options: { destination: logFile } },
+      ],
+    },
+  },
+});
+
+await fastify.register(cors);
+await fastify.register(sensible);
+
+await fastify.register(languagesRoutes, { prefix: "/api/languages" });
+await fastify.register(vocabRoutes, { prefix: "/api/vocab" });
+await fastify.register(quizRoutes, { prefix: "/api/quiz" });
+await fastify.register(progressRoutes, { prefix: "/api/progress" });
+
+const port = parseInt(process.env.PORT ?? "3000", 10);
+const host = process.env.HOST ?? "0.0.0.0";
+
+try {
+  await fastify.listen({ port, host });
+} catch (err) {
+  fastify.log.error(err);
+  process.exit(1);
+}
