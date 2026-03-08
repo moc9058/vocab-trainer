@@ -121,8 +121,18 @@ vocab-trainer/
 │       ├── main.tsx
 │       ├── App.tsx
 │       ├── types.ts
-│       ├── api/                 # API client utilities
-│       ├── components/          # React components
+│       ├── api/
+│       │   ├── client.ts        # Generic fetch/post utilities
+│       │   ├── quiz.ts          # Quiz API wrappers
+│       │   └── vocab.ts         # Vocabulary API wrappers
+│       ├── components/
+│       │   ├── Dashboard.tsx     # Main layout
+│       │   ├── Sidebar.tsx       # Session list
+│       │   ├── SessionDetail.tsx # Session details view
+│       │   ├── QuizTaking.tsx    # Active quiz interface
+│       │   ├── LanguageSelectModal.tsx
+│       │   ├── QuizFilterModal.tsx
+│       │   └── EmptyState.tsx
 │       └── i18n/                # Internationalization (en, zh)
 ```
 
@@ -257,6 +267,7 @@ vocab-trainer/
   "language": "chinese",
   "questionCount": 10,
   "topics": ["Greetings & Introductions"],
+  "categories": ["noun", "verb"],
   "questionType": "definition"
 }
 ```
@@ -319,28 +330,31 @@ When all questions are answered the session status changes to `"completed"`.
 
 ## Frontend
 
-React 19 single-page application that serves as a quiz history viewer. Built with Vite 6 and styled with Tailwind CSS 4. Supports English and Chinese UI via a custom i18n context (no external library).
+React 19 single-page application for taking vocabulary quizzes and reviewing past sessions. Built with Vite 6 and styled with Tailwind CSS 4. Supports English and Chinese UI via a custom i18n context (no external library).
 
 ### Screens / Views
 
-| View               | Description                                                                                                        |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| **LanguagePicker**  | Initial screen — user picks UI language (English or 中文). Sets the i18n context for the rest of the app.          |
-| **Dashboard**       | Main layout after language selection. Two-column: Sidebar (quiz session list) + SessionDetail. Fetches history on mount. |
-| **Sidebar**         | Scrollable list of quiz sessions showing language, status badge, date, and score. Click a session to select it.    |
-| **SessionDetail**   | Full detail of a selected session: metadata grid + questions table (term, expected answer, correct/incorrect/unanswered). |
-| **EmptyState**      | Placeholder shown when no quiz history exists.                                                                     |
+| View                    | Description                                                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Dashboard**           | Main layout. Header with "Start Quiz" button + two-column body: Sidebar (quiz session list) + main content area. Fetches history on mount. |
+| **Sidebar**             | Scrollable list of quiz sessions showing language, status badge, date, and score. Click a session to select it.    |
+| **SessionDetail**       | Full detail of a selected session: metadata grid + questions table (term, expected answer, correct/incorrect/unanswered). |
+| **QuizTaking**          | Active quiz interface — displays the current question and records answers. On completion, returns to the history view. |
+| **LanguageSelectModal** | Modal to pick the target language when starting a new quiz. Lists languages fetched from the API.                  |
+| **QuizFilterModal**     | Modal to select topic and category filters before starting a quiz. Supports "Select All" / "Clear All" actions.   |
+| **EmptyState**          | Placeholder shown when no quiz history exists.                                                                     |
 
 ### API Integration
 
-- **`api/client.ts`** — Generic `fetchJson<T>()` utility wrapping the Fetch API.
-- **`api/quiz.ts`** — `getHistory(language?)` and `getSessionDetails(sessionId)`.
+- **`api/client.ts`** — Generic `fetchJson<T>()` and `postJson<T>()` utilities wrapping the Fetch API.
+- **`api/quiz.ts`** — `getHistory(language?)`, `getSessionDetails(sessionId)`, `startQuiz(opts)`, and `answerQuestion(opts)`.
+- **`api/vocab.ts`** — `getFilters(language)` for retrieving available topics and categories.
 - **Dev proxy:** Vite proxies `/api/*` to `http://localhost:3000` so the frontend dev server can reach the backend.
 
 ### Internationalization
 
 - Context-based (`i18n/context.tsx`): `I18nProvider` + `useI18n()` hook.
-- 27 translation keys defined in `i18n/translations.ts` for English.
+- 34 translation keys defined in `i18n/translations.ts` for English.
 - Type-safe keys via the `TranslationKey` type.
 
 ### State Management
