@@ -1,11 +1,18 @@
 import type { FastifyPluginAsync } from "fastify";
 import {
-  readVocabFile,
-  readProgressFile,
-  writeProgressFile,
-  readQuizHistory,
-  writeQuizHistory,
-} from "../storage.js";
+  languageExists,
+  getFilteredWords,
+  getProgressForLanguage,
+  getWordProgress,
+  updateWordProgress,
+  getQuizSession,
+  createQuizSession,
+  updateQuizSession,
+  deleteQuizSession,
+  listQuizSessions,
+  importQuizSessions,
+  getAllQuizSessions,
+} from "../firestore.js";
 import type { QuizSession, QuizQuestion, Word, WordProgress } from "../types.js";
 
 const quizRoutes: FastifyPluginAsync = async (fastify) => {
@@ -16,6 +23,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       questionCount?: number;
       topics?: string[];
       categories?: string[];
+      levels?: string[];
       questionType?: string;
     };
   }>(
@@ -30,33 +38,26 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
             questionCount: { type: "number", minimum: 1, maximum: 100 },
             topics: { type: "array", items: { type: "string" } },
             categories: { type: "array", items: { type: "string" } },
+            levels: { type: "array", items: { type: "string" } },
             questionType: { type: "string" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { language, questionCount = 10, topics, categories, questionType } = request.body;
-      const vocab = await readVocabFile(language);
-      if (!vocab) return reply.notFound(`Language file '${language}' not found`);
-
-      let pool = vocab.words;
-      const hasTopicFilter = topics && topics.length > 0;
-      const hasCategoryFilter = categories && categories.length > 0;
-      if (hasTopicFilter || hasCategoryFilter) {
-        pool = pool.filter((w) => {
-          const matchesTopic = hasTopicFilter && w.topics.some((t) => topics.includes(t));
-          const matchesCategory = hasCategoryFilter && categories.includes(w.grammaticalCategory);
-          return matchesTopic || matchesCategory;
-        });
+      const { language, questionCount = 10, topics, categories, levels, questionType } = request.body;
+      if (!(await languageExists(language))) {
+        return reply.notFound(`Language '${language}' not found`);
       }
+
+      const pool = await getFilteredWords(language, { topics, categories, levels });
 
       if (pool.length === 0) {
         return reply.badRequest("No words match the given filters");
       }
 
-      const progress = await readProgressFile(language);
-      const selected = weightedSample(pool, Math.min(questionCount, pool.length), progress.words);
+      const progressData = await getProgressForLanguage(language);
+      const selected = weightedSample(pool, Math.min(questionCount, pool.length), progressData.words);
       const wordIds = selected.map((w) => w.id);
 
       const questions: QuizQuestion[] = selected.map((w) => {
@@ -80,10 +81,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         wordIds,
       };
 
-      const history = await readQuizHistory();
-      history.sessions.push(session);
-      await writeQuizHistory(history);
-
+      await createQuizSession(session);
       return reply.status(201).send(session);
     }
   );
@@ -108,8 +106,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { sessionId, wordId, correct } = request.body;
-      const history = await readQuizHistory();
-      const session = history.sessions.find((s) => s.sessionId === sessionId);
+      const session = await getQuizSession(sessionId);
       if (!session) return reply.notFound(`Session '${sessionId}' not found`);
       if (session.status === "completed") return reply.badRequest("Session already completed");
 
@@ -121,14 +118,8 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       if (correct) session.score.correct++;
 
       // Update progress
-      const progress = await readProgressFile(session.language);
-      const wp: WordProgress = progress.words[wordId] ?? {
-        timesSeen: 0,
-        timesCorrect: 0,
-        correctRate: 0,
-        lastReviewed: "",
-        streak: 0,
-      };
+      const wp: WordProgress = { ...(await getWordProgress(session.language, wordId)) };
+
       wp.timesSeen++;
       if (correct) {
         wp.timesCorrect++;
@@ -138,8 +129,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       }
       wp.correctRate = wp.timesCorrect / wp.timesSeen;
       wp.lastReviewed = new Date().toISOString();
-      progress.words[wordId] = wp;
-      await writeProgressFile(session.language, progress);
+      await updateWordProgress(session.language, wordId, wp);
 
       // Check if session is complete
       const allAnswered = session.questions.every((q) => q.userCorrect !== undefined);
@@ -148,7 +138,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         session.completedAt = new Date().toISOString();
       }
 
-      await writeQuizHistory(history);
+      await updateQuizSession(session);
       return { session, wordProgress: wp };
     }
   );
@@ -157,8 +147,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { sessionId: string } }>(
     "/session/:sessionId",
     async (request, reply) => {
-      const history = await readQuizHistory();
-      const session = history.sessions.find((s) => s.sessionId === request.params.sessionId);
+      const session = await getQuizSession(request.params.sessionId);
       if (!session) return reply.notFound("Session not found");
       return session;
     }
@@ -168,12 +157,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Querystring: { language?: string } }>(
     "/history",
     async (request) => {
-      const history = await readQuizHistory();
-      let sessions = history.sessions;
-      if (request.query.language) {
-        sessions = sessions.filter((s) => s.language === request.query.language);
-      }
-      // Return summaries (without full questions)
+      const sessions = await listQuizSessions(request.query.language);
       return sessions.map((s) => ({
         sessionId: s.sessionId,
         language: s.language,
@@ -190,8 +174,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { sessionId: string } }>(
     "/history/:sessionId",
     async (request, reply) => {
-      const history = await readQuizHistory();
-      const session = history.sessions.find((s) => s.sessionId === request.params.sessionId);
+      const session = await getQuizSession(request.params.sessionId);
       if (!session) return reply.notFound("Session not found");
       return session;
     }
@@ -201,11 +184,8 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { sessionId: string } }>(
     "/history/:sessionId",
     async (request, reply) => {
-      const history = await readQuizHistory();
-      const idx = history.sessions.findIndex((s) => s.sessionId === request.params.sessionId);
-      if (idx === -1) return reply.notFound("Session not found");
-      history.sessions.splice(idx, 1);
-      await writeQuizHistory(history);
+      const deleted = await deleteQuizSession(request.params.sessionId);
+      if (!deleted) return reply.notFound("Session not found");
       return reply.status(204).send();
     }
   );
@@ -225,17 +205,16 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request) => {
-      const history = await readQuizHistory();
       const imported = request.body.sessions;
-      history.sessions.push(...imported);
-      await writeQuizHistory(history);
-      return { imported: imported.length, total: history.sessions.length };
+      await importQuizSessions(imported);
+      const all = await getAllQuizSessions();
+      return { imported: imported.length, total: all.sessions.length };
     }
   );
 
   // Export quiz history
   fastify.get("/history/export", async () => {
-    return await readQuizHistory();
+    return await getAllQuizSessions();
   });
 };
 
@@ -254,12 +233,9 @@ function weightedSample(
     let weight = 1;
 
     if (!p || p.timesSeen === 0) {
-      // Unseen words get high weight
       weight = 5;
     } else {
-      // Lower accuracy = higher weight
       weight += (1 - p.correctRate) * 4;
-      // Staleness bonus: days since last review
       const daysSince = (now - new Date(p.lastReviewed).getTime()) / (1000 * 60 * 60 * 24);
       weight += Math.min(daysSince, 7) * 0.5;
     }
@@ -267,7 +243,6 @@ function weightedSample(
     return { word: w, weight };
   });
 
-  // Weighted random selection without replacement
   const selected: Word[] = [];
   const remaining = [...weighted];
 

@@ -31,7 +31,8 @@ const translations = {
     grammarColumn: "Grammar Categories",
     selectAll: "Select All",
     clearAll: "Clear All",
-    noFiltersHint: "Select at least one topic or category to start",
+    levelsColumn: "Levels",
+    noFiltersHint: "Select at least one topic, category, or level to start",
     back: "Back",
   },
 } as const;

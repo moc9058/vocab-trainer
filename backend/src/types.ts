@@ -11,6 +11,7 @@ export interface Word {
   grammaticalCategory: string;
   examples: Example[];
   topics: Topic[];
+  level?: string;
   notes?: string;
 }
 

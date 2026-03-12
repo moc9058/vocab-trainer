@@ -4,7 +4,7 @@ import { getFilters } from "../api/vocab";
 
 interface Props {
   language: string;
-  onStart: (filters: { topics: string[]; categories: string[] }) => void;
+  onStart: (filters: { topics: string[]; categories: string[]; levels: string[] }) => void;
   onBack: () => void;
   onClose: () => void;
 }
@@ -13,19 +13,23 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
   const { t } = useI18n();
   const [allTopics, setAllTopics] = useState<string[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
+  const [allLevels, setAllLevels] = useState<string[]>([]);
   const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [selectedLevels, setSelectedLevels] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     getFilters(language)
-      .then(({ topics, categories }) => {
+      .then(({ topics, categories, levels }) => {
         setAllTopics(topics);
         setAllCategories(categories);
+        setAllLevels(levels);
       })
       .catch(() => {
         setAllTopics([]);
         setAllCategories([]);
+        setAllLevels([]);
       })
       .finally(() => setLoading(false));
   }, [language]);
@@ -48,7 +52,16 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
     });
   }
 
-  const hasSelection = selectedTopics.size > 0 || selectedCategories.size > 0;
+  function toggleLevel(level: string) {
+    setSelectedLevels((prev) => {
+      const next = new Set(prev);
+      if (next.has(level)) next.delete(level);
+      else next.add(level);
+      return next;
+    });
+  }
+
+  const hasSelection = selectedTopics.size > 0 || selectedCategories.size > 0 || selectedLevels.size > 0;
 
   return (
     <div
@@ -56,7 +69,7 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
       onClick={onClose}
     >
       <div
-        className="w-full max-w-2xl rounded-xl bg-white p-6 shadow-xl max-h-[80vh] flex flex-col"
+        className="w-full max-w-3xl rounded-xl bg-white p-6 shadow-xl max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-4 text-lg font-semibold text-gray-800">
@@ -130,6 +143,40 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
                 ))}
               </ul>
             </div>
+
+            {/* Levels column (only shown when levels exist) */}
+            {allLevels.length > 0 && (
+              <div className="flex-1 flex flex-col min-w-0">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-medium text-gray-700">{t("levelsColumn")}</h3>
+                  <button
+                    onClick={() =>
+                      setSelectedLevels(
+                        selectedLevels.size === allLevels.length ? new Set() : new Set(allLevels)
+                      )
+                    }
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    {selectedLevels.size === allLevels.length ? t("clearAll") : t("selectAll")}
+                  </button>
+                </div>
+                <ul className="flex-1 overflow-y-auto space-y-1">
+                  {allLevels.map((level) => (
+                    <li key={level}>
+                      <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedLevels.has(level)}
+                          onChange={() => toggleLevel(level)}
+                          className="accent-blue-600"
+                        />
+                        {level}
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
@@ -156,6 +203,7 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
                 onStart({
                   topics: [...selectedTopics],
                   categories: [...selectedCategories],
+                  levels: [...selectedLevels],
                 })
               }
               disabled={!hasSelection}

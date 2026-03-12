@@ -47,7 +47,7 @@ export default function Dashboard() {
     setSelectedLanguage(language);
   }
 
-  async function handleFiltersSelected(filters: { topics: string[]; categories: string[] }) {
+  async function handleFiltersSelected(filters: { topics: string[]; categories: string[]; levels: string[] }) {
     if (starting || !selectedLanguage) return;
     setStarting(true);
     try {
@@ -55,6 +55,7 @@ export default function Dashboard() {
         language: selectedLanguage,
         topics: filters.topics,
         categories: filters.categories,
+        levels: filters.levels,
       });
       setSelectedLanguage(null);
       setActiveQuiz(session);

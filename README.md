@@ -2,6 +2,31 @@
 
 A vocabulary testing tool that helps users memorize vocabularies and view example sentences.
 
+## Cloud Run Deployment
+
+Deploy both services to Google Cloud Run using the included script.
+
+### Prerequisites
+
+- `gcloud` CLI installed and authenticated (`gcloud auth login`)
+- Cloud Run API enabled (`gcloud services enable run.googleapis.com`)
+- Artifact Registry repositories created: `vocab-test-backend` and `vocab-test-frontend`
+- Docker running locally
+
+### Deploy
+
+```bash
+./deploy.sh vocab-trainer asia-northeast1
+```
+
+This will:
+1. Build and push backend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-backend/backend`
+2. Deploy backend to Cloud Run
+3. Build and push frontend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-frontend/frontend`
+4. Deploy frontend to Cloud Run with `BACKEND_URL` pointing to the backend service
+
+The script prints both service URLs on completion.
+
 ## Quickstart
 
 ### Prerequisites
@@ -38,12 +63,13 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
 {
   "words": [
     {
-      "id": "zh-greet-001",
+      "id": "zh-000001",
       "term": "你好",
       "transliteration": "nǐ hǎo",
       "definition": {
         "Japanese": "こんにちは",
-        "English": "hello"
+        "English": "hello",
+        "Korean": "안녕하세요"
       },
       "grammaticalCategory": "interjection",
       "examples": [
@@ -53,6 +79,7 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
         }
       ],
       "topics": ["Greetings & Introductions"],
+      "level": "HSK1",
       "notes": ""
     }
   ]
@@ -61,7 +88,12 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
 
 ### Field Definitions
 
-- **`id`** — Unique identifier per word, useful for tracking quiz progress. Pattern: `{lang}-{number}`.
+- **`id`** — Unique identifier per word, useful for tracking quiz progress. Pattern: `{lang}-{number}`, where `{lang}` is an [ISO 639-1](https://en.wikipedia.org/wiki/List_of_ISO_639-1_codes) language code:
+  | Language | Code | Example ID |
+  |----------|------|------------|
+  | Chinese  | `zh` | `zh-000001` |
+  | English  | `en` | `en-000001` |
+  | Arabic   | `ar` | `ar-000001` |
 - **`term`** — The vocabulary word in the target language.
 - **`transliteration`** — Optional. Romanized pronunciation, critical for non-Latin scripts (Arabic, Chinese).
 - **`definition`** — An object keyed by language, allowing definitions in multiple languages (English, Japanese, Korean, etc.).
@@ -86,6 +118,7 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
   - **Academic / Professional:** `Economics & Finance`, `Politics & Government`, `Science & Technology`, `Law & Justice`, `Medicine`, `Education`, `Business & Commerce`
   - **Culture & Society:** `Arts & Entertainment`, `Sports & Fitness`, `Religion & Philosophy`, `History`, `Media & News`
   - **Language Fundamentals:** `Numbers & Time`, `Colors & Shapes`, `Verbs of Motion`, `Common Adjectives`, `Conjunctions & Prepositions`
+- **`level`** — Optional. Proficiency level tag for the word (e.g. `"HSK1"`, `"HSK2"`, …, `"HSK7~9"` for Chinese). Can be any string value.
 - **`notes`** — Optional. Free-form field for irregularities, mnemonics, etc.
 
 ## Project Structure
@@ -173,6 +206,7 @@ vocab-trainer/
 | `search`    | string | —       | Matches term, transliteration, or definition   |
 | `topic`     | string | —       | Filter by topic                                |
 | `category`  | string | —       | Filter by grammaticalCategory                  |
+| `level`     | string | —       | Filter by level                                |
 | `page`      | number | 1       | Page number (min 1)                            |
 | `limit`     | number | 50      | Items per page (max 100)                       |
 
@@ -193,7 +227,8 @@ vocab-trainer/
 ```json
 {
   "topics": ["Greetings & Introductions"],
-  "categories": ["interjection", "noun", "verb"]
+  "categories": ["interjection", "noun", "verb"],
+  "levels": ["HSK1", "HSK2"]
 }
 ```
 
@@ -268,6 +303,7 @@ vocab-trainer/
   "questionCount": 10,
   "topics": ["Greetings & Introductions"],
   "categories": ["noun", "verb"],
+  "levels": ["HSK1"],
   "questionType": "definition"
 }
 ```
@@ -341,14 +377,14 @@ React 19 single-page application for taking vocabulary quizzes and reviewing pas
 | **SessionDetail**       | Full detail of a selected session: metadata grid + questions table (term, expected answer, correct/incorrect/unanswered). |
 | **QuizTaking**          | Active quiz interface — displays the current question and records answers. On completion, returns to the history view. |
 | **LanguageSelectModal** | Modal to pick the target language when starting a new quiz. Lists languages fetched from the API.                  |
-| **QuizFilterModal**     | Modal to select topic and category filters before starting a quiz. Supports "Select All" / "Clear All" actions.   |
+| **QuizFilterModal**     | Modal to select topic, category, and level filters before starting a quiz. Supports "Select All" / "Clear All" actions. Level column only appears when words have levels set. |
 | **EmptyState**          | Placeholder shown when no quiz history exists.                                                                     |
 
 ### API Integration
 
 - **`api/client.ts`** — Generic `fetchJson<T>()` and `postJson<T>()` utilities wrapping the Fetch API.
 - **`api/quiz.ts`** — `getHistory(language?)`, `getSessionDetails(sessionId)`, `startQuiz(opts)`, and `answerQuestion(opts)`.
-- **`api/vocab.ts`** — `getFilters(language)` for retrieving available topics and categories.
+- **`api/vocab.ts`** — `getFilters(language)` for retrieving available topics, categories, and levels.
 - **Dev proxy:** Vite proxies `/api/*` to `http://localhost:3000` so the frontend dev server can reach the backend.
 
 ### Internationalization

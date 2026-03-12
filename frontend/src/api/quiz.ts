@@ -15,6 +15,7 @@ export function startQuiz(opts: {
   questionCount?: number;
   topics?: string[];
   categories?: string[];
+  levels?: string[];
   questionType?: string;
 }): Promise<QuizSession> {
   return postJson<QuizSession>("/api/quiz/start", opts);

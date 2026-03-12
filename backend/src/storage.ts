@@ -37,7 +37,7 @@ async function writeJson<T>(path: string, data: T): Promise<void> {
 export async function listVocabFiles(): Promise<string[]> {
   try {
     const files = await readdir(DB_DIR);
-    return files.filter((f) => f.endsWith(".json")).sort();
+    return files.filter((f) => f.endsWith(".json") && !f.startsWith("id_map_")).sort();
   } catch {
     return [];
   }

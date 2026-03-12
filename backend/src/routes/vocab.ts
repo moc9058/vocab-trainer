@@ -1,47 +1,39 @@
 import type { FastifyPluginAsync } from "fastify";
-import { readVocabFile, writeVocabFile, deleteVocabFile } from "../storage.js";
-import type { Word, VocabFile, PaginatedResult } from "../types.js";
+import {
+  languageExists,
+  getWords,
+  getWord,
+  getWordFilters,
+  addWord,
+  updateWord,
+  deleteWord,
+  wordIdExists,
+  getNextWordId,
+  createLanguage,
+  deleteLanguage,
+} from "../firestore.js";
+import type { Word } from "../types.js";
 
 const vocabRoutes: FastifyPluginAsync = async (fastify) => {
   // List words with filtering & pagination
   fastify.get<{
     Params: { language: string };
-    Querystring: { search?: string; topic?: string; category?: string; page?: string; limit?: string };
+    Querystring: { search?: string; topic?: string; category?: string; level?: string; page?: string; limit?: string };
   }>("/:language", async (request, reply) => {
     const { language } = request.params;
-    const data = await readVocabFile(language);
-    if (!data) return reply.notFound(`Language file '${language}' not found`);
-
-    let words = data.words;
-    const { search, topic, category } = request.query;
-
-    if (search) {
-      const q = search.toLowerCase();
-      words = words.filter(
-        (w) =>
-          w.term.toLowerCase().includes(q) ||
-          w.transliteration?.toLowerCase().includes(q) ||
-          Object.values(w.definition).some((d) => d.toLowerCase().includes(q))
-      );
+    if (!(await languageExists(language))) {
+      return reply.notFound(`Language '${language}' not found`);
     }
 
-    if (topic) {
-      words = words.filter((w) => (w.topics as string[]).includes(topic));
-    }
-
-    if (category) {
-      words = words.filter((w) => w.grammaticalCategory === category);
-    }
-
+    const { search, topic, category, level } = request.query;
     const page = Math.max(1, parseInt(request.query.page ?? "1", 10) || 1);
     const limit = Math.max(1, Math.min(100, parseInt(request.query.limit ?? "50", 10) || 50));
-    const total = words.length;
-    const totalPages = Math.ceil(total / limit) || 1;
-    const start = (page - 1) * limit;
-    const items = words.slice(start, start + limit);
 
-    const result: PaginatedResult<Word> = { items, total, page, limit, totalPages };
-    return result;
+    return await getWords(
+      language,
+      { search, topic, category, level },
+      { page, limit }
+    );
   });
 
   // Get available filter options for a language
@@ -49,11 +41,10 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
     "/:language/filters",
     async (request, reply) => {
       const { language } = request.params;
-      const data = await readVocabFile(language);
-      if (!data) return reply.notFound(`Language file '${language}' not found`);
-      const topics = [...new Set(data.words.flatMap((w) => w.topics))];
-      const categories = [...new Set(data.words.map((w) => w.grammaticalCategory).filter(Boolean))].sort();
-      return { topics, categories };
+      if (!(await languageExists(language))) {
+        return reply.notFound(`Language '${language}' not found`);
+      }
+      return await getWordFilters(language);
     }
   );
 
@@ -62,10 +53,10 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
     "/:language/:wordId",
     async (request, reply) => {
       const { language, wordId } = request.params;
-      const data = await readVocabFile(language);
-      if (!data) return reply.notFound(`Language file '${language}' not found`);
-
-      const word = data.words.find((w) => w.id === wordId);
+      if (!(await languageExists(language))) {
+        return reply.notFound(`Language '${language}' not found`);
+      }
+      const word = await getWord(wordId);
       if (!word) return reply.notFound(`Word '${wordId}' not found`);
       return word;
     }
@@ -96,6 +87,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
               },
             },
             topics: { type: "array", items: { type: "string" } },
+            level: { type: "string" },
             notes: { type: "string" },
           },
         },
@@ -103,13 +95,14 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { language } = request.params;
-      const data = await readVocabFile(language);
-      if (!data) return reply.notFound(`Language file '${language}' not found`);
+      if (!(await languageExists(language))) {
+        return reply.notFound(`Language '${language}' not found`);
+      }
 
       const body = request.body;
-      const id = body.id ?? generateWordId(data, language);
+      const id = body.id ?? (await getNextWordId(language));
 
-      if (data.words.some((w) => w.id === id)) {
+      if (await wordIdExists(id)) {
         return reply.conflict(`Word with id '${id}' already exists`);
       }
 
@@ -121,11 +114,11 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         grammaticalCategory: body.grammaticalCategory,
         examples: body.examples ?? [],
         topics: body.topics,
+        level: body.level,
         notes: body.notes,
       };
 
-      data.words.push(word);
-      await writeVocabFile(language, data);
+      await addWord(language, word);
       return reply.status(201).send(word);
     }
   );
@@ -135,15 +128,12 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
     "/:language/:wordId",
     async (request, reply) => {
       const { language, wordId } = request.params;
-      const data = await readVocabFile(language);
-      if (!data) return reply.notFound(`Language file '${language}' not found`);
+      if (!(await languageExists(language))) {
+        return reply.notFound(`Language '${language}' not found`);
+      }
 
-      const idx = data.words.findIndex((w) => w.id === wordId);
-      if (idx === -1) return reply.notFound(`Word '${wordId}' not found`);
-
-      const updated = { ...data.words[idx], ...request.body, id: wordId };
-      data.words[idx] = updated;
-      await writeVocabFile(language, data);
+      const updated = await updateWord(language, wordId, request.body);
+      if (!updated) return reply.notFound(`Word '${wordId}' not found`);
       return updated;
     }
   );
@@ -153,53 +143,39 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
     "/:language/:wordId",
     async (request, reply) => {
       const { language, wordId } = request.params;
-      const data = await readVocabFile(language);
-      if (!data) return reply.notFound(`Language file '${language}' not found`);
+      if (!(await languageExists(language))) {
+        return reply.notFound(`Language '${language}' not found`);
+      }
 
-      const idx = data.words.findIndex((w) => w.id === wordId);
-      if (idx === -1) return reply.notFound(`Word '${wordId}' not found`);
-
-      data.words.splice(idx, 1);
-      await writeVocabFile(language, data);
+      const deleted = await deleteWord(language, wordId);
+      if (!deleted) return reply.notFound(`Word '${wordId}' not found`);
       return reply.status(204).send();
     }
   );
 
-  // Create new language file
-  fastify.post<{
-    Params: { language: string };
-  }>(
+  // Create new language
+  fastify.post<{ Params: { language: string } }>(
     "/:language/file",
     async (request, reply) => {
       const { language } = request.params;
-      const existing = await readVocabFile(language);
-      if (existing) return reply.conflict(`Language file '${language}' already exists`);
-
-      const file: VocabFile = { words: [] };
-      await writeVocabFile(language, file);
-      return reply.status(201).send(file);
+      if (await languageExists(language)) {
+        return reply.conflict(`Language '${language}' already exists`);
+      }
+      await createLanguage(language);
+      return reply.status(201).send({ words: [] });
     }
   );
 
-  // Delete language file
+  // Delete language
   fastify.delete<{ Params: { language: string } }>(
     "/:language/file",
     async (request, reply) => {
       const { language } = request.params;
-      const deleted = await deleteVocabFile(language);
-      if (!deleted) return reply.notFound(`Language file '${language}' not found`);
+      const deleted = await deleteLanguage(language);
+      if (!deleted) return reply.notFound(`Language '${language}' not found`);
       return reply.status(204).send();
     }
   );
 };
-
-function generateWordId(data: VocabFile, language: string): string {
-  const prefix = language.slice(0, 3).toLowerCase();
-  const maxNum = data.words.reduce((max, w) => {
-    const match = w.id.match(/-(\d+)$/);
-    return match ? Math.max(max, parseInt(match[1], 10)) : max;
-  }, 0);
-  return `${prefix}-${String(maxNum + 1).padStart(3, "0")}`;
-}
 
 export default vocabRoutes;

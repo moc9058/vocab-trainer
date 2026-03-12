@@ -1,5 +1,10 @@
 import type { FastifyPluginAsync } from "fastify";
-import { readProgressFile, deleteProgressFile, readVocabFile } from "../storage.js";
+import {
+  languageExists,
+  getProgressForLanguage,
+  getWordProgress,
+  deleteProgressForLanguage,
+} from "../firestore.js";
 
 const progressRoutes: FastifyPluginAsync = async (fastify) => {
   // Get progress for all words in a language
@@ -7,11 +12,10 @@ const progressRoutes: FastifyPluginAsync = async (fastify) => {
     "/:language",
     async (request, reply) => {
       const { language } = request.params;
-      const vocab = await readVocabFile(language);
-      if (!vocab) return reply.notFound(`Language file '${language}' not found`);
-
-      const progress = await readProgressFile(language);
-      return progress;
+      if (!(await languageExists(language))) {
+        return reply.notFound(`Language '${language}' not found`);
+      }
+      return await getProgressForLanguage(language);
     }
   );
 
@@ -20,18 +24,10 @@ const progressRoutes: FastifyPluginAsync = async (fastify) => {
     "/:language/:wordId",
     async (request, reply) => {
       const { language, wordId } = request.params;
-      const vocab = await readVocabFile(language);
-      if (!vocab) return reply.notFound(`Language file '${language}' not found`);
-
-      const progress = await readProgressFile(language);
-      const wordProgress = progress.words[wordId] ?? {
-        timesSeen: 0,
-        timesCorrect: 0,
-        correctRate: 0,
-        lastReviewed: null,
-        streak: 0,
-      };
-      return wordProgress;
+      if (!(await languageExists(language))) {
+        return reply.notFound(`Language '${language}' not found`);
+      }
+      return await getWordProgress(language, wordId);
     }
   );
 
@@ -40,7 +36,7 @@ const progressRoutes: FastifyPluginAsync = async (fastify) => {
     "/:language",
     async (request, reply) => {
       const { language } = request.params;
-      await deleteProgressFile(language);
+      await deleteProgressForLanguage(language);
       return reply.status(204).send();
     }
   );
