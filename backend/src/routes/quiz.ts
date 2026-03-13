@@ -6,12 +6,9 @@ import {
   getWordProgress,
   updateWordProgress,
   getQuizSession,
+  getQuizSessionByLanguage,
   createQuizSession,
   updateQuizSession,
-  deleteQuizSession,
-  listQuizSessions,
-  importQuizSessions,
-  getAllQuizSessions,
 } from "../firestore.js";
 import type { QuizSession, QuizQuestion, Word, WordProgress } from "../types.js";
 
@@ -35,7 +32,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
           required: ["language"],
           properties: {
             language: { type: "string" },
-            questionCount: { type: "number", minimum: 1, maximum: 100 },
+            questionCount: { type: "number", minimum: 1 },
             topics: { type: "array", items: { type: "string" } },
             categories: { type: "array", items: { type: "string" } },
             levels: { type: "array", items: { type: "string" } },
@@ -45,19 +42,22 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { language, questionCount = 10, topics, categories, levels, questionType } = request.body;
-      if (!(await languageExists(language))) {
+      const { language, questionCount, topics, categories, levels, questionType } = request.body;
+      const [exists, pool, progressData] = await Promise.all([
+        languageExists(language),
+        getFilteredWords(language, { topics, categories, levels }),
+        getProgressForLanguage(language),
+      ]);
+
+      if (!exists) {
         return reply.notFound(`Language '${language}' not found`);
       }
-
-      const pool = await getFilteredWords(language, { topics, categories, levels });
 
       if (pool.length === 0) {
         return reply.badRequest("No words match the given filters");
       }
-
-      const progressData = await getProgressForLanguage(language);
-      const selected = weightedSample(pool, Math.min(questionCount, pool.length), progressData.words);
+      const count = questionCount ? Math.min(questionCount, pool.length) : pool.length;
+      const selected = weightedSample(pool, count, progressData.words);
       const wordIds = selected.map((w) => w.id);
 
       const questions: QuizQuestion[] = selected.map((w) => {
@@ -67,17 +67,20 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
           wordId: w.id,
           term: w.term,
           expectedAnswer,
+          transliteration: w.transliteration,
+          japaneseDefinition: w.definition["Japanese"],
+          examples: w.examples,
         };
       });
 
       const session: QuizSession = {
-        sessionId: `qs-${Date.now()}`,
+        sessionId: language,
         language,
         startedAt: new Date().toISOString(),
         status: "in-progress",
         score: { correct: 0, total: questions.length },
         questions,
-        questionType,
+        ...(questionType ? { questionType } : {}),
         wordIds,
       };
 
@@ -110,12 +113,24 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       if (!session) return reply.notFound(`Session '${sessionId}' not found`);
       if (session.status === "completed") return reply.badRequest("Session already completed");
 
-      const question = session.questions.find((q) => q.wordId === wordId);
+      const question = session.questions.find((q) => q.wordId === wordId && q.userCorrect === undefined);
       if (!question) return reply.notFound(`Word '${wordId}' not in this session`);
-      if (question.userCorrect !== undefined) return reply.badRequest("Question already answered");
 
       question.userCorrect = correct;
-      if (correct) session.score.correct++;
+      if (correct) {
+        session.score.correct++;
+      } else {
+        // Re-queue wrong answer to appear again later
+        session.questions.push({
+          wordId: question.wordId,
+          term: question.term,
+          expectedAnswer: question.expectedAnswer,
+          transliteration: question.transliteration,
+          japaneseDefinition: question.japaneseDefinition,
+          examples: question.examples,
+        });
+        session.score.total++;
+      }
 
       // Update progress
       const wp: WordProgress = { ...(await getWordProgress(session.language, wordId)) };
@@ -143,79 +158,15 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Get session state
-  fastify.get<{ Params: { sessionId: string } }>(
-    "/session/:sessionId",
+  // Get current session for a language
+  fastify.get<{ Params: { language: string } }>(
+    "/session/language/:language",
     async (request, reply) => {
-      const session = await getQuizSession(request.params.sessionId);
-      if (!session) return reply.notFound("Session not found");
+      const session = await getQuizSessionByLanguage(request.params.language);
+      if (!session) return reply.notFound("No session found for this language");
       return session;
     }
   );
-
-  // List past sessions
-  fastify.get<{ Querystring: { language?: string } }>(
-    "/history",
-    async (request) => {
-      const sessions = await listQuizSessions(request.query.language);
-      return sessions.map((s) => ({
-        sessionId: s.sessionId,
-        language: s.language,
-        startedAt: s.startedAt,
-        completedAt: s.completedAt,
-        status: s.status,
-        score: s.score,
-        questionType: s.questionType,
-      }));
-    }
-  );
-
-  // Get full session details
-  fastify.get<{ Params: { sessionId: string } }>(
-    "/history/:sessionId",
-    async (request, reply) => {
-      const session = await getQuizSession(request.params.sessionId);
-      if (!session) return reply.notFound("Session not found");
-      return session;
-    }
-  );
-
-  // Delete session
-  fastify.delete<{ Params: { sessionId: string } }>(
-    "/history/:sessionId",
-    async (request, reply) => {
-      const deleted = await deleteQuizSession(request.params.sessionId);
-      if (!deleted) return reply.notFound("Session not found");
-      return reply.status(204).send();
-    }
-  );
-
-  // Import quiz history
-  fastify.post<{ Body: { sessions: QuizSession[] } }>(
-    "/history/import",
-    {
-      schema: {
-        body: {
-          type: "object",
-          required: ["sessions"],
-          properties: {
-            sessions: { type: "array" },
-          },
-        },
-      },
-    },
-    async (request) => {
-      const imported = request.body.sessions;
-      await importQuizSessions(imported);
-      const all = await getAllQuizSessions();
-      return { imported: imported.length, total: all.sessions.length };
-    }
-  );
-
-  // Export quiz history
-  fastify.get("/history/export", async () => {
-    return await getAllQuizSessions();
-  });
 };
 
 /**

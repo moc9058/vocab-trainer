@@ -1,13 +1,12 @@
 import { fetchJson, postJson } from "./client";
-import type { QuizSession, QuizSessionSummary } from "../types";
+import type { QuizSession } from "../types";
 
-export function getHistory(language?: string): Promise<QuizSessionSummary[]> {
-  const params = language ? `?language=${encodeURIComponent(language)}` : "";
-  return fetchJson<QuizSessionSummary[]>(`/api/quiz/history${params}`);
-}
-
-export function getSessionDetails(sessionId: string): Promise<QuizSession> {
-  return fetchJson<QuizSession>(`/api/quiz/history/${sessionId}`);
+export async function getCurrentSession(language: string): Promise<QuizSession | null> {
+  try {
+    return await fetchJson<QuizSession>(`/api/quiz/session/language/${encodeURIComponent(language)}`);
+  } catch {
+    return null;
+  }
 }
 
 export function startQuiz(opts: {

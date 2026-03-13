@@ -1,46 +1,24 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useI18n } from "../i18n/context";
-import { getHistory, startQuiz } from "../api/quiz";
-import Sidebar from "./Sidebar";
-import SessionDetail from "./SessionDetail";
+import { getCurrentSession, startQuiz } from "../api/quiz";
 import EmptyState from "./EmptyState";
 import QuizTaking from "./QuizTaking";
 import LanguageSelectModal from "./LanguageSelectModal";
 import QuizFilterModal from "./QuizFilterModal";
-import type { QuizSession, QuizSessionSummary } from "../types";
+import type { QuizSession } from "../types";
 
 export default function Dashboard() {
   const { t } = useI18n();
-  const [history, setHistory] = useState<QuizSessionSummary[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [activeQuiz, setActiveQuiz] = useState<QuizSession | null>(null);
   const [starting, setStarting] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
-
-  function refreshHistory() {
-    getHistory()
-      .then((data) => {
-        setHistory(data);
-        if (data.length > 0) {
-          setSelectedId(data[0].sessionId);
-        }
-      })
-      .catch(() => setHistory([]));
-  }
-
-  useEffect(() => {
-    getHistory()
-      .then((data) => {
-        setHistory(data);
-        if (data.length > 0) {
-          setSelectedId(data[0].sessionId);
-        }
-      })
-      .catch(() => setHistory([]))
-      .finally(() => setLoading(false));
-  }, []);
+  const [resumePrompt, setResumePrompt] = useState<QuizSession | null>(null);
+  const [pendingFilters, setPendingFilters] = useState<{
+    topics: string[];
+    categories: string[];
+    levels: string[];
+  } | null>(null);
 
   function handleLanguageSelected(language: string) {
     setShowLanguageModal(false);
@@ -51,6 +29,14 @@ export default function Dashboard() {
     if (starting || !selectedLanguage) return;
     setStarting(true);
     try {
+      // Check for existing in-progress session
+      const existing = await getCurrentSession(selectedLanguage);
+      if (existing && existing.status === "in-progress") {
+        setPendingFilters(filters);
+        setResumePrompt(existing);
+        return;
+      }
+      // No existing session — start new
       const session = await startQuiz({
         language: selectedLanguage,
         topics: filters.topics,
@@ -58,6 +44,37 @@ export default function Dashboard() {
         levels: filters.levels,
       });
       setSelectedLanguage(null);
+      setActiveQuiz(session);
+    } catch (err) {
+      console.error("Failed to start quiz:", err);
+      alert(String(err));
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  async function handleResume() {
+    if (resumePrompt) {
+      setActiveQuiz(resumePrompt);
+      setResumePrompt(null);
+      setPendingFilters(null);
+      setSelectedLanguage(null);
+      setStarting(false);
+    }
+  }
+
+  async function handleStartNew() {
+    if (!selectedLanguage || !pendingFilters) return;
+    setResumePrompt(null);
+    try {
+      const session = await startQuiz({
+        language: selectedLanguage,
+        topics: pendingFilters.topics,
+        categories: pendingFilters.categories,
+        levels: pendingFilters.levels,
+      });
+      setSelectedLanguage(null);
+      setPendingFilters(null);
       setActiveQuiz(session);
     } catch (err) {
       console.error("Failed to start quiz:", err);
@@ -78,15 +95,6 @@ export default function Dashboard() {
 
   function handleQuizComplete() {
     setActiveQuiz(null);
-    refreshHistory();
-  }
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <p className="text-gray-400">Loading...</p>
-      </div>
-    );
   }
 
   return (
@@ -107,7 +115,7 @@ export default function Dashboard() {
           onClose={() => setShowLanguageModal(false)}
         />
       )}
-      {selectedLanguage && !showLanguageModal && (
+      {selectedLanguage && !showLanguageModal && !resumePrompt && (
         <QuizFilterModal
           language={selectedLanguage}
           onStart={handleFiltersSelected}
@@ -115,24 +123,34 @@ export default function Dashboard() {
           onClose={handleFilterClose}
         />
       )}
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar
-          history={history}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-        />
-        <main className="flex-1">
-          {activeQuiz ? (
-            <QuizTaking session={activeQuiz} onComplete={handleQuizComplete} />
-          ) : history.length === 0 ? (
-            <EmptyState />
-          ) : selectedId ? (
-            <SessionDetail sessionId={selectedId} />
-          ) : (
-            <EmptyState />
-          )}
-        </main>
-      </div>
+      {resumePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <p className="mb-4 text-gray-700">{t("existingQuizFound")}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleResume}
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+              >
+                {t("resumeQuiz")}
+              </button>
+              <button
+                onClick={handleStartNew}
+                className="flex-1 rounded-lg bg-gray-200 px-4 py-2 text-gray-700 hover:bg-gray-300"
+              >
+                {t("startNewQuiz")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <main className="flex-1">
+        {activeQuiz ? (
+          <QuizTaking session={activeQuiz} onComplete={handleQuizComplete} />
+        ) : (
+          <EmptyState />
+        )}
+      </main>
     </div>
   );
 }

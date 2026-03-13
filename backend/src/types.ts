@@ -77,6 +77,9 @@ export interface QuizQuestion {
   wordId: string;
   term: string;
   expectedAnswer: string;
+  transliteration?: string;
+  japaneseDefinition?: string;
+  examples?: Example[];
   userCorrect?: boolean;
 }
 
@@ -95,10 +98,6 @@ export interface QuizSession {
   questions: QuizQuestion[];
   questionType?: string;
   wordIds?: string[];
-}
-
-export interface QuizHistoryFile {
-  sessions: QuizSession[];
 }
 
 export interface PaginatedResult<T> {

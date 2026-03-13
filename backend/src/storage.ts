@@ -2,12 +2,12 @@ import { readFile, writeFile, readdir, rename, unlink, mkdir } from "node:fs/pro
 import { join, resolve } from "node:path";
 import { existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
-import type { VocabFile, ProgressFile, QuizHistoryFile } from "./types.js";
+import type { VocabFile, ProgressFile } from "./types.js";
 
 const DB_DIR = resolve(import.meta.dirname, "..", "DB");
 const DATA_DIR = resolve(import.meta.dirname, "..", "data");
 const PROGRESS_DIR = join(DATA_DIR, "progress");
-const QUIZ_HISTORY_PATH = join(DATA_DIR, "quiz-history.json");
+
 
 async function ensureDir(dir: string): Promise<void> {
   if (!existsSync(dir)) {
@@ -83,13 +83,3 @@ export async function deleteProgressFile(language: string): Promise<boolean> {
   }
 }
 
-// --- Quiz history ---
-
-export async function readQuizHistory(): Promise<QuizHistoryFile> {
-  const data = await readJson<QuizHistoryFile>(QUIZ_HISTORY_PATH);
-  return data ?? { sessions: [] };
-}
-
-export async function writeQuizHistory(data: QuizHistoryFile): Promise<void> {
-  await writeJson(QUIZ_HISTORY_PATH, data);
-}

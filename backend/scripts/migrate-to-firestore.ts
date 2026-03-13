@@ -11,7 +11,11 @@ import { Firestore } from "@google-cloud/firestore";
 import { readFile, readdir } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import { existsSync } from "node:fs";
-import type { VocabFile, ProgressFile, QuizHistoryFile } from "../src/types.js";
+import type { VocabFile, ProgressFile, QuizSession } from "../src/types.js";
+
+interface QuizHistoryFile {
+  sessions: QuizSession[];
+}
 
 const DB_DIR = resolve(import.meta.dirname, "..", "DB");
 const DATA_DIR = resolve(import.meta.dirname, "..", "data");
@@ -19,6 +23,7 @@ const PROGRESS_DIR = join(DATA_DIR, "progress");
 const QUIZ_HISTORY_PATH = join(DATA_DIR, "quiz-history.json");
 
 const db = new Firestore({
+  projectId: process.env.FIRESTORE_PROJECT || undefined,
   databaseId: process.env.FIRESTORE_DATABASE_ID || "vocab-database",
 });
 

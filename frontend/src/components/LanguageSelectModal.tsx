@@ -56,9 +56,6 @@ export default function LanguageSelectModal({ onSelect, onClose }: Props) {
                   <span className="font-medium text-gray-800">
                     {lang.language}
                   </span>
-                  <span className="ml-2 text-sm text-gray-500">
-                    {lang.topics.join(", ")}
-                  </span>
                   <span className="ml-2 text-xs text-gray-400">
                     {lang.wordCount} {t("words")}
                   </span>

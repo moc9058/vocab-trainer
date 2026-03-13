@@ -16,14 +16,21 @@ Deploy both services to Google Cloud Run using the included script.
 ### Deploy
 
 ```bash
-./deploy.sh vocab-trainer asia-northeast1
+./deploy.sh vocab-trainer-490014 asia-northeast1
+```
+
+To also run the Firestore data migration (imports local `backend/DB/` JSON files into Firestore):
+
+```bash
+./deploy.sh vocab-trainer-490014 asia-northeast1 --migrate
 ```
 
 This will:
 1. Build and push backend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-backend/backend`
 2. Deploy backend to Cloud Run
-3. Build and push frontend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-frontend/frontend`
-4. Deploy frontend to Cloud Run with `BACKEND_URL` pointing to the backend service
+3. Run Firestore migration (only with `--migrate`)
+4. Build and push frontend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-frontend/frontend`
+5. Deploy frontend to Cloud Run with `BACKEND_URL` pointing to the backend service
 
 The script prints both service URLs on completion.
 
@@ -131,10 +138,12 @@ vocab-trainer/
 │   ├── package-lock.json
 │   ├── tsconfig.json
 │   ├── Dockerfile
+│   ├── scripts/
+│   │   └── migrate-to-firestore.ts  # One-time JSON → Firestore migration
 │   ├── src/
 │   │   ├── index.ts             # Fastify server entry point
 │   │   ├── types.ts             # Shared TypeScript interfaces
-│   │   ├── storage.ts           # File-based persistence layer
+│   │   ├── firestore.ts         # Google Cloud Firestore persistence layer
 │   │   └── routes/
 │   │       ├── languages.ts     # /api/languages
 │   │       ├── vocab.ts         # /api/vocab
@@ -142,8 +151,7 @@ vocab-trainer/
 │   │       └── quiz.ts          # /api/quiz
 │   ├── DB/                      # Vocabulary JSON files
 │   └── data/
-│       ├── progress/            # Per-language progress files
-│       └── quiz-history.json    # Quiz session history
+│       └── progress/            # Per-language progress files
 ├── frontend/
 │   ├── package.json
 │   ├── package-lock.json
@@ -159,21 +167,19 @@ vocab-trainer/
 │       │   ├── quiz.ts          # Quiz API wrappers
 │       │   └── vocab.ts         # Vocabulary API wrappers
 │       ├── components/
-│       │   ├── Dashboard.tsx     # Main layout
-│       │   ├── Sidebar.tsx       # Session list
-│       │   ├── SessionDetail.tsx # Session details view
+│       │   ├── Dashboard.tsx     # Main layout with resume/new quiz flow
 │       │   ├── QuizTaking.tsx    # Active quiz interface
 │       │   ├── LanguageSelectModal.tsx
 │       │   ├── QuizFilterModal.tsx
 │       │   └── EmptyState.tsx
-│       └── i18n/                # Internationalization (en, zh)
+│       └── i18n/                # Internationalization (en)
 ```
 
 ## Tech Stack
 
 | Layer    | Technology                                            |
 | -------- | ----------------------------------------------------- |
-| Backend  | Fastify 5, TypeScript, @fastify/cors, @fastify/sensible |
+| Backend  | Fastify 5, TypeScript, Google Cloud Firestore, @fastify/cors, @fastify/sensible |
 | Frontend | React 19, Vite 6, Tailwind CSS 4                     |
 | Deploy   | Docker (Node 24 Alpine), `serve` for static frontend  |
 
@@ -294,7 +300,11 @@ vocab-trainer/
 
 ### Quiz
 
+One quiz session is stored per language. Starting a new quiz overwrites the previous session. Wrong answers are re-queued and appear again until answered correctly.
+
 #### `POST /api/quiz/start` — Start a new quiz session
+
+Overwrites any existing session for the given language.
 
 **Body:**
 ```json
@@ -308,12 +318,14 @@ vocab-trainer/
 }
 ```
 
-All fields except `language` are optional (`questionCount` defaults to 10, max 100).
+All fields except `language` are optional (`questionCount` defaults to all matching words).
 
 Words are selected using **weighted random sampling**:
 - Unseen words get weight **5**
 - Lower accuracy → higher weight: `1 + (1 - correctRate) * 4`
 - Staleness bonus: `daysSinceReview * 0.5` (capped at 7 days)
+
+Each question includes: `term`, `expectedAnswer`, `transliteration` (pinyin), `japaneseDefinition`, and `examples` (sentence + translation).
 
 **Response:** `201` with `QuizSession`.
 
@@ -322,75 +334,51 @@ Words are selected using **weighted random sampling**:
 **Body:**
 ```json
 {
-  "sessionId": "qs-1772976596749",
-  "wordId": "zh-greet-001",
+  "sessionId": "chinese",
+  "wordId": "zh-000001",
   "correct": true
 }
 ```
+
+If `correct` is `false`, the word is re-appended to the end of the question queue and will appear again. This repeats until the user answers correctly.
 
 **Response:** `{ session, wordProgress }` — updated session state and word progress.
 
 When all questions are answered the session status changes to `"completed"`.
 
-#### `GET /api/quiz/session/:sessionId` — Get current session state
+#### `GET /api/quiz/session/language/:language` — Get current session for a language
+
+Returns the in-progress or completed quiz session for the given language, or `404` if none exists.
 
 **Response:** `QuizSession` object.
-
-#### `GET /api/quiz/history` — List past sessions (summaries)
-
-| Query Param | Type   | Description        |
-| ----------- | ------ | ------------------ |
-| `language`  | string | Filter by language |
-
-**Response:** Array of session summaries (without `questions`).
-
-#### `GET /api/quiz/history/:sessionId` — Get full session details
-
-**Response:** Full `QuizSession` (includes all questions).
-
-#### `DELETE /api/quiz/history/:sessionId` — Delete a session
-
-**Response:** `204 No Content`
-
-#### `POST /api/quiz/history/import` — Import sessions
-
-**Body:** `{ "sessions": [ /* QuizSession[] */ ] }`
-
-**Response:** `{ "imported": 5, "total": 12 }`
-
-#### `GET /api/quiz/history/export` — Export all history
-
-**Response:** `{ "sessions": [ /* QuizSession[] */ ] }`
 
 ---
 
 ## Frontend
 
-React 19 single-page application for taking vocabulary quizzes and reviewing past sessions. Built with Vite 6 and styled with Tailwind CSS 4. Supports English and Chinese UI via a custom i18n context (no external library).
+React 19 single-page application for taking vocabulary quizzes. Built with Vite 6 and styled with Tailwind CSS 4. Supports English UI via a custom i18n context (no external library).
 
 ### Screens / Views
 
 | View                    | Description                                                                                                        |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Dashboard**           | Main layout. Header with "Start Quiz" button + two-column body: Sidebar (quiz session list) + main content area. Fetches history on mount. |
-| **Sidebar**             | Scrollable list of quiz sessions showing language, status badge, date, and score. Click a session to select it.    |
-| **SessionDetail**       | Full detail of a selected session: metadata grid + questions table (term, expected answer, correct/incorrect/unanswered). |
-| **QuizTaking**          | Active quiz interface — displays the current question and records answers. On completion, returns to the history view. |
+| **Dashboard**           | Main layout. Header with "Start Quiz" button. Checks for existing in-progress session and offers resume or start new. |
+| **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows pinyin, Japanese definition, and example sentences. Wrong answers are re-queued until correct. Supports resuming from where the user left off. |
 | **LanguageSelectModal** | Modal to pick the target language when starting a new quiz. Lists languages fetched from the API.                  |
 | **QuizFilterModal**     | Modal to select topic, category, and level filters before starting a quiz. Supports "Select All" / "Clear All" actions. Level column only appears when words have levels set. |
-| **EmptyState**          | Placeholder shown when no quiz history exists.                                                                     |
+| **EmptyState**          | Welcome screen shown when no quiz is active.                                                                       |
 
 ### API Integration
 
 - **`api/client.ts`** — Generic `fetchJson<T>()` and `postJson<T>()` utilities wrapping the Fetch API.
-- **`api/quiz.ts`** — `getHistory(language?)`, `getSessionDetails(sessionId)`, `startQuiz(opts)`, and `answerQuestion(opts)`.
+- **`api/quiz.ts`** — `getCurrentSession(language)`, `startQuiz(opts)`, and `answerQuestion(opts)`.
 - **`api/vocab.ts`** — `getFilters(language)` for retrieving available topics, categories, and levels.
 - **Dev proxy:** Vite proxies `/api/*` to `http://localhost:3000` so the frontend dev server can reach the backend.
 
 ### Internationalization
 
 - Context-based (`i18n/context.tsx`): `I18nProvider` + `useI18n()` hook.
-- 34 translation keys defined in `i18n/translations.ts` for English.
+- Translation keys defined in `i18n/translations.ts` for English.
 - Type-safe keys via the `TranslationKey` type.
 
 ### State Management
@@ -405,22 +393,25 @@ Tailwind CSS 4 utility classes only — no custom CSS beyond the Tailwind import
 
 ## Data Storage
 
-All data is stored as JSON files on disk — no database required.
+Production data is stored in **Google Cloud Firestore** (database: `vocab-database`).
 
-| Directory                | Contents                         |
-| ------------------------ | -------------------------------- |
-| `backend/DB/`            | Vocabulary files (`{lang}.json`) |
-| `backend/data/progress/` | Per-language progress files      |
-| `backend/data/`          | `quiz-history.json`              |
+| Firestore Collection | Contents                                              |
+| -------------------- | ----------------------------------------------------- |
+| `languages`          | Language metadata (word count, topics)                 |
+| `words`              | Vocabulary words (one document per word)               |
+| `id_maps`            | Term → word ID mappings and next ID counter            |
+| `progress`           | Per-word progress (times seen, correct rate)            |
+| `quiz_sessions`      | One quiz session per language (keyed by language name)  |
 
-**Atomic writes:** Every file write goes through a temp file (`path.{randomHex}.tmp`) which is then renamed to the target path. This prevents corruption if the process is interrupted mid-write.
+Local JSON files under `backend/DB/` serve as the source for the initial Firestore migration (run with `./deploy.sh ... --migrate`).
 
 ## Configuration
 
-| Variable | Default   | Description              |
-| -------- | --------- | ------------------------ |
-| `PORT`   | `3000`    | Server listening port    |
-| `HOST`   | `0.0.0.0` | Server listening address |
+| Variable              | Default          | Description                        |
+| --------------------- | ---------------- | ---------------------------------- |
+| `PORT`                | `3000`           | Server listening port              |
+| `HOST`                | `0.0.0.0`       | Server listening address           |
+| `FIRESTORE_DATABASE_ID` | `vocab-database` | Firestore database ID            |
 
 ## Docker
 

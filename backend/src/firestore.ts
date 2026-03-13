@@ -6,7 +6,6 @@ import type {
   WordProgress,
   ProgressFile,
   QuizSession,
-  QuizHistoryFile,
   PaginatedResult,
   Topic,
 } from "./types.js";
@@ -311,7 +310,7 @@ export async function deleteProgressForLanguage(language: string): Promise<void>
   await batch.commit();
 }
 
-// ========== Quiz Sessions ==========
+// ========== Quiz Sessions (keyed by language — one session per language) ==========
 
 export async function getQuizSession(sessionId: string): Promise<QuizSession | null> {
   const doc = await quizSessions.doc(sessionId).get();
@@ -319,51 +318,24 @@ export async function getQuizSession(sessionId: string): Promise<QuizSession | n
   return docToSession(doc);
 }
 
+export async function getQuizSessionByLanguage(language: string): Promise<QuizSession | null> {
+  const doc = await quizSessions.doc(language).get();
+  if (!doc.exists) return null;
+  return docToSession(doc);
+}
+
 export async function createQuizSession(session: QuizSession): Promise<void> {
   const data: Record<string, unknown> = { ...session };
   delete data.sessionId;
-  await quizSessions.doc(session.sessionId).set(data);
+  const clean = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
+  await quizSessions.doc(session.language).set(clean);
 }
 
 export async function updateQuizSession(session: QuizSession): Promise<void> {
   const data: Record<string, unknown> = { ...session };
   delete data.sessionId;
-  await quizSessions.doc(session.sessionId).set(data);
-}
-
-export async function deleteQuizSession(sessionId: string): Promise<boolean> {
-  const doc = await quizSessions.doc(sessionId).get();
-  if (!doc.exists) return false;
-  await quizSessions.doc(sessionId).delete();
-  return true;
-}
-
-export async function listQuizSessions(language?: string): Promise<QuizSession[]> {
-  let query = quizSessions.orderBy("startedAt", "desc") as FirebaseFirestore.Query;
-  if (language) {
-    query = quizSessions.where("language", "==", language).orderBy("startedAt", "desc");
-  }
-  const snap = await query.get();
-  return snap.docs.map(docToSession);
-}
-
-export async function importQuizSessions(sessions: QuizSession[]): Promise<void> {
-  // Firestore batches are limited to 500 operations
-  for (let i = 0; i < sessions.length; i += 500) {
-    const batch = db.batch();
-    const chunk = sessions.slice(i, i + 500);
-    for (const session of chunk) {
-      const data: Record<string, unknown> = { ...session };
-      delete data.sessionId;
-      batch.set(quizSessions.doc(session.sessionId), data);
-    }
-    await batch.commit();
-  }
-}
-
-export async function getAllQuizSessions(): Promise<QuizHistoryFile> {
-  const snap = await quizSessions.get();
-  return { sessions: snap.docs.map(docToSession) };
+  const clean = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
+  await quizSessions.doc(session.language).set(clean);
 }
 
 function docToSession(doc: FirebaseFirestore.DocumentSnapshot): QuizSession {
