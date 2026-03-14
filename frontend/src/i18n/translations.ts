@@ -24,6 +24,18 @@ const translations = {
     levelsColumn: "Levels",
     noFiltersHint: "Select at least one topic, category, or level to start",
     back: "Back",
+    browseWords: "Browse Words",
+    searchPlaceholder: "Search words...",
+    noWordsFound: "No words found",
+    term: "Term",
+    definition: "Definition",
+    category: "Category",
+    level: "Level",
+    topic: "Topic",
+    page: "Page",
+    of: "of",
+    previous: "Previous",
+    next: "Next",
   },
 } as const;
 

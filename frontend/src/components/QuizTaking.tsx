@@ -43,9 +43,9 @@ export default function QuizTaking({ session, onComplete }: Props) {
   if (isComplete) {
     const { correct, total } = currentSession.score;
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-6 p-8">
-        <h2 className="text-2xl font-bold text-gray-800">{t("quizComplete")}</h2>
-        <p className="text-4xl font-semibold text-blue-600">
+      <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-800">{t("quizComplete")}</h2>
+        <p className="text-2xl sm:text-4xl font-semibold text-blue-600">
           {correct} / {total}
         </p>
         <button
@@ -59,11 +59,11 @@ export default function QuizTaking({ session, onComplete }: Props) {
   }
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 p-8">
+    <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
       <p className="text-sm text-gray-500">
         {currentIndex + 1} / {questions.length}
       </p>
-      <h2 className="text-3xl font-bold text-gray-800">{question!.term}</h2>
+      <h2 className="text-xl sm:text-3xl font-bold text-gray-800">{question!.term}</h2>
 
       {!showingAnswer ? (
         <button
@@ -99,18 +99,18 @@ export default function QuizTaking({ session, onComplete }: Props) {
             </div>
           )}
 
-          <div className="flex gap-4">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
             <button
               disabled={submitting}
               onClick={() => handleGrade(true)}
-              className="rounded-lg bg-green-600 px-6 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+              className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-2 text-white hover:bg-green-700 disabled:opacity-50"
             >
               {t("iWasCorrect")}
             </button>
             <button
               disabled={submitting}
               onClick={() => handleGrade(false)}
-              className="rounded-lg bg-red-600 px-6 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+              className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-2 text-white hover:bg-red-700 disabled:opacity-50"
             >
               {t("iWasWrong")}
             </button>

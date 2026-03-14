@@ -3,6 +3,7 @@ import { useI18n } from "../i18n/context";
 import { getCurrentSession, startQuiz } from "../api/quiz";
 import EmptyState from "./EmptyState";
 import QuizTaking from "./QuizTaking";
+import WordList from "./WordList";
 import LanguageSelectModal from "./LanguageSelectModal";
 import QuizFilterModal from "./QuizFilterModal";
 import type { QuizSession } from "../types";
@@ -19,6 +20,8 @@ export default function Dashboard() {
     categories: string[];
     levels: string[];
   } | null>(null);
+  const [browsingLanguage, setBrowsingLanguage] = useState<string | null>(null);
+  const [showBrowseLanguageModal, setShowBrowseLanguageModal] = useState(false);
 
   function handleLanguageSelected(language: string) {
     setShowLanguageModal(false);
@@ -99,16 +102,33 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-3">
-        <h1 className="text-xl font-bold text-gray-800">{t("appTitle")}</h1>
-        <button
-          onClick={() => setShowLanguageModal(true)}
-          disabled={starting}
-          className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          {t("startQuiz")}
-        </button>
+      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-3 sm:px-6 py-3">
+        <h1 className="text-base sm:text-xl font-bold text-gray-800">{t("appTitle")}</h1>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <button
+            onClick={() => setShowBrowseLanguageModal(true)}
+            className="rounded-lg border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+          >
+            {t("browseWords")}
+          </button>
+          <button
+            onClick={() => setShowLanguageModal(true)}
+            disabled={starting}
+            className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {t("startQuiz")}
+          </button>
+        </div>
       </header>
+      {showBrowseLanguageModal && (
+        <LanguageSelectModal
+          onSelect={(lang) => {
+            setShowBrowseLanguageModal(false);
+            setBrowsingLanguage(lang);
+          }}
+          onClose={() => setShowBrowseLanguageModal(false)}
+        />
+      )}
       {showLanguageModal && (
         <LanguageSelectModal
           onSelect={handleLanguageSelected}
@@ -147,6 +167,11 @@ export default function Dashboard() {
       <main className="flex-1">
         {activeQuiz ? (
           <QuizTaking session={activeQuiz} onComplete={handleQuizComplete} />
+        ) : browsingLanguage ? (
+          <WordList
+            language={browsingLanguage}
+            onBack={() => setBrowsingLanguage(null)}
+          />
         ) : (
           <EmptyState />
         )}

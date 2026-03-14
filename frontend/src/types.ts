@@ -31,3 +31,23 @@ export interface QuizSession {
   questionType?: string;
   wordIds?: string[];
 }
+
+export interface Word {
+  id: string;
+  term: string;
+  transliteration?: string;
+  definition: Record<string, string>;
+  grammaticalCategory: string;
+  examples: Example[];
+  topics: string[];
+  level?: string;
+  notes?: string;
+}
+
+export interface PaginatedResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
