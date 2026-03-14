@@ -1,0 +1,120 @@
+import { AzureOpenAI } from "openai";
+import { config } from "dotenv";
+import { resolve, dirname } from "path";
+import { fileURLToPath } from "url";
+import { TOPICS, type Word, type Topic } from "./types.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Load .env from project root
+config({ path: resolve(__dirname, "../../.env") });
+
+let client: AzureOpenAI | null = null;
+let deployment = "";
+
+export function createAzureClient(): AzureOpenAI {
+  if (!client) {
+    client = new AzureOpenAI({
+      apiKey: process.env.AZURE_OPENAI_API_KEY,
+      endpoint: process.env.AZURE_OPENAI_ENDPOINT,
+      apiVersion: process.env.AZURE_OPENAI_API_VERSION,
+      maxRetries: 5,
+    });
+    deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME!;
+  }
+  return client;
+}
+
+export function getDeployment(): string {
+  if (!deployment) {
+    deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME!;
+  }
+  return deployment;
+}
+
+export async function callLLM(systemPrompt: string, userPrompt: string): Promise<string> {
+  const cl = createAzureClient();
+  const response = await cl.chat.completions.create({
+    model: getDeployment(),
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+  });
+  return response.choices[0]?.message?.content ?? "";
+}
+
+export function stripMarkdownFences(text: string): string {
+  return text.replace(/^```(?:json)?\s*\n?/gm, "").replace(/\n?```\s*$/gm, "").trim();
+}
+
+export const PARTICLES = new Set([
+  "的", "了", "着", "过", "吗", "呢", "吧", "啊", "呀",
+  "哦", "哇", "嘛", "啦", "嘞", "喽", "罢了", "而已", "来着",
+]);
+
+export const PARTICLE_PINYIN: Record<string, string> = {
+  "的": "de", "了": "le", "着": "zhe", "过": "guò",
+  "吗": "ma", "呢": "ne", "吧": "ba", "啊": "ā",
+  "呀": "ya", "哦": "ó", "哇": "wa", "嘛": "ma",
+  "啦": "la", "嘞": "lei", "喽": "lou",
+  "罢了": "bàle", "而已": "éryǐ", "来着": "láizhe",
+};
+
+export async function generatePinyinForChars(
+  chars: string[]
+): Promise<{ char: string; pinyin: string }[]> {
+  if (chars.length === 0) return [];
+
+  const systemPrompt = `You are a Chinese pronunciation expert. Given a list of individual Chinese characters, return their most common pinyin with tone marks. Return a JSON object with a "results" key containing an array of {"char": "...", "pinyin": "..."} objects.`;
+  const userPrompt = `Provide pinyin for these characters: ${chars.join(", ")}`;
+
+  const raw = await callLLM(systemPrompt, userPrompt);
+  const parsed = JSON.parse(stripMarkdownFences(raw));
+  const results: { char: string; pinyin: string }[] = [];
+
+  for (const entry of parsed.results ?? []) {
+    if (
+      typeof entry?.char === "string" &&
+      typeof entry?.pinyin === "string" &&
+      entry.char.length === 1 &&
+      entry.pinyin.length > 0
+    ) {
+      results.push({ char: entry.char, pinyin: entry.pinyin });
+    }
+  }
+
+  return results;
+}
+
+const topicsSet = new Set<string>(TOPICS);
+
+export function validateWord(w: unknown): w is Omit<Word, "id" | "level"> {
+  if (!w || typeof w !== "object") return false;
+  const obj = w as Record<string, unknown>;
+  if (typeof obj.term !== "string" || !obj.term) return false;
+  if (typeof obj.transliteration !== "string") return false;
+  if (!obj.definition || typeof obj.definition !== "object") return false;
+  const def = obj.definition as Record<string, string>;
+  if (!def.Japanese || !def.English || !def.Korean) return false;
+  if (typeof obj.grammaticalCategory !== "string") return false;
+  if (!Array.isArray(obj.examples) || obj.examples.length === 0) return false;
+  if (!Array.isArray(obj.topics)) return false;
+  // Filter topics to valid ones
+  obj.topics = (obj.topics as string[]).filter((t) => topicsSet.has(t));
+  if ((obj.topics as string[]).length === 0) return false;
+  return true;
+}
+
+export function chunk<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
+export function delay(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}

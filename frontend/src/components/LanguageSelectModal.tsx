@@ -44,7 +44,7 @@ export default function LanguageSelectModal({ onSelect, onClose }: Props) {
         ) : languages.length === 0 ? (
           <p className="text-gray-500">No languages available.</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="max-h-64 space-y-2 overflow-y-auto">
             {languages.map((lang) => (
               <li key={lang.filename}>
                 <button

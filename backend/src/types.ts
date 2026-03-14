@@ -53,10 +53,18 @@ export interface VocabFile {
   words: Word[];
 }
 
+export interface WordIndexEntry {
+  term: string;
+  id: string;
+  level: string;
+  pinyin: string;
+}
+
 export interface LanguageInfo {
   filename: string;
   language: string;
   topics: Topic[];
+  levels: string[];
   wordCount: number;
 }
 

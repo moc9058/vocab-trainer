@@ -1,14 +1,16 @@
 import { useEffect, useState, useCallback } from "react";
 import { useI18n } from "../i18n/context";
-import { getWords, getFilters } from "../api/vocab";
+import { getWords, getFilters, getPinyinMap } from "../api/vocab";
+import RubyText from "./RubyText";
 import type { Word, PaginatedResult } from "../types";
 
 interface Props {
   language: string;
   onBack: () => void;
+  pinyinMap?: Record<string, string>;
 }
 
-export default function WordList({ language, onBack }: Props) {
+export default function WordList({ language, onBack, pinyinMap: externalMap }: Props) {
   const { t } = useI18n();
   const [result, setResult] = useState<PaginatedResult<Word> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,12 +25,22 @@ export default function WordList({ language, onBack }: Props) {
     categories: string[];
     levels: string[];
   } | null>(null);
+  const [pinyinMap, setPinyinMap] = useState<Record<string, string>>(externalMap ?? {});
+
+  useEffect(() => {
+    if (externalMap) setPinyinMap(externalMap);
+  }, [externalMap]);
 
   useEffect(() => {
     getFilters(language)
       .then(setFilterOptions)
       .catch(() => setFilterOptions(null));
-  }, [language]);
+    if (!externalMap) {
+      getPinyinMap(language)
+        .then(setPinyinMap)
+        .catch(() => setPinyinMap({}));
+    }
+  }, [language, externalMap]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -137,6 +149,7 @@ export default function WordList({ language, onBack }: Props) {
                   onToggle={() =>
                     setExpandedId(expandedId === word.id ? null : word.id)
                   }
+                  pinyinMap={pinyinMap}
                 />
               ))}
             </div>
@@ -159,6 +172,7 @@ export default function WordList({ language, onBack }: Props) {
                     onToggle={() =>
                       setExpandedId(expandedId === word.id ? null : word.id)
                     }
+                    pinyinMap={pinyinMap}
                   />
                 ))}
               </tbody>
@@ -197,10 +211,12 @@ function WordCard({
   word,
   expanded,
   onToggle,
+  pinyinMap,
 }: {
   word: Word;
   expanded: boolean;
   onToggle: () => void;
+  pinyinMap: Record<string, string>;
 }) {
   const { t } = useI18n();
   const defText = Object.values(word.definition).join("; ");
@@ -241,7 +257,7 @@ function WordCard({
           <ul className="space-y-1">
             {word.examples.map((ex, i) => (
               <li key={i} className="text-sm text-gray-600">
-                <span>{ex.sentence}</span>
+                <span><RubyText text={ex.sentence} pinyinMap={pinyinMap} /></span>
                 <span className="ml-2 text-gray-400">— {ex.translation}</span>
               </li>
             ))}
@@ -268,10 +284,12 @@ function WordRow({
   word,
   expanded,
   onToggle,
+  pinyinMap,
 }: {
   word: Word;
   expanded: boolean;
   onToggle: () => void;
+  pinyinMap: Record<string, string>;
 }) {
   const { t } = useI18n();
   const defText = Object.values(word.definition).join("; ");
@@ -303,7 +321,7 @@ function WordRow({
             <ul className="space-y-1">
               {word.examples.map((ex, i) => (
                 <li key={i} className="text-sm text-gray-600">
-                  <span>{ex.sentence}</span>
+                  <span><RubyText text={ex.sentence} pinyinMap={pinyinMap} /></span>
                   <span className="ml-2 text-gray-400">— {ex.translation}</span>
                 </li>
               ))}

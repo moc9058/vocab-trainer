@@ -27,3 +27,7 @@ export async function getWords(
 export function getFilters(language: string): Promise<{ topics: string[]; categories: string[]; levels: string[] }> {
   return fetchJson(`/api/vocab/${encodeURIComponent(language)}/filters`);
 }
+
+export function getPinyinMap(language: string): Promise<Record<string, string>> {
+  return fetchJson(`/api/vocab/${encodeURIComponent(language)}/pinyin-map`);
+}

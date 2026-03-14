@@ -11,8 +11,11 @@ import {
   getNextWordId,
   createLanguage,
   deleteLanguage,
+  lookupWordByTerm,
+  getPinyinMap,
 } from "../firestore.js";
 import type { Word } from "../types.js";
+import { generateMissingWords } from "../word-generator.js";
 
 const vocabRoutes: FastifyPluginAsync = async (fastify) => {
   // List words with filtering & pagination
@@ -45,6 +48,42 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.notFound(`Language '${language}' not found`);
       }
       return await getWordFilters(language);
+    }
+  );
+
+  // Lookup word by term in word_index
+  fastify.get<{
+    Params: { language: string };
+    Querystring: { term: string };
+  }>(
+    "/:language/lookup",
+    async (request, reply) => {
+      const { language } = request.params;
+      const { term } = request.query;
+      if (!term) {
+        return reply.badRequest("Query parameter 'term' is required");
+      }
+      if (!(await languageExists(language))) {
+        return reply.notFound(`Language '${language}' not found`);
+      }
+      const entry = await lookupWordByTerm(language, term);
+      if (!entry) return reply.notFound(`Term '${term}' not found in index`);
+      return entry;
+    }
+  );
+
+  // Get pinyin map (term → pinyin) for all words in a language
+  fastify.get<{ Params: { language: string } }>(
+    "/:language/pinyin-map",
+    async (request, reply) => {
+      const { language } = request.params;
+      if (!(await languageExists(language))) {
+        return reply.notFound(`Language '${language}' not found`);
+      }
+      const map = await getPinyinMap(language);
+      // Fire-and-forget: generate missing words in the background
+      generateMissingWords(language, request.log);
+      return map;
     }
   );
 

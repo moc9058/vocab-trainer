@@ -8,7 +8,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "migrate": "tsx scripts/migrate-to-firestore.ts"
+    "migrate": "tsx scripts/migrate-to-firestore.ts",
+    "restructure": "tsx scripts/restructure-db.ts",
+    "generate-extended": "tsx scripts/generate-extended.ts"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",
@@ -19,6 +21,8 @@
     "@fastify/cors": "^11.2.0",
     "@fastify/sensible": "^6.0.4",
     "@google-cloud/firestore": "^8.3.0",
-    "fastify": "^5.8.2"
+    "dotenv": "^17.3.1",
+    "fastify": "^5.8.2",
+    "openai": "^6.29.0"
   }
 }

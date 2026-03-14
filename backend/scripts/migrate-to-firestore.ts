@@ -129,6 +129,27 @@ async function migrateLanguage(filename: string): Promise<void> {
   } else {
     console.log(`  No progress data found`);
   }
+
+  // 5. Migrate word_index
+  let indexCount = 0;
+  for (let i = 0; i < vocab.words.length; i += 500) {
+    const batch = db.batch();
+    const chunk = vocab.words.slice(i, i + 500);
+    for (const word of chunk) {
+      const docId = `${language}_${word.term}`;
+      batch.set(db.collection("word_index").doc(docId), {
+        language,
+        term: word.term,
+        id: word.id,
+        level: word.level ?? "",
+        pinyin: word.transliteration ?? "",
+      });
+      indexCount++;
+    }
+    await batch.commit();
+    console.log(`  Word index: ${Math.min(i + 500, vocab.words.length)}/${vocab.words.length}`);
+  }
+  console.log(`  Migrated ${indexCount} word_index entries`);
 }
 
 async function migrateQuizHistory(): Promise<void> {
@@ -161,7 +182,7 @@ async function main(): Promise<void> {
 
   // Find all vocab files
   const files = await readdir(DB_DIR);
-  const vocabFiles = files.filter((f) => f.endsWith(".json") && !f.startsWith("id_map_")).sort();
+  const vocabFiles = files.filter((f) => f.endsWith(".json") && !f.startsWith("id_map_") && !f.startsWith("word_index")).sort();
   console.log(`Found ${vocabFiles.length} language file(s): ${vocabFiles.join(", ")}`);
 
   for (const file of vocabFiles) {

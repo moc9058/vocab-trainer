@@ -1,14 +1,16 @@
 import { useState } from "react";
 import { useI18n } from "../i18n/context";
 import { answerQuestion } from "../api/quiz";
+import RubyText from "./RubyText";
 import type { QuizSession } from "../types";
 
 interface Props {
   session: QuizSession;
   onComplete: () => void;
+  pinyinMap?: Record<string, string>;
 }
 
-export default function QuizTaking({ session, onComplete }: Props) {
+export default function QuizTaking({ session, onComplete, pinyinMap = {} }: Props) {
   const { t } = useI18n();
   const [currentSession, setCurrentSession] = useState(session);
   // Start from the first unanswered question (supports resume)
@@ -92,7 +94,7 @@ export default function QuizTaking({ session, onComplete }: Props) {
               <p className="mb-2 text-sm font-medium text-gray-500">{t("examples")}</p>
               {question!.examples.map((ex, i) => (
                 <div key={i} className="mb-2 last:mb-0">
-                  <p className="text-base text-gray-800">{ex.sentence}</p>
+                  <p className="text-base text-gray-800"><RubyText text={ex.sentence} pinyinMap={pinyinMap} /></p>
                   <p className="text-sm text-gray-500">{ex.translation}</p>
                 </div>
               ))}
