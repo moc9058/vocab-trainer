@@ -128,6 +128,25 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
 - **`level`** — Optional. Proficiency level tag for the word (e.g. `"HSK1"`, `"HSK2"`, …, `"HSK7~9"` for Chinese). Can be any string value.
 - **`notes`** — Optional. Free-form field for irregularities, mnemonics, etc.
 
+## Generating Extended Vocabulary
+
+The `generate-extended` script extracts unknown words from example sentences in `HSK{N}.json`, generates full vocabulary entries via Azure OpenAI, and saves them to `HSK{N}-extended.json`.
+
+```bash
+# Run for all HSK levels
+cd backend && npm run generate-extended
+
+# Run for a single level
+cd backend && npm run generate-extended -- HSK3
+```
+
+Safe to re-run — deduplicates against existing words across all levels.
+
+Requires the following environment variables:
+- `AZURE_OPENAI_ENDPOINT`
+- `AZURE_OPENAI_API_KEY`
+- `AZURE_OPENAI_DEPLOYMENT`
+
 ## Project Structure
 
 ```
@@ -139,25 +158,28 @@ vocab-trainer/
 │   ├── tsconfig.json
 │   ├── Dockerfile
 │   ├── scripts/
-│   │   └── migrate-to-firestore.ts  # One-time JSON → Firestore migration
+│   │   ├── migrate-to-firestore.ts  # One-time JSON → Firestore migration
+│   │   ├── generate-extended.ts     # Generate extended vocab via Azure OpenAI
+│   │   └── find-missing-pinyin.ts   # Find words missing pinyin data
 │   ├── src/
 │   │   ├── index.ts             # Fastify server entry point
 │   │   ├── types.ts             # Shared TypeScript interfaces
 │   │   ├── firestore.ts         # Google Cloud Firestore persistence layer
+│   │   ├── word-generator.ts    # Background word generation logic
+│   │   ├── llm.ts               # Azure OpenAI LLM integration
 │   │   └── routes/
 │   │       ├── languages.ts     # /api/languages
 │   │       ├── vocab.ts         # /api/vocab
 │   │       ├── progress.ts      # /api/progress
 │   │       └── quiz.ts          # /api/quiz
-│   ├── DB/                      # Vocabulary JSON files
-│   └── data/
-│       └── progress/            # Per-language progress files
+│   └── DB/                      # Per-HSK-level vocabulary JSON files
 ├── frontend/
 │   ├── package.json
 │   ├── package-lock.json
 │   ├── tsconfig.json
 │   ├── Dockerfile
 │   ├── vite.config.ts
+│   ├── nginx.conf.template      # Nginx config for production serving
 │   └── src/
 │       ├── main.tsx
 │       ├── App.tsx
@@ -167,8 +189,10 @@ vocab-trainer/
 │       │   ├── quiz.ts          # Quiz API wrappers
 │       │   └── vocab.ts         # Vocabulary API wrappers
 │       ├── components/
-│       │   ├── Dashboard.tsx     # Main layout with resume/new quiz flow
+│       │   ├── Dashboard.tsx     # Main layout with quiz/browse orchestration
 │       │   ├── QuizTaking.tsx    # Active quiz interface
+│       │   ├── WordList.tsx      # Paginated word browsing with filters
+│       │   ├── RubyText.tsx      # Ruby text component for pinyin annotations
 │       │   ├── LanguageSelectModal.tsx
 │       │   ├── QuizFilterModal.tsx
 │       │   └── EmptyState.tsx
@@ -181,7 +205,7 @@ vocab-trainer/
 | -------- | ----------------------------------------------------- |
 | Backend  | Fastify 5, TypeScript, Google Cloud Firestore, @fastify/cors, @fastify/sensible |
 | Frontend | React 19, Vite 6, Tailwind CSS 4                     |
-| Deploy   | Docker (Node 24 Alpine), `serve` for static frontend  |
+| Deploy   | Docker (Node 24 Alpine), Nginx Alpine for static frontend |
 
 ## Backend API Reference
 
@@ -265,6 +289,24 @@ vocab-trainer/
 #### `DELETE /api/vocab/:language/file` — Delete language file
 
 **Response:** `204 No Content`
+
+#### `GET /api/vocab/:language/lookup?term=X` — Look up word by term
+
+Looks up a word by its term using the word_index for fast retrieval.
+
+**Response:** `Word` object, or `404` if not found.
+
+#### `GET /api/vocab/:language/pinyin-map` — Get pinyin map
+
+Returns a mapping of terms to their pinyin. Triggers background word generation if configured.
+
+**Response:**
+```json
+{
+  "你好": "nǐ hǎo",
+  "谢谢": "xiè xiè"
+}
+```
 
 ---
 
@@ -362,8 +404,9 @@ React 19 single-page application for taking vocabulary quizzes. Built with Vite 
 
 | View                    | Description                                                                                                        |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Dashboard**           | Main layout. Header with "Start Quiz" button. Checks for existing in-progress session and offers resume or start new. |
-| **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows pinyin, Japanese definition, and example sentences. Wrong answers are re-queued until correct. Supports resuming from where the user left off. |
+| **Dashboard**           | Main layout. Header with "Start Quiz" and "Browse Words" buttons. Checks for existing in-progress session and offers resume or start new. |
+| **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows pinyin, Japanese definition, and example sentences with RubyText pinyin annotations. Wrong answers are re-queued until correct. Supports resuming from where the user left off. |
+| **WordList**            | Paginated word browsing with search, topic/category/level filters, progress badges, and expandable word details with pinyin displayed via RubyText. |
 | **LanguageSelectModal** | Modal to pick the target language when starting a new quiz. Lists languages fetched from the API.                  |
 | **QuizFilterModal**     | Modal to select topic, category, and level filters before starting a quiz. Supports "Select All" / "Clear All" actions. Level column only appears when words have levels set. |
 | **EmptyState**          | Welcome screen shown when no quiz is active.                                                                       |
@@ -372,7 +415,7 @@ React 19 single-page application for taking vocabulary quizzes. Built with Vite 
 
 - **`api/client.ts`** — Generic `fetchJson<T>()` and `postJson<T>()` utilities wrapping the Fetch API.
 - **`api/quiz.ts`** — `getCurrentSession(language)`, `startQuiz(opts)`, and `answerQuestion(opts)`.
-- **`api/vocab.ts`** — `getFilters(language)` for retrieving available topics, categories, and levels.
+- **`api/vocab.ts`** — `getFilters(language)`, `getPinyinMap(language)`, `getWords(language, params)` for vocabulary browsing and data retrieval.
 - **Dev proxy:** Vite proxies `/api/*` to `http://localhost:3000` so the frontend dev server can reach the backend.
 
 ### Internationalization
@@ -401,6 +444,7 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `words`              | Vocabulary words (one document per word)               |
 | `id_maps`            | Term → word ID mappings and next ID counter            |
 | `progress`           | Per-word progress (times seen, correct rate)            |
+| `word_index`         | Fast term → {id, level, pinyin} lookup (composite key: `{language}_{term}`) |
 | `quiz_sessions`      | One quiz session per language (keyed by language name)  |
 
 Local JSON files under `backend/DB/` serve as the source for the initial Firestore migration (run with `./deploy.sh ... --migrate`).
@@ -412,6 +456,9 @@ Local JSON files under `backend/DB/` serve as the source for the initial Firesto
 | `PORT`                | `3000`           | Server listening port              |
 | `HOST`                | `0.0.0.0`       | Server listening address           |
 | `FIRESTORE_DATABASE_ID` | `vocab-database` | Firestore database ID            |
+| `AZURE_OPENAI_ENDPOINT` | —               | Azure OpenAI endpoint for background word generation |
+| `AZURE_OPENAI_API_KEY`  | —               | Azure OpenAI API key             |
+| `AZURE_OPENAI_DEPLOYMENT` | —             | Azure OpenAI deployment name     |
 
 ## Docker
 
@@ -420,6 +467,6 @@ Both Dockerfiles use **Node 24 Alpine** with multi-stage builds to keep images s
 | Service    | Port | Description                                          |
 | ---------- | ---- | ---------------------------------------------------- |
 | `backend`  | 3000 | Multi-stage build → `node dist/index.js` (production deps only) |
-| `frontend` | 5173 | Multi-stage build → Vite static output served with `serve -s`   |
+| `frontend` | 5173 | Multi-stage build → Nginx Alpine serves static assets, proxies `/api/` to backend |
 
 See [Quickstart](#quickstart) for usage.
