@@ -1,3 +1,20 @@
+/**
+ * Generate extended vocabulary from example sentences in HSK files.
+ *
+ * For each level, processes sentences in batches of 30:
+ *   1. Segment batch via LLM → word/pinyin pairs, store on examples
+ *   2. Classify extracted terms (move vs generate)
+ *   3. Move existing words from other files to this level's extended file
+ *   4. Generate new word entries via LLM
+ *   5. Save after each batch for crash resilience
+ * After all levels: rebuild sequential IDs and word_index.json
+ *
+ * Usage:
+ *   cd backend && npm run generate-extended
+ *   cd backend && npm run generate-extended -- HSK1 HSK3
+ *   cd backend && npm run generate-extended -- hsk1 hsk7~9
+ */
+
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { readFileSync, writeFileSync, existsSync } from "fs";
@@ -10,17 +27,36 @@ import {
   chunk,
   delay,
   segmentBatch,
+  type Segment,
 } from "../src/llm.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DB_DIR = resolve(__dirname, "../DB");
 
 const LEVELS = ["HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6", "HSK7-9"];
-const MAX_ROUNDS = 5;
+
+const FILE_ORDER = [
+  "HSK1.json", "HSK1-extended.json",
+  "HSK2.json", "HSK2-extended.json",
+  "HSK3.json", "HSK3-extended.json",
+  "HSK4.json", "HSK4-extended.json",
+  "HSK5.json", "HSK5-extended.json",
+  "HSK6.json", "HSK6-extended.json",
+  "HSK7-9.json", "HSK7-9-extended.json",
+];
 
 interface WordIndex {
   next_id: number;
   terms: Record<string, { term: string; id: string; level: string; pinyin: string }>;
+}
+
+interface TermInfo {
+  term: string;
+  pinyin: string;
+  firstSeenLevel: string;
+  firstSeenSentence: string;
+  firstSeenTranslation: string;
+  firstSeenSegments: Segment[];
 }
 
 function readJSON<T>(path: string): T {
@@ -35,299 +71,397 @@ function formatId(n: number): string {
   return `zh-${String(n).padStart(6, "0")}`;
 }
 
-async function extractTermsViaSegments(sentences: string[]): Promise<string[]> {
-  const seen = new Set<string>();
-  const batches = chunk(sentences, 30);
+// ── Move words from other files to target extended file ──────────────
 
-  for (let i = 0; i < batches.length; i++) {
-    console.log(`  Extraction batch ${i + 1}/${batches.length} (${batches[i].length} sentences)`);
-    let retries = 0;
-    while (retries < 2) {
-      try {
-        const results = await segmentBatch(batches[i]);
-        for (const segs of results.values()) {
-          for (const seg of segs) {
-            if (seg.pinyin && seg.text.length > 1 && !PARTICLES.has(seg.text)) {
-              seen.add(seg.text);
-            }
-          }
-        }
-        break;
-      } catch (e) {
-        retries++;
-        if (retries >= 2) console.error(`  Extraction batch ${i + 1} failed after retries:`, e);
-      }
-    }
-    await delay(1000);
+function moveWords(
+  terms: TermInfo[],
+  allFiles: Map<string, { words: Word[] }>,
+  termToFile: Map<string, string>,
+): number {
+  let moved = 0;
+
+  for (const info of terms) {
+    const sourceFilename = termToFile.get(info.term);
+    if (!sourceFilename) continue;
+
+    const targetFilename = `${info.firstSeenLevel}-extended.json`;
+
+    // Don't move if already in the right place
+    if (sourceFilename === targetFilename) continue;
+    if (sourceFilename === `${info.firstSeenLevel}.json`) continue;
+
+    const sourceData = allFiles.get(sourceFilename)!;
+    const idx = sourceData.words.findIndex((w) => w.term === info.term);
+    if (idx === -1) continue;
+
+    const word = sourceData.words[idx];
+    const movedWord: Word = { ...word, level: `${info.firstSeenLevel}-extended` };
+
+    // Remove from source
+    sourceData.words.splice(idx, 1);
+
+    // Add to target
+    const targetData = allFiles.get(targetFilename)!;
+    targetData.words.push(movedWord);
+
+    // Update lookup
+    termToFile.set(info.term, targetFilename);
+
+    console.log(`    Moved "${info.term}" from ${sourceFilename} → ${targetFilename}`);
+    moved++;
   }
 
-  return [...seen];
+  return moved;
 }
 
-function collectSentences(words: Word[]): string[] {
-  const sentences: string[] = [];
-  for (const w of words) {
-    for (const ex of w.examples) {
-      sentences.push(ex.sentence);
-    }
-  }
-  return sentences;
-}
+// ── Generate new word entries via LLM ────────────────────────────────
 
-async function processLevel(level: string, wordIndex: WordIndex, knownTerms: Set<string>, indexPath: string): Promise<void> {
-  console.log(`\n=== Processing ${level} ===`);
+async function generateWords(
+  terms: TermInfo[],
+  level: string,
+  allFiles: Map<string, { words: Word[] }>,
+  wordIndex: WordIndex,
+  allKnownTerms: Set<string>,
+  termToFile: Map<string, string>,
+): Promise<number> {
+  if (terms.length === 0) return 0;
 
-  const corePath = resolve(DB_DIR, `${level}.json`);
-  const extPath = resolve(DB_DIR, `${level}-extended.json`);
+  const extFilename = `${level}-extended.json`;
+  const extData = allFiles.get(extFilename)!;
+  const topicsList = TOPICS.join(", ");
+  let generated = 0;
 
-  if (!existsSync(corePath)) {
-    console.log(`  ${level}.json not found, skipping`);
-    return;
-  }
+  const batches = chunk(terms, 20);
+  for (let bi = 0; bi < batches.length; bi++) {
+    const batch = batches[bi];
+    console.log(`    Generation batch ${bi + 1}/${batches.length} (${batch.length} terms)`);
 
-  const coreFile = readJSON<{ words: Word[] }>(corePath);
-  const extFile = existsSync(extPath) ? readJSON<{ words: Word[] }>(extPath) : { words: [] };
-
-  // Build level-scoped terms set (only this level's core + extended words)
-  const levelTerms = new Set<string>();
-  for (const w of coreFile.words) {
-    levelTerms.add(w.term);
-  }
-  for (const w of extFile.words) {
-    levelTerms.add(w.term);
-    knownTerms.add(w.term); // Also add to global dedup set
-  }
-
-  const extendedLevel = `${level}-extended`;
-  const allNewWords: Word[] = [...extFile.words];
-  let currentWords = coreFile.words;
-
-  for (let round = 0; round < MAX_ROUNDS; round++) {
-    console.log(`\n  --- Round ${round + 1}/${MAX_ROUNDS} ---`);
-
-    // Collect example sentences from current words
-    const sentences = collectSentences(currentWords);
-    if (sentences.length === 0) {
-      console.log("  No sentences to process, stopping");
-      break;
-    }
-    console.log(`  Extracting terms from ${sentences.length} sentences`);
-
-    // Extract terms from sentences
-    const extractedTerms = await extractTermsViaSegments(sentences);
-
-    // Filter against level-scoped terms (not global knownTerms) and particles
-    const newTerms = extractedTerms.filter(
-      (t) => !levelTerms.has(t) && !PARTICLES.has(t) && t.length > 0
-    );
-
-    // Split into moved terms (exist in another level's core) and truly new terms
-    const movedTerms: string[] = [];
-    const trulyNewTerms: string[] = [];
-    for (const t of newTerms) {
-      if (wordIndex.terms[t]) {
-        movedTerms.push(t);
-      } else {
-        trulyNewTerms.push(t);
-      }
-    }
-
-    console.log(`  Found ${extractedTerms.length} terms, ${newTerms.length} are new (${movedTerms.length} moved, ${trulyNewTerms.length} truly new)`);
-
-    if (movedTerms.length + trulyNewTerms.length < 3) {
-      console.log("  Too few new terms (<3), stopping");
-      break;
-    }
-
-    // Move cross-level terms: copy from source level's core file into this extended file
-    for (const t of movedTerms) {
-      const sourceEntry = wordIndex.terms[t];
-      // Skip if already in an extended file (don't move between extended files)
-      if (sourceEntry.level.includes("-extended")) continue;
-      // Skip if already handled by global dedup
-      if (knownTerms.has(t)) continue;
-
-      const sourceCorePath = resolve(DB_DIR, `${sourceEntry.level}.json`);
-      if (!existsSync(sourceCorePath)) continue;
-
-      const sourceFile = readJSON<{ words: Word[] }>(sourceCorePath);
-      const wordIdx = sourceFile.words.findIndex((w) => w.term === t);
-      if (wordIdx === -1) continue;
-
-      const movedWord: Word = {
-        ...sourceFile.words[wordIdx],
-        level: extendedLevel,
-      };
-
-      // Remove from source file
-      sourceFile.words.splice(wordIdx, 1);
-      writeJSON(sourceCorePath, sourceFile);
-
-      // Add to extended
-      allNewWords.push(movedWord);
-      knownTerms.add(t);
-      levelTerms.add(t);
-
-      // Update word index
-      wordIndex.terms[t].level = extendedLevel;
-    }
-
-    if (movedTerms.length > 0) {
-      writeJSON(extPath, { words: allNewWords });
-      writeJSON(indexPath, wordIndex);
-      console.log(`  Moved ${movedTerms.length} terms from other levels`);
-    }
-
-    // Generate full word entries for truly new terms in batches of 20
-    const batches = chunk(trulyNewTerms, 20);
-    const topicsList = TOPICS.join(", ");
-    const roundWords: Word[] = [];
-
-    for (let i = 0; i < batches.length; i++) {
-      console.log(`  Generation batch ${i + 1}/${batches.length} (${batches[i].length} terms)`);
-      const systemPrompt = `You are a Chinese vocabulary expert. Generate detailed vocabulary entries for Chinese words. Return a JSON object with a "words" key containing an array of word objects.`;
-      const userPrompt = `Generate vocabulary entries for these Chinese words (level: ${extendedLevel}).
+    const systemPrompt = `You are a Chinese vocabulary expert. Generate vocabulary entries for Chinese words. Return a JSON object with a "words" key containing an array of word objects.`;
+    const wordsList = batch.map((t) => t.term).join(", ");
+    const userPrompt = `Generate vocabulary entries for these Chinese words (level: ${level}-extended).
 
 Each word object must have:
 - "term": the Chinese word
 - "transliteration": pinyin with tone marks
 - "definition": {"Japanese": "...", "English": "...", "Korean": "..."}
 - "grammaticalCategory": one of "noun", "verb", "adjective", "adverb", "numeral", "measure word", "conjunction", "preposition", "particle", "pronoun", "interjection", "phrase"
-- "examples": [{"sentence": "Chinese sentence using the word", "translation": "Japanese translation"}] (1-2 examples)
 - "topics": array of 1-3 topics from: ${topicsList}
 - "notes": brief usage note or empty string
 
-Words: ${batches[i].join(", ")}`;
+Do NOT include "examples" — examples will be added separately.
 
+Words: ${wordsList}`;
+
+    let retries = 0;
+    while (retries < 3) {
+      try {
+        const raw = await callLLM(systemPrompt, userPrompt);
+        const parsed = JSON.parse(stripMarkdownFences(raw));
+        const words: unknown[] = parsed.words ?? [];
+
+        for (const w of words) {
+          const wObj = w as Record<string, unknown>;
+          if (!wObj.examples) wObj.examples = [{ sentence: "", translation: "" }];
+
+          if (!validateWord(w)) {
+            console.warn(`    Skipped invalid word:`, (w as Record<string, unknown>)?.term ?? w);
+            continue;
+          }
+
+          const validated = w as Omit<Word, "id" | "level">;
+          if (allKnownTerms.has(validated.term)) continue;
+
+          const termInfo = batch.find((t) => t.term === validated.term);
+          if (!termInfo) continue;
+
+          const id = formatId(wordIndex.next_id);
+          wordIndex.next_id++;
+
+          const fullWord: Word = {
+            ...validated,
+            id,
+            level: `${level}-extended`,
+            topics: validated.topics as Topic[],
+            examples: [
+              {
+                sentence: termInfo.firstSeenSentence,
+                translation: termInfo.firstSeenTranslation,
+                segments: termInfo.firstSeenSegments,
+              },
+            ],
+          };
+
+          extData.words.push(fullWord);
+          allKnownTerms.add(validated.term);
+          termToFile.set(validated.term, extFilename);
+
+          wordIndex.terms[validated.term] = {
+            term: validated.term,
+            id,
+            level: `${level}-extended`,
+            pinyin: validated.transliteration ?? termInfo.pinyin,
+          };
+
+          generated++;
+        }
+        break;
+      } catch (e) {
+        retries++;
+        if (retries >= 3) console.error(`    Generation batch ${bi + 1} failed after 3 retries:`, e);
+        else await delay(2000);
+      }
+    }
+
+    // Save after each generation batch
+    writeJSON(resolve(DB_DIR, extFilename), extData);
+    writeJSON(resolve(DB_DIR, "word_index.json"), wordIndex);
+
+    await delay(1000);
+  }
+
+  return generated;
+}
+
+// ── Process a single level (per-batch pipeline) ──────────────────────
+
+async function processLevel(
+  level: string,
+  allFiles: Map<string, { words: Word[] }>,
+  wordIndex: WordIndex,
+  allKnownTerms: Set<string>,
+  termToFile: Map<string, string>,
+): Promise<void> {
+  console.log(`\n=== Processing ${level} ===`);
+
+  for (const suffix of ["", "-extended"]) {
+    const filename = `${level}${suffix}.json`;
+    const data = allFiles.get(filename);
+    if (!data || data.words.length === 0) continue;
+
+    // Collect example sentence references
+    const exRefs: { word: Word; exIndex: number; sentence: string; translation: string }[] = [];
+    for (const w of data.words) {
+      for (let ei = 0; ei < w.examples.length; ei++) {
+        exRefs.push({
+          word: w,
+          exIndex: ei,
+          sentence: w.examples[ei].sentence,
+          translation: w.examples[ei].translation,
+        });
+      }
+    }
+
+    if (exRefs.length === 0) continue;
+    console.log(`  ${filename}: ${exRefs.length} sentences`);
+
+    // Process in batches of 30
+    const batches = chunk(exRefs, 30);
+    for (let bi = 0; bi < batches.length; bi++) {
+      const batch = batches[bi];
+      console.log(`  Batch ${bi + 1}/${batches.length} (${batch.length} sentences)`);
+
+      // Step 1: Segment
+      let batchNewTerms: TermInfo[] = [];
       let retries = 0;
-      while (retries < 2) {
+      while (retries < 3) {
         try {
-          const raw = await callLLM(systemPrompt, userPrompt);
-          const parsed = JSON.parse(stripMarkdownFences(raw));
-          const words: unknown[] = parsed.words ?? [];
-          for (const w of words) {
-            if (validateWord(w)) {
-              const validated = w as Omit<Word, "id" | "level">;
-              if (knownTerms.has(validated.term)) continue;
+          const sentences = batch.map((r) => r.sentence);
+          const results = await segmentBatch(sentences);
 
-              const id = formatId(wordIndex.next_id);
-              wordIndex.next_id++;
+          for (let j = 0; j < batch.length; j++) {
+            const segs = results.get(j);
+            if (!segs) continue;
 
-              const fullWord: Word = {
-                ...validated,
-                id,
-                level: extendedLevel,
-                topics: validated.topics as Topic[],
-              };
+            // Store segments on the example
+            const ref = batch[j];
+            (ref.word.examples[ref.exIndex] as unknown as Record<string, unknown>).segments = segs;
 
-              roundWords.push(fullWord);
-              allNewWords.push(fullWord);
-              knownTerms.add(validated.term);
+            // Collect new terms from this batch
+            for (const seg of segs) {
+              if (!seg.pinyin || seg.text.length <= 1 || PARTICLES.has(seg.text)) continue;
+              if (allKnownTerms.has(seg.text)) continue;
 
-              wordIndex.terms[validated.term] = {
-                term: validated.term,
-                id,
-                level: extendedLevel,
-                pinyin: validated.transliteration ?? "",
-              };
-            } else {
-              console.warn(`  Skipped invalid word:`, (w as Record<string, unknown>)?.term ?? w);
+              // Avoid duplicates within this batch
+              if (batchNewTerms.some((t) => t.term === seg.text)) continue;
+
+              batchNewTerms.push({
+                term: seg.text,
+                pinyin: seg.pinyin,
+                firstSeenLevel: level,
+                firstSeenSentence: ref.sentence,
+                firstSeenTranslation: ref.translation,
+                firstSeenSegments: segs,
+              });
             }
           }
           break;
         } catch (e) {
           retries++;
-          if (retries >= 2) console.error(`  Generation batch ${i + 1} failed after retries:`, e);
+          if (retries >= 3) {
+            console.error(`  Segmentation batch ${bi + 1} failed after 3 retries:`, e);
+          } else {
+            await delay(2000);
+          }
         }
       }
 
-      // Write after each batch for crash resilience
-      writeJSON(extPath, { words: allNewWords });
-      writeJSON(indexPath, wordIndex);
-      console.log(`  Saved ${allNewWords.length} words to ${level}-extended.json after batch ${i + 1}`);
+      // Save segments
+      writeJSON(resolve(DB_DIR, filename), data);
+
+      if (batchNewTerms.length === 0) {
+        await delay(1000);
+        continue;
+      }
+
+      // Step 2: Classify — split into move vs generate
+      const toMove: TermInfo[] = [];
+      const toGenerate: TermInfo[] = [];
+
+      for (const info of batchNewTerms) {
+        if (termToFile.has(info.term)) {
+          toMove.push(info);
+        } else {
+          toGenerate.push(info);
+        }
+      }
+
+      console.log(`    New terms: ${batchNewTerms.length} (${toMove.length} move, ${toGenerate.length} generate)`);
+
+      // Step 3: Move existing words
+      if (toMove.length > 0) {
+        const moved = moveWords(toMove, allFiles, termToFile);
+        if (moved > 0) {
+          // Save affected files
+          for (const info of toMove) {
+            const srcFile = termToFile.get(info.term);
+            if (srcFile) writeJSON(resolve(DB_DIR, srcFile), allFiles.get(srcFile)!);
+          }
+          const extFilename = `${level}-extended.json`;
+          writeJSON(resolve(DB_DIR, extFilename), allFiles.get(extFilename)!);
+        }
+      }
+
+      // Mark moved terms as known
+      for (const info of toMove) {
+        allKnownTerms.add(info.term);
+      }
+
+      // Step 4: Generate new words
+      if (toGenerate.length > 0) {
+        await generateWords(toGenerate, level, allFiles, wordIndex, allKnownTerms, termToFile);
+      }
 
       await delay(1000);
     }
-
-    // Post-process: segment example sentences with pinyin
-    if (roundWords.length > 0) {
-      const exRefs: { example: { sentence: string; segments?: unknown }; sentence: string }[] = [];
-      for (const w of roundWords) {
-        for (const ex of w.examples) {
-          exRefs.push({ example: ex, sentence: ex.sentence });
-        }
-      }
-
-      const segBatches = chunk(exRefs, 10);
-      console.log(`  Segmenting ${exRefs.length} examples in ${segBatches.length} batches`);
-
-      for (let si = 0; si < segBatches.length; si++) {
-        const batch = segBatches[si];
-        const sentences = batch.map((r) => r.sentence);
-        let retries = 0;
-        while (retries < 3) {
-          try {
-            const results = await segmentBatch(sentences);
-            for (let j = 0; j < batch.length; j++) {
-              const segs = results.get(j);
-              if (segs) {
-                (batch[j].example as Record<string, unknown>).segments = segs;
-              }
-            }
-            break;
-          } catch (err) {
-            retries++;
-            if (retries >= 3) {
-              console.error(`  Segment batch ${si + 1} failed after 3 retries:`, err);
-            } else {
-              await delay(2000);
-            }
-          }
-        }
-        if (si < segBatches.length - 1) await delay(500);
-      }
-
-      // Save after segmentation
-      writeJSON(extPath, { words: allNewWords });
-      console.log(`  Segmentation complete for round ${round + 1}`);
-    }
-
-    console.log(`  Added ${roundWords.length} words this round (total: ${allNewWords.length})`);
-
-    // Use the newly generated words as input for the next round
-    currentWords = roundWords;
   }
 }
 
-async function main(): Promise<void> {
-  const cliLevels = process.argv.slice(2);
-  const levelsToProcess = cliLevels.length > 0 ? cliLevels : LEVELS;
+// ── Rebuild IDs ──────────────────────────────────────────────────────
 
-  // Validate CLI levels
-  const invalid = cliLevels.filter((l) => !LEVELS.includes(l));
-  if (invalid.length > 0) {
-    console.error(`Invalid level(s): ${invalid.join(", ")}. Valid levels: ${LEVELS.join(", ")}`);
-    process.exit(1);
+function rebuildIds(
+  allFiles: Map<string, { words: Word[] }>,
+): WordIndex {
+  let nextId = 1;
+  const wordIndex: WordIndex = { next_id: 0, terms: {} };
+
+  for (const filename of FILE_ORDER) {
+    const data = allFiles.get(filename);
+    if (!data) continue;
+
+    for (const word of data.words) {
+      const newId = formatId(nextId);
+      word.id = newId;
+
+      wordIndex.terms[word.term] = {
+        term: word.term,
+        id: newId,
+        level: word.level ?? "",
+        pinyin: word.transliteration ?? "",
+      };
+
+      nextId++;
+    }
   }
 
-  console.log("Loading word index...");
+  wordIndex.next_id = nextId;
+  return wordIndex;
+}
+
+// ── Main ─────────────────────────────────────────────────────────────
+
+/** Normalize a CLI level argument to canonical form (e.g. "hsk1" → "HSK1", "hsk789" → "HSK7-9") */
+function normalizeLevel(raw: string): string | null {
+  const s = raw.trim().toUpperCase().replace(/[~\-]/g, "");
+  if (/^HSK[789]+$/.test(s)) return "HSK7-9";
+  const m = s.match(/^HSK([1-6])$/);
+  if (m) return `HSK${m[1]}`;
+  return null;
+}
+
+async function main(): Promise<void> {
+  const cliArgs = process.argv.slice(2);
+
+  let levelsToProcess: string[];
+  if (cliArgs.length > 0) {
+    const resolved = new Set<string>();
+    const invalid: string[] = [];
+    for (const arg of cliArgs) {
+      const level = normalizeLevel(arg);
+      if (level) resolved.add(level);
+      else invalid.push(arg);
+    }
+    if (invalid.length > 0) {
+      console.error(`Invalid level(s): ${invalid.join(", ")}. Valid: HSK1-HSK6, HSK7-9 (accepts hsk7, hsk789, hsk7~9, etc.)`);
+      process.exit(1);
+    }
+    levelsToProcess = LEVELS.filter((l) => resolved.has(l));
+  } else {
+    levelsToProcess = LEVELS;
+  }
+
+  // Load all files
+  const allFiles = new Map<string, { words: Word[] }>();
+  for (const filename of FILE_ORDER) {
+    const filepath = resolve(DB_DIR, filename);
+    if (existsSync(filepath)) {
+      allFiles.set(filename, readJSON(filepath));
+    } else {
+      allFiles.set(filename, { words: [] });
+    }
+  }
+
   const indexPath = resolve(DB_DIR, "word_index.json");
   const wordIndex = readJSON<WordIndex>(indexPath);
+  console.log(`Loaded ${allFiles.size} files, word_index: ${Object.keys(wordIndex.terms).length} entries`);
 
-  // Known terms set — used only for cross-level dedup during generation.
-  // NOT pre-populated from word_index; each level builds its own levelTerms set.
-  const knownTerms = new Set<string>();
-  console.log(`Word index loaded (${Object.keys(wordIndex.terms).length} entries, next_id: ${wordIndex.next_id})`);
-
-  // Process levels sequentially
-  for (const level of levelsToProcess) {
-    await processLevel(level, wordIndex, knownTerms, indexPath);
-
-    // Save word index after each level
-    writeJSON(indexPath, wordIndex);
-    console.log(`  Updated word_index.json (next_id: ${wordIndex.next_id})`);
+  // Build lookup structures
+  const allKnownTerms = new Set<string>();
+  const termToFile = new Map<string, string>();
+  for (const [filename, data] of allFiles) {
+    for (const w of data.words) {
+      allKnownTerms.add(w.term);
+      termToFile.set(w.term, filename);
+    }
   }
 
+  // Process each level (per-batch pipeline)
+  for (const level of levelsToProcess) {
+    await processLevel(level, allFiles, wordIndex, allKnownTerms, termToFile);
+  }
+
+  // Final pass: rebuild IDs
+  console.log("\n=== Rebuilding IDs ===");
+  const newIndex = rebuildIds(allFiles);
+
+  for (const filename of FILE_ORDER) {
+    const data = allFiles.get(filename);
+    if (data) writeJSON(resolve(DB_DIR, filename), data);
+  }
+  writeJSON(indexPath, newIndex);
+
+  const totalWords = newIndex.next_id - 1;
+  console.log(`word_index.json: ${Object.keys(newIndex.terms).length} entries, next_id: ${newIndex.next_id}`);
+  console.log(`Total words: ${totalWords}`);
   console.log("\nDone!");
 }
 

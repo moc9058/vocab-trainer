@@ -14,28 +14,7 @@
       "examples": [
         {
           "sentence": "我爱我的家人。",
-          "translation": "私は家族を愛しています。",
-          "segments": [
-            {
-              "text": "我",
-              "pinyin": "wǒ"
-            },
-            {
-              "text": "爱",
-              "pinyin": "ài"
-            },
-            {
-              "text": "我的",
-              "pinyin": "wǒ de"
-            },
-            {
-              "text": "家人",
-              "pinyin": "jiā rén"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "私は家族を愛しています。"
         }
       ],
       "topics": [
@@ -57,36 +36,7 @@
       "examples": [
         {
           "sentence": "我的爱好是看书和听音乐。",
-          "translation": "私の趣味は読書と音楽を聴くことです。",
-          "segments": [
-            {
-              "text": "我的",
-              "pinyin": "wǒ de"
-            },
-            {
-              "text": "爱好",
-              "pinyin": "ài hào"
-            },
-            {
-              "text": "是",
-              "pinyin": "shì"
-            },
-            {
-              "text": "看书",
-              "pinyin": "kàn shū"
-            },
-            {
-              "text": "和",
-              "pinyin": "hé"
-            },
-            {
-              "text": "听音乐",
-              "pinyin": "tīng yīn yuè"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "私の趣味は読書と音楽を聴くことです。"
         }
       ],
       "topics": [
@@ -109,32 +59,7 @@
       "examples": [
         {
           "sentence": "我有八本书。",
-          "translation": "私は本を8冊持っています。",
-          "segments": [
-            {
-              "text": "我",
-              "pinyin": "wǒ"
-            },
-            {
-              "text": "有",
-              "pinyin": "yǒu"
-            },
-            {
-              "text": "八",
-              "pinyin": "bā"
-            },
-            {
-              "text": "本",
-              "pinyin": "běn"
-            },
-            {
-              "text": "书",
-              "pinyin": "shū"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "私は本を8冊持っています。"
         }
       ],
       "topics": [
@@ -156,28 +81,7 @@
       "examples": [
         {
           "sentence": "爸爸在家做饭。",
-          "translation": "お父さんは家で料理をしています。",
-          "segments": [
-            {
-              "text": "爸爸",
-              "pinyin": "bà ba"
-            },
-            {
-              "text": "在",
-              "pinyin": "zài"
-            },
-            {
-              "text": "家",
-              "pinyin": "jiā"
-            },
-            {
-              "text": "做饭",
-              "pinyin": "zuò fàn"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "お父さんは家で料理をしています。"
         }
       ],
       "topics": [
@@ -199,24 +103,7 @@
       "examples": [
         {
           "sentence": "我们走吧。",
-          "translation": "行きましょう。",
-          "segments": [
-            {
-              "text": "我们",
-              "pinyin": "wǒ men"
-            },
-            {
-              "text": "走",
-              "pinyin": "zǒu"
-            },
-            {
-              "text": "吧",
-              "pinyin": "ba"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "行きましょう。"
         }
       ],
       "topics": [
@@ -238,36 +125,7 @@
       "examples": [
         {
           "sentence": "那辆车是白色的。",
-          "translation": "その車は白いです。",
-          "segments": [
-            {
-              "text": "那",
-              "pinyin": "nà"
-            },
-            {
-              "text": "辆",
-              "pinyin": "liàng"
-            },
-            {
-              "text": "车",
-              "pinyin": "chē"
-            },
-            {
-              "text": "是",
-              "pinyin": "shì"
-            },
-            {
-              "text": "白色",
-              "pinyin": "bái sè"
-            },
-            {
-              "text": "的",
-              "pinyin": "de"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "その車は白いです。"
         }
       ],
       "topics": [
@@ -289,47 +147,7 @@
       "examples": [
         {
           "sentence": "白天我在上班，晚上才有空。",
-          "translation": "昼間は仕事をしていて、夜になってから時間があります。",
-          "segments": [
-            {
-              "text": "白天",
-              "pinyin": "bái tiān"
-            },
-            {
-              "text": "我",
-              "pinyin": "wǒ"
-            },
-            {
-              "text": "在",
-              "pinyin": "zài"
-            },
-            {
-              "text": "上班",
-              "pinyin": "shàng bān"
-            },
-            {
-              "text": "，"
-            },
-            {
-              "text": "晚上",
-              "pinyin": "wǎn shàng"
-            },
-            {
-              "text": "才",
-              "pinyin": "cái"
-            },
-            {
-              "text": "有",
-              "pinyin": "yǒu"
-            },
-            {
-              "text": "空",
-              "pinyin": "kòng"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "昼間は仕事をしていて、夜になってから時間があります。"
         }
       ],
       "topics": [
@@ -351,40 +169,7 @@
       "examples": [
         {
           "sentence": "这里有一百个人参加会议。",
-          "translation": "ここには100人が会議に参加しています。",
-          "segments": [
-            {
-              "text": "这里",
-              "pinyin": "zhè lǐ"
-            },
-            {
-              "text": "有",
-              "pinyin": "yǒu"
-            },
-            {
-              "text": "一百",
-              "pinyin": "yì bǎi"
-            },
-            {
-              "text": "个",
-              "pinyin": "gè"
-            },
-            {
-              "text": "人",
-              "pinyin": "rén"
-            },
-            {
-              "text": "参加",
-              "pinyin": "cān jiā"
-            },
-            {
-              "text": "会议",
-              "pinyin": "huì yì"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "ここには100人が会議に参加しています。"
         }
       ],
       "topics": [
@@ -406,32 +191,7 @@
       "examples": [
         {
           "sentence": "我们班有二十个学生。",
-          "translation": "私たちのクラスには20人の生徒がいます。",
-          "segments": [
-            {
-              "text": "我们班",
-              "pinyin": "wǒ men bān"
-            },
-            {
-              "text": "有",
-              "pinyin": "yǒu"
-            },
-            {
-              "text": "二十",
-              "pinyin": "èr shí"
-            },
-            {
-              "text": "个",
-              "pinyin": "gè"
-            },
-            {
-              "text": "学生",
-              "pinyin": "xué shēng"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "私たちのクラスには20人の生徒がいます。"
         }
       ],
       "topics": [
@@ -453,28 +213,7 @@
       "examples": [
         {
           "sentence": "他等了半小时。",
-          "translation": "彼は30分待ちました。",
-          "segments": [
-            {
-              "text": "他",
-              "pinyin": "tā"
-            },
-            {
-              "text": "等",
-              "pinyin": "děng"
-            },
-            {
-              "text": "了",
-              "pinyin": "le"
-            },
-            {
-              "text": "半小时",
-              "pinyin": "bàn xiǎo shí"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "彼は30分待ちました。"
         }
       ],
       "topics": [
@@ -496,28 +235,7 @@
       "examples": [
         {
           "sentence": "半年后我会回国。",
-          "translation": "半年後に帰国します。",
-          "segments": [
-            {
-              "text": "半年后",
-              "pinyin": "bàn nián hòu"
-            },
-            {
-              "text": "我",
-              "pinyin": "wǒ"
-            },
-            {
-              "text": "会",
-              "pinyin": "huì"
-            },
-            {
-              "text": "回国",
-              "pinyin": "huí guó"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "半年後に帰国します。"
         }
       ],
       "topics": [
@@ -540,32 +258,7 @@
       "examples": [
         {
           "sentence": "你能帮我吗？",
-          "translation": "手伝ってくれますか？",
-          "segments": [
-            {
-              "text": "你",
-              "pinyin": "nǐ"
-            },
-            {
-              "text": "能",
-              "pinyin": "néng"
-            },
-            {
-              "text": "帮",
-              "pinyin": "bāng"
-            },
-            {
-              "text": "我",
-              "pinyin": "wǒ"
-            },
-            {
-              "text": "吗",
-              "pinyin": "ma"
-            },
-            {
-              "text": "？"
-            }
-          ]
+          "translation": "手伝ってくれますか？"
         }
       ],
       "topics": [
@@ -587,32 +280,7 @@
       "examples": [
         {
           "sentence": "我买了一个新包。",
-          "translation": "私は新しいバッグを買いました。",
-          "segments": [
-            {
-              "text": "我",
-              "pinyin": "wǒ"
-            },
-            {
-              "text": "买",
-              "pinyin": "mǎi"
-            },
-            {
-              "text": "了",
-              "pinyin": "le"
-            },
-            {
-              "text": "一个",
-              "pinyin": "yí gè"
-            },
-            {
-              "text": "新包",
-              "pinyin": "xīn bāo"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "私は新しいバッグを買いました。"
         }
       ],
       "topics": [
@@ -634,32 +302,7 @@
       "examples": [
         {
           "sentence": "早餐我常常吃包子。",
-          "translation": "朝ご飯によく包子を食べます。",
-          "segments": [
-            {
-              "text": "早餐",
-              "pinyin": "zǎo cān"
-            },
-            {
-              "text": "我",
-              "pinyin": "wǒ"
-            },
-            {
-              "text": "常常",
-              "pinyin": "cháng cháng"
-            },
-            {
-              "text": "吃",
-              "pinyin": "chī"
-            },
-            {
-              "text": "包子",
-              "pinyin": "bāo zi"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "朝ご飯によく包子を食べます。"
         }
       ],
       "topics": [
@@ -681,36 +324,7 @@
       "examples": [
         {
           "sentence": "请给我一杯水。",
-          "translation": "私に一杯の水をください。",
-          "segments": [
-            {
-              "text": "请",
-              "pinyin": "qǐng"
-            },
-            {
-              "text": "给",
-              "pinyin": "gěi"
-            },
-            {
-              "text": "我",
-              "pinyin": "wǒ"
-            },
-            {
-              "text": "一",
-              "pinyin": "yì"
-            },
-            {
-              "text": "杯",
-              "pinyin": "bēi"
-            },
-            {
-              "text": "水",
-              "pinyin": "shuǐ"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "私に一杯の水をください。"
         }
       ],
       "topics": [
@@ -732,32 +346,7 @@
       "examples": [
         {
           "sentence": "他住在城市的北边。",
-          "translation": "彼は町の北側に住んでいます。",
-          "segments": [
-            {
-              "text": "他",
-              "pinyin": "tā"
-            },
-            {
-              "text": "住在",
-              "pinyin": "zhù zài"
-            },
-            {
-              "text": "城市",
-              "pinyin": "chéng shì"
-            },
-            {
-              "text": "的",
-              "pinyin": "de"
-            },
-            {
-              "text": "北边",
-              "pinyin": "běi biān"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "彼は町の北側に住んでいます。"
         }
       ],
       "topics": [
@@ -779,32 +368,7 @@
       "examples": [
         {
           "sentence": "学校在村子的北边。",
-          "translation": "学校は村の北側にあります。",
-          "segments": [
-            {
-              "text": "学校",
-              "pinyin": "xué xiào"
-            },
-            {
-              "text": "在",
-              "pinyin": "zài"
-            },
-            {
-              "text": "村子",
-              "pinyin": "cūn zi"
-            },
-            {
-              "text": "的",
-              "pinyin": "de"
-            },
-            {
-              "text": "北边",
-              "pinyin": "běi biān"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "学校は村の北側にあります。"
         }
       ],
       "topics": [
@@ -826,24 +390,7 @@
       "examples": [
         {
           "sentence": "这本书很有意思。",
-          "translation": "この本はとても面白いです。",
-          "segments": [
-            {
-              "text": "这本书",
-              "pinyin": "zhè běn shū"
-            },
-            {
-              "text": "很",
-              "pinyin": "hěn"
-            },
-            {
-              "text": "有意思",
-              "pinyin": "yǒu yì si"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "この本はとても面白いです。"
         }
       ],
       "topics": [
@@ -865,36 +412,7 @@
       "examples": [
         {
           "sentence": "请把你的本子递给我。",
-          "translation": "あなたのノートを私に渡してください。",
-          "segments": [
-            {
-              "text": "请",
-              "pinyin": "qǐng"
-            },
-            {
-              "text": "把",
-              "pinyin": "bǎ"
-            },
-            {
-              "text": "你的",
-              "pinyin": "nǐ de"
-            },
-            {
-              "text": "本子",
-              "pinyin": "běn zi"
-            },
-            {
-              "text": "递给",
-              "pinyin": "dì gěi"
-            },
-            {
-              "text": "我",
-              "pinyin": "wǒ"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "あなたのノートを私に渡してください。"
         }
       ],
       "topics": [
@@ -917,36 +435,7 @@
       "examples": [
         {
           "sentence": "她比我高三厘米。",
-          "translation": "彼女は私より3センチ高いです。",
-          "segments": [
-            {
-              "text": "她",
-              "pinyin": "tā"
-            },
-            {
-              "text": "比",
-              "pinyin": "bǐ"
-            },
-            {
-              "text": "我",
-              "pinyin": "wǒ"
-            },
-            {
-              "text": "高",
-              "pinyin": "gāo"
-            },
-            {
-              "text": "三",
-              "pinyin": "sān"
-            },
-            {
-              "text": "厘米",
-              "pinyin": "lí mǐ"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "彼女は私より3センチ高いです。"
         }
       ],
       "topics": [
@@ -969,32 +458,7 @@
       "examples": [
         {
           "sentence": "别忘了带钥匙。",
-          "translation": "鍵を忘れないでください。",
-          "segments": [
-            {
-              "text": "别",
-              "pinyin": "bié"
-            },
-            {
-              "text": "忘",
-              "pinyin": "wàng"
-            },
-            {
-              "text": "了",
-              "pinyin": "le"
-            },
-            {
-              "text": "带",
-              "pinyin": "dài"
-            },
-            {
-              "text": "钥匙",
-              "pinyin": "yào shi"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "鍵を忘れないでください。"
         }
       ],
       "topics": [
@@ -1017,28 +481,7 @@
       "examples": [
         {
           "sentence": "你还有别的吗？",
-          "translation": "ほかに何かありますか？",
-          "segments": [
-            {
-              "text": "你",
-              "pinyin": "nǐ"
-            },
-            {
-              "text": "还有",
-              "pinyin": "hái yǒu"
-            },
-            {
-              "text": "别的",
-              "pinyin": "bié de"
-            },
-            {
-              "text": "吗",
-              "pinyin": "ma"
-            },
-            {
-              "text": "？"
-            }
-          ]
+          "translation": "ほかに何かありますか？"
         }
       ],
       "topics": [
@@ -1061,40 +504,7 @@
       "examples": [
         {
           "sentence": "他因为生病昨天没来上班。",
-          "translation": "彼は病気のため昨日出勤しませんでした。",
-          "segments": [
-            {
-              "text": "他",
-              "pinyin": "tā"
-            },
-            {
-              "text": "因为",
-              "pinyin": "yīn wèi"
-            },
-            {
-              "text": "生病",
-              "pinyin": "shēng bìng"
-            },
-            {
-              "text": "昨天",
-              "pinyin": "zuó tiān"
-            },
-            {
-              "text": "没",
-              "pinyin": "méi"
-            },
-            {
-              "text": "来",
-              "pinyin": "lái"
-            },
-            {
-              "text": "上班",
-              "pinyin": "shàng bān"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "彼は病気のため昨日出勤しませんでした。"
         }
       ],
       "topics": [
@@ -1117,36 +527,7 @@
       "examples": [
         {
           "sentence": "医院里有很多病人需要照顾。",
-          "translation": "病院には手当てが必要な患者がたくさんいます。",
-          "segments": [
-            {
-              "text": "医院里",
-              "pinyin": "yī yuàn lǐ"
-            },
-            {
-              "text": "有",
-              "pinyin": "yǒu"
-            },
-            {
-              "text": "很多",
-              "pinyin": "hěn duō"
-            },
-            {
-              "text": "病人",
-              "pinyin": "bìng rén"
-            },
-            {
-              "text": "需要",
-              "pinyin": "xū yào"
-            },
-            {
-              "text": "照顾",
-              "pinyin": "zhào gù"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "病院には手当てが必要な患者がたくさんいます。"
         }
       ],
       "topics": [
@@ -1169,39 +550,7 @@
       "examples": [
         {
           "sentence": "这个房间不大，但很温馨。",
-          "translation": "この部屋はあまり大きくないが、とても居心地がいいです。",
-          "segments": [
-            {
-              "text": "这个",
-              "pinyin": "zhè gè"
-            },
-            {
-              "text": "房间",
-              "pinyin": "fáng jiān"
-            },
-            {
-              "text": "不大",
-              "pinyin": "bù dà"
-            },
-            {
-              "text": "，"
-            },
-            {
-              "text": "但",
-              "pinyin": "dàn"
-            },
-            {
-              "text": "很",
-              "pinyin": "hěn"
-            },
-            {
-              "text": "温馨",
-              "pinyin": "wēn xīn"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "この部屋はあまり大きくないが、とても居心地がいいです。"
         }
       ],
       "topics": [
@@ -1224,35 +573,7 @@
       "examples": [
         {
           "sentence": "你的答案不对，请再想一想。",
-          "translation": "あなたの答えは正しくありません。もう一度考えてください。",
-          "segments": [
-            {
-              "text": "你的",
-              "pinyin": "nǐ de"
-            },
-            {
-              "text": "答案",
-              "pinyin": "dá àn"
-            },
-            {
-              "text": "不对",
-              "pinyin": "bù duì"
-            },
-            {
-              "text": "，"
-            },
-            {
-              "text": "请",
-              "pinyin": "qǐng"
-            },
-            {
-              "text": "再想一想",
-              "pinyin": "zài xiǎng yì xiǎng"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "あなたの答えは正しくありません。もう一度考えてください。"
         }
       ],
       "topics": [
@@ -1275,41 +596,7 @@
       "examples": [
         {
           "sentence": "A: 谢谢你帮我。 B: 不客气。",
-          "translation": "A: 手伝ってくれてありがとう。 B: どういたしまして。",
-          "segments": [
-            {
-              "text": "A:"
-            },
-            {
-              "text": "谢谢",
-              "pinyin": "xiè xiè"
-            },
-            {
-              "text": "你",
-              "pinyin": "nǐ"
-            },
-            {
-              "text": "帮",
-              "pinyin": "bāng"
-            },
-            {
-              "text": "我",
-              "pinyin": "wǒ"
-            },
-            {
-              "text": "。"
-            },
-            {
-              "text": "B:"
-            },
-            {
-              "text": "不客气",
-              "pinyin": "bù kè qì"
-            },
-            {
-              "text": "."
-            }
-          ]
+          "translation": "A: 手伝ってくれてありがとう。 B: どういたしまして。"
         }
       ],
       "topics": [
@@ -1332,32 +619,7 @@
       "examples": [
         {
           "sentence": "我不喜欢吃辣的菜。",
-          "translation": "私は辛い料理が好きではありません。",
-          "segments": [
-            {
-              "text": "我",
-              "pinyin": "wǒ"
-            },
-            {
-              "text": "不喜欢",
-              "pinyin": "bù xǐ huān"
-            },
-            {
-              "text": "吃",
-              "pinyin": "chī"
-            },
-            {
-              "text": "辣的",
-              "pinyin": "là de"
-            },
-            {
-              "text": "菜",
-              "pinyin": "cài"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "私は辛い料理が好きではありません。"
         }
       ],
       "topics": [
@@ -1380,36 +642,7 @@
       "examples": [
         {
           "sentence": "这家饭店的菜非常好吃。",
-          "translation": "このレストランの料理はとても美味しいです。",
-          "segments": [
-            {
-              "text": "这家",
-              "pinyin": "zhè jiā"
-            },
-            {
-              "text": "饭店",
-              "pinyin": "fàn diàn"
-            },
-            {
-              "text": "的",
-              "pinyin": "de"
-            },
-            {
-              "text": "菜",
-              "pinyin": "cài"
-            },
-            {
-              "text": "非常",
-              "pinyin": "fēi cháng"
-            },
-            {
-              "text": "好吃",
-              "pinyin": "hǎo chī"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "このレストランの料理はとても美味しいです。"
         }
       ],
       "topics": [
@@ -1431,36 +664,7 @@
       "examples": [
         {
           "sentence": "他每天早上喝一杯绿茶。",
-          "translation": "彼は毎朝一杯の緑茶を飲みます。",
-          "segments": [
-            {
-              "text": "他",
-              "pinyin": "tā"
-            },
-            {
-              "text": "每天",
-              "pinyin": "měi tiān"
-            },
-            {
-              "text": "早上",
-              "pinyin": "zǎo shàng"
-            },
-            {
-              "text": "喝",
-              "pinyin": "hē"
-            },
-            {
-              "text": "一杯",
-              "pinyin": "yì bēi"
-            },
-            {
-              "text": "绿茶",
-              "pinyin": "lǜ chá"
-            },
-            {
-              "text": "。"
-            }
-          ]
+          "translation": "彼は毎朝一杯の緑茶を飲みます。"
         }
       ],
       "topics": [
