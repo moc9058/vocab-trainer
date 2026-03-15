@@ -17,6 +17,19 @@ interface QuizHistoryFile {
   sessions: QuizSession[];
 }
 
+/** Recursively remove empty-string keys from an object (Firestore rejects them). */
+function stripEmptyKeys(obj: unknown): unknown {
+  if (Array.isArray(obj)) return obj.map(stripEmptyKeys);
+  if (obj !== null && typeof obj === "object") {
+    const clean: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      if (k !== "") clean[k] = stripEmptyKeys(v);
+    }
+    return clean;
+  }
+  return obj;
+}
+
 const DB_DIR = resolve(import.meta.dirname, "..", "DB");
 const DATA_DIR = resolve(import.meta.dirname, "..", "data");
 const PROGRESS_DIR = join(DATA_DIR, "progress");
@@ -63,7 +76,7 @@ async function migrateLanguage(filename: string): Promise<void> {
     for (const word of chunk) {
       const docRef = db.collection("words").doc(word.id);
       const { id, ...wordData } = word;
-      batch.set(docRef, { ...wordData, language });
+      batch.set(docRef, stripEmptyKeys({ ...wordData, language }) as FirebaseFirestore.DocumentData);
       wordCount++;
     }
     await batch.commit();

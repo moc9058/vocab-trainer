@@ -1,5 +1,5 @@
 {
-  "next_id": 11239,
+  "next_id": 12012,
   "terms": {
     "爱": {
       "term": "爱",
@@ -70,7 +70,7 @@
     "半天": {
       "term": "半天",
       "id": "zh-000012",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "bàn tiān"
     },
     "帮": {
@@ -82,7 +82,7 @@
     "帮忙": {
       "term": "帮忙",
       "id": "zh-000014",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "bāng máng"
     },
     "包": {
@@ -106,7 +106,7 @@
     "杯子": {
       "term": "杯子",
       "id": "zh-000018",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "bēi zi"
     },
     "北": {
@@ -124,7 +124,7 @@
     "北京": {
       "term": "北京",
       "id": "zh-000021",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "běi jīng"
     },
     "本": {
@@ -160,7 +160,7 @@
     "别人": {
       "term": "别人",
       "id": "zh-000027",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "bié rén"
     },
     "病": {
@@ -196,7 +196,7 @@
     "不用": {
       "term": "不用",
       "id": "zh-000033",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "bú yòng"
     },
     "不": {
@@ -232,7 +232,7 @@
     "常常": {
       "term": "常常",
       "id": "zh-000039",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "cháng cháng"
     },
     "唱": {
@@ -256,7 +256,7 @@
     "车票": {
       "term": "车票",
       "id": "zh-000043",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "chē piào"
     },
     "车上": {
@@ -268,7 +268,7 @@
     "车站": {
       "term": "车站",
       "id": "zh-000045",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "chē zhàn"
     },
     "吃": {
@@ -280,7 +280,7 @@
     "吃饭": {
       "term": "吃饭",
       "id": "zh-000047",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "chī fàn"
     },
     "出": {
@@ -292,13 +292,13 @@
     "出来": {
       "term": "出来",
       "id": "zh-000049",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "chū lái"
     },
     "出去": {
       "term": "出去",
       "id": "zh-000050",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "chū qù"
     },
     "穿": {
@@ -346,7 +346,7 @@
     "打电话": {
       "term": "打电话",
       "id": "zh-000058",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "dǎ diàn huà"
     },
     "打开": {
@@ -370,7 +370,7 @@
     "大学": {
       "term": "大学",
       "id": "zh-000062",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "dà xué"
     },
     "大学生": {
@@ -418,7 +418,7 @@
     "地方": {
       "term": "地方",
       "id": "zh-000070",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "dì fang"
     },
     "地上": {
@@ -436,7 +436,7 @@
     "弟弟": {
       "term": "弟弟",
       "id": "zh-000073",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "dì di"
     },
     "第（第二）": {
@@ -460,19 +460,19 @@
     "电话": {
       "term": "电话",
       "id": "zh-000077",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "diàn huà"
     },
     "电脑": {
       "term": "电脑",
       "id": "zh-000078",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "diàn nǎo"
     },
     "电视": {
       "term": "电视",
       "id": "zh-000079",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "diàn shì"
     },
     "电视机": {
@@ -484,13 +484,13 @@
     "电影": {
       "term": "电影",
       "id": "zh-000081",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "diàn yǐng"
     },
     "电影院": {
       "term": "电影院",
       "id": "zh-000082",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "diàn yǐng yuàn"
     },
     "东": {
@@ -508,7 +508,7 @@
     "东西": {
       "term": "东西",
       "id": "zh-000085",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "dōng xi"
     },
     "动": {
@@ -538,7 +538,7 @@
     "读书": {
       "term": "读书",
       "id": "zh-000090",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "dú shū"
     },
     "对": {
@@ -550,7 +550,7 @@
     "对不起": {
       "term": "对不起",
       "id": "zh-000092",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "duì bu qǐ"
     },
     "多": {
@@ -598,13 +598,13 @@
     "房间": {
       "term": "房间",
       "id": "zh-000100",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "fáng jiān"
     },
     "房子": {
       "term": "房子",
       "id": "zh-000101",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "fáng zi"
     },
     "放": {
@@ -634,13 +634,13 @@
     "飞机": {
       "term": "飞机",
       "id": "zh-000106",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "fēi jī"
     },
     "非常": {
       "term": "非常",
       "id": "zh-000107",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "fēi cháng"
     },
     "分": {
@@ -682,13 +682,13 @@
     "高兴": {
       "term": "高兴",
       "id": "zh-000114",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "gāo xìng"
     },
     "告诉": {
       "term": "告诉",
       "id": "zh-000115",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "gào su"
     },
     "哥哥": {
@@ -730,7 +730,7 @@
     "工作": {
       "term": "工作",
       "id": "zh-000122",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "gōngzuò"
     },
     "关": {
@@ -766,7 +766,7 @@
     "国外": {
       "term": "国外",
       "id": "zh-000128",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "guówài"
     },
     "过": {
@@ -784,31 +784,31 @@
     "还是": {
       "term": "还是",
       "id": "zh-000131",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "háishi"
     },
     "还有": {
       "term": "还有",
       "id": "zh-000132",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "háiyǒu"
     },
     "孩子": {
       "term": "孩子",
       "id": "zh-000133",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "háizi"
     },
     "汉语": {
       "term": "汉语",
       "id": "zh-000134",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "hànyǔ"
     },
     "汉字": {
       "term": "汉字",
       "id": "zh-000135",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "hànzì"
     },
     "好": {
@@ -820,13 +820,13 @@
     "好吃": {
       "term": "好吃",
       "id": "zh-000137",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "hǎochī"
     },
     "好看": {
       "term": "好看",
       "id": "zh-000138",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "hǎokàn"
     },
     "好听": {
@@ -910,7 +910,7 @@
     "回答": {
       "term": "回答",
       "id": "zh-000152",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "huídá"
     },
     "回到": {
@@ -922,13 +922,13 @@
     "回家": {
       "term": "回家",
       "id": "zh-000154",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "huí jiā"
     },
     "回来": {
       "term": "回来",
       "id": "zh-000155",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "huí lái"
     },
     "回去": {
@@ -946,19 +946,19 @@
     "火车": {
       "term": "火车",
       "id": "zh-000158",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "huǒ chē"
     },
     "机场": {
       "term": "机场",
       "id": "zh-000159",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "jī chǎng"
     },
     "机票": {
       "term": "机票",
       "id": "zh-000160",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "jī piào"
     },
     "鸡蛋": {
@@ -982,7 +982,7 @@
     "记得": {
       "term": "记得",
       "id": "zh-000164",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "jìdé"
     },
     "记住": {
@@ -1000,13 +1000,13 @@
     "家里": {
       "term": "家里",
       "id": "zh-000167",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "jiālǐ"
     },
     "家人": {
       "term": "家人",
       "id": "zh-000168",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "jiārén"
     },
     "间": {
@@ -1024,7 +1024,7 @@
     "见面": {
       "term": "见面",
       "id": "zh-000171",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "jiànmiàn"
     },
     "教": {
@@ -1060,13 +1060,13 @@
     "今年": {
       "term": "今年",
       "id": "zh-000177",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "jīnnián"
     },
     "今天": {
       "term": "今天",
       "id": "zh-000178",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "jīntiān"
     },
     "进": {
@@ -1078,13 +1078,13 @@
     "进来": {
       "term": "进来",
       "id": "zh-000180",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "jìnlái"
     },
     "进去": {
       "term": "进去",
       "id": "zh-000181",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "jìn qù"
     },
     "九": {
@@ -1102,7 +1102,7 @@
     "觉得": {
       "term": "觉得",
       "id": "zh-000184",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "juéde"
     },
     "开": {
@@ -1120,7 +1120,7 @@
     "开会": {
       "term": "开会",
       "id": "zh-000187",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "kāi huì"
     },
     "开玩笑": {
@@ -1144,13 +1144,13 @@
     "看到": {
       "term": "看到",
       "id": "zh-000191",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "kàn dào"
     },
     "看见": {
       "term": "看见",
       "id": "zh-000192",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "kàn jiàn"
     },
     "考": {
@@ -1162,7 +1162,7 @@
     "考试": {
       "term": "考试",
       "id": "zh-000194",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "kǎo shì"
     },
     "渴": {
@@ -1234,7 +1234,7 @@
     "老师": {
       "term": "老师",
       "id": "zh-000206",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "lǎoshī"
     },
     "了": {
@@ -1312,19 +1312,19 @@
     "路口": {
       "term": "路口",
       "id": "zh-000219",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "lù kǒu"
     },
     "路上": {
       "term": "路上",
       "id": "zh-000220",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "lù shàng"
     },
     "妈妈": {
       "term": "妈妈",
       "id": "zh-000221",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "māma"
     },
     "马路": {
@@ -1336,7 +1336,7 @@
     "马上": {
       "term": "马上",
       "id": "zh-000223",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "mǎshàng"
     },
     "吗": {
@@ -1396,7 +1396,7 @@
     "没有": {
       "term": "没有",
       "id": "zh-000233",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "méiyǒu"
     },
     "妹妹": {
@@ -1414,7 +1414,7 @@
     "门口": {
       "term": "门口",
       "id": "zh-000236",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "ménkǒu"
     },
     "门票": {
@@ -1438,7 +1438,7 @@
     "面包": {
       "term": "面包",
       "id": "zh-000240",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "miànbāo"
     },
     "面条儿": {
@@ -1450,25 +1450,25 @@
     "名字": {
       "term": "名字",
       "id": "zh-000242",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "míngzi"
     },
     "明白": {
       "term": "明白",
       "id": "zh-000243",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "míngbái"
     },
     "明年": {
       "term": "明年",
       "id": "zh-000244",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "míngnián"
     },
     "明天": {
       "term": "明天",
       "id": "zh-000245",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "míngtiān"
     },
     "拿": {
@@ -1486,7 +1486,7 @@
     "哪里": {
       "term": "哪里",
       "id": "zh-000248",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "nǎlǐ"
     },
     "哪儿": {
@@ -1522,13 +1522,13 @@
     "那儿": {
       "term": "那儿",
       "id": "zh-000254",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "nàr"
     },
     "那些": {
       "term": "那些",
       "id": "zh-000255",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "nàxiē"
     },
     "奶": {
@@ -1672,7 +1672,7 @@
     "旁边": {
       "term": "旁边",
       "id": "zh-000279",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "páng biān"
     },
     "跑": {
@@ -1684,7 +1684,7 @@
     "朋友": {
       "term": "朋友",
       "id": "zh-000281",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "péngyǒu"
     },
     "票": {
@@ -1708,7 +1708,7 @@
     "起床": {
       "term": "起床",
       "id": "zh-000285",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "qǐchuáng"
     },
     "起来": {
@@ -1768,13 +1768,13 @@
     "请进": {
       "term": "请进",
       "id": "zh-000295",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "qǐngjìn"
     },
     "请问": {
       "term": "请问",
       "id": "zh-000296",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "qǐngwèn"
     },
     "请坐": {
@@ -1798,7 +1798,7 @@
     "去年": {
       "term": "去年",
       "id": "zh-000300",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "qùnián"
     },
     "热": {
@@ -1816,13 +1816,13 @@
     "认识": {
       "term": "认识",
       "id": "zh-000303",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "rènshi"
     },
     "认真": {
       "term": "认真",
       "id": "zh-000304",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "rènzhēn"
     },
     "日": {
@@ -1864,7 +1864,7 @@
     "商店": {
       "term": "商店",
       "id": "zh-000311",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shāngdiàn"
     },
     "上": {
@@ -1876,7 +1876,7 @@
     "上班": {
       "term": "上班",
       "id": "zh-000313",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shàngbān"
     },
     "上边": {
@@ -1888,7 +1888,7 @@
     "上车": {
       "term": "上车",
       "id": "zh-000315",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shàngchē"
     },
     "上次": {
@@ -1900,7 +1900,7 @@
     "上课": {
       "term": "上课",
       "id": "zh-000317",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shàngkè"
     },
     "上网": {
@@ -1918,7 +1918,7 @@
     "上学": {
       "term": "上学",
       "id": "zh-000320",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shàngxué"
     },
     "少": {
@@ -1942,31 +1942,31 @@
     "身体": {
       "term": "身体",
       "id": "zh-000324",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shēn tǐ"
     },
     "什么": {
       "term": "什么",
       "id": "zh-000325",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shénme"
     },
     "生病": {
       "term": "生病",
       "id": "zh-000326",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shēng bìng"
     },
     "生气": {
       "term": "生气",
       "id": "zh-000327",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shēng qì"
     },
     "生日": {
       "term": "生日",
       "id": "zh-000328",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shēng rì"
     },
     "十": {
@@ -1984,7 +1984,7 @@
     "时间": {
       "term": "时间",
       "id": "zh-000331",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shí jiān"
     },
     "事": {
@@ -2020,7 +2020,7 @@
     "手机": {
       "term": "手机",
       "id": "zh-000337",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shǒu jī"
     },
     "书": {
@@ -2056,7 +2056,7 @@
     "水果": {
       "term": "水果",
       "id": "zh-000343",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shuǐguǒ"
     },
     "睡": {
@@ -2068,7 +2068,7 @@
     "睡觉": {
       "term": "睡觉",
       "id": "zh-000345",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shuìjiào"
     },
     "说": {
@@ -2080,7 +2080,7 @@
     "说话": {
       "term": "说话",
       "id": "zh-000347",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "shuōhuà"
     },
     "四": {
@@ -2110,7 +2110,7 @@
     "他们": {
       "term": "他们",
       "id": "zh-000352",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "tāmen"
     },
     "她": {
@@ -2140,7 +2140,7 @@
     "天气": {
       "term": "天气",
       "id": "zh-000357",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "tiānqì"
     },
     "听": {
@@ -2152,7 +2152,7 @@
     "听到": {
       "term": "听到",
       "id": "zh-000359",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "tīngdào"
     },
     "听见": {
@@ -2176,7 +2176,7 @@
     "图书馆": {
       "term": "图书馆",
       "id": "zh-000363",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "túshūguǎn"
     },
     "外": {
@@ -2206,7 +2206,7 @@
     "玩儿": {
       "term": "玩儿",
       "id": "zh-000368",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "wánr"
     },
     "晚": {
@@ -2218,19 +2218,19 @@
     "晚饭": {
       "term": "晚饭",
       "id": "zh-000370",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "wǎn fàn"
     },
     "晚上": {
       "term": "晚上",
       "id": "zh-000371",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "wǎnshang"
     },
     "网上": {
       "term": "网上",
       "id": "zh-000372",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "wǎng shàng"
     },
     "网友": {
@@ -2266,7 +2266,7 @@
     "我们": {
       "term": "我们",
       "id": "zh-000378",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "wǒmen"
     },
     "五": {
@@ -2308,7 +2308,7 @@
     "喜欢": {
       "term": "喜欢",
       "id": "zh-000385",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "xǐ huān"
     },
     "下": {
@@ -2332,7 +2332,7 @@
     "下车": {
       "term": "下车",
       "id": "zh-000389",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "xià chē"
     },
     "下次": {
@@ -2350,13 +2350,13 @@
     "下午": {
       "term": "下午",
       "id": "zh-000392",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "xià wǔ"
     },
     "下雨": {
       "term": "下雨",
       "id": "zh-000393",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "xià yǔ"
     },
     "先": {
@@ -2374,7 +2374,7 @@
     "现在": {
       "term": "现在",
       "id": "zh-000396",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "xiàn zài"
     },
     "想": {
@@ -2404,13 +2404,13 @@
     "小朋友": {
       "term": "小朋友",
       "id": "zh-000401",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "xiǎo péng yǒu"
     },
     "小时": {
       "term": "小时",
       "id": "zh-000402",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "xiǎo shí"
     },
     "小学": {
@@ -2440,7 +2440,7 @@
     "谢谢": {
       "term": "谢谢",
       "id": "zh-000407",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "xièxie"
     },
     "新": {
@@ -2470,7 +2470,7 @@
     "星期天": {
       "term": "星期天",
       "id": "zh-000412",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "xīng qī tiān"
     },
     "行": {
@@ -2482,7 +2482,7 @@
     "休息": {
       "term": "休息",
       "id": "zh-000414",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "xiū xi"
     },
     "学": {
@@ -2494,19 +2494,19 @@
     "学生": {
       "term": "学生",
       "id": "zh-000416",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "xué shēng"
     },
     "学习": {
       "term": "学习",
       "id": "zh-000417",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "xué xí"
     },
     "学校": {
       "term": "学校",
       "id": "zh-000418",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "xué xiào"
     },
     "学院": {
@@ -2548,19 +2548,19 @@
     "衣服": {
       "term": "衣服",
       "id": "zh-000425",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "yīfu"
     },
     "医生": {
       "term": "医生",
       "id": "zh-000426",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "yīshēng"
     },
     "医院": {
       "term": "医院",
       "id": "zh-000427",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "yīyuàn"
     },
     "一半": {
@@ -2572,7 +2572,7 @@
     "一会儿": {
       "term": "一会儿",
       "id": "zh-000429",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "yíhuìr"
     },
     "一块儿": {
@@ -2596,7 +2596,7 @@
     "一边": {
       "term": "一边",
       "id": "zh-000433",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "yìbiān"
     },
     "一点儿": {
@@ -2608,13 +2608,13 @@
     "一起": {
       "term": "一起",
       "id": "zh-000435",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "yìqǐ"
     },
     "一些": {
       "term": "一些",
       "id": "zh-000436",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "yìxiē"
     },
     "用": {
@@ -2638,7 +2638,7 @@
     "有名": {
       "term": "有名",
       "id": "zh-000440",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "yǒumíng"
     },
     "有时候": {
@@ -2704,7 +2704,7 @@
     "再见": {
       "term": "再见",
       "id": "zh-000451",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zàijiàn"
     },
     "在": {
@@ -2734,13 +2734,13 @@
     "早上": {
       "term": "早上",
       "id": "zh-000456",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zǎoshang"
     },
     "怎么": {
       "term": "怎么",
       "id": "zh-000457",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zěnme"
     },
     "站": {
@@ -2758,7 +2758,7 @@
     "找到": {
       "term": "找到",
       "id": "zh-000460",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zhǎo dào"
     },
     "这": {
@@ -2776,19 +2776,19 @@
     "这里": {
       "term": "这里",
       "id": "zh-000463",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zhèlǐ"
     },
     "这儿": {
       "term": "这儿",
       "id": "zh-000464",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zhèr"
     },
     "这些": {
       "term": "这些",
       "id": "zh-000465",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zhèxiē"
     },
     "着": {
@@ -2806,7 +2806,7 @@
     "真的": {
       "term": "真的",
       "id": "zh-000468",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zhēnde"
     },
     "正": {
@@ -2818,13 +2818,13 @@
     "正在": {
       "term": "正在",
       "id": "zh-000470",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zhèngzài"
     },
     "知道": {
       "term": "知道",
       "id": "zh-000471",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zhīdào"
     },
     "知识": {
@@ -2842,7 +2842,7 @@
     "中国": {
       "term": "中国",
       "id": "zh-000474",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "Zhōngguó"
     },
     "中间": {
@@ -2854,13 +2854,13 @@
     "中文": {
       "term": "中文",
       "id": "zh-000476",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "Zhōngwén"
     },
     "中午": {
       "term": "中午",
       "id": "zh-000477",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zhōngwǔ"
     },
     "中学": {
@@ -2884,7 +2884,7 @@
     "重要": {
       "term": "重要",
       "id": "zh-000481",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zhòngyào"
     },
     "住": {
@@ -2896,13 +2896,13 @@
     "准备": {
       "term": "准备",
       "id": "zh-000483",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zhǔnbèi"
     },
     "桌子": {
       "term": "桌子",
       "id": "zh-000484",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zhuōzi"
     },
     "字": {
@@ -2926,7 +2926,7 @@
     "走路": {
       "term": "走路",
       "id": "zh-000488",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zǒulù"
     },
     "最": {
@@ -2938,7 +2938,7 @@
     "最好": {
       "term": "最好",
       "id": "zh-000490",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zuìhǎo"
     },
     "最后": {
@@ -2950,7 +2950,7 @@
     "昨天": {
       "term": "昨天",
       "id": "zh-000492",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zuótiān"
     },
     "左": {
@@ -2974,7 +2974,7 @@
     "坐下": {
       "term": "坐下",
       "id": "zh-000496",
-      "level": "HSK1",
+      "level": "HSK2-extended",
       "pinyin": "zuò xià"
     },
     "做": {
@@ -7420,7 +7420,7 @@
     "安排": {
       "term": "安排",
       "id": "zh-001237",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "ānpái"
     },
     "安装": {
@@ -7474,7 +7474,7 @@
     "搬家": {
       "term": "搬家",
       "id": "zh-001246",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "bān jiā"
     },
     "板": {
@@ -7498,13 +7498,13 @@
     "保安": {
       "term": "保安",
       "id": "zh-001250",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "bǎo ān"
     },
     "保持": {
       "term": "保持",
       "id": "zh-001251",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "bǎo chí"
     },
     "保存": {
@@ -7516,13 +7516,13 @@
     "保护": {
       "term": "保护",
       "id": "zh-001253",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "bǎo hù"
     },
     "保留": {
       "term": "保留",
       "id": "zh-001254",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "bǎo liú"
     },
     "保险": {
@@ -7552,7 +7552,7 @@
     "报道": {
       "term": "报道",
       "id": "zh-001259",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "bào dào"
     },
     "报告": {
@@ -7618,7 +7618,7 @@
     "比赛": {
       "term": "比赛",
       "id": "zh-001270",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "bǐsài"
     },
     "必然": {
@@ -7666,7 +7666,7 @@
     "表格": {
       "term": "表格",
       "id": "zh-001278",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "biǎogé"
     },
     "表面": {
@@ -7798,7 +7798,7 @@
     "才能": {
       "term": "才能",
       "id": "zh-001300",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "cáinéng"
     },
     "采取": {
@@ -7894,7 +7894,7 @@
     "衬衫": {
       "term": "衬衫",
       "id": "zh-001316",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "chènshān"
     },
     "衬衣": {
@@ -7912,13 +7912,13 @@
     "成功": {
       "term": "成功",
       "id": "zh-001319",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "chénggōng"
     },
     "成果": {
       "term": "成果",
       "id": "zh-001320",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "chéngguǒ"
     },
     "成就": {
@@ -7930,7 +7930,7 @@
     "成立": {
       "term": "成立",
       "id": "zh-001322",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "chénglì"
     },
     "成熟": {
@@ -7942,13 +7942,13 @@
     "成员": {
       "term": "成员",
       "id": "zh-001324",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "chéngyuán"
     },
     "成长": {
       "term": "成长",
       "id": "zh-001325",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "chéngzhǎng"
     },
     "城": {
@@ -8008,7 +8008,7 @@
     "除了": {
       "term": "除了",
       "id": "zh-001335",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "chúle"
     },
     "处理": {
@@ -8104,7 +8104,7 @@
     "错误": {
       "term": "错误",
       "id": "zh-001351",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "cuòwù"
     },
     "达到": {
@@ -8128,7 +8128,7 @@
     "大概": {
       "term": "大概",
       "id": "zh-001355",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "dàgài"
     },
     "大使馆": {
@@ -8194,7 +8194,7 @@
     "当地": {
       "term": "当地",
       "id": "zh-001366",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "dāng dì"
     },
     "当然": {
@@ -8236,7 +8236,7 @@
     "得分": {
       "term": "得分",
       "id": "zh-001373",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "dé fēn"
     },
     "等待": {
@@ -8254,7 +8254,7 @@
     "地区": {
       "term": "地区",
       "id": "zh-001376",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "dì qū"
     },
     "电视剧": {
@@ -8272,7 +8272,7 @@
     "电台": {
       "term": "电台",
       "id": "zh-001379",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "diàn tái"
     },
     "电子邮件": {
@@ -8368,7 +8368,7 @@
     "对方": {
       "term": "对方",
       "id": "zh-001395",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "duìfāng"
     },
     "对手": {
@@ -8398,7 +8398,7 @@
     "发出": {
       "term": "发出",
       "id": "zh-001400",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "fāchū"
     },
     "发达": {
@@ -8422,7 +8422,7 @@
     "发生": {
       "term": "发生",
       "id": "zh-001404",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "fāshēng"
     },
     "发送": {
@@ -8440,7 +8440,7 @@
     "发展": {
       "term": "发展",
       "id": "zh-001407",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "fāzhǎn"
     },
     "反对": {
@@ -8470,7 +8470,7 @@
     "范围": {
       "term": "范围",
       "id": "zh-001412",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "fànwéi"
     },
     "方式": {
@@ -8506,7 +8506,7 @@
     "房租": {
       "term": "房租",
       "id": "zh-001418",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "fángzū"
     },
     "访问": {
@@ -8518,7 +8518,7 @@
     "放到": {
       "term": "放到",
       "id": "zh-001420",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "fàngdào"
     },
     "飞行": {
@@ -8536,7 +8536,7 @@
     "费用": {
       "term": "费用",
       "id": "zh-001423",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "fèiyòng"
     },
     "分别": {
@@ -8566,7 +8566,7 @@
     "风险": {
       "term": "风险",
       "id": "zh-001428",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "fēngxiǎn"
     },
     "否定": {
@@ -8614,7 +8614,7 @@
     "负责": {
       "term": "负责",
       "id": "zh-001436",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "fùzé"
     },
     "复印": {
@@ -8626,7 +8626,7 @@
     "复杂": {
       "term": "复杂",
       "id": "zh-001438",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "fùzá"
     },
     "富": {
@@ -8638,7 +8638,7 @@
     "改进": {
       "term": "改进",
       "id": "zh-001440",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "gǎijìn"
     },
     "改造": {
@@ -8650,7 +8650,7 @@
     "概念": {
       "term": "概念",
       "id": "zh-001442",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "gài niàn"
     },
     "赶": {
@@ -8686,7 +8686,7 @@
     "感冒": {
       "term": "感冒",
       "id": "zh-001448",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "gǎn mào"
     },
     "感情": {
@@ -8794,7 +8794,7 @@
     "更加": {
       "term": "更加",
       "id": "zh-001466",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "gèngjiā"
     },
     "工厂": {
@@ -8836,13 +8836,13 @@
     "公布": {
       "term": "公布",
       "id": "zh-001473",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "gōngbù"
     },
     "公共": {
       "term": "公共",
       "id": "zh-001474",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "gōnggòng"
     },
     "公开": {
@@ -8872,7 +8872,7 @@
     "功课": {
       "term": "功课",
       "id": "zh-001479",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "gōngkè"
     },
     "功能": {
@@ -9046,7 +9046,7 @@
     "海关": {
       "term": "海关",
       "id": "zh-001508",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "hǎiguān"
     },
     "害怕": {
@@ -9190,7 +9190,7 @@
     "环境": {
       "term": "环境",
       "id": "zh-001532",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "huánjìng"
     },
     "会议": {
@@ -9226,13 +9226,13 @@
     "积极": {
       "term": "积极",
       "id": "zh-001538",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jījí"
     },
     "基本": {
       "term": "基本",
       "id": "zh-001539",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jīběn"
     },
     "基本上": {
@@ -9298,13 +9298,13 @@
     "技术": {
       "term": "技术",
       "id": "zh-001550",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jìshù"
     },
     "继续": {
       "term": "继续",
       "id": "zh-001551",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jìxù"
     },
     "加工": {
@@ -9340,13 +9340,13 @@
     "家乡": {
       "term": "家乡",
       "id": "zh-001557",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jiāxiāng"
     },
     "价格": {
       "term": "价格",
       "id": "zh-001558",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jiàgé"
     },
     "价钱": {
@@ -9484,7 +9484,7 @@
     "教练": {
       "term": "教练",
       "id": "zh-001581",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jiàoliàn"
     },
     "结实": {
@@ -9586,13 +9586,13 @@
     "紧张": {
       "term": "紧张",
       "id": "zh-001598",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jǐnzhāng"
     },
     "进步": {
       "term": "进步",
       "id": "zh-001599",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jìnbù"
     },
     "进一步": {
@@ -9622,7 +9622,7 @@
     "经济": {
       "term": "经济",
       "id": "zh-001604",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jīngjì"
     },
     "经历": {
@@ -9634,7 +9634,7 @@
     "经验": {
       "term": "经验",
       "id": "zh-001606",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jīngyàn"
     },
     "经营": {
@@ -9652,7 +9652,7 @@
     "精神": {
       "term": "精神",
       "id": "zh-001609",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jīngshén"
     },
     "景色": {
@@ -9664,7 +9664,7 @@
     "警察": {
       "term": "警察",
       "id": "zh-001611",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jǐngchá"
     },
     "静": {
@@ -9712,7 +9712,7 @@
     "具体": {
       "term": "具体",
       "id": "zh-001619",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jùtǐ"
     },
     "具有": {
@@ -9736,7 +9736,7 @@
     "决定": {
       "term": "决定",
       "id": "zh-001623",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "jué dìng"
     },
     "决赛": {
@@ -9796,7 +9796,7 @@
     "看起来": {
       "term": "看起来",
       "id": "zh-001633",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "kàn qǐ lái"
     },
     "看上去": {
@@ -9868,13 +9868,13 @@
     "空儿": {
       "term": "空儿",
       "id": "zh-001645",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "kòngr"
     },
     "裤子": {
       "term": "裤子",
       "id": "zh-001646",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "kùzi"
     },
     "快速": {
@@ -9970,7 +9970,7 @@
     "理解": {
       "term": "理解",
       "id": "zh-001662",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "lǐjiě"
     },
     "理论": {
@@ -10162,13 +10162,13 @@
     "满足": {
       "term": "满足",
       "id": "zh-001694",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "mǎnzú"
     },
     "慢慢": {
       "term": "慢慢",
       "id": "zh-001695",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "mànmàn"
     },
     "毛病": {
@@ -10264,13 +10264,13 @@
     "明确": {
       "term": "明确",
       "id": "zh-001711",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "míng què"
     },
     "明显": {
       "term": "明显",
       "id": "zh-001712",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "míng xiǎn"
     },
     "命运": {
@@ -10288,7 +10288,7 @@
     "母亲": {
       "term": "母亲",
       "id": "zh-001715",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "mǔ qīn"
     },
     "木头": {
@@ -10300,7 +10300,7 @@
     "目标": {
       "term": "目标",
       "id": "zh-001717",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "mù biāo"
     },
     "目前": {
@@ -10456,7 +10456,7 @@
     "牌子": {
       "term": "牌子",
       "id": "zh-001743",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "pái zi"
     },
     "派": {
@@ -10534,7 +10534,7 @@
     "评价": {
       "term": "评价",
       "id": "zh-001756",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "píngjià"
     },
     "苹果": {
@@ -10558,7 +10558,7 @@
     "普遍": {
       "term": "普遍",
       "id": "zh-001760",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "pǔbiàn"
     },
     "普及": {
@@ -10588,13 +10588,13 @@
     "其实": {
       "term": "其实",
       "id": "zh-001765",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "qíshí"
     },
     "奇怪": {
       "term": "奇怪",
       "id": "zh-001766",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "qíguài"
     },
     "气候": {
@@ -10702,13 +10702,13 @@
     "情况": {
       "term": "情况",
       "id": "zh-001784",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "qíngkuàng"
     },
     "请教": {
       "term": "请教",
       "id": "zh-001785",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "qǐngjiào"
     },
     "庆祝": {
@@ -10822,7 +10822,7 @@
     "热烈": {
       "term": "热烈",
       "id": "zh-001804",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "rèliè"
     },
     "人才": {
@@ -10906,7 +10906,7 @@
     "任务": {
       "term": "任务",
       "id": "zh-001818",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "rènwu"
     },
     "仍": {
@@ -10930,7 +10930,7 @@
     "容易": {
       "term": "容易",
       "id": "zh-001822",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "róngyì"
     },
     "如何": {
@@ -10948,7 +10948,7 @@
     "沙发": {
       "term": "沙发",
       "id": "zh-001825",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "shāfā"
     },
     "沙子": {
@@ -10972,7 +10972,7 @@
     "商品": {
       "term": "商品",
       "id": "zh-001829",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "shāngpǐn"
     },
     "商业": {
@@ -11014,7 +11014,7 @@
     "设备": {
       "term": "设备",
       "id": "zh-001836",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "shèbèi"
     },
     "设计": {
@@ -11032,7 +11032,7 @@
     "社会": {
       "term": "社会",
       "id": "zh-001839",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "shèhuì"
     },
     "身份证": {
@@ -11224,13 +11224,13 @@
     "市场": {
       "term": "市场",
       "id": "zh-001871",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "shìchǎng"
     },
     "事故": {
       "term": "事故",
       "id": "zh-001872",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "shìgù"
     },
     "事件": {
@@ -11386,7 +11386,7 @@
     "属于": {
       "term": "属于",
       "id": "zh-001898",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "shǔyú"
     },
     "束": {
@@ -11428,7 +11428,7 @@
     "速度": {
       "term": "速度",
       "id": "zh-001905",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "sù dù"
     },
     "随": {
@@ -11488,7 +11488,7 @@
     "提前": {
       "term": "提前",
       "id": "zh-001915",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "tí qián"
     },
     "提问": {
@@ -11500,7 +11500,7 @@
     "题目": {
       "term": "题目",
       "id": "zh-001917",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "tí mù"
     },
     "体会": {
@@ -11524,7 +11524,7 @@
     "天空": {
       "term": "天空",
       "id": "zh-001921",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "tiānkōng"
     },
     "甜": {
@@ -11536,7 +11536,7 @@
     "调整": {
       "term": "调整",
       "id": "zh-001923",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "tiáozhěng"
     },
     "跳": {
@@ -11764,7 +11764,7 @@
     "玩具": {
       "term": "玩具",
       "id": "zh-001961",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "wánjù"
     },
     "往往": {
@@ -11824,7 +11824,7 @@
     "文化": {
       "term": "文化",
       "id": "zh-001971",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "wénhuà"
     },
     "文件": {
@@ -11848,7 +11848,7 @@
     "文章": {
       "term": "文章",
       "id": "zh-001975",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "wénzhāng"
     },
     "文字": {
@@ -11866,7 +11866,7 @@
     "屋子": {
       "term": "屋子",
       "id": "zh-001978",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "wūzi"
     },
     "武器": {
@@ -11884,7 +11884,7 @@
     "舞台": {
       "term": "舞台",
       "id": "zh-001981",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "wǔ tái"
     },
     "西部": {
@@ -11896,7 +11896,7 @@
     "希望": {
       "term": "希望",
       "id": "zh-001983",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "xī wàng"
     },
     "系": {
@@ -11908,7 +11908,7 @@
     "下来": {
       "term": "下来",
       "id": "zh-001985",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "xià lái"
     },
     "下面": {
@@ -12022,7 +12022,7 @@
     "香蕉": {
       "term": "香蕉",
       "id": "zh-002004",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "xiāngjiāo"
     },
     "消费": {
@@ -12040,7 +12040,7 @@
     "消息": {
       "term": "消息",
       "id": "zh-002007",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "xiāoxi"
     },
     "效果": {
@@ -12070,7 +12070,7 @@
     "信封": {
       "term": "信封",
       "id": "zh-002012",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "xìnfēng"
     },
     "信任": {
@@ -12082,7 +12082,7 @@
     "行李": {
       "term": "行李",
       "id": "zh-002014",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "xínglǐ"
     },
     "形成": {
@@ -12160,7 +12160,7 @@
     "宣布": {
       "term": "宣布",
       "id": "zh-002027",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "xuānbù"
     },
     "宣传": {
@@ -12172,7 +12172,7 @@
     "选手": {
       "term": "选手",
       "id": "zh-002029",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "xuǎnshǒu"
     },
     "学费": {
@@ -12226,7 +12226,7 @@
     "演唱会": {
       "term": "演唱会",
       "id": "zh-002038",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "yǎnchànghuì"
     },
     "演出": {
@@ -12238,7 +12238,7 @@
     "演员": {
       "term": "演员",
       "id": "zh-002040",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "yǎnyuán"
     },
     "羊": {
@@ -12256,7 +12256,7 @@
     "要是": {
       "term": "要是",
       "id": "zh-002043",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "yàoshi"
     },
     "衣架": {
@@ -12268,7 +12268,7 @@
     "一切": {
       "term": "一切",
       "id": "zh-002045",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "yíqiè"
     },
     "已": {
@@ -12394,7 +12394,7 @@
     "邮件": {
       "term": "邮件",
       "id": "zh-002066",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "yóu jiàn"
     },
     "邮票": {
@@ -12442,7 +12442,7 @@
     "有效": {
       "term": "有效",
       "id": "zh-002074",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "yǒu xiào"
     },
     "预报": {
@@ -12502,7 +12502,7 @@
     "杂志": {
       "term": "杂志",
       "id": "zh-002084",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zázhì"
     },
     "早已": {
@@ -12520,25 +12520,25 @@
     "造成": {
       "term": "造成",
       "id": "zh-002087",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zàochéng"
     },
     "责任": {
       "term": "责任",
       "id": "zh-002088",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zérèn"
     },
     "增加": {
       "term": "增加",
       "id": "zh-002089",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zēngjiā"
     },
     "增长": {
       "term": "增长",
       "id": "zh-002090",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zēngzhǎng"
     },
     "展开": {
@@ -12634,7 +12634,7 @@
     "证件": {
       "term": "证件",
       "id": "zh-002106",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zhèngjiàn"
     },
     "证据": {
@@ -12724,7 +12724,7 @@
     "只有": {
       "term": "只有",
       "id": "zh-002121",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zhǐ yǒu"
     },
     "指": {
@@ -12808,7 +12808,7 @@
     "终于": {
       "term": "终于",
       "id": "zh-002135",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zhōng yú"
     },
     "钟": {
@@ -12838,7 +12838,7 @@
     "周围": {
       "term": "周围",
       "id": "zh-002140",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zhōu wéi"
     },
     "猪": {
@@ -12868,7 +12868,7 @@
     "主意": {
       "term": "主意",
       "id": "zh-002145",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zhǔyì"
     },
     "主张": {
@@ -12880,7 +12880,7 @@
     "注意": {
       "term": "注意",
       "id": "zh-002147",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zhùyì"
     },
     "祝": {
@@ -12898,7 +12898,7 @@
     "抓住": {
       "term": "抓住",
       "id": "zh-002150",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zhuāzhù"
     },
     "专家": {
@@ -13042,7 +13042,7 @@
     "足球": {
       "term": "足球",
       "id": "zh-002174",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zúqiú"
     },
     "组合": {
@@ -13060,7 +13060,7 @@
     "作品": {
       "term": "作品",
       "id": "zh-002177",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zuòpǐn"
     },
     "作者": {
@@ -13072,7 +13072,7 @@
     "做客": {
       "term": "做客",
       "id": "zh-002179",
-      "level": "HSK3",
+      "level": "HSK2-extended",
       "pinyin": "zuòkè"
     },
     "阿姨": {
@@ -13120,7 +13120,7 @@
     "按时": {
       "term": "按时",
       "id": "zh-002187",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "ànshí"
     },
     "暗": {
@@ -13138,7 +13138,7 @@
     "巴士": {
       "term": "巴士",
       "id": "zh-002190",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "bā shì"
     },
     "百货": {
@@ -13180,7 +13180,7 @@
     "包裹": {
       "term": "包裹",
       "id": "zh-002197",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "bāoguǒ"
     },
     "包含": {
@@ -13330,7 +13330,7 @@
     "表情": {
       "term": "表情",
       "id": "zh-002222",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "biǎoqíng"
     },
     "表扬": {
@@ -13396,7 +13396,7 @@
     "布置": {
       "term": "布置",
       "id": "zh-002233",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "bùzhì"
     },
     "步行": {
@@ -13414,7 +13414,7 @@
     "材料": {
       "term": "材料",
       "id": "zh-002236",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "cáiliào"
     },
     "财产": {
@@ -13492,7 +13492,7 @@
     "产品": {
       "term": "产品",
       "id": "zh-002249",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "chǎnpǐn"
     },
     "长途": {
@@ -13594,7 +13594,7 @@
     "承担": {
       "term": "承担",
       "id": "zh-002266",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "chéngdān"
     },
     "承认": {
@@ -13696,7 +13696,7 @@
     "出口": {
       "term": "出口",
       "id": "zh-002283",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "chū kǒu"
     },
     "出色": {
@@ -14068,7 +14068,7 @@
     "灯光": {
       "term": "灯光",
       "id": "zh-002345",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "dēngguāng"
     },
     "登": {
@@ -14080,7 +14080,7 @@
     "登记": {
       "term": "登记",
       "id": "zh-002347",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "dēngjì"
     },
     "登录": {
@@ -14254,7 +14254,7 @@
     "锻炼": {
       "term": "锻炼",
       "id": "zh-002376",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "duànliàn"
     },
     "对比": {
@@ -14350,7 +14350,7 @@
     "发烧": {
       "term": "发烧",
       "id": "zh-002392",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "fāshāo"
     },
     "法": {
@@ -14374,7 +14374,7 @@
     "法院": {
       "term": "法院",
       "id": "zh-002396",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "fǎyuàn"
     },
     "翻": {
@@ -14668,7 +14668,7 @@
     "根据": {
       "term": "根据",
       "id": "zh-002445",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "gēnjù"
     },
     "工程": {
@@ -14728,7 +14728,7 @@
     "固定": {
       "term": "固定",
       "id": "zh-002455",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "gùdìng"
     },
     "瓜": {
@@ -14866,13 +14866,13 @@
     "行业": {
       "term": "行业",
       "id": "zh-002478",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "hángyè"
     },
     "航班": {
       "term": "航班",
       "id": "zh-002479",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "hángbān"
     },
     "航空": {
@@ -14908,7 +14908,7 @@
     "合同": {
       "term": "合同",
       "id": "zh-002485",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "hé tóng"
     },
     "黑暗": {
@@ -14956,7 +14956,7 @@
     "护士": {
       "term": "护士",
       "id": "zh-002493",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "hù shi"
     },
     "划": {
@@ -14998,7 +14998,7 @@
     "回复": {
       "term": "回复",
       "id": "zh-002500",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "huí fù"
     },
     "汇": {
@@ -15088,7 +15088,7 @@
     "机遇": {
       "term": "机遇",
       "id": "zh-002515",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "jīyù"
     },
     "积累": {
@@ -15160,7 +15160,7 @@
     "技巧": {
       "term": "技巧",
       "id": "zh-002527",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "jìqiǎo"
     },
     "季": {
@@ -15400,7 +15400,7 @@
     "结论": {
       "term": "结论",
       "id": "zh-002567",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "jiélùn"
     },
     "姐妹": {
@@ -15592,7 +15592,7 @@
     "考虑": {
       "term": "考虑",
       "id": "zh-002599",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "kǎolǜ"
     },
     "棵": {
@@ -15610,7 +15610,7 @@
     "空间": {
       "term": "空间",
       "id": "zh-002602",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "kōngjiān"
     },
     "口袋": {
@@ -15640,7 +15640,7 @@
     "快递": {
       "term": "快递",
       "id": "zh-002607",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "kuàidì"
     },
     "宽": {
@@ -15682,7 +15682,7 @@
     "垃圾": {
       "term": "垃圾",
       "id": "zh-002614",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "lājī"
     },
     "拉开": {
@@ -15724,7 +15724,7 @@
     "老家": {
       "term": "老家",
       "id": "zh-002621",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "lǎo jiā"
     },
     "老婆": {
@@ -15820,7 +15820,7 @@
     "良好": {
       "term": "良好",
       "id": "zh-002637",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "liáng hǎo"
     },
     "量": {
@@ -15856,7 +15856,7 @@
     "了解": {
       "term": "了解",
       "id": "zh-002643",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "liǎojiě"
     },
     "列": {
@@ -15928,7 +15928,7 @@
     "律师": {
       "term": "律师",
       "id": "zh-002655",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "lǜshī"
     },
     "轮": {
@@ -15982,7 +15982,7 @@
     "帽子": {
       "term": "帽子",
       "id": "zh-002664",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "màozi"
     },
     "没错": {
@@ -16030,13 +16030,13 @@
     "梦想": {
       "term": "梦想",
       "id": "zh-002672",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "mèngxiǎng"
     },
     "秘密": {
       "term": "秘密",
       "id": "zh-002673",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "mìmì"
     },
     "秘书": {
@@ -16150,7 +16150,7 @@
     "男女": {
       "term": "男女",
       "id": "zh-002692",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "nánnǚ"
     },
     "男士": {
@@ -16510,7 +16510,7 @@
     "权利": {
       "term": "权利",
       "id": "zh-002752",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "quánlì"
     },
     "却": {
@@ -16558,7 +16558,7 @@
     "人家": {
       "term": "人家",
       "id": "zh-002760",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "rénjiā"
     },
     "日记": {
@@ -16678,7 +16678,7 @@
     "上楼": {
       "term": "上楼",
       "id": "zh-002780",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "shàng lóu"
     },
     "上门": {
@@ -16864,7 +16864,7 @@
     "收获": {
       "term": "收获",
       "id": "zh-002811",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "shōuhuò"
     },
     "收益": {
@@ -16888,13 +16888,13 @@
     "手术": {
       "term": "手术",
       "id": "zh-002815",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "shǒushù"
     },
     "手套": {
       "term": "手套",
       "id": "zh-002816",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "shǒutào"
     },
     "守": {
@@ -16942,7 +16942,7 @@
     "暑假": {
       "term": "暑假",
       "id": "zh-002824",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "shǔjià"
     },
     "树林": {
@@ -16954,13 +16954,13 @@
     "树叶": {
       "term": "树叶",
       "id": "zh-002826",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "shùyè"
     },
     "数据": {
       "term": "数据",
       "id": "zh-002827",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "shùjù"
     },
     "数码": {
@@ -17152,7 +17152,7 @@
     "提供": {
       "term": "提供",
       "id": "zh-002859",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "tígōng"
     },
     "提醒": {
@@ -17266,7 +17266,7 @@
     "童年": {
       "term": "童年",
       "id": "zh-002878",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "tóng nián"
     },
     "统计": {
@@ -17362,7 +17362,7 @@
     "袜子": {
       "term": "袜子",
       "id": "zh-002894",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "wàzi"
     },
     "外汇": {
@@ -17440,7 +17440,7 @@
     "维持": {
       "term": "维持",
       "id": "zh-002907",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "wéichí"
     },
     "维护": {
@@ -17458,7 +17458,7 @@
     "尾巴": {
       "term": "尾巴",
       "id": "zh-002910",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "wěiba"
     },
     "未必": {
@@ -17518,7 +17518,7 @@
     "无法": {
       "term": "无法",
       "id": "zh-002920",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "wú fǎ"
     },
     "无聊": {
@@ -17566,7 +17566,7 @@
     "西瓜": {
       "term": "西瓜",
       "id": "zh-002928",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "xī guā"
     },
     "吸": {
@@ -17596,7 +17596,7 @@
     "吸引": {
       "term": "吸引",
       "id": "zh-002933",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "xī yǐn"
     },
     "喜爱": {
@@ -17740,7 +17740,7 @@
     "想象": {
       "term": "想象",
       "id": "zh-002957",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "xiǎngxiàng"
     },
     "项": {
@@ -17752,7 +17752,7 @@
     "项目": {
       "term": "项目",
       "id": "zh-002959",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "xiàngmù"
     },
     "相片": {
@@ -17776,7 +17776,7 @@
     "小吃": {
       "term": "小吃",
       "id": "zh-002963",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "xiǎochī"
     },
     "小伙子": {
@@ -17794,7 +17794,7 @@
     "效率": {
       "term": "效率",
       "id": "zh-002966",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "xiàolǜ"
     },
     "些": {
@@ -17902,7 +17902,7 @@
     "选择": {
       "term": "选择",
       "id": "zh-002984",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "xuǎn zé"
     },
     "学分": {
@@ -17998,7 +17998,7 @@
     "严格": {
       "term": "严格",
       "id": "zh-003000",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "yán gé"
     },
     "严重": {
@@ -18046,13 +18046,13 @@
     "眼里": {
       "term": "眼里",
       "id": "zh-003008",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "yǎnlǐ"
     },
     "演讲": {
       "term": "演讲",
       "id": "zh-003009",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "yǎnjiǎng"
     },
     "阳台": {
@@ -18118,7 +18118,7 @@
     "依然": {
       "term": "依然",
       "id": "zh-003020",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "yīrán"
     },
     "一律": {
@@ -18226,7 +18226,7 @@
     "引起": {
       "term": "引起",
       "id": "zh-003038",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "yǐnqǐ"
     },
     "应": {
@@ -18310,7 +18310,7 @@
     "有趣": {
       "term": "有趣",
       "id": "zh-003052",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "yǒuqù"
     },
     "有限": {
@@ -18334,7 +18334,7 @@
     "语法": {
       "term": "语法",
       "id": "zh-003056",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "yǔfǎ"
     },
     "语音": {
@@ -18424,7 +18424,7 @@
     "阅读": {
       "term": "阅读",
       "id": "zh-003071",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "yuèdú"
     },
     "运动会": {
@@ -18592,7 +18592,7 @@
     "政府": {
       "term": "政府",
       "id": "zh-003099",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "zhèngfǔ"
     },
     "政治": {
@@ -18622,13 +18622,13 @@
     "之一": {
       "term": "之一",
       "id": "zh-003104",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "zhī yī"
     },
     "植物": {
       "term": "植物",
       "id": "zh-003105",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "zhí wù"
     },
     "指挥": {
@@ -18646,7 +18646,7 @@
     "质量": {
       "term": "质量",
       "id": "zh-003108",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "zhì liàng"
     },
     "治": {
@@ -18682,7 +18682,7 @@
     "种类": {
       "term": "种类",
       "id": "zh-003114",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "zhǒng lèi"
     },
     "中奖": {
@@ -18718,7 +18718,7 @@
     "主题": {
       "term": "主题",
       "id": "zh-003120",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "zhǔ tí"
     },
     "主席": {
@@ -18736,7 +18736,7 @@
     "著名": {
       "term": "著名",
       "id": "zh-003123",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "zhùmíng"
     },
     "著作": {
@@ -18808,7 +18808,7 @@
     "准时": {
       "term": "准时",
       "id": "zh-003135",
-      "level": "HSK4",
+      "level": "HSK2-extended",
       "pinyin": "zhǔnshí"
     },
     "资料": {
@@ -18910,7 +18910,7 @@
     "安慰": {
       "term": "安慰",
       "id": "zh-003152",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "ānwèi"
     },
     "岸": {
@@ -19168,7 +19168,7 @@
     "玻璃": {
       "term": "玻璃",
       "id": "zh-003195",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "bōli"
     },
     "博客": {
@@ -19342,7 +19342,7 @@
     "彩票": {
       "term": "彩票",
       "id": "zh-003224",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "cǎipiào"
     },
     "餐馆": {
@@ -19354,7 +19354,7 @@
     "餐厅": {
       "term": "餐厅",
       "id": "zh-003226",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "cāntīng"
     },
     "餐饮": {
@@ -19366,7 +19366,7 @@
     "草原": {
       "term": "草原",
       "id": "zh-003228",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "cǎoyuán"
     },
     "册": {
@@ -19396,7 +19396,7 @@
     "差别": {
       "term": "差别",
       "id": "zh-003233",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "chābié"
     },
     "差距": {
@@ -19702,7 +19702,7 @@
     "窗帘": {
       "term": "窗帘",
       "id": "zh-003284",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "chuānglián"
     },
     "闯": {
@@ -19750,7 +19750,7 @@
     "聪明": {
       "term": "聪明",
       "id": "zh-003292",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "cōngmíng"
     },
     "从而": {
@@ -19960,7 +19960,7 @@
     "蛋糕": {
       "term": "蛋糕",
       "id": "zh-003327",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "dàngāo"
     },
     "当场": {
@@ -20002,7 +20002,7 @@
     "到来": {
       "term": "到来",
       "id": "zh-003334",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "dàolái"
     },
     "倒是": {
@@ -20020,7 +20020,7 @@
     "得了": {
       "term": "得了",
       "id": "zh-003337",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "déle"
     },
     "得以": {
@@ -20080,7 +20080,7 @@
     "典礼": {
       "term": "典礼",
       "id": "zh-003347",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "diǎnlǐ"
     },
     "点燃": {
@@ -20092,7 +20092,7 @@
     "电池": {
       "term": "电池",
       "id": "zh-003349",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "diànchí"
     },
     "电饭锅": {
@@ -20302,7 +20302,7 @@
     "分成": {
       "term": "分成",
       "id": "zh-003384",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "fēnchéng"
     },
     "分解": {
@@ -20392,7 +20392,7 @@
     "福利": {
       "term": "福利",
       "id": "zh-003399",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "fúlì"
     },
     "辅助": {
@@ -20410,7 +20410,7 @@
     "附件": {
       "term": "附件",
       "id": "zh-003402",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "fù jiàn"
     },
     "改革": {
@@ -20512,7 +20512,7 @@
     "隔壁": {
       "term": "隔壁",
       "id": "zh-003419",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "gé bì"
     },
     "个儿": {
@@ -20602,7 +20602,7 @@
     "沟通": {
       "term": "沟通",
       "id": "zh-003434",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "gōutōng"
     },
     "估计": {
@@ -20626,7 +20626,7 @@
     "鼓励": {
       "term": "鼓励",
       "id": "zh-003438",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "gǔlì"
     },
     "鼓掌": {
@@ -20926,7 +20926,7 @@
     "回收": {
       "term": "回收",
       "id": "zh-003488",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "huíshōu"
     },
     "回头": {
@@ -20962,7 +20962,7 @@
     "活力": {
       "term": "活力",
       "id": "zh-003494",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "huólì"
     },
     "活泼": {
@@ -21010,7 +21010,7 @@
     "肌肉": {
       "term": "肌肉",
       "id": "zh-003502",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "jīròu"
     },
     "基地": {
@@ -21052,7 +21052,7 @@
     "技能": {
       "term": "技能",
       "id": "zh-003509",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "jìnéng"
     },
     "继承": {
@@ -21520,7 +21520,7 @@
     "客户": {
       "term": "客户",
       "id": "zh-003587",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "kèhù"
     },
     "客气": {
@@ -21652,7 +21652,7 @@
     "礼貌": {
       "term": "礼貌",
       "id": "zh-003609",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "lǐmào"
     },
     "厉害": {
@@ -21760,7 +21760,7 @@
     "流动": {
       "term": "流动",
       "id": "zh-003627",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "liú dòng"
     },
     "流通": {
@@ -21970,7 +21970,7 @@
     "耐心": {
       "term": "耐心",
       "id": "zh-003662",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "nàixīn"
     },
     "男性": {
@@ -22030,7 +22030,7 @@
     "年龄": {
       "term": "年龄",
       "id": "zh-003672",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "niánlíng"
     },
     "年前": {
@@ -22162,7 +22162,7 @@
     "脾气": {
       "term": "脾气",
       "id": "zh-003694",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "pi qi"
     },
     "匹": {
@@ -22342,7 +22342,7 @@
     "签约": {
       "term": "签约",
       "id": "zh-003724",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "qiān yuē"
     },
     "签证": {
@@ -22456,13 +22456,13 @@
     "清晨": {
       "term": "清晨",
       "id": "zh-003743",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "qīngchén"
     },
     "清理": {
       "term": "清理",
       "id": "zh-003744",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "qīnglǐ"
     },
     "情节": {
@@ -22738,7 +22738,7 @@
     "上涨": {
       "term": "上涨",
       "id": "zh-003790",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "shàngzhǎng"
     },
     "稍": {
@@ -22900,7 +22900,7 @@
     "剩下": {
       "term": "剩下",
       "id": "zh-003817",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "shèngxià"
     },
     "失误": {
@@ -22996,7 +22996,7 @@
     "视频": {
       "term": "视频",
       "id": "zh-003833",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "shìpín"
     },
     "视为": {
@@ -23056,7 +23056,7 @@
     "书法": {
       "term": "书法",
       "id": "zh-003843",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "shūfǎ"
     },
     "书柜": {
@@ -23086,7 +23086,7 @@
     "熟悉": {
       "term": "熟悉",
       "id": "zh-003848",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "shúxī"
     },
     "鼠": {
@@ -23116,7 +23116,7 @@
     "摔倒": {
       "term": "摔倒",
       "id": "zh-003853",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "shuāidǎo"
     },
     "率领": {
@@ -23488,7 +23488,7 @@
     "推行": {
       "term": "推行",
       "id": "zh-003915",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "tuīxíng"
     },
     "脱离": {
@@ -23542,7 +23542,7 @@
     "违法": {
       "term": "违法",
       "id": "zh-003924",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "wéi fǎ"
     },
     "违反": {
@@ -23560,7 +23560,7 @@
     "围绕": {
       "term": "围绕",
       "id": "zh-003927",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "wéi rào"
     },
     "唯一": {
@@ -23848,7 +23848,7 @@
     "消毒": {
       "term": "消毒",
       "id": "zh-003975",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "xiāo dú"
     },
     "消防": {
@@ -24094,7 +24094,7 @@
     "邀请": {
       "term": "邀请",
       "id": "zh-004016",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "yāoqǐng"
     },
     "摇头": {
@@ -24178,13 +24178,13 @@
     "一句话": {
       "term": "一句话",
       "id": "zh-004030",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "yījùhuà"
     },
     "一路": {
       "term": "一路",
       "id": "zh-004031",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "yílù"
     },
     "一下子": {
@@ -24208,7 +24208,7 @@
     "以便": {
       "term": "以便",
       "id": "zh-004035",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "yǐbiàn"
     },
     "以往": {
@@ -24382,7 +24382,7 @@
     "有力": {
       "term": "有力",
       "id": "zh-004064",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "yǒu lì"
     },
     "有利于": {
@@ -24412,7 +24412,7 @@
     "雨水": {
       "term": "雨水",
       "id": "zh-004069",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "yǔ shuǐ"
     },
     "预备": {
@@ -24424,7 +24424,7 @@
     "预期": {
       "term": "预期",
       "id": "zh-004071",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "yùqī"
     },
     "元旦": {
@@ -24688,7 +24688,7 @@
     "掌握": {
       "term": "掌握",
       "id": "zh-004115",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "zhǎngwò"
     },
     "招生": {
@@ -24814,7 +24814,7 @@
     "之内": {
       "term": "之内",
       "id": "zh-004136",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "zhīnèi"
     },
     "之外": {
@@ -25048,7 +25048,7 @@
     "助理": {
       "term": "助理",
       "id": "zh-004175",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "zhù lǐ"
     },
     "助手": {
@@ -25222,7 +25222,7 @@
     "组织": {
       "term": "组织",
       "id": "zh-004204",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "zǔ zhī"
     },
     "醉": {
@@ -25240,13 +25240,13 @@
     "尊重": {
       "term": "尊重",
       "id": "zh-004207",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "zūn zhòng"
     },
     "遵守": {
       "term": "遵守",
       "id": "zh-004208",
-      "level": "HSK5",
+      "level": "HSK2-extended",
       "pinyin": "zūn shǒu"
     },
     "挨着": {
@@ -25414,7 +25414,7 @@
     "被告": {
       "term": "被告",
       "id": "zh-004236",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "bèigào"
     },
     "奔跑": {
@@ -25552,7 +25552,7 @@
     "病情": {
       "term": "病情",
       "id": "zh-004259",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "bìngqíng"
     },
     "拨打": {
@@ -25888,7 +25888,7 @@
     "场地": {
       "term": "场地",
       "id": "zh-004315",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "chǎng dì"
     },
     "场馆": {
@@ -26212,7 +26212,7 @@
     "创意": {
       "term": "创意",
       "id": "zh-004369",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "chuàng yì"
     },
     "此处": {
@@ -27046,7 +27046,7 @@
     "港口": {
       "term": "港口",
       "id": "zh-004508",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "gǎngkǒu"
     },
     "高层": {
@@ -27244,7 +27244,7 @@
     "故障": {
       "term": "故障",
       "id": "zh-004541",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "gùzhàng"
     },
     "顾": {
@@ -27430,7 +27430,7 @@
     "好转": {
       "term": "好转",
       "id": "zh-004572",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "hǎozhuǎn"
     },
     "好学": {
@@ -27874,7 +27874,7 @@
     "节假日": {
       "term": "节假日",
       "id": "zh-004646",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "jié jià rì"
     },
     "节能": {
@@ -29320,7 +29320,7 @@
     "日语": {
       "term": "日语",
       "id": "zh-004887",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "rì yǔ"
     },
     "融合": {
@@ -29410,7 +29410,7 @@
     "山谷": {
       "term": "山谷",
       "id": "zh-004902",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "shān gǔ"
     },
     "山坡": {
@@ -29422,7 +29422,7 @@
     "伤口": {
       "term": "伤口",
       "id": "zh-004904",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "shāng kǒu"
     },
     "伤亡": {
@@ -29752,7 +29752,7 @@
     "说明书": {
       "term": "说明书",
       "id": "zh-004959",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "shuō míng shū"
     },
     "说实话": {
@@ -30106,13 +30106,13 @@
     "团队": {
       "term": "团队",
       "id": "zh-005018",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "tuán duì"
     },
     "推出": {
       "term": "推出",
       "id": "zh-005019",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "tuī chū"
     },
     "退票": {
@@ -30508,7 +30508,7 @@
     "笑容": {
       "term": "笑容",
       "id": "zh-005085",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "xiàoróng"
     },
     "笑声": {
@@ -30592,7 +30592,7 @@
     "薪水": {
       "term": "薪水",
       "id": "zh-005099",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "xīnshuǐ"
     },
     "信仰": {
@@ -30676,7 +30676,7 @@
     "学会": {
       "term": "学会",
       "id": "zh-005113",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "xué huì"
     },
     "学员": {
@@ -30940,7 +30940,7 @@
     "议题": {
       "term": "议题",
       "id": "zh-005157",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "yìtí"
     },
     "异常": {
@@ -30970,7 +30970,7 @@
     "因素": {
       "term": "因素",
       "id": "zh-005162",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "yīnsù"
     },
     "阴谋": {
@@ -31024,7 +31024,7 @@
     "迎来": {
       "term": "迎来",
       "id": "zh-005171",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "yíng lái"
     },
     "影迷": {
@@ -31126,7 +31126,7 @@
     "有事": {
       "term": "有事",
       "id": "zh-005188",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "yǒu shì"
     },
     "于": {
@@ -31402,7 +31402,7 @@
     "站台": {
       "term": "站台",
       "id": "zh-005234",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "zhàn tái"
     },
     "章": {
@@ -31444,7 +31444,7 @@
     "招聘": {
       "term": "招聘",
       "id": "zh-005241",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "zhāopìn"
     },
     "照样": {
@@ -31504,7 +31504,7 @@
     "政策": {
       "term": "政策",
       "id": "zh-005251",
-      "level": "HSK6",
+      "level": "HSK2-extended",
       "pinyin": "zhèngcè"
     },
     "政党": {
@@ -67428,6 +67428,4644 @@
       "id": "zh-011238",
       "level": "HSK1-extended",
       "pinyin": "zhōuwǔ"
+    },
+    "好的": {
+      "term": "好的",
+      "id": "zh-011239",
+      "level": "HSK2-extended",
+      "pinyin": "hǎo de"
+    },
+    "聊天": {
+      "term": "聊天",
+      "id": "zh-011240",
+      "level": "HSK2-extended",
+      "pinyin": "liáo tiān"
+    },
+    "出门前": {
+      "term": "出门前",
+      "id": "zh-011241",
+      "level": "HSK2-extended",
+      "pinyin": "chū mén qián"
+    },
+    "我们班": {
+      "term": "我们班",
+      "id": "zh-011242",
+      "level": "HSK2-extended",
+      "pinyin": "wǒmen bān"
+    },
+    "吃饱": {
+      "term": "吃饱",
+      "id": "zh-011243",
+      "level": "HSK2-extended",
+      "pinyin": "chī bǎo"
+    },
+    "背上楼": {
+      "term": "背上楼",
+      "id": "zh-011244",
+      "level": "HSK2-extended",
+      "pinyin": "bēi shàng lóu"
+    },
+    "丢了": {
+      "term": "丢了",
+      "id": "zh-011245",
+      "level": "HSK2-extended",
+      "pinyin": "diū le"
+    },
+    "边上": {
+      "term": "边上",
+      "id": "zh-011246",
+      "level": "HSK2-extended",
+      "pinyin": "biān shàng"
+    },
+    "变了": {
+      "term": "变了",
+      "id": "zh-011247",
+      "level": "HSK2-extended",
+      "pinyin": "biàn le"
+    },
+    "毛毛虫": {
+      "term": "毛毛虫",
+      "id": "zh-011248",
+      "level": "HSK2-extended",
+      "pinyin": "máo mao chóng"
+    },
+    "蝴蝶": {
+      "term": "蝴蝶",
+      "id": "zh-011249",
+      "level": "HSK2-extended",
+      "pinyin": "hú dié"
+    },
+    "看过": {
+      "term": "看过",
+      "id": "zh-011250",
+      "level": "HSK2-extended",
+      "pinyin": "kàn guò"
+    },
+    "几遍": {
+      "term": "几遍",
+      "id": "zh-011251",
+      "level": "HSK2-extended",
+      "pinyin": "jǐ biàn"
+    },
+    "会说": {
+      "term": "会说",
+      "id": "zh-011252",
+      "level": "HSK2-extended",
+      "pinyin": "huì shuō"
+    },
+    "晚了": {
+      "term": "晚了",
+      "id": "zh-011253",
+      "level": "HSK2-extended",
+      "pinyin": "wǎn le"
+    },
+    "过了": {
+      "term": "过了",
+      "id": "zh-011254",
+      "level": "HSK2-extended",
+      "pinyin": "guò le"
+    },
+    "第一": {
+      "term": "第一",
+      "id": "zh-011255",
+      "level": "HSK2-extended",
+      "pinyin": "dì yī"
+    },
+    "服务员": {
+      "term": "服务员",
+      "id": "zh-011256",
+      "level": "HSK2-extended",
+      "pinyin": "fú wù yuán"
+    },
+    "五层": {
+      "term": "五层",
+      "id": "zh-011257",
+      "level": "HSK2-extended",
+      "pinyin": "wǔ céng"
+    },
+    "单子": {
+      "term": "单子",
+      "id": "zh-011258",
+      "level": "HSK2-extended",
+      "pinyin": "dān zi"
+    },
+    "查一查": {
+      "term": "查一查",
+      "id": "zh-011259",
+      "level": "HSK2-extended",
+      "pinyin": "chá yī chá"
+    },
+    "这种": {
+      "term": "这种",
+      "id": "zh-011260",
+      "level": "HSK2-extended",
+      "pinyin": "zhè zhǒng"
+    },
+    "超过了": {
+      "term": "超过了",
+      "id": "zh-011261",
+      "level": "HSK2-extended",
+      "pinyin": "chāo guò le"
+    },
+    "成了": {
+      "term": "成了",
+      "id": "zh-011262",
+      "level": "HSK2-extended",
+      "pinyin": "chéng le"
+    },
+    "她的": {
+      "term": "她的",
+      "id": "zh-011263",
+      "level": "HSK2-extended",
+      "pinyin": "tā de"
+    },
+    "出现了": {
+      "term": "出现了",
+      "id": "zh-011264",
+      "level": "HSK2-extended",
+      "pinyin": "chū xiàn le"
+    },
+    "出院了": {
+      "term": "出院了",
+      "id": "zh-011265",
+      "level": "HSK2-extended",
+      "pinyin": "chū yuàn le"
+    },
+    "出租了": {
+      "term": "出租了",
+      "id": "zh-011266",
+      "level": "HSK2-extended",
+      "pinyin": "chū zū le"
+    },
+    "停靠": {
+      "term": "停靠",
+      "id": "zh-011267",
+      "level": "HSK2-extended",
+      "pinyin": "tíng kào"
+    },
+    "吹开了": {
+      "term": "吹开了",
+      "id": "zh-011268",
+      "level": "HSK2-extended",
+      "pinyin": "chuī kāi le"
+    },
+    "生活費": {
+      "term": "生活費",
+      "id": "zh-011269",
+      "level": "HSK2-extended",
+      "pinyin": "shēng huó fèi"
+    },
+    "會議": {
+      "term": "會議",
+      "id": "zh-011270",
+      "level": "HSK2-extended",
+      "pinyin": "huì yì"
+    },
+    "報告": {
+      "term": "報告",
+      "id": "zh-011271",
+      "level": "HSK2-extended",
+      "pinyin": "bào gào"
+    },
+    "出來": {
+      "term": "出來",
+      "id": "zh-011272",
+      "level": "HSK2-extended",
+      "pinyin": "chū lái"
+    },
+    "學生": {
+      "term": "學生",
+      "id": "zh-011273",
+      "level": "HSK2-extended",
+      "pinyin": "xué shēng"
+    },
+    "參加": {
+      "term": "參加",
+      "id": "zh-011274",
+      "level": "HSK2-extended",
+      "pinyin": "cān jiā"
+    },
+    "校園": {
+      "term": "校園",
+      "id": "zh-011275",
+      "level": "HSK2-extended",
+      "pinyin": "xiào yuán"
+    },
+    "活動": {
+      "term": "活動",
+      "id": "zh-011276",
+      "level": "HSK2-extended",
+      "pinyin": "huó dòng"
+    },
+    "這次": {
+      "term": "這次",
+      "id": "zh-011277",
+      "level": "HSK2-extended",
+      "pinyin": "zhè cì"
+    },
+    "改進": {
+      "term": "改進",
+      "id": "zh-011278",
+      "level": "HSK2-extended",
+      "pinyin": "gǎi jìn"
+    },
+    "生產": {
+      "term": "生產",
+      "id": "zh-011279",
+      "level": "HSK2-extended",
+      "pinyin": "shēngchǎn"
+    },
+    "大多數": {
+      "term": "大多數",
+      "id": "zh-011280",
+      "level": "HSK2-extended",
+      "pinyin": "dàduōshù"
+    },
+    "這個": {
+      "term": "這個",
+      "id": "zh-011281",
+      "level": "HSK2-extended",
+      "pinyin": "zhège"
+    },
+    "決定": {
+      "term": "決定",
+      "id": "zh-011282",
+      "level": "HSK2-extended",
+      "pinyin": "juédìng"
+    },
+    "岸邊": {
+      "term": "岸邊",
+      "id": "zh-011283",
+      "level": "HSK2-extended",
+      "pinyin": "ànbiān"
+    },
+    "凝視": {
+      "term": "凝視",
+      "id": "zh-011284",
+      "level": "HSK2-extended",
+      "pinyin": "níngshì"
+    },
+    "遼闊": {
+      "term": "遼闊",
+      "id": "zh-011285",
+      "level": "HSK2-extended",
+      "pinyin": "liáokuò"
+    },
+    "工廠": {
+      "term": "工廠",
+      "id": "zh-011286",
+      "level": "HSK2-extended",
+      "pinyin": "gōngchǎng"
+    },
+    "產品": {
+      "term": "產品",
+      "id": "zh-011287",
+      "level": "HSK2-extended",
+      "pinyin": "chǎnpǐn"
+    },
+    "學校": {
+      "term": "學校",
+      "id": "zh-011288",
+      "level": "HSK2-extended",
+      "pinyin": "xuéxiào"
+    },
+    "大門": {
+      "term": "大門",
+      "id": "zh-011289",
+      "level": "HSK2-extended",
+      "pinyin": "dàmén"
+    },
+    "八點": {
+      "term": "八點",
+      "id": "zh-011290",
+      "level": "HSK2-extended",
+      "pinyin": "bādiǎn"
+    },
+    "開放": {
+      "term": "開放",
+      "id": "zh-011291",
+      "level": "HSK2-extended",
+      "pinyin": "kāifàng"
+    },
+    "小孩子": {
+      "term": "小孩子",
+      "id": "zh-011292",
+      "level": "HSK2-extended",
+      "pinyin": "xiǎoháizi"
+    },
+    "應該": {
+      "term": "應該",
+      "id": "zh-011293",
+      "level": "HSK2-extended",
+      "pinyin": "yīnggāi"
+    },
+    "學會": {
+      "term": "學會",
+      "id": "zh-011294",
+      "level": "HSK2-extended",
+      "pinyin": "xuéhuì"
+    },
+    "圖書館": {
+      "term": "圖書館",
+      "id": "zh-011295",
+      "level": "HSK2-extended",
+      "pinyin": "túshūguǎn"
+    },
+    "大聲": {
+      "term": "大聲",
+      "id": "zh-011296",
+      "level": "HSK2-extended",
+      "pinyin": "dàshēng"
+    },
+    "說話": {
+      "term": "說話",
+      "id": "zh-011297",
+      "level": "HSK2-extended",
+      "pinyin": "shuōhuà"
+    },
+    "這件": {
+      "term": "這件",
+      "id": "zh-011298",
+      "level": "HSK2-extended",
+      "pinyin": "zhèjiàn"
+    },
+    "各種": {
+      "term": "各種",
+      "id": "zh-011299",
+      "level": "HSK2-extended",
+      "pinyin": "gè zhǒng"
+    },
+    "選擇": {
+      "term": "選擇",
+      "id": "zh-011300",
+      "level": "HSK2-extended",
+      "pinyin": "xuǎn zé"
+    },
+    "我們": {
+      "term": "我們",
+      "id": "zh-011301",
+      "level": "HSK2-extended",
+      "pinyin": "wǒ men"
+    },
+    "週末": {
+      "term": "週末",
+      "id": "zh-011302",
+      "level": "HSK2-extended",
+      "pinyin": "zhōu mò"
+    },
+    "親近": {
+      "term": "親近",
+      "id": "zh-011303",
+      "level": "HSK2-extended",
+      "pinyin": "qīn jìn"
+    },
+    "這項": {
+      "term": "這項",
+      "id": "zh-011304",
+      "level": "HSK2-extended",
+      "pinyin": "zhè xiàng"
+    },
+    "帶來": {
+      "term": "帶來",
+      "id": "zh-011305",
+      "level": "HSK2-extended",
+      "pinyin": "dài lái"
+    },
+    "更多": {
+      "term": "更多",
+      "id": "zh-011306",
+      "level": "HSK2-extended",
+      "pinyin": "gèng duō"
+    },
+    "就業機會": {
+      "term": "就業機會",
+      "id": "zh-011307",
+      "level": "HSK2-extended",
+      "pinyin": "jiù yè jī huì"
+    },
+    "已經": {
+      "term": "已經",
+      "id": "zh-011308",
+      "level": "HSK2-extended",
+      "pinyin": "yǐ jīng"
+    },
+    "十年": {
+      "term": "十年",
+      "id": "zh-011309",
+      "level": "HSK2-extended",
+      "pinyin": "shí nián"
+    },
+    "成績": {
+      "term": "成績",
+      "id": "zh-011310",
+      "level": "HSK2-extended",
+      "pinyin": "chéng jì"
+    },
+    "吃了": {
+      "term": "吃了",
+      "id": "zh-011311",
+      "level": "HSK2-extended",
+      "pinyin": "chī le"
+    },
+    "黑了": {
+      "term": "黑了",
+      "id": "zh-011312",
+      "level": "HSK2-extended",
+      "pinyin": "hēi le"
+    },
+    "这条道": {
+      "term": "这条道",
+      "id": "zh-011313",
+      "level": "HSK2-extended",
+      "pinyin": "zhè tiáo dào"
+    },
+    "说的": {
+      "term": "说的",
+      "id": "zh-011314",
+      "level": "HSK2-extended",
+      "pinyin": "shuō de"
+    },
+    "来的话": {
+      "term": "来的话",
+      "id": "zh-011315",
+      "level": "HSK2-extended",
+      "pinyin": "lái de huà"
+    },
+    "这张": {
+      "term": "这张",
+      "id": "zh-011316",
+      "level": "HSK2-extended",
+      "pinyin": "zhè zhāng"
+    },
+    "听了": {
+      "term": "听了",
+      "id": "zh-011317",
+      "level": "HSK2-extended",
+      "pinyin": "tīng le"
+    },
+    "这家店": {
+      "term": "这家店",
+      "id": "zh-011318",
+      "level": "HSK2-extended",
+      "pinyin": "zhè jiā diàn"
+    },
+    "买了": {
+      "term": "买了",
+      "id": "zh-011319",
+      "level": "HSK2-extended",
+      "pinyin": "mǎi le"
+    },
+    "掉了": {
+      "term": "掉了",
+      "id": "zh-011320",
+      "level": "HSK2-extended",
+      "pinyin": "diào le"
+    },
+    "这条": {
+      "term": "这条",
+      "id": "zh-011321",
+      "level": "HSK2-extended",
+      "pinyin": "zhè tiáo"
+    },
+    "给他": {
+      "term": "给他",
+      "id": "zh-011322",
+      "level": "HSK2-extended",
+      "pinyin": "gěi tā"
+    },
+    "发了": {
+      "term": "发了",
+      "id": "zh-011323",
+      "level": "HSK2-extended",
+      "pinyin": "fā le"
+    },
+    "这段话": {
+      "term": "这段话",
+      "id": "zh-011324",
+      "level": "HSK2-extended",
+      "pinyin": "zhè duàn huà"
+    },
+    "足球队": {
+      "term": "足球队",
+      "id": "zh-011325",
+      "level": "HSK2-extended",
+      "pinyin": "zúqiú duì"
+    },
+    "球队的": {
+      "term": "球队的",
+      "id": "zh-011326",
+      "level": "HSK2-extended",
+      "pinyin": "qiúduì de"
+    },
+    "课堂上": {
+      "term": "课堂上",
+      "id": "zh-011327",
+      "level": "HSK2-extended",
+      "pinyin": "kètáng shàng"
+    },
+    "做了": {
+      "term": "做了",
+      "id": "zh-011328",
+      "level": "HSK2-extended",
+      "pinyin": "zuò le"
+    },
+    "书店的": {
+      "term": "书店的",
+      "id": "zh-011329",
+      "level": "HSK2-extended",
+      "pinyin": "shūdiàn de"
+    },
+    "多数人": {
+      "term": "多数人",
+      "id": "zh-011330",
+      "level": "HSK2-extended",
+      "pinyin": "duōshù rén"
+    },
+    "正确的": {
+      "term": "正确的",
+      "id": "zh-011331",
+      "level": "HSK2-extended",
+      "pinyin": "zhèngquè de"
+    },
+    "发出去了": {
+      "term": "发出去了",
+      "id": "zh-011332",
+      "level": "HSK2-extended",
+      "pinyin": "fā chū qù le"
+    },
+    "这方面": {
+      "term": "这方面",
+      "id": "zh-011333",
+      "level": "HSK2-extended",
+      "pinyin": "zhè fāngmiàn"
+    },
+    "一份": {
+      "term": "一份",
+      "id": "zh-011334",
+      "level": "HSK2-extended",
+      "pinyin": "yí fèn"
+    },
+    "炒饭": {
+      "term": "炒饭",
+      "id": "zh-011335",
+      "level": "HSK2-extended",
+      "pinyin": "chǎofàn"
+    },
+    "一封信": {
+      "term": "一封信",
+      "id": "zh-011336",
+      "level": "HSK2-extended",
+      "pinyin": "yī fēng xìn"
+    },
+    "市里": {
+      "term": "市里",
+      "id": "zh-011337",
+      "level": "HSK2-extended",
+      "pinyin": "shì lǐ"
+    },
+    "到了": {
+      "term": "到了",
+      "id": "zh-011338",
+      "level": "HSK2-extended",
+      "pinyin": "dào le"
+    },
+    "昨晚": {
+      "term": "昨晚",
+      "id": "zh-011339",
+      "level": "HSK2-extended",
+      "pinyin": "zuó wǎn"
+    },
+    "不是": {
+      "term": "不是",
+      "id": "zh-011340",
+      "level": "HSK2-extended",
+      "pinyin": "bú shì"
+    },
+    "每个人": {
+      "term": "每个人",
+      "id": "zh-011341",
+      "level": "HSK2-extended",
+      "pinyin": "měi gè rén"
+    },
+    "自己的": {
+      "term": "自己的",
+      "id": "zh-011342",
+      "level": "HSK2-extended",
+      "pinyin": "zì jǐ de"
+    },
+    "每年": {
+      "term": "每年",
+      "id": "zh-011343",
+      "level": "HSK2-extended",
+      "pinyin": "měi nián"
+    },
+    "回乡": {
+      "term": "回乡",
+      "id": "zh-011344",
+      "level": "HSK2-extended",
+      "pinyin": "huí xiāng"
+    },
+    "喊叫": {
+      "term": "喊叫",
+      "id": "zh-011345",
+      "level": "HSK2-extended",
+      "pinyin": "hǎn jiào"
+    },
+    "河边": {
+      "term": "河边",
+      "id": "zh-011346",
+      "level": "HSK2-extended",
+      "pinyin": "hé biān"
+    },
+    "写字": {
+      "term": "写字",
+      "id": "zh-011347",
+      "level": "HSK2-extended",
+      "pinyin": "xiě zì"
+    },
+    "咖啡馆": {
+      "term": "咖啡馆",
+      "id": "zh-011348",
+      "level": "HSK2-extended",
+      "pinyin": "kā fēi guǎn"
+    },
+    "湖边": {
+      "term": "湖边",
+      "id": "zh-011349",
+      "level": "HSK2-extended",
+      "pinyin": "hú biān"
+    },
+    "挂在": {
+      "term": "挂在",
+      "id": "zh-011350",
+      "level": "HSK2-extended",
+      "pinyin": "guà zài"
+    },
+    "有时": {
+      "term": "有时",
+      "id": "zh-011351",
+      "level": "HSK2-extended",
+      "pinyin": "yǒu shí"
+    },
+    "课外": {
+      "term": "课外",
+      "id": "zh-011352",
+      "level": "HSK2-extended",
+      "pinyin": "kè wài"
+    },
+    "坐车": {
+      "term": "坐车",
+      "id": "zh-011353",
+      "level": "HSK2-extended",
+      "pinyin": "zuò chē"
+    },
+    "鸡肉": {
+      "term": "鸡肉",
+      "id": "zh-011354",
+      "level": "HSK2-extended",
+      "pinyin": "jī ròu"
+    },
+    "三级": {
+      "term": "三级",
+      "id": "zh-011355",
+      "level": "HSK2-extended",
+      "pinyin": "sān jí"
+    },
+    "别急": {
+      "term": "别急",
+      "id": "zh-011356",
+      "level": "HSK2-extended",
+      "pinyin": "bié jí"
+    },
+    "家长会": {
+      "term": "家长会",
+      "id": "zh-011357",
+      "level": "HSK2-extended",
+      "pinyin": "jiā zhǎng huì"
+    },
+    "假的": {
+      "term": "假的",
+      "id": "zh-011358",
+      "level": "HSK2-extended",
+      "pinyin": "jiǎ de"
+    },
+    "这位": {
+      "term": "这位",
+      "id": "zh-011359",
+      "level": "HSK2-extended",
+      "pinyin": "zhè wèi"
+    },
+    "三件": {
+      "term": "三件",
+      "id": "zh-011360",
+      "level": "HSK2-extended",
+      "pinyin": "sān jiàn"
+    },
+    "有趣的": {
+      "term": "有趣的",
+      "id": "zh-011361",
+      "level": "HSK2-extended",
+      "pinyin": "yǒu qù de"
+    },
+    "会上": {
+      "term": "会上",
+      "id": "zh-011362",
+      "level": "HSK2-extended",
+      "pinyin": "huì shàng"
+    },
+    "五分钟": {
+      "term": "五分钟",
+      "id": "zh-011363",
+      "level": "HSK2-extended",
+      "pinyin": "wǔ fēn zhōng"
+    },
+    "山羊": {
+      "term": "山羊",
+      "id": "zh-011364",
+      "level": "HSK2-extended",
+      "pinyin": "shān yáng"
+    },
+    "那天": {
+      "term": "那天",
+      "id": "zh-011365",
+      "level": "HSK2-extended",
+      "pinyin": "nà tiān"
+    },
+    "我国": {
+      "term": "我国",
+      "id": "zh-011366",
+      "level": "HSK2-extended",
+      "pinyin": "wǒ guó"
+    },
+    "夜来香": {
+      "term": "夜来香",
+      "id": "zh-011367",
+      "level": "HSK2-extended",
+      "pinyin": "yè lái xiāng"
+    },
+    "一名": {
+      "term": "一名",
+      "id": "zh-011368",
+      "level": "HSK2-extended",
+      "pinyin": "yī míng"
+    },
+    "数学": {
+      "term": "数学",
+      "id": "zh-011369",
+      "level": "HSK2-extended",
+      "pinyin": "shù xué"
+    },
+    "第二个": {
+      "term": "第二个",
+      "id": "zh-011370",
+      "level": "HSK2-extended",
+      "pinyin": "dì èr gè"
+    },
+    "今晚": {
+      "term": "今晚",
+      "id": "zh-011371",
+      "level": "HSK2-extended",
+      "pinyin": "jīn wǎn"
+    },
+    "很久": {
+      "term": "很久",
+      "id": "zh-011372",
+      "level": "HSK2-extended",
+      "pinyin": "hěn jiǔ"
+    },
+    "两斤": {
+      "term": "两斤",
+      "id": "zh-011373",
+      "level": "HSK2-extended",
+      "pinyin": "liǎng jīn"
+    },
+    "我要": {
+      "term": "我要",
+      "id": "zh-011374",
+      "level": "HSK2-extended",
+      "pinyin": "wǒ yào"
+    },
+    "下一个": {
+      "term": "下一个",
+      "id": "zh-011375",
+      "level": "HSK2-extended",
+      "pinyin": "xià yī gè"
+    },
+    "举起": {
+      "term": "举起",
+      "id": "zh-011376",
+      "level": "HSK2-extended",
+      "pinyin": "jǔ qǐ"
+    },
+    "一句": {
+      "term": "一句",
+      "id": "zh-011377",
+      "level": "HSK2-extended",
+      "pinyin": "yī jù"
+    },
+    "很开心": {
+      "term": "很开心",
+      "id": "zh-011378",
+      "level": "HSK2-extended",
+      "pinyin": "hěn kāi xīn"
+    },
+    "考生们": {
+      "term": "考生们",
+      "id": "zh-011379",
+      "level": "HSK2-extended",
+      "pinyin": "kǎoshēngmen"
+    },
+    "教室外": {
+      "term": "教室外",
+      "id": "zh-011380",
+      "level": "HSK2-extended",
+      "pinyin": "jiàoshì wài"
+    },
+    "靠墙": {
+      "term": "靠墙",
+      "id": "zh-011381",
+      "level": "HSK2-extended",
+      "pinyin": "kào qiáng"
+    },
+    "站着": {
+      "term": "站着",
+      "id": "zh-011382",
+      "level": "HSK2-extended",
+      "pinyin": "zhànzhe"
+    },
+    "选了": {
+      "term": "选了",
+      "id": "zh-011383",
+      "level": "HSK2-extended",
+      "pinyin": "xuǎn le"
+    },
+    "物理": {
+      "term": "物理",
+      "id": "zh-011384",
+      "level": "HSK2-extended",
+      "pinyin": "wùlǐ"
+    },
+    "这一科": {
+      "term": "这一科",
+      "id": "zh-011385",
+      "level": "HSK2-extended",
+      "pinyin": "zhè yī kē"
+    },
+    "噩梦": {
+      "term": "噩梦",
+      "id": "zh-011386",
+      "level": "HSK2-extended",
+      "pinyin": "èmèng"
+    },
+    "三点一刻": {
+      "term": "三点一刻",
+      "id": "zh-011387",
+      "level": "HSK2-extended",
+      "pinyin": "sān diǎn yī kè"
+    },
+    "到达了": {
+      "term": "到达了",
+      "id": "zh-011388",
+      "level": "HSK2-extended",
+      "pinyin": "dàodále"
+    },
+    "茶水": {
+      "term": "茶水",
+      "id": "zh-011389",
+      "level": "HSK2-extended",
+      "pinyin": "cháshuǐ"
+    },
+    "拉上": {
+      "term": "拉上",
+      "id": "zh-011390",
+      "level": "HSK2-extended",
+      "pinyin": "lā shàng"
+    },
+    "老年人": {
+      "term": "老年人",
+      "id": "zh-011391",
+      "level": "HSK2-extended",
+      "pinyin": "lǎoniánrén"
+    },
+    "脸上": {
+      "term": "脸上",
+      "id": "zh-011392",
+      "level": "HSK2-extended",
+      "pinyin": "liǎn shàng"
+    },
+    "露出": {
+      "term": "露出",
+      "id": "zh-011393",
+      "level": "HSK2-extended",
+      "pinyin": "lùchū"
+    },
+    "开窗": {
+      "term": "开窗",
+      "id": "zh-011394",
+      "level": "HSK2-extended",
+      "pinyin": "kāi chuāng"
+    },
+    "变得": {
+      "term": "变得",
+      "id": "zh-011395",
+      "level": "HSK2-extended",
+      "pinyin": "biàn de"
+    },
+    "五度": {
+      "term": "五度",
+      "id": "zh-011396",
+      "level": "HSK2-extended",
+      "pinyin": "wǔ dù"
+    },
+    "留在": {
+      "term": "留在",
+      "id": "zh-011397",
+      "level": "HSK2-extended",
+      "pinyin": "liú zài"
+    },
+    "联系方式": {
+      "term": "联系方式",
+      "id": "zh-011398",
+      "level": "HSK2-extended",
+      "pinyin": "liánxì fāngshì"
+    },
+    "美国": {
+      "term": "美国",
+      "id": "zh-011399",
+      "level": "HSK2-extended",
+      "pinyin": "měiguó"
+    },
+    "河水": {
+      "term": "河水",
+      "id": "zh-011400",
+      "level": "HSK2-extended",
+      "pinyin": "héshuǐ"
+    },
+    "山谷中": {
+      "term": "山谷中",
+      "id": "zh-011401",
+      "level": "HSK2-extended",
+      "pinyin": "shān gǔ zhōng"
+    },
+    "说得": {
+      "term": "说得",
+      "id": "zh-011402",
+      "level": "HSK2-extended",
+      "pinyin": "shuō de"
+    },
+    "这件": {
+      "term": "这件",
+      "id": "zh-011403",
+      "level": "HSK2-extended",
+      "pinyin": "zhè jiàn"
+    },
+    "旅客们": {
+      "term": "旅客们",
+      "id": "zh-011404",
+      "level": "HSK2-extended",
+      "pinyin": "lǚkèmen"
+    },
+    "检票": {
+      "term": "检票",
+      "id": "zh-011405",
+      "level": "HSK2-extended",
+      "pinyin": "jiǎnpiào"
+    },
+    "云南": {
+      "term": "云南",
+      "id": "zh-011406",
+      "level": "HSK2-extended",
+      "pinyin": "yúnnán"
+    },
+    "绿的": {
+      "term": "绿的",
+      "id": "zh-011407",
+      "level": "HSK2-extended",
+      "pinyin": "lǜ de"
+    },
+    "绿色的": {
+      "term": "绿色的",
+      "id": "zh-011408",
+      "level": "HSK2-extended",
+      "pinyin": "lǜsè de"
+    },
+    "那家店": {
+      "term": "那家店",
+      "id": "zh-011409",
+      "level": "HSK2-extended",
+      "pinyin": "nà jiā diàn"
+    },
+    "满了": {
+      "term": "满了",
+      "id": "zh-011410",
+      "level": "HSK2-extended",
+      "pinyin": "mǎn le"
+    },
+    "写下": {
+      "term": "写下",
+      "id": "zh-011411",
+      "level": "HSK2-extended",
+      "pinyin": "xiě xià"
+    },
+    "联系电话": {
+      "term": "联系电话",
+      "id": "zh-011412",
+      "level": "HSK2-extended",
+      "pinyin": "liánxì diànhuà"
+    },
+    "表格上": {
+      "term": "表格上",
+      "id": "zh-011413",
+      "level": "HSK2-extended",
+      "pinyin": "biǎogé shàng"
+    },
+    "参加者": {
+      "term": "参加者",
+      "id": "zh-011414",
+      "level": "HSK2-extended",
+      "pinyin": "cānjiā zhě"
+    },
+    "将在": {
+      "term": "将在",
+      "id": "zh-011415",
+      "level": "HSK2-extended",
+      "pinyin": "jiāng zài"
+    },
+    "拿到了": {
+      "term": "拿到了",
+      "id": "zh-011416",
+      "level": "HSK2-extended",
+      "pinyin": "ná dào le"
+    },
+    "录取通知书": {
+      "term": "录取通知书",
+      "id": "zh-011417",
+      "level": "HSK2-extended",
+      "pinyin": "lùqǔ tōngzhī shū"
+    },
+    "数学题": {
+      "term": "数学题",
+      "id": "zh-011418",
+      "level": "HSK2-extended",
+      "pinyin": "shùxué tí"
+    },
+    "听起来": {
+      "term": "听起来",
+      "id": "zh-011419",
+      "level": "HSK2-extended",
+      "pinyin": "tīng qǐlái"
+    },
+    "三年级": {
+      "term": "三年级",
+      "id": "zh-011420",
+      "level": "HSK2-extended",
+      "pinyin": "sān niánjí"
+    },
+    "弄破": {
+      "term": "弄破",
+      "id": "zh-011421",
+      "level": "HSK2-extended",
+      "pinyin": "nòng pò"
+    },
+    "爬树": {
+      "term": "爬树",
+      "id": "zh-011422",
+      "level": "HSK2-extended",
+      "pinyin": "pá shù"
+    },
+    "怕黑": {
+      "term": "怕黑",
+      "id": "zh-011423",
+      "level": "HSK2-extended",
+      "pinyin": "pà hēi"
+    },
+    "买票": {
+      "term": "买票",
+      "id": "zh-011424",
+      "level": "HSK2-extended",
+      "pinyin": "mǎi piào"
+    },
+    "每周": {
+      "term": "每周",
+      "id": "zh-011425",
+      "level": "HSK2-extended",
+      "pinyin": "měi zhōu"
+    },
+    "这篇": {
+      "term": "这篇",
+      "id": "zh-011426",
+      "level": "HSK2-extended",
+      "pinyin": "zhè piān"
+    },
+    "桌上": {
+      "term": "桌上",
+      "id": "zh-011427",
+      "level": "HSK2-extended",
+      "pinyin": "zhuō shàng"
+    },
+    "空的": {
+      "term": "空的",
+      "id": "zh-011428",
+      "level": "HSK2-extended",
+      "pinyin": "kōng de"
+    },
+    "普通的": {
+      "term": "普通的",
+      "id": "zh-011429",
+      "level": "HSK2-extended",
+      "pinyin": "pǔtōng de"
+    },
+    "其他人": {
+      "term": "其他人",
+      "id": "zh-011430",
+      "level": "HSK2-extended",
+      "pinyin": "qítā rén"
+    },
+    "来了": {
+      "term": "来了",
+      "id": "zh-011431",
+      "level": "HSK2-extended",
+      "pinyin": "lái le"
+    },
+    "三十名": {
+      "term": "三十名",
+      "id": "zh-011432",
+      "level": "HSK2-extended",
+      "pinyin": "sān shí míng"
+    },
+    "十名": {
+      "term": "十名",
+      "id": "zh-011433",
+      "level": "HSK2-extended",
+      "pinyin": "shí míng"
+    },
+    "十分钟后": {
+      "term": "十分钟后",
+      "id": "zh-011434",
+      "level": "HSK2-extended",
+      "pinyin": "shí fēnzhōng hòu"
+    },
+    "一听到": {
+      "term": "一听到",
+      "id": "zh-011435",
+      "level": "HSK2-extended",
+      "pinyin": "yī tīngdào"
+    },
+    "今天的": {
+      "term": "今天的",
+      "id": "zh-011436",
+      "level": "HSK2-extended",
+      "pinyin": "jīntiān de"
+    },
+    "三度": {
+      "term": "三度",
+      "id": "zh-011437",
+      "level": "HSK2-extended",
+      "pinyin": "sān dù"
+    },
+    "卖了": {
+      "term": "卖了",
+      "id": "zh-011438",
+      "level": "HSK2-extended",
+      "pinyin": "mài le"
+    },
+    "一千本": {
+      "term": "一千本",
+      "id": "zh-011439",
+      "level": "HSK2-extended",
+      "pinyin": "yī qiān běn"
+    },
+    "三千克": {
+      "term": "三千克",
+      "id": "zh-011440",
+      "level": "HSK2-extended",
+      "pinyin": "sān qiān kè"
+    },
+    "去过": {
+      "term": "去过",
+      "id": "zh-011441",
+      "level": "HSK2-extended",
+      "pinyin": "qùguò"
+    },
+    "迎来了": {
+      "term": "迎来了",
+      "id": "zh-011442",
+      "level": "HSK2-extended",
+      "pinyin": "yíngláile"
+    },
+    "秋天的": {
+      "term": "秋天的",
+      "id": "zh-011443",
+      "level": "HSK2-extended",
+      "pinyin": "qiūtiān de"
+    },
+    "变黄": {
+      "term": "变黄",
+      "id": "zh-011444",
+      "level": "HSK2-extended",
+      "pinyin": "biànhuáng"
+    },
+    "这支": {
+      "term": "这支",
+      "id": "zh-011445",
+      "level": "HSK2-extended",
+      "pinyin": "zhè zhī"
+    },
+    "上赛季": {
+      "term": "上赛季",
+      "id": "zh-011446",
+      "level": "HSK2-extended",
+      "pinyin": "shàng sàijì"
+    },
+    "赢了": {
+      "term": "赢了",
+      "id": "zh-011447",
+      "level": "HSK2-extended",
+      "pinyin": "yíngle"
+    },
+    "跑步时": {
+      "term": "跑步时",
+      "id": "zh-011448",
+      "level": "HSK2-extended",
+      "pinyin": "pǎobù shí"
+    },
+    "舒服的": {
+      "term": "舒服的",
+      "id": "zh-011449",
+      "level": "HSK2-extended",
+      "pinyin": "shūfu de"
+    },
+    "取得了": {
+      "term": "取得了",
+      "id": "zh-011450",
+      "level": "HSK2-extended",
+      "pinyin": "qǔdéle"
+    },
+    "好成绩": {
+      "term": "好成绩",
+      "id": "zh-011451",
+      "level": "HSK2-extended",
+      "pinyin": "hǎo chéngjì"
+    },
+    "问题的": {
+      "term": "问题的",
+      "id": "zh-011452",
+      "level": "HSK2-extended",
+      "pinyin": "wèntí de"
+    },
+    "全方面": {
+      "term": "全方面",
+      "id": "zh-011453",
+      "level": "HSK2-extended",
+      "pinyin": "quán fāngmiàn"
+    },
+    "借出去了": {
+      "term": "借出去了",
+      "id": "zh-011454",
+      "level": "HSK2-extended",
+      "pinyin": "jièchūqùle"
+    },
+    "这项": {
+      "term": "这项",
+      "id": "zh-011455",
+      "level": "HSK2-extended",
+      "pinyin": "zhè xiàng"
+    },
+    "范围内": {
+      "term": "范围内",
+      "id": "zh-011456",
+      "level": "HSK2-extended",
+      "pinyin": "fànwéi nèi"
+    },
+    "不分": {
+      "term": "不分",
+      "id": "zh-011457",
+      "level": "HSK2-extended",
+      "pinyin": "bù fēn"
+    },
+    "淡旺季": {
+      "term": "淡旺季",
+      "id": "zh-011458",
+      "level": "HSK2-extended",
+      "pinyin": "dàn wàng jì"
+    },
+    "每个": {
+      "term": "每个",
+      "id": "zh-011459",
+      "level": "HSK2-extended",
+      "pinyin": "měi gè"
+    },
+    "报名表": {
+      "term": "报名表",
+      "id": "zh-011460",
+      "level": "HSK2-extended",
+      "pinyin": "bào míng biǎo"
+    },
+    "写明": {
+      "term": "写明",
+      "id": "zh-011461",
+      "level": "HSK2-extended",
+      "pinyin": "xiě míng"
+    },
+    "看了": {
+      "term": "看了",
+      "id": "zh-011462",
+      "level": "HSK2-extended",
+      "pinyin": "kàn le"
+    },
+    "想要": {
+      "term": "想要",
+      "id": "zh-011463",
+      "level": "HSK2-extended",
+      "pinyin": "xiǎng yào"
+    },
+    "什么样的": {
+      "term": "什么样的",
+      "id": "zh-011464",
+      "level": "HSK2-extended",
+      "pinyin": "shén me yàng de"
+    },
+    "四川省": {
+      "term": "四川省",
+      "id": "zh-011465",
+      "level": "HSK2-extended",
+      "pinyin": "Sì chuān shěng"
+    },
+    "重要的": {
+      "term": "重要的",
+      "id": "zh-011466",
+      "level": "HSK2-extended",
+      "pinyin": "zhòng yào de"
+    },
+    "收到了": {
+      "term": "收到了",
+      "id": "zh-011467",
+      "level": "HSK2-extended",
+      "pinyin": "shōu dào le"
+    },
+    "戴了": {
+      "term": "戴了",
+      "id": "zh-011468",
+      "level": "HSK2-extended",
+      "pinyin": "dài le"
+    },
+    "一块": {
+      "term": "一块",
+      "id": "zh-011469",
+      "level": "HSK2-extended",
+      "pinyin": "yí kuài"
+    },
+    "新的": {
+      "term": "新的",
+      "id": "zh-011470",
+      "level": "HSK2-extended",
+      "pinyin": "xīn de"
+    },
+    "受到了": {
+      "term": "受到了",
+      "id": "zh-011471",
+      "level": "HSK2-extended",
+      "pinyin": "shòu dào le"
+    },
+    "很高的": {
+      "term": "很高的",
+      "id": "zh-011472",
+      "level": "HSK2-extended",
+      "pinyin": "hěn gāo de"
+    },
+    "坐着": {
+      "term": "坐着",
+      "id": "zh-011473",
+      "level": "HSK2-extended",
+      "pinyin": "zuò zhe"
+    },
+    "电话号码": {
+      "term": "电话号码",
+      "id": "zh-011474",
+      "level": "HSK2-extended",
+      "pinyin": "diàn huà hào mǎ"
+    },
+    "不同的": {
+      "term": "不同的",
+      "id": "zh-011475",
+      "level": "HSK2-extended",
+      "pinyin": "bù tóng de"
+    },
+    "所有的": {
+      "term": "所有的",
+      "id": "zh-011476",
+      "level": "HSK2-extended",
+      "pinyin": "suǒ yǒu de"
+    },
+    "工作的": {
+      "term": "工作的",
+      "id": "zh-011477",
+      "level": "HSK2-extended",
+      "pinyin": "gōng zuò de"
+    },
+    "电池寿命": {
+      "term": "电池寿命",
+      "id": "zh-011478",
+      "level": "HSK2-extended",
+      "pinyin": "diàn chí shòu mìng"
+    },
+    "提上": {
+      "term": "提上",
+      "id": "zh-011479",
+      "level": "HSK2-extended",
+      "pinyin": "tí shàng"
+    },
+    "体育课": {
+      "term": "体育课",
+      "id": "zh-011480",
+      "level": "HSK2-extended",
+      "pinyin": "tǐ yù kè"
+    },
+    "河里": {
+      "term": "河里",
+      "id": "zh-011481",
+      "level": "HSK2-extended",
+      "pinyin": "hé lǐ"
+    },
+    "城市中心": {
+      "term": "城市中心",
+      "id": "zh-011482",
+      "level": "HSK2-extended",
+      "pinyin": "chéng shì zhōng xīn"
+    },
+    "发给": {
+      "term": "发给",
+      "id": "zh-011483",
+      "level": "HSK2-extended",
+      "pinyin": "fā gěi"
+    },
+    "推门": {
+      "term": "推门",
+      "id": "zh-011484",
+      "level": "HSK2-extended",
+      "pinyin": "tuī mén"
+    },
+    "走了": {
+      "term": "走了",
+      "id": "zh-011485",
+      "level": "HSK2-extended",
+      "pinyin": "zǒu le"
+    },
+    "跑得": {
+      "term": "跑得",
+      "id": "zh-011486",
+      "level": "HSK2-extended",
+      "pinyin": "pǎo de"
+    },
+    "做完": {
+      "term": "做完",
+      "id": "zh-011487",
+      "level": "HSK2-extended",
+      "pinyin": "zuò wán"
+    },
+    "完成了": {
+      "term": "完成了",
+      "id": "zh-011488",
+      "level": "HSK2-extended",
+      "pinyin": "wán chéng le"
+    },
+    "三人": {
+      "term": "三人",
+      "id": "zh-011489",
+      "level": "HSK2-extended",
+      "pinyin": "sān rén"
+    },
+    "一百万": {
+      "term": "一百万",
+      "id": "zh-011490",
+      "level": "HSK2-extended",
+      "pinyin": "yì bǎi wàn"
+    },
+    "渔夫": {
+      "term": "渔夫",
+      "id": "zh-011491",
+      "level": "HSK2-extended",
+      "pinyin": "yú fū"
+    },
+    "水里": {
+      "term": "水里",
+      "id": "zh-011492",
+      "level": "HSK2-extended",
+      "pinyin": "shuǐ lǐ"
+    },
+    "闻到": {
+      "term": "闻到",
+      "id": "zh-011493",
+      "level": "HSK2-extended",
+      "pinyin": "wén dào"
+    },
+    "花香": {
+      "term": "花香",
+      "id": "zh-011494",
+      "level": "HSK2-extended",
+      "pinyin": "huā xiāng"
+    },
+    "西北风": {
+      "term": "西北风",
+      "id": "zh-011495",
+      "level": "HSK2-extended",
+      "pinyin": "xī běi fēng"
+    },
+    "新买了": {
+      "term": "新买了",
+      "id": "zh-011496",
+      "level": "HSK2-extended",
+      "pinyin": "xīn mǎi le"
+    },
+    "很有": {
+      "term": "很有",
+      "id": "zh-011497",
+      "level": "HSK2-extended",
+      "pinyin": "hěn yǒu"
+    },
+    "那张": {
+      "term": "那张",
+      "id": "zh-011498",
+      "level": "HSK2-extended",
+      "pinyin": "nà zhāng"
+    },
+    "风景照": {
+      "term": "风景照",
+      "id": "zh-011499",
+      "level": "HSK2-extended",
+      "pinyin": "fēngjǐngzhào"
+    },
+    "三个": {
+      "term": "三个",
+      "id": "zh-011500",
+      "level": "HSK2-extended",
+      "pinyin": "sān gè"
+    },
+    "这双": {
+      "term": "这双",
+      "id": "zh-011501",
+      "level": "HSK2-extended",
+      "pinyin": "zhè shuāng"
+    },
+    "下雨天": {
+      "term": "下雨天",
+      "id": "zh-011502",
+      "level": "HSK2-extended",
+      "pinyin": "xià yǔ tiān"
+    },
+    "一封": {
+      "term": "一封",
+      "id": "zh-011503",
+      "level": "HSK2-extended",
+      "pinyin": "yì fēng"
+    },
+    "夜空": {
+      "term": "夜空",
+      "id": "zh-011504",
+      "level": "HSK2-extended",
+      "pinyin": "yè kōng"
+    },
+    "两周": {
+      "term": "两周",
+      "id": "zh-011505",
+      "level": "HSK2-extended",
+      "pinyin": "liǎng zhōu"
+    },
+    "可供": {
+      "term": "可供",
+      "id": "zh-011506",
+      "level": "HSK2-extended",
+      "pinyin": "kě gōng"
+    },
+    "借阅": {
+      "term": "借阅",
+      "id": "zh-011507",
+      "level": "HSK2-extended",
+      "pinyin": "jiè yuè"
+    },
+    "学了": {
+      "term": "学了",
+      "id": "zh-011508",
+      "level": "HSK2-extended",
+      "pinyin": "xué le"
+    },
+    "新东西": {
+      "term": "新东西",
+      "id": "zh-011509",
+      "level": "HSK2-extended",
+      "pinyin": "xīn dōngxī"
+    },
+    "揉了揉": {
+      "term": "揉了揉",
+      "id": "zh-011510",
+      "level": "HSK2-extended",
+      "pinyin": "róu le róu"
+    },
+    "看了看": {
+      "term": "看了看",
+      "id": "zh-011511",
+      "level": "HSK2-extended",
+      "pinyin": "kàn le kàn"
+    },
+    "有神": {
+      "term": "有神",
+      "id": "zh-011512",
+      "level": "HSK2-extended",
+      "pinyin": "yǒu shén"
+    },
+    "感冒药": {
+      "term": "感冒药",
+      "id": "zh-011513",
+      "level": "HSK2-extended",
+      "pinyin": "gǎnmào yào"
+    },
+    "两片": {
+      "term": "两片",
+      "id": "zh-011514",
+      "level": "HSK2-extended",
+      "pinyin": "liǎng piàn"
+    },
+    "带上": {
+      "term": "带上",
+      "id": "zh-011515",
+      "level": "HSK2-extended",
+      "pinyin": "dài shàng"
+    },
+    "还要": {
+      "term": "还要",
+      "id": "zh-011516",
+      "level": "HSK2-extended",
+      "pinyin": "hái yào"
+    },
+    "一共有": {
+      "term": "一共有",
+      "id": "zh-011517",
+      "level": "HSK2-extended",
+      "pinyin": "yī gòng yǒu"
+    },
+    "十五": {
+      "term": "十五",
+      "id": "zh-011518",
+      "level": "HSK2-extended",
+      "pinyin": "shí wǔ"
+    },
+    "顺风": {
+      "term": "顺风",
+      "id": "zh-011519",
+      "level": "HSK2-extended",
+      "pinyin": "shùnfēng"
+    },
+    "三十": {
+      "term": "三十",
+      "id": "zh-011520",
+      "level": "HSK2-extended",
+      "pinyin": "sānshí"
+    },
+    "十元": {
+      "term": "十元",
+      "id": "zh-011521",
+      "level": "HSK2-extended",
+      "pinyin": "shíyuán"
+    },
+    "免税": {
+      "term": "免税",
+      "id": "zh-011522",
+      "level": "HSK2-extended",
+      "pinyin": "miǎnshuì"
+    },
+    "教书": {
+      "term": "教书",
+      "id": "zh-011523",
+      "level": "HSK2-extended",
+      "pinyin": "jiāoshū"
+    },
+    "十四": {
+      "term": "十四",
+      "id": "zh-011524",
+      "level": "HSK2-extended",
+      "pinyin": "shísì"
+    },
+    "忘带": {
+      "term": "忘带",
+      "id": "zh-011525",
+      "level": "HSK2-extended",
+      "pinyin": "wàngdài"
+    },
+    "这道": {
+      "term": "这道",
+      "id": "zh-011526",
+      "level": "HSK2-extended",
+      "pinyin": "zhèdào"
+    },
+    "找到了": {
+      "term": "找到了",
+      "id": "zh-011527",
+      "level": "HSK2-extended",
+      "pinyin": "zhǎodàole"
+    },
+    "他们家": {
+      "term": "他们家",
+      "id": "zh-011528",
+      "level": "HSK2-extended",
+      "pinyin": "tāmenjiā"
+    },
+    "好了": {
+      "term": "好了",
+      "id": "zh-011529",
+      "level": "HSK2-extended",
+      "pinyin": "hǎole"
+    },
+    "小偷": {
+      "term": "小偷",
+      "id": "zh-011530",
+      "level": "HSK2-extended",
+      "pinyin": "xiǎotōu"
+    },
+    "就会": {
+      "term": "就会",
+      "id": "zh-011531",
+      "level": "HSK2-extended",
+      "pinyin": "jiùhuì"
+    },
+    "参加了": {
+      "term": "参加了",
+      "id": "zh-011532",
+      "level": "HSK2-extended",
+      "pinyin": "cānjiāle"
+    },
+    "中年人": {
+      "term": "中年人",
+      "id": "zh-011533",
+      "level": "HSK2-extended",
+      "pinyin": "zhōngniánrén"
+    },
+    "本次": {
+      "term": "本次",
+      "id": "zh-011534",
+      "level": "HSK2-extended",
+      "pinyin": "běncì"
+    },
+    "一周": {
+      "term": "一周",
+      "id": "zh-011535",
+      "level": "HSK2-extended",
+      "pinyin": "yīzhōu"
+    },
+    "这只狗": {
+      "term": "这只狗",
+      "id": "zh-011536",
+      "level": "HSK2-extended",
+      "pinyin": "zhèzhīgǒu"
+    },
+    "主人的": {
+      "term": "主人的",
+      "id": "zh-011537",
+      "level": "HSK2-extended",
+      "pinyin": "zhǔrén de"
+    },
+    "住院了": {
+      "term": "住院了",
+      "id": "zh-011538",
+      "level": "HSK2-extended",
+      "pinyin": "zhùyuànle"
+    },
+    "装作": {
+      "term": "装作",
+      "id": "zh-011539",
+      "level": "HSK2-extended",
+      "pinyin": "zhuāngzuò"
+    },
+    "发生了": {
+      "term": "发生了",
+      "id": "zh-011540",
+      "level": "HSK2-extended",
+      "pinyin": "fāshēngle"
+    },
+    "大学里": {
+      "term": "大学里",
+      "id": "zh-011541",
+      "level": "HSK2-extended",
+      "pinyin": "dàxué lǐ"
+    },
+    "老街": {
+      "term": "老街",
+      "id": "zh-011542",
+      "level": "HSK2-extended",
+      "pinyin": "lǎojiē"
+    },
+    "分到": {
+      "term": "分到",
+      "id": "zh-011543",
+      "level": "HSK2-extended",
+      "pinyin": "fēndào"
+    },
+    "同一个": {
+      "term": "同一个",
+      "id": "zh-011544",
+      "level": "HSK2-extended",
+      "pinyin": "tóng yī gè"
+    },
+    "学习组": {
+      "term": "学习组",
+      "id": "zh-011545",
+      "level": "HSK2-extended",
+      "pinyin": "xuéxí zǔ"
+    },
+    "嘴里": {
+      "term": "嘴里",
+      "id": "zh-011546",
+      "level": "HSK2-extended",
+      "pinyin": "zuǐ lǐ"
+    },
+    "著名的": {
+      "term": "著名的",
+      "id": "zh-011547",
+      "level": "HSK2-extended",
+      "pinyin": "zhùmíng de"
+    },
+    "小说作家": {
+      "term": "小说作家",
+      "id": "zh-011548",
+      "level": "HSK2-extended",
+      "pinyin": "xiǎoshuō zuòjiā"
+    },
+    "那只": {
+      "term": "那只",
+      "id": "zh-011549",
+      "level": "HSK2-extended",
+      "pinyin": "nà zhī"
+    },
+    "第一名": {
+      "term": "第一名",
+      "id": "zh-011550",
+      "level": "HSK2-extended",
+      "pinyin": "dì yī míng"
+    },
+    "不见了": {
+      "term": "不见了",
+      "id": "zh-011551",
+      "level": "HSK2-extended",
+      "pinyin": "bú jiàn le"
+    },
+    "吹开": {
+      "term": "吹开",
+      "id": "zh-011552",
+      "level": "HSK2-extended",
+      "pinyin": "chuī kāi"
+    },
+    "每个月": {
+      "term": "每个月",
+      "id": "zh-011553",
+      "level": "HSK2-extended",
+      "pinyin": "měi gè yuè"
+    },
+    "大學學生": {
+      "term": "大學學生",
+      "id": "zh-011554",
+      "level": "HSK2-extended",
+      "pinyin": "dà xué xué shēng"
+    },
+    "學生們": {
+      "term": "學生們",
+      "id": "zh-011555",
+      "level": "HSK2-extended",
+      "pinyin": "xué shēng men"
+    },
+    "學習": {
+      "term": "學習",
+      "id": "zh-011556",
+      "level": "HSK2-extended",
+      "pinyin": "xué xí"
+    },
+    "比賽": {
+      "term": "比賽",
+      "id": "zh-011557",
+      "level": "HSK2-extended",
+      "pinyin": "bǐ sài"
+    },
+    "綠樹": {
+      "term": "綠樹",
+      "id": "zh-011558",
+      "level": "HSK2-extended",
+      "pinyin": "lǜ shù"
+    },
+    "志願者": {
+      "term": "志願者",
+      "id": "zh-011559",
+      "level": "HSK2-extended",
+      "pinyin": "zhì yuàn zhě"
+    },
+    "計劃": {
+      "term": "計劃",
+      "id": "zh-011560",
+      "level": "HSK2-extended",
+      "pinyin": "jì huà"
+    },
+    "工作方法": {
+      "term": "工作方法",
+      "id": "zh-011561",
+      "level": "HSK2-extended",
+      "pinyin": "gōng zuò fāng fǎ"
+    },
+    "這家": {
+      "term": "這家",
+      "id": "zh-011562",
+      "level": "HSK2-extended",
+      "pinyin": "zhè jiā"
+    },
+    "出發": {
+      "term": "出發",
+      "id": "zh-011563",
+      "level": "HSK2-extended",
+      "pinyin": "chū fā"
+    },
+    "風景": {
+      "term": "風景",
+      "id": "zh-011564",
+      "level": "HSK2-extended",
+      "pinyin": "fēng jǐng"
+    },
+    "窗外": {
+      "term": "窗外",
+      "id": "zh-011565",
+      "level": "HSK2-extended",
+      "pinyin": "chuāng wài"
+    },
+    "遠方": {
+      "term": "遠方",
+      "id": "zh-011566",
+      "level": "HSK2-extended",
+      "pinyin": "yuǎn fāng"
+    },
+    "什麼": {
+      "term": "什麼",
+      "id": "zh-011567",
+      "level": "HSK2-extended",
+      "pinyin": "shén me"
+    },
+    "那個": {
+      "term": "那個",
+      "id": "zh-011568",
+      "level": "HSK2-extended",
+      "pinyin": "nà ge"
+    },
+    "電子": {
+      "term": "電子",
+      "id": "zh-011569",
+      "level": "HSK2-extended",
+      "pinyin": "diànzǐ"
+    },
+    "一個": {
+      "term": "一個",
+      "id": "zh-011570",
+      "level": "HSK2-extended",
+      "pinyin": "yí gè"
+    },
+    "考試": {
+      "term": "考試",
+      "id": "zh-011571",
+      "level": "HSK2-extended",
+      "pinyin": "kǎoshì"
+    },
+    "七點": {
+      "term": "七點",
+      "id": "zh-011572",
+      "level": "HSK2-extended",
+      "pinyin": "qī diǎn"
+    },
+    "開門": {
+      "term": "開門",
+      "id": "zh-011573",
+      "level": "HSK2-extended",
+      "pinyin": "kāi mén"
+    },
+    "見面": {
+      "term": "見面",
+      "id": "zh-011574",
+      "level": "HSK2-extended",
+      "pinyin": "jiànmiàn"
+    },
+    "現在": {
+      "term": "現在",
+      "id": "zh-011575",
+      "level": "HSK2-extended",
+      "pinyin": "xiànzài"
+    },
+    "八點半": {
+      "term": "八點半",
+      "id": "zh-011576",
+      "level": "HSK2-extended",
+      "pinyin": "bā diǎn bàn"
+    },
+    "公園": {
+      "term": "公園",
+      "id": "zh-011577",
+      "level": "HSK2-extended",
+      "pinyin": "gōngyuán"
+    },
+    "六點": {
+      "term": "六點",
+      "id": "zh-011578",
+      "level": "HSK2-extended",
+      "pinyin": "liù diǎn"
+    },
+    "喜歡": {
+      "term": "喜歡",
+      "id": "zh-011579",
+      "level": "HSK2-extended",
+      "pinyin": "xǐhuān"
+    },
+    "練習": {
+      "term": "練習",
+      "id": "zh-011580",
+      "level": "HSK2-extended",
+      "pinyin": "liànxí"
+    },
+    "漢語": {
+      "term": "漢語",
+      "id": "zh-011581",
+      "level": "HSK2-extended",
+      "pinyin": "hànyǔ"
+    },
+    "自行車": {
+      "term": "自行車",
+      "id": "zh-011582",
+      "level": "HSK2-extended",
+      "pinyin": "zìxíngchē"
+    },
+    "安靜": {
+      "term": "安靜",
+      "id": "zh-011583",
+      "level": "HSK2-extended",
+      "pinyin": "ānjìng"
+    },
+    "讀書": {
+      "term": "讀書",
+      "id": "zh-011584",
+      "level": "HSK2-extended",
+      "pinyin": "dúshū"
+    },
+    "很會": {
+      "term": "很會",
+      "id": "zh-011585",
+      "level": "HSK2-extended",
+      "pinyin": "hěn huì"
+    },
+    "這件事": {
+      "term": "這件事",
+      "id": "zh-011586",
+      "level": "HSK2-extended",
+      "pinyin": "zhè jiàn shì"
+    },
+    "處理": {
+      "term": "處理",
+      "id": "zh-011587",
+      "level": "HSK2-extended",
+      "pinyin": "chǔlǐ"
+    },
+    "這是": {
+      "term": "這是",
+      "id": "zh-011588",
+      "level": "HSK2-extended",
+      "pinyin": "zhè shì"
+    },
+    "電影": {
+      "term": "電影",
+      "id": "zh-011589",
+      "level": "HSK2-extended",
+      "pinyin": "diànyǐng"
+    },
+    "鄰居": {
+      "term": "鄰居",
+      "id": "zh-011590",
+      "level": "HSK2-extended",
+      "pinyin": "línjū"
+    },
+    "新政策": {
+      "term": "新政策",
+      "id": "zh-011591",
+      "level": "HSK2-extended",
+      "pinyin": "xīn zhèngcè"
+    },
+    "改變": {
+      "term": "改變",
+      "id": "zh-011592",
+      "level": "HSK2-extended",
+      "pinyin": "gǎibiàn"
+    },
+    "時間": {
+      "term": "時間",
+      "id": "zh-011593",
+      "level": "HSK2-extended",
+      "pinyin": "shíjiān"
+    },
+    "準備": {
+      "term": "準備",
+      "id": "zh-011594",
+      "level": "HSK2-extended",
+      "pinyin": "zhǔnbèi"
+    },
+    "離開": {
+      "term": "離開",
+      "id": "zh-011595",
+      "level": "HSK2-extended",
+      "pinyin": "líkāi"
+    },
+    "這裡": {
+      "term": "這裡",
+      "id": "zh-011596",
+      "level": "HSK2-extended",
+      "pinyin": "zhèlǐ"
+    },
+    "晚飯": {
+      "term": "晚飯",
+      "id": "zh-011597",
+      "level": "HSK2-extended",
+      "pinyin": "wǎnfàn"
+    },
+    "開始": {
+      "term": "開始",
+      "id": "zh-011598",
+      "level": "HSK2-extended",
+      "pinyin": "kāishǐ"
+    },
+    "通向": {
+      "term": "通向",
+      "id": "zh-011599",
+      "level": "HSK2-extended",
+      "pinyin": "tōngxiàng"
+    },
+    "他说的": {
+      "term": "他说的",
+      "id": "zh-011600",
+      "level": "HSK2-extended",
+      "pinyin": "tā shuō de"
+    },
+    "的話": {
+      "term": "的話",
+      "id": "zh-011601",
+      "level": "HSK2-extended",
+      "pinyin": "de huà"
+    },
+    "告訴": {
+      "term": "告訴",
+      "id": "zh-011602",
+      "level": "HSK2-extended",
+      "pinyin": "gàosù"
+    },
+    "剛才": {
+      "term": "剛才",
+      "id": "zh-011603",
+      "level": "HSK2-extended",
+      "pinyin": "gāngcái"
+    },
+    "聽了": {
+      "term": "聽了",
+      "id": "zh-011604",
+      "level": "HSK2-extended",
+      "pinyin": "tīng le"
+    },
+    "那首歌": {
+      "term": "那首歌",
+      "id": "zh-011605",
+      "level": "HSK2-extended",
+      "pinyin": "nà shǒu gē"
+    },
+    "好喝": {
+      "term": "好喝",
+      "id": "zh-011606",
+      "level": "HSK2-extended",
+      "pinyin": "hǎohē"
+    },
+    "找一找": {
+      "term": "找一找",
+      "id": "zh-011607",
+      "level": "HSK2-extended",
+      "pinyin": "zhǎo yī zhǎo"
+    },
+    "那封": {
+      "term": "那封",
+      "id": "zh-011608",
+      "level": "HSK2-extended",
+      "pinyin": "nà fēng"
+    },
+    "查收": {
+      "term": "查收",
+      "id": "zh-011609",
+      "level": "HSK2-extended",
+      "pinyin": "cháshōu"
+    },
+    "写了": {
+      "term": "写了",
+      "id": "zh-011610",
+      "level": "HSK2-extended",
+      "pinyin": "xiěle"
+    },
+    "小孩": {
+      "term": "小孩",
+      "id": "zh-011611",
+      "level": "HSK2-extended",
+      "pinyin": "xiǎohái"
+    },
+    "课外活动": {
+      "term": "课外活动",
+      "id": "zh-011612",
+      "level": "HSK2-extended",
+      "pinyin": "kèwài huódòng"
+    },
+    "通过了": {
+      "term": "通过了",
+      "id": "zh-011613",
+      "level": "HSK2-extended",
+      "pinyin": "tōngguòle"
+    },
+    "这块": {
+      "term": "这块",
+      "id": "zh-011614",
+      "level": "HSK2-extended",
+      "pinyin": "zhè kuài"
+    },
+    "王老师": {
+      "term": "王老师",
+      "id": "zh-011615",
+      "level": "HSK2-extended",
+      "pinyin": "Wáng lǎoshī"
+    },
+    "开始了": {
+      "term": "开始了",
+      "id": "zh-011616",
+      "level": "HSK2-extended",
+      "pinyin": "kāishǐle"
+    },
+    "种着": {
+      "term": "种着",
+      "id": "zh-011617",
+      "level": "HSK2-extended",
+      "pinyin": "zhòngzhe"
+    },
+    "老歌": {
+      "term": "老歌",
+      "id": "zh-011618",
+      "level": "HSK2-extended",
+      "pinyin": "lǎogē"
+    },
+    "错了": {
+      "term": "错了",
+      "id": "zh-011619",
+      "level": "HSK2-extended",
+      "pinyin": "cuòle"
+    },
+    "没见": {
+      "term": "没见",
+      "id": "zh-011620",
+      "level": "HSK2-extended",
+      "pinyin": "méi jiàn"
+    },
+    "等了": {
+      "term": "等了",
+      "id": "zh-011621",
+      "level": "HSK2-extended",
+      "pinyin": "děngle"
+    },
+    "下一个站": {
+      "term": "下一个站",
+      "id": "zh-011622",
+      "level": "HSK2-extended",
+      "pinyin": "xià yí gè zhàn"
+    },
+    "旗子": {
+      "term": "旗子",
+      "id": "zh-011623",
+      "level": "HSK2-extended",
+      "pinyin": "qízi"
+    },
+    "他说了": {
+      "term": "他说了",
+      "id": "zh-011624",
+      "level": "HSK2-extended",
+      "pinyin": "tā shuōle"
+    },
+    "进了": {
+      "term": "进了",
+      "id": "zh-011625",
+      "level": "HSK2-extended",
+      "pinyin": "jìnle"
+    },
+    "两个人": {
+      "term": "两个人",
+      "id": "zh-011626",
+      "level": "HSK2-extended",
+      "pinyin": "liǎng gè rén"
+    },
+    "蓝色的": {
+      "term": "蓝色的",
+      "id": "zh-011627",
+      "level": "HSK2-extended",
+      "pinyin": "lán sè de"
+    },
+    "昨天晚上": {
+      "term": "昨天晚上",
+      "id": "zh-011628",
+      "level": "HSK2-extended",
+      "pinyin": "zuótiān wǎnshang"
+    },
+    "点心": {
+      "term": "点心",
+      "id": "zh-011629",
+      "level": "HSK2-extended",
+      "pinyin": "diǎn xīn"
+    },
+    "惊讶的": {
+      "term": "惊讶的",
+      "id": "zh-011630",
+      "level": "HSK2-extended",
+      "pinyin": "jīng yà de"
+    },
+    "留给": {
+      "term": "留给",
+      "id": "zh-011631",
+      "level": "HSK2-extended",
+      "pinyin": "liú gěi"
+    },
+    "下得": {
+      "term": "下得",
+      "id": "zh-011632",
+      "level": "HSK2-extended",
+      "pinyin": "xià de"
+    },
+    "小村子": {
+      "term": "小村子",
+      "id": "zh-011633",
+      "level": "HSK2-extended",
+      "pinyin": "xiǎo cūn zi"
+    },
+    "上车前": {
+      "term": "上车前",
+      "id": "zh-011634",
+      "level": "HSK2-extended",
+      "pinyin": "shàng chē qián"
+    },
+    "想买": {
+      "term": "想买",
+      "id": "zh-011635",
+      "level": "HSK2-extended",
+      "pinyin": "xiǎng mǎi"
+    },
+    "不想要": {
+      "term": "不想要",
+      "id": "zh-011636",
+      "level": "HSK2-extended",
+      "pinyin": "bù xiǎng yào"
+    },
+    "蓝的": {
+      "term": "蓝的",
+      "id": "zh-011637",
+      "level": "HSK2-extended",
+      "pinyin": "lán de"
+    },
+    "入口处": {
+      "term": "入口处",
+      "id": "zh-011638",
+      "level": "HSK2-extended",
+      "pinyin": "rù kǒu chù"
+    },
+    "他说的话": {
+      "term": "他说的话",
+      "id": "zh-011639",
+      "level": "HSK2-extended",
+      "pinyin": "tā shuō de huà"
+    },
+    "不小心": {
+      "term": "不小心",
+      "id": "zh-011640",
+      "level": "HSK2-extended",
+      "pinyin": "bù xiǎo xīn"
+    },
+    "健身房": {
+      "term": "健身房",
+      "id": "zh-011641",
+      "level": "HSK2-extended",
+      "pinyin": "jiàn shēn fáng"
+    },
+    "加点": {
+      "term": "加点",
+      "id": "zh-011642",
+      "level": "HSK2-extended",
+      "pinyin": "jiā diǎn"
+    },
+    "一千": {
+      "term": "一千",
+      "id": "zh-011643",
+      "level": "HSK2-extended",
+      "pinyin": "yī qiān"
+    },
+    "阶段性": {
+      "term": "阶段性",
+      "id": "zh-011644",
+      "level": "HSK2-extended",
+      "pinyin": "jiē duàn xìng"
+    },
+    "所有人": {
+      "term": "所有人",
+      "id": "zh-011645",
+      "level": "HSK2-extended",
+      "pinyin": "suǒ yǒu rén"
+    },
+    "工作时间": {
+      "term": "工作时间",
+      "id": "zh-011646",
+      "level": "HSK2-extended",
+      "pinyin": "gōng zuò shí jiān"
+    },
+    "辣菜": {
+      "term": "辣菜",
+      "id": "zh-011647",
+      "level": "HSK2-extended",
+      "pinyin": "là cài"
+    },
+    "篮球技巧": {
+      "term": "篮球技巧",
+      "id": "zh-011648",
+      "level": "HSK2-extended",
+      "pinyin": "lán qiú jì qiǎo"
+    },
+    "那座楼": {
+      "term": "那座楼",
+      "id": "zh-011649",
+      "level": "HSK2-extended",
+      "pinyin": "nà zuò lóu"
+    },
+    "这款": {
+      "term": "这款",
+      "id": "zh-011650",
+      "level": "HSK2-extended",
+      "pinyin": "zhè kuǎn"
+    },
+    "游来游去": {
+      "term": "游来游去",
+      "id": "zh-011651",
+      "level": "HSK2-extended",
+      "pinyin": "yóu lái yóu qù"
+    },
+    "轻轻地": {
+      "term": "轻轻地",
+      "id": "zh-011652",
+      "level": "HSK2-extended",
+      "pinyin": "qīng qīng de"
+    },
+    "进去了": {
+      "term": "进去了",
+      "id": "zh-011653",
+      "level": "HSK2-extended",
+      "pinyin": "jìn qù le"
+    },
+    "停了": {
+      "term": "停了",
+      "id": "zh-011654",
+      "level": "HSK2-extended",
+      "pinyin": "tíng le"
+    },
+    "做完了": {
+      "term": "做完了",
+      "id": "zh-011655",
+      "level": "HSK2-extended",
+      "pinyin": "zuò wán le"
+    },
+    "坐得下": {
+      "term": "坐得下",
+      "id": "zh-011656",
+      "level": "HSK2-extended",
+      "pinyin": "zuò dé xià"
+    },
+    "中了": {
+      "term": "中了",
+      "id": "zh-011657",
+      "level": "HSK2-extended",
+      "pinyin": "zhòng le"
+    },
+    "出海": {
+      "term": "出海",
+      "id": "zh-011658",
+      "level": "HSK2-extended",
+      "pinyin": "chū hǎi"
+    },
+    "掉进了": {
+      "term": "掉进了",
+      "id": "zh-011659",
+      "level": "HSK2-extended",
+      "pinyin": "diào jìn le"
+    },
+    "饭菜": {
+      "term": "饭菜",
+      "id": "zh-011660",
+      "level": "HSK2-extended",
+      "pinyin": "fàn cài"
+    },
+    "一双": {
+      "term": "一双",
+      "id": "zh-011661",
+      "level": "HSK2-extended",
+      "pinyin": "yī shuāng"
+    },
+    "这本": {
+      "term": "这本",
+      "id": "zh-011662",
+      "level": "HSK2-extended",
+      "pinyin": "zhè běn"
+    },
+    "旅行时": {
+      "term": "旅行时",
+      "id": "zh-011663",
+      "level": "HSK2-extended",
+      "pinyin": "lǚ xíng shí"
+    },
+    "拍了": {
+      "term": "拍了",
+      "id": "zh-011664",
+      "level": "HSK2-extended",
+      "pinyin": "pāi le"
+    },
+    "试试": {
+      "term": "试试",
+      "id": "zh-011665",
+      "level": "HSK2-extended",
+      "pinyin": "shì shi"
+    },
+    "就在家": {
+      "term": "就在家",
+      "id": "zh-011666",
+      "level": "HSK2-extended",
+      "pinyin": "jiù zài jiā"
+    },
+    "语法点": {
+      "term": "语法点",
+      "id": "zh-011667",
+      "level": "HSK2-extended",
+      "pinyin": "yǔ fǎ diǎn"
+    },
+    "更能": {
+      "term": "更能",
+      "id": "zh-011668",
+      "level": "HSK2-extended",
+      "pinyin": "gèng néng"
+    },
+    "睡了": {
+      "term": "睡了",
+      "id": "zh-011669",
+      "level": "HSK2-extended",
+      "pinyin": "shuì le"
+    },
+    "一觉": {
+      "term": "一觉",
+      "id": "zh-011670",
+      "level": "HSK2-extended",
+      "pinyin": "yí jiào"
+    },
+    "发烧了": {
+      "term": "发烧了",
+      "id": "zh-011671",
+      "level": "HSK2-extended",
+      "pinyin": "fā shāo le"
+    },
+    "买点": {
+      "term": "买点",
+      "id": "zh-011672",
+      "level": "HSK2-extended",
+      "pinyin": "mǎi diǎn"
+    },
+    "雨伞": {
+      "term": "雨伞",
+      "id": "zh-011673",
+      "level": "HSK2-extended",
+      "pinyin": "yǔ sǎn"
+    },
+    "三百": {
+      "term": "三百",
+      "id": "zh-011674",
+      "level": "HSK2-extended",
+      "pinyin": "sān bǎi"
+    },
+    "三月": {
+      "term": "三月",
+      "id": "zh-011675",
+      "level": "HSK2-extended",
+      "pinyin": "sān yuè"
+    },
+    "十五日": {
+      "term": "十五日",
+      "id": "zh-011676",
+      "level": "HSK2-extended",
+      "pinyin": "shí wǔ rì"
+    },
+    "风向": {
+      "term": "风向",
+      "id": "zh-011677",
+      "level": "HSK2-extended",
+      "pinyin": "fēng xiàng"
+    },
+    "十元钱": {
+      "term": "十元钱",
+      "id": "zh-011678",
+      "level": "HSK2-extended",
+      "pinyin": "shí yuán qián"
+    },
+    "可以了": {
+      "term": "可以了",
+      "id": "zh-011679",
+      "level": "HSK2-extended",
+      "pinyin": "kě yǐ le"
+    },
+    "免税店": {
+      "term": "免税店",
+      "id": "zh-011680",
+      "level": "HSK2-extended",
+      "pinyin": "miǎn shuì diàn"
+    },
+    "退税": {
+      "term": "退税",
+      "id": "zh-011681",
+      "level": "HSK2-extended",
+      "pinyin": "tuì shuì"
+    },
+    "做好": {
+      "term": "做好",
+      "id": "zh-011682",
+      "level": "HSK2-extended",
+      "pinyin": "zuò hǎo"
+    },
+    "行窃": {
+      "term": "行窃",
+      "id": "zh-011683",
+      "level": "HSK2-extended",
+      "pinyin": "xíng qiè"
+    },
+    "案子": {
+      "term": "案子",
+      "id": "zh-011684",
+      "level": "HSK2-extended",
+      "pinyin": "àn zi"
+    },
+    "一周之内": {
+      "term": "一周之内",
+      "id": "zh-011685",
+      "level": "HSK2-extended",
+      "pinyin": "yì zhōu zhī nèi"
+    },
+    "咬人": {
+      "term": "咬人",
+      "id": "zh-011686",
+      "level": "HSK2-extended",
+      "pinyin": "yǎo rén"
+    },
+    "第三组": {
+      "term": "第三组",
+      "id": "zh-011687",
+      "level": "HSK2-extended",
+      "pinyin": "dì sān zǔ"
+    },
+    "不方便": {
+      "term": "不方便",
+      "id": "zh-011688",
+      "level": "HSK2-extended",
+      "pinyin": "bù fāng biàn"
+    },
+    "念着": {
+      "term": "念着",
+      "id": "zh-011689",
+      "level": "HSK2-extended",
+      "pinyin": "niàn zhe"
+    },
+    "受欢迎": {
+      "term": "受欢迎",
+      "id": "zh-011690",
+      "level": "HSK2-extended",
+      "pinyin": "shòu huān yíng"
+    },
+    "可愛": {
+      "term": "可愛",
+      "id": "zh-011691",
+      "level": "HSK2-extended",
+      "pinyin": "kě'ài"
+    },
+    "還是": {
+      "term": "還是",
+      "id": "zh-011692",
+      "level": "HSK2-extended",
+      "pinyin": "háishì"
+    },
+    "鑰匙": {
+      "term": "鑰匙",
+      "id": "zh-011693",
+      "level": "HSK2-extended",
+      "pinyin": "yàoshi"
+    },
+    "不見": {
+      "term": "不見",
+      "id": "zh-011694",
+      "level": "HSK2-extended",
+      "pinyin": "bújiàn"
+    },
+    "還在": {
+      "term": "還在",
+      "id": "zh-011695",
+      "level": "HSK2-extended",
+      "pinyin": "háizài"
+    },
+    "窗簾": {
+      "term": "窗簾",
+      "id": "zh-011696",
+      "level": "HSK2-extended",
+      "pinyin": "chuānglián"
+    },
+    "吹開": {
+      "term": "吹開",
+      "id": "zh-011697",
+      "level": "HSK2-extended",
+      "pinyin": "chuī kāi"
+    },
+    "裡面": {
+      "term": "裡面",
+      "id": "zh-011698",
+      "level": "HSK2-extended",
+      "pinyin": "lǐmiàn"
+    },
+    "每個月": {
+      "term": "每個月",
+      "id": "zh-011699",
+      "level": "HSK2-extended",
+      "pinyin": "měi gè yuè"
+    },
+    "教室裡": {
+      "term": "教室裡",
+      "id": "zh-011700",
+      "level": "HSK2-extended",
+      "pinyin": "jiàoshì lǐ"
+    },
+    "安靜地": {
+      "term": "安靜地",
+      "id": "zh-011701",
+      "level": "HSK2-extended",
+      "pinyin": "ānjìng de"
+    },
+    "聽課": {
+      "term": "聽課",
+      "id": "zh-011702",
+      "level": "HSK2-extended",
+      "pinyin": "tīng kè"
+    },
+    "一個小時": {
+      "term": "一個小時",
+      "id": "zh-011703",
+      "level": "HSK2-extended",
+      "pinyin": "yī gè xiǎo shí"
+    },
+    "新技能": {
+      "term": "新技能",
+      "id": "zh-011704",
+      "level": "HSK2-extended",
+      "pinyin": "xīn jìnéng"
+    },
+    "一場": {
+      "term": "一場",
+      "id": "zh-011705",
+      "level": "HSK2-extended",
+      "pinyin": "yī chǎng"
+    },
+    "比賽中": {
+      "term": "比賽中",
+      "id": "zh-011706",
+      "level": "HSK2-extended",
+      "pinyin": "bǐsài zhōng"
+    },
+    "表現": {
+      "term": "表現",
+      "id": "zh-011707",
+      "level": "HSK2-extended",
+      "pinyin": "biǎoxiàn"
+    },
+    "得獎": {
+      "term": "得獎",
+      "id": "zh-011708",
+      "level": "HSK2-extended",
+      "pinyin": "dé jiǎng"
+    },
+    "公園裡": {
+      "term": "公園裡",
+      "id": "zh-011709",
+      "level": "HSK2-extended",
+      "pinyin": "gōngyuán lǐ"
+    },
+    "幫忙": {
+      "term": "幫忙",
+      "id": "zh-011710",
+      "level": "HSK2-extended",
+      "pinyin": "bāngmáng"
+    },
+    "海灘": {
+      "term": "海灘",
+      "id": "zh-011711",
+      "level": "HSK2-extended",
+      "pinyin": "hǎitān"
+    },
+    "討論": {
+      "term": "討論",
+      "id": "zh-011712",
+      "level": "HSK2-extended",
+      "pinyin": "tǎolùn"
+    },
+    "下個月": {
+      "term": "下個月",
+      "id": "zh-011713",
+      "level": "HSK2-extended",
+      "pinyin": "xià gè yuè"
+    },
+    "常去": {
+      "term": "常去",
+      "id": "zh-011714",
+      "level": "HSK2-extended",
+      "pinyin": "cháng qù"
+    },
+    "餐廳": {
+      "term": "餐廳",
+      "id": "zh-011715",
+      "level": "HSK2-extended",
+      "pinyin": "cāntīng"
+    },
+    "明天早上": {
+      "term": "明天早上",
+      "id": "zh-011716",
+      "level": "HSK2-extended",
+      "pinyin": "míngtiān zǎoshang"
+    },
+    "火車": {
+      "term": "火車",
+      "id": "zh-011717",
+      "level": "HSK2-extended",
+      "pinyin": "huǒchē"
+    },
+    "窗戶": {
+      "term": "窗戶",
+      "id": "zh-011718",
+      "level": "HSK2-extended",
+      "pinyin": "chuānghù"
+    },
+    "放鬆": {
+      "term": "放鬆",
+      "id": "zh-011719",
+      "level": "HSK2-extended",
+      "pinyin": "fàngsōng"
+    },
+    "傳來": {
+      "term": "傳來",
+      "id": "zh-011720",
+      "level": "HSK2-extended",
+      "pinyin": "chuánlái"
+    },
+    "熟悉的": {
+      "term": "熟悉的",
+      "id": "zh-011721",
+      "level": "HSK2-extended",
+      "pinyin": "shúxī de"
+    },
+    "聲音": {
+      "term": "聲音",
+      "id": "zh-011722",
+      "level": "HSK2-extended",
+      "pinyin": "shēngyīn"
+    },
+    "東西": {
+      "term": "東西",
+      "id": "zh-011723",
+      "level": "HSK2-extended",
+      "pinyin": "dōngxi"
+    },
+    "電子郵件": {
+      "term": "電子郵件",
+      "id": "zh-011724",
+      "level": "HSK2-extended",
+      "pinyin": "diànzǐ yóujiàn"
+    },
+    "問題": {
+      "term": "問題",
+      "id": "zh-011725",
+      "level": "HSK2-extended",
+      "pinyin": "wèntí"
+    },
+    "蘋果": {
+      "term": "蘋果",
+      "id": "zh-011726",
+      "level": "HSK2-extended",
+      "pinyin": "píngguǒ"
+    },
+    "下週": {
+      "term": "下週",
+      "id": "zh-011727",
+      "level": "HSK2-extended",
+      "pinyin": "xià zhōu"
+    },
+    "幾點": {
+      "term": "幾點",
+      "id": "zh-011728",
+      "level": "HSK2-extended",
+      "pinyin": "jǐ diǎn"
+    },
+    "這本": {
+      "term": "這本",
+      "id": "zh-011729",
+      "level": "HSK2-extended",
+      "pinyin": "zhè běn"
+    },
+    "一小時": {
+      "term": "一小時",
+      "id": "zh-011730",
+      "level": "HSK2-extended",
+      "pinyin": "yī xiǎoshí"
+    },
+    "經常": {
+      "term": "經常",
+      "id": "zh-011731",
+      "level": "HSK2-extended",
+      "pinyin": "jīngcháng"
+    },
+    "八點前": {
+      "term": "八點前",
+      "id": "zh-011732",
+      "level": "HSK2-extended",
+      "pinyin": "bā diǎn qián"
+    },
+    "辦公室": {
+      "term": "辦公室",
+      "id": "zh-011733",
+      "level": "HSK2-extended",
+      "pinyin": "bàngōngshì"
+    },
+    "九點": {
+      "term": "九點",
+      "id": "zh-011734",
+      "level": "HSK2-extended",
+      "pinyin": "jiǔ diǎn"
+    },
+    "準時": {
+      "term": "準時",
+      "id": "zh-011735",
+      "level": "HSK2-extended",
+      "pinyin": "zhǔnshí"
+    },
+    "這條": {
+      "term": "這條",
+      "id": "zh-011736",
+      "level": "HSK2-extended",
+      "pinyin": "zhè tiáo"
+    },
+    "山頂": {
+      "term": "山頂",
+      "id": "zh-011737",
+      "level": "HSK2-extended",
+      "pinyin": "shāndǐng"
+    },
+    "覺得": {
+      "term": "覺得",
+      "id": "zh-011738",
+      "level": "HSK2-extended",
+      "pinyin": "juédé"
+    },
+    "什麼時候": {
+      "term": "什麼時候",
+      "id": "zh-011739",
+      "level": "HSK2-extended",
+      "pinyin": "shénme shíhòu"
+    },
+    "門外": {
+      "term": "門外",
+      "id": "zh-011740",
+      "level": "HSK2-extended",
+      "pinyin": "ménwài"
+    },
+    "這杯": {
+      "term": "這杯",
+      "id": "zh-011741",
+      "level": "HSK2-extended",
+      "pinyin": "zhè bēi"
+    },
+    "那封信": {
+      "term": "那封信",
+      "id": "zh-011742",
+      "level": "HSK2-extended",
+      "pinyin": "nà fēng xìn"
+    },
+    "查收了": {
+      "term": "查收了",
+      "id": "zh-011743",
+      "level": "HSK2-extended",
+      "pinyin": "cháshōu le"
+    },
+    "提案": {
+      "term": "提案",
+      "id": "zh-011744",
+      "level": "HSK2-extended",
+      "pinyin": "tí'àn"
+    },
+    "种菜": {
+      "term": "种菜",
+      "id": "zh-011745",
+      "level": "HSK2-extended",
+      "pinyin": "zhòngcài"
+    },
+    "王老師": {
+      "term": "王老師",
+      "id": "zh-011746",
+      "level": "HSK2-extended",
+      "pinyin": "Wáng lǎoshī"
+    },
+    "没來": {
+      "term": "没來",
+      "id": "zh-011747",
+      "level": "HSK2-extended",
+      "pinyin": "méi lái"
+    },
+    "上課": {
+      "term": "上課",
+      "id": "zh-011748",
+      "level": "HSK2-extended",
+      "pinyin": "shàngkè"
+    },
+    "半个": {
+      "term": "半个",
+      "id": "zh-011749",
+      "level": "HSK2-extended",
+      "pinyin": "bàn gè"
+    },
+    "举着": {
+      "term": "举着",
+      "id": "zh-011750",
+      "level": "HSK2-extended",
+      "pinyin": "jǔzhe"
+    },
+    "那辆车": {
+      "term": "那辆车",
+      "id": "zh-011751",
+      "level": "HSK2-extended",
+      "pinyin": "nà liàng chē"
+    },
+    "睡好": {
+      "term": "睡好",
+      "id": "zh-011752",
+      "level": "HSK2-extended",
+      "pinyin": "shuì hǎo"
+    },
+    "吃点心": {
+      "term": "吃点心",
+      "id": "zh-011753",
+      "level": "HSK2-extended",
+      "pinyin": "chī diǎnxīn"
+    },
+    "不想": {
+      "term": "不想",
+      "id": "zh-011754",
+      "level": "HSK2-extended",
+      "pinyin": "bù xiǎng"
+    },
+    "那双": {
+      "term": "那双",
+      "id": "zh-011755",
+      "level": "HSK2-extended",
+      "pinyin": "nà shuāng"
+    },
+    "工作人员": {
+      "term": "工作人员",
+      "id": "zh-011756",
+      "level": "HSK2-extended",
+      "pinyin": "gōngzuò rényuán"
+    },
+    "打碎了": {
+      "term": "打碎了",
+      "id": "zh-011757",
+      "level": "HSK2-extended",
+      "pinyin": "dǎ suì le"
+    },
+    "这菜": {
+      "term": "这菜",
+      "id": "zh-011758",
+      "level": "HSK2-extended",
+      "pinyin": "zhè cài"
+    },
+    "九点": {
+      "term": "九点",
+      "id": "zh-011759",
+      "level": "HSK2-extended",
+      "pinyin": "jiǔ diǎn"
+    },
+    "基本的": {
+      "term": "基本的",
+      "id": "zh-011760",
+      "level": "HSK2-extended",
+      "pinyin": "jīběn de"
+    },
+    "抱起": {
+      "term": "抱起",
+      "id": "zh-011761",
+      "level": "HSK2-extended",
+      "pinyin": "bào qǐ"
+    },
+    "三个人": {
+      "term": "三个人",
+      "id": "zh-011762",
+      "level": "HSK2-extended",
+      "pinyin": "sān gè rén"
+    },
+    "坐不下": {
+      "term": "坐不下",
+      "id": "zh-011763",
+      "level": "HSK2-extended",
+      "pinyin": "zuò bù xià"
+    },
+    "这么多人": {
+      "term": "这么多人",
+      "id": "zh-011764",
+      "level": "HSK2-extended",
+      "pinyin": "zhème duō rén"
+    },
+    "那支箭": {
+      "term": "那支箭",
+      "id": "zh-011765",
+      "level": "HSK2-extended",
+      "pinyin": "nà zhī jiàn"
+    },
+    "靶心": {
+      "term": "靶心",
+      "id": "zh-011766",
+      "level": "HSK2-extended",
+      "pinyin": "bǎ xīn"
+    },
+    "捕鱼": {
+      "term": "捕鱼",
+      "id": "zh-011767",
+      "level": "HSK2-extended",
+      "pinyin": "bǔ yú"
+    },
+    "水坑": {
+      "term": "水坑",
+      "id": "zh-011768",
+      "level": "HSK2-extended",
+      "pinyin": "shuǐ kēng"
+    },
+    "排水沟": {
+      "term": "排水沟",
+      "id": "zh-011769",
+      "level": "HSK2-extended",
+      "pinyin": "pái shuǐ gōu"
+    },
+    "新鞋": {
+      "term": "新鞋",
+      "id": "zh-011770",
+      "level": "HSK2-extended",
+      "pinyin": "xīn xié"
+    },
+    "带好": {
+      "term": "带好",
+      "id": "zh-011771",
+      "level": "HSK2-extended",
+      "pinyin": "dài hǎo"
+    },
+    "拍了拍": {
+      "term": "拍了拍",
+      "id": "zh-011772",
+      "level": "HSK2-extended",
+      "pinyin": "pāi le pāi"
+    },
+    "人家里": {
+      "term": "人家里",
+      "id": "zh-011773",
+      "level": "HSK2-extended",
+      "pinyin": "rén jiā lǐ"
+    },
+    "讲了": {
+      "term": "讲了",
+      "id": "zh-011774",
+      "level": "HSK2-extended",
+      "pinyin": "jiǎng le"
+    },
+    "复习时": {
+      "term": "复习时",
+      "id": "zh-011775",
+      "level": "HSK2-extended",
+      "pinyin": "fù xí shí"
+    },
+    "有经验": {
+      "term": "有经验",
+      "id": "zh-011776",
+      "level": "HSK2-extended",
+      "pinyin": "yǒu jīng yàn"
+    },
+    "发音": {
+      "term": "发音",
+      "id": "zh-011777",
+      "level": "HSK2-extended",
+      "pinyin": "fā yīn"
+    },
+    "走走": {
+      "term": "走走",
+      "id": "zh-011778",
+      "level": "HSK2-extended",
+      "pinyin": "zǒu zǒu"
+    },
+    "去看": {
+      "term": "去看",
+      "id": "zh-011779",
+      "level": "HSK2-extended",
+      "pinyin": "qù kàn"
+    },
+    "忘了": {
+      "term": "忘了",
+      "id": "zh-011780",
+      "level": "HSK2-extended",
+      "pinyin": "wàng le"
+    },
+    "这把": {
+      "term": "这把",
+      "id": "zh-011781",
+      "level": "HSK2-extended",
+      "pinyin": "zhè bǎ"
+    },
+    "三百块钱": {
+      "term": "三百块钱",
+      "id": "zh-011782",
+      "level": "HSK2-extended",
+      "pinyin": "sān bǎi kuài qián"
+    },
+    "三百本": {
+      "term": "三百本",
+      "id": "zh-011783",
+      "level": "HSK2-extended",
+      "pinyin": "sān bǎi běn"
+    },
+    "这类书": {
+      "term": "这类书",
+      "id": "zh-011784",
+      "level": "HSK2-extended",
+      "pinyin": "zhè lèi shū"
+    },
+    "市场的": {
+      "term": "市场的",
+      "id": "zh-011785",
+      "level": "HSK2-extended",
+      "pinyin": "shì chǎng de"
+    },
+    "找给": {
+      "term": "找给",
+      "id": "zh-011786",
+      "level": "HSK2-extended",
+      "pinyin": "zhǎo gěi"
+    },
+    "出境时": {
+      "term": "出境时",
+      "id": "zh-011787",
+      "level": "HSK2-extended",
+      "pinyin": "chū jìng shí"
+    },
+    "会议前": {
+      "term": "会议前",
+      "id": "zh-011788",
+      "level": "HSK2-extended",
+      "pinyin": "huì yì qián"
+    },
+    "关好": {
+      "term": "关好",
+      "id": "zh-011789",
+      "level": "HSK2-extended",
+      "pinyin": "guān hǎo"
+    },
+    "安全检查": {
+      "term": "安全检查",
+      "id": "zh-011790",
+      "level": "HSK2-extended",
+      "pinyin": "ān quán jiǎn chá"
+    },
+    "带走": {
+      "term": "带走",
+      "id": "zh-011791",
+      "level": "HSK2-extended",
+      "pinyin": "dài zǒu"
+    },
+    "侦查": {
+      "term": "侦查",
+      "id": "zh-011792",
+      "level": "HSK2-extended",
+      "pinyin": "zhēn chá"
+    },
+    "几个": {
+      "term": "几个",
+      "id": "zh-011793",
+      "level": "HSK2-extended",
+      "pinyin": "jǐ gè"
+    },
+    "送达": {
+      "term": "送达",
+      "id": "zh-011794",
+      "level": "HSK2-extended",
+      "pinyin": "sòng dá"
+    },
+    "来说": {
+      "term": "来说",
+      "id": "zh-011795",
+      "level": "HSK2-extended",
+      "pinyin": "lái shuō"
+    },
+    "那首诗": {
+      "term": "那首诗",
+      "id": "zh-011796",
+      "level": "HSK2-extended",
+      "pinyin": "nà shǒu shī"
+    },
+    "含着": {
+      "term": "含着",
+      "id": "zh-011797",
+      "level": "HSK2-extended",
+      "pinyin": "hán zhe"
+    },
+    "团队中": {
+      "term": "团队中",
+      "id": "zh-011798",
+      "level": "HSK2-extended",
+      "pinyin": "tuán duì zhōng"
+    },
+    "交給": {
+      "term": "交給",
+      "id": "zh-011799",
+      "level": "HSK2-extended",
+      "pinyin": "jiāogěi"
+    },
+    "老師": {
+      "term": "老師",
+      "id": "zh-011800",
+      "level": "HSK2-extended",
+      "pinyin": "lǎoshī"
+    },
+    "找不到": {
+      "term": "找不到",
+      "id": "zh-011801",
+      "level": "HSK2-extended",
+      "pinyin": "zhǎo bù dào"
+    },
+    "手機": {
+      "term": "手機",
+      "id": "zh-011802",
+      "level": "HSK2-extended",
+      "pinyin": "shǒujī"
+    },
+    "不見了": {
+      "term": "不見了",
+      "id": "zh-011803",
+      "level": "HSK2-extended",
+      "pinyin": "bújiànle"
+    },
+    "講課": {
+      "term": "講課",
+      "id": "zh-011804",
+      "level": "HSK2-extended",
+      "pinyin": "jiǎngkè"
+    },
+    "跑了": {
+      "term": "跑了",
+      "id": "zh-011805",
+      "level": "HSK2-extended",
+      "pinyin": "pǎole"
+    },
+    "小時": {
+      "term": "小時",
+      "id": "zh-011806",
+      "level": "HSK2-extended",
+      "pinyin": "xiǎoshí"
+    },
+    "受傷了": {
+      "term": "受傷了",
+      "id": "zh-011807",
+      "level": "HSK2-extended",
+      "pinyin": "shòushāngle"
+    },
+    "因為": {
+      "term": "因為",
+      "id": "zh-011808",
+      "level": "HSK2-extended",
+      "pinyin": "yīnwèi"
+    },
+    "孩子們": {
+      "term": "孩子們",
+      "id": "zh-011809",
+      "level": "HSK2-extended",
+      "pinyin": "háizimen"
+    },
+    "課堂": {
+      "term": "課堂",
+      "id": "zh-011810",
+      "level": "HSK2-extended",
+      "pinyin": "kètáng"
+    },
+    "那家": {
+      "term": "那家",
+      "id": "zh-011811",
+      "level": "HSK2-extended",
+      "pinyin": "nàjiā"
+    },
+    "打開": {
+      "term": "打開",
+      "id": "zh-011812",
+      "level": "HSK2-extended",
+      "pinyin": "dǎkāi"
+    },
+    "房間": {
+      "term": "房間",
+      "id": "zh-011813",
+      "level": "HSK2-extended",
+      "pinyin": "fángjiān"
+    },
+    "比較": {
+      "term": "比較",
+      "id": "zh-011814",
+      "level": "HSK2-extended",
+      "pinyin": "bǐjiào"
+    },
+    "通風": {
+      "term": "通風",
+      "id": "zh-011815",
+      "level": "HSK2-extended",
+      "pinyin": "tōngfēng"
+    },
+    "運動": {
+      "term": "運動",
+      "id": "zh-011816",
+      "level": "HSK2-extended",
+      "pinyin": "yùndòng"
+    },
+    "好時機": {
+      "term": "好時機",
+      "id": "zh-011817",
+      "level": "HSK2-extended",
+      "pinyin": "hǎoshíjī"
+    },
+    "遠處": {
+      "term": "遠處",
+      "id": "zh-011818",
+      "level": "HSK2-extended",
+      "pinyin": "yuǎnchù"
+    },
+    "音樂聲": {
+      "term": "音樂聲",
+      "id": "zh-011819",
+      "level": "HSK2-extended",
+      "pinyin": "yīnyuèshēng"
+    },
+    "來過": {
+      "term": "來過",
+      "id": "zh-011820",
+      "level": "HSK2-extended",
+      "pinyin": "láiguò"
+    },
+    "電話": {
+      "term": "電話",
+      "id": "zh-011821",
+      "level": "HSK2-extended",
+      "pinyin": "diànhuà"
+    },
+    "帶了": {
+      "term": "帶了",
+      "id": "zh-011822",
+      "level": "HSK2-extended",
+      "pinyin": "dàile"
+    },
+    "隨時": {
+      "term": "隨時",
+      "id": "zh-011823",
+      "level": "HSK2-extended",
+      "pinyin": "suíshí"
+    },
+    "這本書": {
+      "term": "這本書",
+      "id": "zh-011824",
+      "level": "HSK2-extended",
+      "pinyin": "zhè běn shū"
+    },
+    "忘記": {
+      "term": "忘記",
+      "id": "zh-011825",
+      "level": "HSK2-extended",
+      "pinyin": "wàngjì"
+    },
+    "三樓": {
+      "term": "三樓",
+      "id": "zh-011826",
+      "level": "HSK2-extended",
+      "pinyin": "sānlóu"
+    },
+    "總是": {
+      "term": "總是",
+      "id": "zh-011827",
+      "level": "HSK2-extended",
+      "pinyin": "zǒngshì"
+    },
+    "終於": {
+      "term": "終於",
+      "id": "zh-011828",
+      "level": "HSK2-extended",
+      "pinyin": "zhōngyú"
+    },
+    "怎麼樣": {
+      "term": "怎麼樣",
+      "id": "zh-011829",
+      "level": "HSK2-extended",
+      "pinyin": "zěnmeyàng"
+    },
+    "讀了": {
+      "term": "讀了",
+      "id": "zh-011830",
+      "level": "HSK2-extended",
+      "pinyin": "dúle"
+    },
+    "這份": {
+      "term": "這份",
+      "id": "zh-011831",
+      "level": "HSK2-extended",
+      "pinyin": "zhèfèn"
+    },
+    "會議上": {
+      "term": "會議上",
+      "id": "zh-011832",
+      "level": "HSK2-extended",
+      "pinyin": "huìyìshàng"
+    },
+    "新提案": {
+      "term": "新提案",
+      "id": "zh-011833",
+      "level": "HSK2-extended",
+      "pinyin": "xīn tí'àn"
+    },
+    "爺爺": {
+      "term": "爺爺",
+      "id": "zh-011834",
+      "level": "HSK2-extended",
+      "pinyin": "yéye"
+    },
+    "後院": {
+      "term": "後院",
+      "id": "zh-011835",
+      "level": "HSK2-extended",
+      "pinyin": "hòuyuàn"
+    },
+    "種菜": {
+      "term": "種菜",
+      "id": "zh-011836",
+      "level": "HSK2-extended",
+      "pinyin": "zhòngcài"
+    },
+    "沒來": {
+      "term": "沒來",
+      "id": "zh-011837",
+      "level": "HSK2-extended",
+      "pinyin": "méilái"
+    },
+    "半個": {
+      "term": "半個",
+      "id": "zh-011838",
+      "level": "HSK2-extended",
+      "pinyin": "bàn gè"
+    },
+    "舉著": {
+      "term": "舉著",
+      "id": "zh-011839",
+      "level": "HSK2-extended",
+      "pinyin": "jǔ zhe"
+    },
+    "走過來": {
+      "term": "走過來",
+      "id": "zh-011840",
+      "level": "HSK2-extended",
+      "pinyin": "zǒu guò lái"
+    },
+    "停在": {
+      "term": "停在",
+      "id": "zh-011841",
+      "level": "HSK2-extended",
+      "pinyin": "tíng zài"
+    },
+    "睡好了": {
+      "term": "睡好了",
+      "id": "zh-011842",
+      "level": "HSK2-extended",
+      "pinyin": "shuì hǎo le"
+    },
+    "點心": {
+      "term": "點心",
+      "id": "zh-011843",
+      "level": "HSK2-extended",
+      "pinyin": "diǎn xīn"
+    },
+    "他們": {
+      "term": "他們",
+      "id": "zh-011844",
+      "level": "HSK2-extended",
+      "pinyin": "tā men"
+    },
+    "要不要": {
+      "term": "要不要",
+      "id": "zh-011845",
+      "level": "HSK2-extended",
+      "pinyin": "yào bú yào"
+    },
+    "聯絡": {
+      "term": "聯絡",
+      "id": "zh-011846",
+      "level": "HSK2-extended",
+      "pinyin": "lián luò"
+    },
+    "工作人員": {
+      "term": "工作人員",
+      "id": "zh-011847",
+      "level": "HSK2-extended",
+      "pinyin": "gōng zuò rén yuán"
+    },
+    "打碎": {
+      "term": "打碎",
+      "id": "zh-011848",
+      "level": "HSK2-extended",
+      "pinyin": "dǎ suì"
+    },
+    "服務員": {
+      "term": "服務員",
+      "id": "zh-011849",
+      "level": "HSK2-extended",
+      "pinyin": "fú wù yuán"
+    },
+    "介紹": {
+      "term": "介紹",
+      "id": "zh-011850",
+      "level": "HSK2-extended",
+      "pinyin": "jiè shào"
+    },
+    "地鐵": {
+      "term": "地鐵",
+      "id": "zh-011851",
+      "level": "HSK2-extended",
+      "pinyin": "dì tiě"
+    },
+    "營業": {
+      "term": "營業",
+      "id": "zh-011852",
+      "level": "HSK2-extended",
+      "pinyin": "yíng yè"
+    },
+    "規則": {
+      "term": "規則",
+      "id": "zh-011853",
+      "level": "HSK2-extended",
+      "pinyin": "guī zé"
+    },
+    "詞彙": {
+      "term": "詞彙",
+      "id": "zh-011854",
+      "level": "HSK2-extended",
+      "pinyin": "cí huì"
+    },
+    "媽媽": {
+      "term": "媽媽",
+      "id": "zh-011855",
+      "level": "HSK2-extended",
+      "pinyin": "mā ma"
+    },
+    "寶寶": {
+      "term": "寶寶",
+      "id": "zh-011856",
+      "level": "HSK2-extended",
+      "pinyin": "bǎo bao"
+    },
+    "抱起來": {
+      "term": "抱起來",
+      "id": "zh-011857",
+      "level": "HSK2-extended",
+      "pinyin": "bào qǐ lái"
+    },
+    "抱在": {
+      "term": "抱在",
+      "id": "zh-011858",
+      "level": "HSK2-extended",
+      "pinyin": "bào zài"
+    },
+    "懷裡": {
+      "term": "懷裡",
+      "id": "zh-011859",
+      "level": "HSK2-extended",
+      "pinyin": "huái lǐ"
+    },
+    "三個人": {
+      "term": "三個人",
+      "id": "zh-011860",
+      "level": "HSK2-extended",
+      "pinyin": "sān gè rén"
+    },
+    "會說": {
+      "term": "會說",
+      "id": "zh-011861",
+      "level": "HSK2-extended",
+      "pinyin": "huì shuō"
+    },
+    "看電影": {
+      "term": "看電影",
+      "id": "zh-011862",
+      "level": "HSK2-extended",
+      "pinyin": "kàn diànyǐng"
+    },
+    "這張桌子": {
+      "term": "這張桌子",
+      "id": "zh-011863",
+      "level": "HSK2-extended",
+      "pinyin": "zhè zhāng zhuōzi"
+    },
+    "八個人": {
+      "term": "八個人",
+      "id": "zh-011864",
+      "level": "HSK2-extended",
+      "pinyin": "bā gè rén"
+    },
+    "車裡": {
+      "term": "車裡",
+      "id": "zh-011865",
+      "level": "HSK2-extended",
+      "pinyin": "chē lǐ"
+    },
+    "這麼": {
+      "term": "這麼",
+      "id": "zh-011866",
+      "level": "HSK2-extended",
+      "pinyin": "zhème"
+    },
+    "熱鬧": {
+      "term": "熱鬧",
+      "id": "zh-011867",
+      "level": "HSK2-extended",
+      "pinyin": "rènào"
+    },
+    "排隊": {
+      "term": "排隊",
+      "id": "zh-011868",
+      "level": "HSK2-extended",
+      "pinyin": "pái duì"
+    },
+    "射中": {
+      "term": "射中",
+      "id": "zh-011869",
+      "level": "HSK2-extended",
+      "pinyin": "shè zhòng"
+    },
+    "弓箭手": {
+      "term": "弓箭手",
+      "id": "zh-011870",
+      "level": "HSK2-extended",
+      "pinyin": "gōngjiànshǒu"
+    },
+    "拔出": {
+      "term": "拔出",
+      "id": "zh-011871",
+      "level": "HSK2-extended",
+      "pinyin": "bá chū"
+    },
+    "要想": {
+      "term": "要想",
+      "id": "zh-011872",
+      "level": "HSK2-extended",
+      "pinyin": "yào xiǎng"
+    },
+    "瞄準": {
+      "term": "瞄準",
+      "id": "zh-011873",
+      "level": "HSK2-extended",
+      "pinyin": "miáo zhǔn"
+    },
+    "海邊": {
+      "term": "海邊",
+      "id": "zh-011874",
+      "level": "HSK2-extended",
+      "pinyin": "hǎibiān"
+    },
+    "捕魚": {
+      "term": "捕魚",
+      "id": "zh-011875",
+      "level": "HSK2-extended",
+      "pinyin": "bǔ yú"
+    },
+    "村莊": {
+      "term": "村莊",
+      "id": "zh-011876",
+      "level": "HSK2-extended",
+      "pinyin": "cūn zhuāng"
+    },
+    "為生": {
+      "term": "為生",
+      "id": "zh-011877",
+      "level": "HSK2-extended",
+      "pinyin": "wéi shēng"
+    },
+    "雨後": {
+      "term": "雨後",
+      "id": "zh-011878",
+      "level": "HSK2-extended",
+      "pinyin": "yǔhòu"
+    },
+    "踩到": {
+      "term": "踩到",
+      "id": "zh-011879",
+      "level": "HSK2-extended",
+      "pinyin": "cǎi dào"
+    },
+    "順著": {
+      "term": "順著",
+      "id": "zh-011880",
+      "level": "HSK2-extended",
+      "pinyin": "shùn zhe"
+    },
+    "排水溝": {
+      "term": "排水溝",
+      "id": "zh-011881",
+      "level": "HSK2-extended",
+      "pinyin": "pái shuǐ gōu"
+    },
+    "流走": {
+      "term": "流走",
+      "id": "zh-011882",
+      "level": "HSK2-extended",
+      "pinyin": "liú zǒu"
+    },
+    "丟進": {
+      "term": "丟進",
+      "id": "zh-011883",
+      "level": "HSK2-extended",
+      "pinyin": "diū jìn"
+    },
+    "買了": {
+      "term": "買了",
+      "id": "zh-011884",
+      "level": "HSK2-extended",
+      "pinyin": "mǎi le"
+    },
+    "一雙": {
+      "term": "一雙",
+      "id": "zh-011885",
+      "level": "HSK2-extended",
+      "pinyin": "yī shuāng"
+    },
+    "穿起來": {
+      "term": "穿起來",
+      "id": "zh-011886",
+      "level": "HSK2-extended",
+      "pinyin": "chuān qǐ lái"
+    },
+    "安全带": {
+      "term": "安全带",
+      "id": "zh-011887",
+      "level": "HSK2-extended",
+      "pinyin": "ān quán dài"
+    },
+    "多做": {
+      "term": "多做",
+      "id": "zh-011888",
+      "level": "HSK2-extended",
+      "pinyin": "duō zuò"
+    },
+    "块钱": {
+      "term": "块钱",
+      "id": "zh-011889",
+      "level": "HSK2-extended",
+      "pinyin": "kuài qián"
+    },
+    "这类": {
+      "term": "这类",
+      "id": "zh-011890",
+      "level": "HSK2-extended",
+      "pinyin": "zhè lèi"
+    },
+    "收银员": {
+      "term": "收银员",
+      "id": "zh-011891",
+      "level": "HSK2-extended",
+      "pinyin": "shōu yín yuán"
+    },
+    "二十块钱": {
+      "term": "二十块钱",
+      "id": "zh-011892",
+      "level": "HSK2-extended",
+      "pinyin": "èr shí kuài qián"
+    },
+    "严格的": {
+      "term": "严格的",
+      "id": "zh-011893",
+      "level": "HSK2-extended",
+      "pinyin": "yán gé de"
+    },
+    "嫌疑人": {
+      "term": "嫌疑人",
+      "id": "zh-011894",
+      "level": "HSK2-extended",
+      "pinyin": "xián yí rén"
+    },
+    "警方": {
+      "term": "警方",
+      "id": "zh-011895",
+      "level": "HSK2-extended",
+      "pinyin": "jǐng fāng"
+    },
+    "这起": {
+      "term": "这起",
+      "id": "zh-011896",
+      "level": "HSK2-extended",
+      "pinyin": "zhè qǐ"
+    },
+    "侦查结果": {
+      "term": "侦查结果",
+      "id": "zh-011897",
+      "level": "HSK2-extended",
+      "pinyin": "zhēn chá jié guǒ"
+    },
+    "签收": {
+      "term": "签收",
+      "id": "zh-011898",
+      "level": "HSK2-extended",
+      "pinyin": "qiān shōu"
+    },
+    "传票": {
+      "term": "传票",
+      "id": "zh-011899",
+      "level": "HSK2-extended",
+      "pinyin": "chuánpiào"
+    },
+    "這位": {
+      "term": "這位",
+      "id": "zh-011900",
+      "level": "HSK2-extended",
+      "pinyin": "zhè wèi"
+    },
+    "經驗": {
+      "term": "經驗",
+      "id": "zh-011901",
+      "level": "HSK2-extended",
+      "pinyin": "jīng yàn"
+    },
+    "翻了": {
+      "term": "翻了",
+      "id": "zh-011902",
+      "level": "HSK2-extended",
+      "pinyin": "fān le"
+    },
+    "沒電": {
+      "term": "沒電",
+      "id": "zh-011903",
+      "level": "HSK2-extended",
+      "pinyin": "méi diàn"
+    },
+    "錢包": {
+      "term": "錢包",
+      "id": "zh-011904",
+      "level": "HSK2-extended",
+      "pinyin": "qián bāo"
+    },
+    "大學": {
+      "term": "大學",
+      "id": "zh-011905",
+      "level": "HSK2-extended",
+      "pinyin": "dà xué"
+    },
+    "陌生人": {
+      "term": "陌生人",
+      "id": "zh-011906",
+      "level": "HSK2-extended",
+      "pinyin": "mò shēng rén"
+    },
+    "偷了": {
+      "term": "偷了",
+      "id": "zh-011907",
+      "level": "HSK2-extended",
+      "pinyin": "tōu le"
+    },
+    "那個人": {
+      "term": "那個人",
+      "id": "zh-011908",
+      "level": "HSK2-extended",
+      "pinyin": "nà gè rén"
+    },
+    "八個": {
+      "term": "八個",
+      "id": "zh-011909",
+      "level": "HSK2-extended",
+      "pinyin": "bā gè"
+    },
+    "受傷": {
+      "term": "受傷",
+      "id": "zh-011910",
+      "level": "HSK2-extended",
+      "pinyin": "shòu shāng"
+    },
+    "醫生": {
+      "term": "醫生",
+      "id": "zh-011911",
+      "level": "HSK2-extended",
+      "pinyin": "yī shēng"
+    },
+    "摔倒了": {
+      "term": "摔倒了",
+      "id": "zh-011912",
+      "level": "HSK2-extended",
+      "pinyin": "shuāi dǎo le"
+    },
+    "改天": {
+      "term": "改天",
+      "id": "zh-011913",
+      "level": "HSK2-extended",
+      "pinyin": "gǎi tiān"
+    },
+    "生病了": {
+      "term": "生病了",
+      "id": "zh-011914",
+      "level": "HSK2-extended",
+      "pinyin": "shēng bìng le"
+    },
+    "玩得": {
+      "term": "玩得",
+      "id": "zh-011915",
+      "level": "HSK2-extended",
+      "pinyin": "wán de"
+    },
+    "高興": {
+      "term": "高興",
+      "id": "zh-011916",
+      "level": "HSK2-extended",
+      "pinyin": "gāo xìng"
+    },
+    "按時": {
+      "term": "按時",
+      "id": "zh-011917",
+      "level": "HSK2-extended",
+      "pinyin": "àn shí"
+    },
+    "睡覺": {
+      "term": "睡覺",
+      "id": "zh-011918",
+      "level": "HSK2-extended",
+      "pinyin": "shuì jiào"
+    },
+    "沒有": {
+      "term": "沒有",
+      "id": "zh-011919",
+      "level": "HSK2-extended",
+      "pinyin": "méi yǒu"
+    },
+    "去過": {
+      "term": "去過",
+      "id": "zh-011920",
+      "level": "HSK2-extended",
+      "pinyin": "qùguò"
+    },
+    "書店": {
+      "term": "書店",
+      "id": "zh-011921",
+      "level": "HSK2-extended",
+      "pinyin": "shūdiàn"
+    },
+    "電燈": {
+      "term": "電燈",
+      "id": "zh-011922",
+      "level": "HSK2-extended",
+      "pinyin": "diàndēng"
+    },
+    "整潔": {
+      "term": "整潔",
+      "id": "zh-011923",
+      "level": "HSK2-extended",
+      "pinyin": "zhěngjié"
+    },
+    "收好": {
+      "term": "收好",
+      "id": "zh-011924",
+      "level": "HSK2-extended",
+      "pinyin": "shōuhǎo"
+    },
+    "弄亂": {
+      "term": "弄亂",
+      "id": "zh-011925",
+      "level": "HSK2-extended",
+      "pinyin": "nòngluàn"
+    },
+    "不會": {
+      "term": "不會",
+      "id": "zh-011926",
+      "level": "HSK2-extended",
+      "pinyin": "búhuì"
+    },
+    "半小時": {
+      "term": "半小時",
+      "id": "zh-011927",
+      "level": "HSK2-extended",
+      "pinyin": "bàn xiǎoshí"
+    },
+    "時機": {
+      "term": "時機",
+      "id": "zh-011928",
+      "level": "HSK2-extended",
+      "pinyin": "shíjī"
+    },
+    "投資": {
+      "term": "投資",
+      "id": "zh-011929",
+      "level": "HSK2-extended",
+      "pinyin": "tóuzī"
+    },
+    "一座": {
+      "term": "一座",
+      "id": "zh-011930",
+      "level": "HSK2-extended",
+      "pinyin": "yízuò"
+    },
+    "小山": {
+      "term": "小山",
+      "id": "zh-011931",
+      "level": "HSK2-extended",
+      "pinyin": "xiǎoshān"
+    },
+    "台北": {
+      "term": "台北",
+      "id": "zh-011932",
+      "level": "HSK2-extended",
+      "pinyin": "Táiběi"
+    },
+    "電話號碼": {
+      "term": "電話號碼",
+      "id": "zh-011933",
+      "level": "HSK2-extended",
+      "pinyin": "diànhuà hàomǎ"
+    },
+    "打電話": {
+      "term": "打電話",
+      "id": "zh-011934",
+      "level": "HSK2-extended",
+      "pinyin": "dǎ diànhuà"
+    },
+    "很早": {
+      "term": "很早",
+      "id": "zh-011935",
+      "level": "HSK2-extended",
+      "pinyin": "hěn zǎo"
+    },
+    "感覺": {
+      "term": "感覺",
+      "id": "zh-011936",
+      "level": "HSK2-extended",
+      "pinyin": "gǎnjué"
+    },
+    "那篇": {
+      "term": "那篇",
+      "id": "zh-011937",
+      "level": "HSK2-extended",
+      "pinyin": "nà piān"
+    },
+    "提出了": {
+      "term": "提出了",
+      "id": "zh-011938",
+      "level": "HSK2-extended",
+      "pinyin": "tí chū le"
+    },
+    "細節": {
+      "term": "細節",
+      "id": "zh-011939",
+      "level": "HSK2-extended",
+      "pinyin": "xìjié"
+    },
+    "收成": {
+      "term": "收成",
+      "id": "zh-011940",
+      "level": "HSK2-extended",
+      "pinyin": "shōuchéng"
+    },
+    "走過去": {
+      "term": "走過去",
+      "id": "zh-011941",
+      "level": "HSK2-extended",
+      "pinyin": "zǒu guòqù"
+    },
+    "這邊": {
+      "term": "這邊",
+      "id": "zh-011942",
+      "level": "HSK2-extended",
+      "pinyin": "zhè biān"
+    },
+    "看一下": {
+      "term": "看一下",
+      "id": "zh-011943",
+      "level": "HSK2-extended",
+      "pinyin": "kàn yíxià"
+    },
+    "汽車": {
+      "term": "汽車",
+      "id": "zh-011944",
+      "level": "HSK2-extended",
+      "pinyin": "qìchē"
+    },
+    "吃點心": {
+      "term": "吃點心",
+      "id": "zh-011945",
+      "level": "HSK2-extended",
+      "pinyin": "chī diǎn xīn"
+    },
+    "有問題": {
+      "term": "有問題",
+      "id": "zh-011946",
+      "level": "HSK2-extended",
+      "pinyin": "yǒu wèntí"
+    },
+    "有任何問題": {
+      "term": "有任何問題",
+      "id": "zh-011947",
+      "level": "HSK2-extended",
+      "pinyin": "yǒu rènhé wèntí"
+    },
+    "菜單": {
+      "term": "菜單",
+      "id": "zh-011948",
+      "level": "HSK2-extended",
+      "pinyin": "càidān"
+    },
+    "介紹一下": {
+      "term": "介紹一下",
+      "id": "zh-011949",
+      "level": "HSK2-extended",
+      "pinyin": "jièshào yíxià"
+    },
+    "我們的": {
+      "term": "我們的",
+      "id": "zh-011950",
+      "level": "HSK2-extended",
+      "pinyin": "wǒmen de"
+    },
+    "新同事": {
+      "term": "新同事",
+      "id": "zh-011951",
+      "level": "HSK2-extended",
+      "pinyin": "xīn tóngshì"
+    },
+    "這家店": {
+      "term": "這家店",
+      "id": "zh-011952",
+      "level": "HSK2-extended",
+      "pinyin": "zhè jiā diàn"
+    },
+    "學校的": {
+      "term": "學校的",
+      "id": "zh-011953",
+      "level": "HSK2-extended",
+      "pinyin": "xuéxiào de"
+    },
+    "新詞彙": {
+      "term": "新詞彙",
+      "id": "zh-011954",
+      "level": "HSK2-extended",
+      "pinyin": "xīn cíhuì"
+    },
+    "語言能力": {
+      "term": "語言能力",
+      "id": "zh-011955",
+      "level": "HSK2-extended",
+      "pinyin": "yǔyán nénglì"
+    },
+    "很重要": {
+      "term": "很重要",
+      "id": "zh-011956",
+      "level": "HSK2-extended",
+      "pinyin": "hěn zhòngyào"
+    },
+    "廚房": {
+      "term": "廚房",
+      "id": "zh-011957",
+      "level": "HSK2-extended",
+      "pinyin": "chúfáng"
+    },
+    "做飯": {
+      "term": "做飯",
+      "id": "zh-011958",
+      "level": "HSK2-extended",
+      "pinyin": "zuò fàn"
+    },
+    "護士": {
+      "term": "護士",
+      "id": "zh-011959",
+      "level": "HSK2-extended",
+      "pinyin": "hùshi"
+    },
+    "抱在懷裡": {
+      "term": "抱在懷裡",
+      "id": "zh-011960",
+      "level": "HSK2-extended",
+      "pinyin": "bào zài huái lǐ"
+    },
+    "很溫柔": {
+      "term": "很溫柔",
+      "id": "zh-011961",
+      "level": "HSK2-extended",
+      "pinyin": "hěn wēnróu"
+    },
+    "嬰兒": {
+      "term": "嬰兒",
+      "id": "zh-011962",
+      "level": "HSK2-extended",
+      "pinyin": "yīng'ér"
+    },
+    "睡著了": {
+      "term": "睡著了",
+      "id": "zh-011963",
+      "level": "HSK2-extended",
+      "pinyin": "shuì zháo le"
+    },
+    "電影院": {
+      "term": "電影院",
+      "id": "zh-011964",
+      "level": "HSK2-extended",
+      "pinyin": "diànyǐngyuàn"
+    },
+    "很穩": {
+      "term": "很穩",
+      "id": "zh-011965",
+      "level": "HSK2-extended",
+      "pinyin": "hěn wěn"
+    },
+    "很多東西": {
+      "term": "很多東西",
+      "id": "zh-011966",
+      "level": "HSK2-extended",
+      "pinyin": "hěn duō dōngxi"
+    },
+    "這次旅行": {
+      "term": "這次旅行",
+      "id": "zh-011967",
+      "level": "HSK2-extended",
+      "pinyin": "zhè cì lǚxíng"
+    },
+    "怎麼": {
+      "term": "怎麼",
+      "id": "zh-011968",
+      "level": "HSK2-extended",
+      "pinyin": "zěnme"
+    },
+    "櫃檯": {
+      "term": "櫃檯",
+      "id": "zh-011969",
+      "level": "HSK2-extended",
+      "pinyin": "guìtái"
+    },
+    "買票": {
+      "term": "買票",
+      "id": "zh-011970",
+      "level": "HSK2-extended",
+      "pinyin": "mǎi piào"
+    },
+    "射箭": {
+      "term": "射箭",
+      "id": "zh-011971",
+      "level": "HSK2-extended",
+      "pinyin": "shèjiàn"
+    },
+    "拔出來": {
+      "term": "拔出來",
+      "id": "zh-011972",
+      "level": "HSK2-extended",
+      "pinyin": "bá chū lái"
+    },
+    "必須": {
+      "term": "必須",
+      "id": "zh-011973",
+      "level": "HSK2-extended",
+      "pinyin": "bìxū"
+    },
+    "射手": {
+      "term": "射手",
+      "id": "zh-011974",
+      "level": "HSK2-extended",
+      "pinyin": "shèshǒu"
+    },
+    "放箭": {
+      "term": "放箭",
+      "id": "zh-011975",
+      "level": "HSK2-extended",
+      "pinyin": "fàng jiàn"
+    },
+    "適合": {
+      "term": "適合",
+      "id": "zh-011976",
+      "level": "HSK2-extended",
+      "pinyin": "shìhé"
+    },
+    "漁民": {
+      "term": "漁民",
+      "id": "zh-011977",
+      "level": "HSK2-extended",
+      "pinyin": "yúmín"
+    },
+    "空氣": {
+      "term": "空氣",
+      "id": "zh-011978",
+      "level": "HSK2-extended",
+      "pinyin": "kōngqì"
+    },
+    "特別": {
+      "term": "特別",
+      "id": "zh-011979",
+      "level": "HSK2-extended",
+      "pinyin": "tèbié"
+    },
+    "水洼": {
+      "term": "水洼",
+      "id": "zh-011980",
+      "level": "HSK2-extended",
+      "pinyin": "shuǐ wā"
+    },
+    "滑倒": {
+      "term": "滑倒",
+      "id": "zh-011981",
+      "level": "HSK2-extended",
+      "pinyin": "huá dǎo"
+    },
+    "就能": {
+      "term": "就能",
+      "id": "zh-011982",
+      "level": "HSK2-extended",
+      "pinyin": "jiù néng"
+    },
+    "落葉": {
+      "term": "落葉",
+      "id": "zh-011983",
+      "level": "HSK2-extended",
+      "pinyin": "luò yè"
+    },
+    "沖破": {
+      "term": "沖破",
+      "id": "zh-011984",
+      "level": "HSK2-extended",
+      "pinyin": "chōng pò"
+    },
+    "堤壩": {
+      "term": "堤壩",
+      "id": "zh-011985",
+      "level": "HSK2-extended",
+      "pinyin": "dī bà"
+    },
+    "垃圾桶": {
+      "term": "垃圾桶",
+      "id": "zh-011986",
+      "level": "HSK2-extended",
+      "pinyin": "lā jī tǒng"
+    },
+    "髒東西": {
+      "term": "髒東西",
+      "id": "zh-011987",
+      "level": "HSK2-extended",
+      "pinyin": "zāng dōng xī"
+    },
+    "馬桶": {
+      "term": "馬桶",
+      "id": "zh-011988",
+      "level": "HSK2-extended",
+      "pinyin": "mǎ tǒng"
+    },
+    "那雙": {
+      "term": "那雙",
+      "id": "zh-011989",
+      "level": "HSK2-extended",
+      "pinyin": "nà shuāng"
+    },
+    "上車後": {
+      "term": "上車後",
+      "id": "zh-011990",
+      "level": "HSK2-extended",
+      "pinyin": "shàng chē hòu"
+    },
+    "繫好": {
+      "term": "繫好",
+      "id": "zh-011991",
+      "level": "HSK2-extended",
+      "pinyin": "xì hǎo"
+    },
+    "安全帶": {
+      "term": "安全帶",
+      "id": "zh-011992",
+      "level": "HSK2-extended",
+      "pinyin": "ān quán dài"
+    },
+    "建議": {
+      "term": "建議",
+      "id": "zh-011993",
+      "level": "HSK2-extended",
+      "pinyin": "jiàn yì"
+    },
+    "十塊錢": {
+      "term": "十塊錢",
+      "id": "zh-011994",
+      "level": "HSK2-extended",
+      "pinyin": "shí kuài qián"
+    },
+    "這類": {
+      "term": "這類",
+      "id": "zh-011995",
+      "level": "HSK2-extended",
+      "pinyin": "zhè lèi"
+    },
+    "常見": {
+      "term": "常見",
+      "id": "zh-011996",
+      "level": "HSK2-extended",
+      "pinyin": "cháng jiàn"
+    },
+    "解決": {
+      "term": "解決",
+      "id": "zh-011997",
+      "level": "HSK2-extended",
+      "pinyin": "jiě jué"
+    },
+    "结账": {
+      "term": "结账",
+      "id": "zh-011998",
+      "level": "HSK2-extended",
+      "pinyin": "jié zhàng"
+    },
+    "一點": {
+      "term": "一點",
+      "id": "zh-011999",
+      "level": "HSK2-extended",
+      "pinyin": "yì diǎn"
+    },
+    "兩名": {
+      "term": "兩名",
+      "id": "zh-012000",
+      "level": "HSK2-extended",
+      "pinyin": "liǎng míng"
+    },
+    "調查": {
+      "term": "調查",
+      "id": "zh-012001",
+      "level": "HSK2-extended",
+      "pinyin": "diàochá"
+    },
+    "這起": {
+      "term": "這起",
+      "id": "zh-012002",
+      "level": "HSK2-extended",
+      "pinyin": "zhè qǐ"
+    },
+    "多人": {
+      "term": "多人",
+      "id": "zh-012003",
+      "level": "HSK2-extended",
+      "pinyin": "duō rén"
+    },
+    "顯示": {
+      "term": "顯示",
+      "id": "zh-012004",
+      "level": "HSK2-extended",
+      "pinyin": "xiǎnshì"
+    },
+    "設備": {
+      "term": "設備",
+      "id": "zh-012005",
+      "level": "HSK2-extended",
+      "pinyin": "shèbèi"
+    },
+    "快遞": {
+      "term": "快遞",
+      "id": "zh-012006",
+      "level": "HSK2-extended",
+      "pinyin": "kuàidì"
+    },
+    "記得": {
+      "term": "記得",
+      "id": "zh-012007",
+      "level": "HSK2-extended",
+      "pinyin": "jìde"
+    },
+    "簽收": {
+      "term": "簽收",
+      "id": "zh-012008",
+      "level": "HSK2-extended",
+      "pinyin": "qiānshōu"
+    },
+    "出庭": {
+      "term": "出庭",
+      "id": "zh-012009",
+      "level": "HSK2-extended",
+      "pinyin": "chūtíng"
+    },
+    "欠税": {
+      "term": "欠税",
+      "id": "zh-012010",
+      "level": "HSK2-extended",
+      "pinyin": "qiànshuì"
+    },
+    "税务局": {
+      "term": "税务局",
+      "id": "zh-012011",
+      "level": "HSK2-extended",
+      "pinyin": "shuìwùjú"
     }
   }
 }

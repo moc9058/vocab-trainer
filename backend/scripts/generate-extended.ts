@@ -9,6 +9,7 @@ import {
   PARTICLES,
   chunk,
   delay,
+  segmentBatch,
 } from "../src/llm.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -34,22 +35,23 @@ function formatId(n: number): string {
   return `zh-${String(n).padStart(6, "0")}`;
 }
 
-async function extractTerms(sentences: string[]): Promise<string[]> {
-  const allTerms: string[] = [];
-  const batches = chunk(sentences, 50);
+async function extractTermsViaSegments(sentences: string[]): Promise<string[]> {
+  const seen = new Set<string>();
+  const batches = chunk(sentences, 30);
 
   for (let i = 0; i < batches.length; i++) {
     console.log(`  Extraction batch ${i + 1}/${batches.length} (${batches[i].length} sentences)`);
-    const systemPrompt = `You are a Chinese language expert. Segment Chinese sentences into individual words. Return a JSON object with a "words" key containing an array of distinct Chinese word strings. Exclude grammatical particles (的/了/着/过/吗/呢/吧/啊/呀), punctuation, and single characters that are not standalone words.`;
-    const userPrompt = `Extract all distinct Chinese words from these sentences:\n\n${batches[i].map((s, j) => `${j + 1}. ${s}`).join("\n")}`;
-
     let retries = 0;
     while (retries < 2) {
       try {
-        const raw = await callLLM(systemPrompt, userPrompt);
-        const parsed = JSON.parse(stripMarkdownFences(raw));
-        const words: string[] = parsed.words ?? parsed.terms ?? [];
-        allTerms.push(...words);
+        const results = await segmentBatch(batches[i]);
+        for (const segs of results.values()) {
+          for (const seg of segs) {
+            if (seg.pinyin && seg.text.length > 1 && !PARTICLES.has(seg.text)) {
+              seen.add(seg.text);
+            }
+          }
+        }
         break;
       } catch (e) {
         retries++;
@@ -59,7 +61,7 @@ async function extractTerms(sentences: string[]): Promise<string[]> {
     await delay(1000);
   }
 
-  return [...new Set(allTerms)];
+  return [...seen];
 }
 
 function collectSentences(words: Word[]): string[] {
@@ -112,7 +114,7 @@ async function processLevel(level: string, wordIndex: WordIndex, knownTerms: Set
     console.log(`  Extracting terms from ${sentences.length} sentences`);
 
     // Extract terms from sentences
-    const extractedTerms = await extractTerms(sentences);
+    const extractedTerms = await extractTermsViaSegments(sentences);
 
     // Filter against level-scoped terms (not global knownTerms) and particles
     const newTerms = extractedTerms.filter(
@@ -247,6 +249,49 @@ Words: ${batches[i].join(", ")}`;
       await delay(1000);
     }
 
+    // Post-process: segment example sentences with pinyin
+    if (roundWords.length > 0) {
+      const exRefs: { example: { sentence: string; segments?: unknown }; sentence: string }[] = [];
+      for (const w of roundWords) {
+        for (const ex of w.examples) {
+          exRefs.push({ example: ex, sentence: ex.sentence });
+        }
+      }
+
+      const segBatches = chunk(exRefs, 10);
+      console.log(`  Segmenting ${exRefs.length} examples in ${segBatches.length} batches`);
+
+      for (let si = 0; si < segBatches.length; si++) {
+        const batch = segBatches[si];
+        const sentences = batch.map((r) => r.sentence);
+        let retries = 0;
+        while (retries < 3) {
+          try {
+            const results = await segmentBatch(sentences);
+            for (let j = 0; j < batch.length; j++) {
+              const segs = results.get(j);
+              if (segs) {
+                (batch[j].example as Record<string, unknown>).segments = segs;
+              }
+            }
+            break;
+          } catch (err) {
+            retries++;
+            if (retries >= 3) {
+              console.error(`  Segment batch ${si + 1} failed after 3 retries:`, err);
+            } else {
+              await delay(2000);
+            }
+          }
+        }
+        if (si < segBatches.length - 1) await delay(500);
+      }
+
+      // Save after segmentation
+      writeJSON(extPath, { words: allNewWords });
+      console.log(`  Segmentation complete for round ${round + 1}`);
+    }
+
     console.log(`  Added ${roundWords.length} words this round (total: ${allNewWords.length})`);
 
     // Use the newly generated words as input for the next round
@@ -255,12 +300,13 @@ Words: ${batches[i].join(", ")}`;
 }
 
 async function main(): Promise<void> {
-  const cliLevel = process.argv[2];
-  const levelsToProcess = cliLevel ? [cliLevel] : LEVELS;
+  const cliLevels = process.argv.slice(2);
+  const levelsToProcess = cliLevels.length > 0 ? cliLevels : LEVELS;
 
-  // Validate CLI level
-  if (cliLevel && !LEVELS.includes(cliLevel)) {
-    console.error(`Invalid level: ${cliLevel}. Valid levels: ${LEVELS.join(", ")}`);
+  // Validate CLI levels
+  const invalid = cliLevels.filter((l) => !LEVELS.includes(l));
+  if (invalid.length > 0) {
+    console.error(`Invalid level(s): ${invalid.join(", ")}. Valid levels: ${LEVELS.join(", ")}`);
     process.exit(1);
   }
 

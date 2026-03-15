@@ -79,7 +79,7 @@ export default function QuizTaking({ session, onComplete, pinyinMap = {} }: Prop
           <p className="text-2xl text-green-700">{question!.expectedAnswer}</p>
 
           {question!.transliteration && (
-            <p className="text-lg text-gray-500">{question!.transliteration}</p>
+            <p className="text-xl text-gray-500">{question!.transliteration}</p>
           )}
 
           {question!.japaneseDefinition && (
@@ -94,7 +94,7 @@ export default function QuizTaking({ session, onComplete, pinyinMap = {} }: Prop
               <p className="mb-2 text-sm font-medium text-gray-500">{t("examples")}</p>
               {question!.examples.map((ex, i) => (
                 <div key={i} className="mb-2 last:mb-0">
-                  <p className="text-base text-gray-800"><RubyText text={ex.sentence} pinyinMap={pinyinMap} /></p>
+                  <p className="text-lg text-gray-800"><RubyText text={ex.sentence} pinyinMap={pinyinMap} segments={ex.segments} /></p>
                   <p className="text-sm text-gray-500">{ex.translation}</p>
                 </div>
               ))}

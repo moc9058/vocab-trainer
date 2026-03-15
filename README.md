@@ -19,10 +19,19 @@ Deploy both services to Google Cloud Run using the included script.
 ./deploy.sh vocab-trainer-490014 asia-northeast1
 ```
 
-To also run the Firestore data migration (imports local `backend/DB/` JSON files into Firestore):
+To also run the Firestore data migration during deploy (imports local `backend/DB/` JSON files into Firestore):
 
 ```bash
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --migrate
+```
+
+### Migrate Data Only
+
+Run the Firestore migration without a full deploy:
+
+```bash
+./migrate.sh vocab-trainer-490014              # default database "vocab-database"
+./migrate.sh vocab-trainer-490014 my-db-id     # custom database ID
 ```
 
 This will:
@@ -136,8 +145,8 @@ The `generate-extended` script extracts unknown words from example sentences in 
 # Run for all HSK levels
 cd backend && npm run generate-extended
 
-# Run for a single level
-cd backend && npm run generate-extended -- HSK3
+# Run for specific levels
+cd backend && npm run generate-extended -- HSK1 HSK3 HSK5
 ```
 
 Safe to re-run — deduplicates against existing words across all levels.
@@ -151,6 +160,8 @@ Requires the following environment variables:
 
 ```
 vocab-trainer/
+├── deploy.sh                    # Full Cloud Run deployment script
+├── migrate.sh                   # Standalone Firestore data migration
 ├── docker-compose.yml           # Docker orchestration
 ├── backend/
 │   ├── package.json
@@ -447,7 +458,7 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `word_index`         | Fast term → {id, level, pinyin} lookup (composite key: `{language}_{term}`) |
 | `quiz_sessions`      | One quiz session per language (keyed by language name)  |
 
-Local JSON files under `backend/DB/` serve as the source for the initial Firestore migration (run with `./deploy.sh ... --migrate`).
+Local JSON files under `backend/DB/` serve as the source for the initial Firestore migration (run with `./migrate.sh` or `./deploy.sh ... --migrate`).
 
 ## Configuration
 

@@ -3,7 +3,9 @@
     "allow": [
       "Bash(find /home/moc90/workspace/vocab-trainer/backend/DB -type f -name *.json)",
       "Bash(bash -n /home/moc90/workspace/vocab-trainer/deploy.sh)",
-      "Bash(ls -la /home/moc90/workspace/vocab-trainer/backend/src/*.ts)"
+      "Bash(ls -la /home/moc90/workspace/vocab-trainer/backend/src/*.ts)",
+      "Bash(chmod +x /home/moc90/workspace/vocab-trainer/migrate.sh)",
+      "Bash(python3 -c \":*)"
     ]
   },
   "enabledPlugins": {

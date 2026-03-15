@@ -1,10 +1,16 @@
+interface Segment {
+  text: string;
+  pinyin?: string;
+}
+
 interface Props {
   text: string;
   pinyinMap: Record<string, string>;
+  segments?: Segment[];
 }
 
-export default function RubyText({ text, pinyinMap }: Props) {
-  const segments = segment(text, pinyinMap);
+export default function RubyText({ text, pinyinMap, segments: precomputed }: Props) {
+  const segments = precomputed ?? segment(text, pinyinMap);
 
   return (
     <>
@@ -12,7 +18,7 @@ export default function RubyText({ text, pinyinMap }: Props) {
         seg.pinyin ? (
           <ruby key={i}>
             {seg.text}
-            <rt>{seg.pinyin}</rt>
+            <rt className="text-[70%]">{seg.pinyin}</rt>
           </ruby>
         ) : (
           <span key={i}>{seg.text}</span>
@@ -20,11 +26,6 @@ export default function RubyText({ text, pinyinMap }: Props) {
       )}
     </>
   );
-}
-
-interface Segment {
-  text: string;
-  pinyin?: string;
 }
 
 function segment(text: string, pinyinMap: Record<string, string>): Segment[] {

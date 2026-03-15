@@ -1,6 +1,7 @@
 export interface Example {
   sentence: string;
   translation: string;
+  segments?: { text: string; pinyin?: string }[];
 }
 
 export interface Word {

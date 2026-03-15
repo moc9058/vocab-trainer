@@ -230,7 +230,7 @@ function WordCard({
         <div>
           <span className="font-medium text-gray-800">{word.term}</span>
           {word.transliteration && (
-            <span className="ml-1 text-xs text-gray-400">
+            <span className="ml-1 text-sm text-gray-400">
               ({word.transliteration})
             </span>
           )}
@@ -256,8 +256,8 @@ function WordCard({
           </p>
           <ul className="space-y-1">
             {word.examples.map((ex, i) => (
-              <li key={i} className="text-sm text-gray-600">
-                <span><RubyText text={ex.sentence} pinyinMap={pinyinMap} /></span>
+              <li key={i} className="text-base text-gray-600">
+                <span><RubyText text={ex.sentence} pinyinMap={pinyinMap} segments={ex.segments} /></span>
                 <span className="ml-2 text-gray-400">— {ex.translation}</span>
               </li>
             ))}
@@ -303,7 +303,7 @@ function WordRow({
         <td className="py-2 pr-4">
           <span className="font-medium text-gray-800">{word.term}</span>
           {word.transliteration && (
-            <span className="ml-1 text-xs text-gray-400">
+            <span className="ml-1 text-sm text-gray-400">
               ({word.transliteration})
             </span>
           )}
@@ -320,8 +320,8 @@ function WordRow({
             </p>
             <ul className="space-y-1">
               {word.examples.map((ex, i) => (
-                <li key={i} className="text-sm text-gray-600">
-                  <span><RubyText text={ex.sentence} pinyinMap={pinyinMap} /></span>
+                <li key={i} className="text-base text-gray-600">
+                  <span><RubyText text={ex.sentence} pinyinMap={pinyinMap} segments={ex.segments} /></span>
                   <span className="ml-2 text-gray-400">— {ex.translation}</span>
                 </li>
               ))}
