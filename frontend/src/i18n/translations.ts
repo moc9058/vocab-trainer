@@ -36,6 +36,11 @@ const translations = {
     of: "of",
     previous: "Previous",
     next: "Next",
+    home: "Home",
+    resumePreviousQuiz: "Resume Previous Quiz",
+    questionsAnswered: "questions answered",
+    noActiveQuiz: "No quiz in progress",
+    allWordsHint: "No filters selected — all words will be included",
   },
 } as const;
 

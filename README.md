@@ -415,12 +415,12 @@ React 19 single-page application for taking vocabulary quizzes. Built with Vite 
 
 | View                    | Description                                                                                                        |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Dashboard**           | Main layout. Header with "Start Quiz" and "Browse Words" buttons. Checks for existing in-progress session and offers resume or start new. |
+| **Dashboard**           | Main layout. Header with "Start Quiz", "Browse Words", and "Home" buttons. The Home button appears when a quiz or word list is active and navigates back to the home page. |
 | **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows pinyin, Japanese definition, and example sentences with RubyText pinyin annotations. Wrong answers are re-queued until correct. Supports resuming from where the user left off. |
 | **WordList**            | Paginated word browsing with search, topic/category/level filters, progress badges, and expandable word details with pinyin displayed via RubyText. |
 | **LanguageSelectModal** | Modal to pick the target language when starting a new quiz. Lists languages fetched from the API.                  |
-| **QuizFilterModal**     | Modal to select topic, category, and level filters before starting a quiz. Supports "Select All" / "Clear All" actions. Level column only appears when words have levels set. |
-| **EmptyState**          | Welcome screen shown when no quiz is active.                                                                       |
+| **QuizFilterModal**     | Modal to select topic, category, and level filters before starting a quiz. Supports "Select All" / "Clear All" actions. Level column only appears when words have levels set. Starting with no filters includes all words. |
+| **Home Page (EmptyState)** | Home screen that checks for in-progress quiz sessions across all languages. Shows a resume card with progress (e.g. "12 / 30 answered") if an active session exists, plus "Start New Quiz" and "Browse Words" buttons. |
 
 ### API Integration
 

@@ -181,7 +181,7 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
         )}
 
         {!hasSelection && !loading && (
-          <p className="mt-3 text-xs text-gray-400">{t("noFiltersHint")}</p>
+          <p className="mt-3 text-xs text-gray-400">{t("allWordsHint")}</p>
         )}
 
         <div className="mt-4 flex justify-between">
@@ -206,7 +206,7 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
                   levels: [...selectedLevels],
                 })
               }
-              disabled={!hasSelection}
+              disabled={loading}
               className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
             >
               {t("startQuiz")}

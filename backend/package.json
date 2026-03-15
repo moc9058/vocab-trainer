@@ -11,7 +11,8 @@
     "migrate": "tsx scripts/migrate-to-firestore.ts",
     "restructure": "tsx scripts/restructure-db.ts",
     "generate-extended": "tsx scripts/generate-extended.ts",
-    "add-pinyin-segments": "tsx scripts/add-pinyin-segments.ts"
+    "add-pinyin-segments": "tsx scripts/add-pinyin-segments.ts",
+    "rebuild-index": "tsx scripts/rebuild-word-index.ts"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",
