@@ -47,12 +47,12 @@ const FILE_ORDER = [
 
 interface WordIndex {
   next_id: number;
-  terms: Record<string, { term: string; id: string; level: string; pinyin: string }>;
+  terms: Record<string, { term: string; id: string; level: string; transliteration: string }>;
 }
 
 interface TermInfo {
   term: string;
-  pinyin: string;
+  transliteration: string;
   firstSeenLevel: string;
   firstSeenSentence: string;
   firstSeenTranslation: string;
@@ -199,7 +199,7 @@ Words: ${wordsList}`;
             term: validated.term,
             id,
             level: `${level}-extended`,
-            pinyin: validated.transliteration ?? termInfo.pinyin,
+            transliteration: validated.transliteration ?? termInfo.transliteration,
           };
 
           generated++;
@@ -278,7 +278,7 @@ async function processLevel(
 
             // Collect new terms from this batch
             for (const seg of segs) {
-              if (!seg.pinyin || seg.text.length <= 1 || PARTICLES.has(seg.text)) continue;
+              if (!seg.transliteration || seg.text.length <= 1 || PARTICLES.has(seg.text)) continue;
               if (allKnownTerms.has(seg.text)) continue;
 
               // Avoid duplicates within this batch
@@ -286,7 +286,7 @@ async function processLevel(
 
               batchNewTerms.push({
                 term: seg.text,
-                pinyin: seg.pinyin,
+                transliteration: seg.transliteration,
                 firstSeenLevel: level,
                 firstSeenSentence: ref.sentence,
                 firstSeenTranslation: ref.translation,
@@ -376,7 +376,7 @@ function rebuildIds(
         term: word.term,
         id: newId,
         level: word.level ?? "",
-        pinyin: word.transliteration ?? "",
+        transliteration: word.transliteration ?? "",
       };
 
       nextId++;

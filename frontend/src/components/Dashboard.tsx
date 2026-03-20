@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
 import { getCurrentSession, startQuiz } from "../api/quiz";
-import { getPinyinMap } from "../api/vocab";
+import { getTransliterationMap } from "../api/vocab";
 import EmptyState from "./EmptyState";
 import QuizTaking from "./QuizTaking";
 import WordList from "./WordList";
@@ -23,13 +23,13 @@ export default function Dashboard() {
   } | null>(null);
   const [browsingLanguage, setBrowsingLanguage] = useState<string | null>(null);
   const [showBrowseLanguageModal, setShowBrowseLanguageModal] = useState(false);
-  const [pinyinMap, setPinyinMap] = useState<Record<string, string>>({});
+  const [transliterationMap, setPinyinMap] = useState<Record<string, string>>({});
 
   // Fetch pinyin map when a quiz starts or browsing begins
   const activeLang = activeQuiz?.language ?? browsingLanguage;
   useEffect(() => {
     if (activeLang) {
-      getPinyinMap(activeLang)
+      getTransliterationMap(activeLang)
         .then(setPinyinMap)
         .catch(() => setPinyinMap({}));
     } else {
@@ -41,7 +41,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!activeLang) return;
     const id = setInterval(() => {
-      getPinyinMap(activeLang)
+      getTransliterationMap(activeLang)
         .then(setPinyinMap)
         .catch(() => {});
     }, 30_000);
@@ -205,13 +205,13 @@ export default function Dashboard() {
             onComplete={handleQuizComplete}
             onBrowse={() => setShowBrowseLanguageModal(true)}
             onStartNew={() => setShowLanguageModal(true)}
-            pinyinMap={pinyinMap}
+            transliterationMap={transliterationMap}
           />
         ) : browsingLanguage ? (
           <WordList
             language={browsingLanguage}
             onBack={() => setBrowsingLanguage(null)}
-            pinyinMap={pinyinMap}
+            transliterationMap={transliterationMap}
           />
         ) : (
           <EmptyState

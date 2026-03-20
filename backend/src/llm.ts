@@ -115,7 +115,7 @@ export function validateWord(w: unknown): w is Omit<Word, "id" | "level"> {
 
 export interface Segment {
   text: string;
-  pinyin?: string;
+  transliteration?: string;
 }
 
 /** Call LLM to segment a batch of sentences into words with pinyin */
@@ -149,7 +149,7 @@ Rules:
     for (const seg of entry.segments) {
       if (typeof seg?.text !== "string" || seg.text.length === 0) continue;
       if (typeof seg.pinyin === "string" && seg.pinyin.length > 0) {
-        segs.push({ text: seg.text, pinyin: seg.pinyin });
+        segs.push({ text: seg.text, transliteration: seg.pinyin });
       } else {
         segs.push({ text: seg.text });
       }

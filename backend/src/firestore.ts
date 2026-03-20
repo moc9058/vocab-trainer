@@ -214,26 +214,26 @@ export async function addWord(language: string, word: Word): Promise<void> {
     term: word.term,
     id: word.id,
     level: word.level ?? "",
-    pinyin: word.transliteration ?? "",
+    transliteration: word.transliteration ?? "",
   });
 }
 
-export async function batchAddPinyinEntries(
+export async function batchAddTransliterationEntries(
   language: string,
-  entries: { term: string; pinyin: string }[]
+  entries: { term: string; transliteration: string }[]
 ): Promise<void> {
   const BATCH_LIMIT = 500;
   for (let i = 0; i < entries.length; i += BATCH_LIMIT) {
     const chunk = entries.slice(i, i + BATCH_LIMIT);
     const batch = db.batch();
-    for (const { term, pinyin } of chunk) {
+    for (const { term, transliteration } of chunk) {
       const docId = `${language}_${term}`;
       batch.set(wordIndex.doc(docId), {
         language,
         term,
         id: "",
         level: "",
-        pinyin,
+        transliteration,
       });
     }
     await batch.commit();
@@ -270,7 +270,7 @@ export async function updateWord(language: string, wordId: string, updates: Part
       term: newTerm,
       id: wordId,
       level: updatedWord.level ?? "",
-      pinyin: updatedWord.transliteration ?? "",
+      transliteration: updatedWord.transliteration ?? "",
     });
   }
 
@@ -301,7 +301,14 @@ function docToWord(doc: FirebaseFirestore.DocumentSnapshot): Word {
     transliteration: d.transliteration,
     definition: d.definition,
     grammaticalCategory: d.grammaticalCategory,
-    examples: d.examples ?? [],
+    examples: (d.examples ?? []).map((ex: any) => ({
+      sentence: ex.sentence,
+      translation: ex.translation,
+      segments: ex.segments?.map((seg: any) => ({
+        text: seg.text,
+        transliteration: seg.transliteration ?? seg.pinyin,
+      })),
+    })),
     topics: d.topics ?? [],
     level: d.level,
     notes: d.notes,
@@ -344,7 +351,7 @@ export async function lookupWordByTerm(language: string, term: string): Promise<
   const doc = await wordIndex.doc(docId).get();
   if (!doc.exists) return null;
   const d = doc.data()!;
-  return { term: d.term, id: d.id, level: d.level, pinyin: d.pinyin };
+  return { term: d.term, id: d.id, level: d.level, transliteration: d.transliteration ?? d.pinyin };
 }
 
 export async function lookupWordsByTerms(language: string, terms: string[]): Promise<WordIndexEntry[]> {
@@ -358,7 +365,7 @@ export async function lookupWordsByTerms(language: string, terms: string[]): Pro
     for (const doc of docs) {
       if (doc.exists) {
         const d = doc.data()!;
-        results.push({ term: d.term, id: d.id, level: d.level, pinyin: d.pinyin });
+        results.push({ term: d.term, id: d.id, level: d.level, transliteration: d.transliteration ?? d.pinyin });
       }
     }
   }
@@ -463,15 +470,16 @@ function docToSession(doc: FirebaseFirestore.DocumentSnapshot): QuizSession {
   };
 }
 
-// ========== Pinyin Map ==========
+// ========== Transliteration Map ==========
 
-export async function getPinyinMap(language: string): Promise<Record<string, string>> {
+export async function getTransliterationMap(language: string): Promise<Record<string, string>> {
   const snap = await wordIndex.where("language", "in", expandLanguage(language)).get();
   const map: Record<string, string> = {};
   for (const doc of snap.docs) {
     const d = doc.data();
-    if (d.term && d.pinyin) {
-      map[d.term] = d.pinyin;
+    const transliteration = d.transliteration ?? d.pinyin;
+    if (d.term && transliteration) {
+      map[d.term] = transliteration;
     }
   }
   return map;

@@ -1,9 +1,9 @@
 import {
   getAllWords,
-  getPinyinMap,
+  getTransliterationMap,
   getNextWordId,
   addWord,
-  batchAddPinyinEntries,
+  batchAddTransliterationEntries,
 } from "./firestore.js";
 import {
   callLLM,
@@ -60,25 +60,25 @@ async function doGenerate(
       return;
     }
 
-    // 2. Build pinyin map and known terms set
-    const pinyinMap = await getPinyinMap(language);
-    const knownTerms = new Set(Object.keys(pinyinMap));
+    // 2. Build transliteration map and known terms set
+    const transliterationMap = await getTransliterationMap(language);
+    const knownTerms = new Set(Object.keys(transliterationMap));
 
-    // 2a. Seed particles into pinyin map and word_index
-    const particleEntries: { term: string; pinyin: string }[] = [];
-    for (const [term, pinyin] of Object.entries(PARTICLE_PINYIN)) {
+    // 2a. Seed particles into transliteration map and word_index
+    const particleEntries: { term: string; transliteration: string }[] = [];
+    for (const [term, transliteration] of Object.entries(PARTICLE_PINYIN)) {
       if (!knownTerms.has(term)) {
-        particleEntries.push({ term, pinyin });
+        particleEntries.push({ term, transliteration });
         knownTerms.add(term);
-        pinyinMap[term] = pinyin;
+        transliterationMap[term] = transliteration;
       }
     }
     if (particleEntries.length > 0) {
-      await batchAddPinyinEntries(`${language}-extended`, particleEntries);
-      logger.info(`[word-generator] Seeded ${particleEntries.length} particle pinyin entries`);
+      await batchAddTransliterationEntries(`${language}-extended`, particleEntries);
+      logger.info(`[word-generator] Seeded ${particleEntries.length} particle transliteration entries`);
     }
 
-    let maxLen = Math.max(0, ...Object.keys(pinyinMap).map((k) => k.length));
+    let maxLen = Math.max(0, ...Object.keys(transliterationMap).map((k) => k.length));
 
     // 3. First segmentation pass: find missing single chars
     const punctuation = /^[\s\p{P}\p{S}\p{N}]+$/u;
@@ -129,7 +129,7 @@ async function doGenerate(
 
     // First pass: collect missing single Chinese chars
     for (const { sentence } of sentencesWithLevel) {
-      const { unmatched } = segmentSentence(sentence, pinyinMap, knownTerms, maxLen);
+      const { unmatched } = segmentSentence(sentence, transliterationMap, knownTerms, maxLen);
       for (const ch of unmatched) {
         if (chineseChar.test(ch) && !knownTerms.has(ch)) {
           missingSingleChars.add(ch);
@@ -144,26 +144,26 @@ async function doGenerate(
       for (const batch of charBatches) {
         try {
           const results = await generatePinyinForChars(batch);
-          const entries = results.map((r) => ({ term: r.char, pinyin: r.pinyin }));
+          const entries = results.map((r) => ({ term: r.char, transliteration: r.pinyin }));
           if (entries.length > 0) {
-            await batchAddPinyinEntries(`${language}-extended`, entries);
-            for (const { term, pinyin } of entries) {
+            await batchAddTransliterationEntries(`${language}-extended`, entries);
+            for (const { term, transliteration } of entries) {
               knownTerms.add(term);
-              pinyinMap[term] = pinyin;
+              transliterationMap[term] = transliteration;
             }
           }
         } catch (e) {
           logger.error("[word-generator] Failed to generate pinyin for char batch:", e);
         }
       }
-      maxLen = Math.max(0, ...Object.keys(pinyinMap).map((k) => k.length));
+      maxLen = Math.max(0, ...Object.keys(transliterationMap).map((k) => k.length));
     }
 
     // 4. Second segmentation pass with updated map: collect multi-char missing terms
     const multiCharMissing = new Map<string, string>();
 
     for (const { sentence, level: sourceLevel } of sentencesWithLevel) {
-      const { unmatched } = segmentSentence(sentence, pinyinMap, knownTerms, maxLen);
+      const { unmatched } = segmentSentence(sentence, transliterationMap, knownTerms, maxLen);
       // Group consecutive unmatched Chinese chars into multi-char terms
       let buf = "";
       for (const ch of unmatched) {

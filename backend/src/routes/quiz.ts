@@ -60,18 +60,13 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       const selected = weightedSample(pool, count, progressData.words);
       const wordIds = selected.map((w) => w.id);
 
-      const questions: QuizQuestion[] = selected.map((w) => {
-        const definitions = Object.values(w.definition);
-        const expectedAnswer = definitions[0] ?? "";
-        return {
-          wordId: w.id,
-          term: w.term,
-          expectedAnswer,
-          transliteration: w.transliteration,
-          japaneseDefinition: w.definition["Japanese"],
-          examples: w.examples,
-        };
-      });
+      const questions: QuizQuestion[] = selected.map((w) => ({
+        wordId: w.id,
+        term: w.term,
+        definition: w.definition,
+        transliteration: w.transliteration,
+        examples: w.examples,
+      }));
 
       const session: QuizSession = {
         sessionId: language,
@@ -124,9 +119,8 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         session.questions.push({
           wordId: question.wordId,
           term: question.term,
-          expectedAnswer: question.expectedAnswer,
+          definition: question.definition,
           transliteration: question.transliteration,
-          japaneseDefinition: question.japaneseDefinition,
           examples: question.examples,
         });
         session.score.total++;

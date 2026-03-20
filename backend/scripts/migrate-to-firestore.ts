@@ -155,7 +155,7 @@ async function migrateLanguage(filename: string): Promise<void> {
         term: word.term,
         id: word.id,
         level: word.level ?? "",
-        pinyin: word.transliteration ?? "",
+        transliteration: word.transliteration ?? "",
       });
       indexCount++;
     }

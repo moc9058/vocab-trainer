@@ -12,7 +12,7 @@ import {
   createLanguage,
   deleteLanguage,
   lookupWordByTerm,
-  getPinyinMap,
+  getTransliterationMap,
 } from "../firestore.js";
 import type { Word } from "../types.js";
 import { generateMissingWords } from "../word-generator.js";
@@ -72,15 +72,15 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Get pinyin map (term → pinyin) for all words in a language
+  // Get transliteration map (term → transliteration) for all words in a language
   fastify.get<{ Params: { language: string } }>(
-    "/:language/pinyin-map",
+    "/:language/transliteration-map",
     async (request, reply) => {
       const { language } = request.params;
       if (!(await languageExists(language))) {
         return reply.notFound(`Language '${language}' not found`);
       }
-      const map = await getPinyinMap(language);
+      const map = await getTransliterationMap(language);
       // Fire-and-forget: generate missing words in the background
       generateMissingWords(language, request.log);
       return map;

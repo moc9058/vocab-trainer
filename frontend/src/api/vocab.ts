@@ -1,4 +1,4 @@
-import { fetchJson } from "./client";
+import { fetchJson, postJson, putJson, deleteRequest } from "./client";
 import type { Word, PaginatedResult } from "../types";
 
 interface WordFilters {
@@ -28,6 +28,18 @@ export function getFilters(language: string): Promise<{ topics: string[]; catego
   return fetchJson(`/api/vocab/${encodeURIComponent(language)}/filters`);
 }
 
-export function getPinyinMap(language: string): Promise<Record<string, string>> {
-  return fetchJson(`/api/vocab/${encodeURIComponent(language)}/pinyin-map`);
+export function getTransliterationMap(language: string): Promise<Record<string, string>> {
+  return fetchJson(`/api/vocab/${encodeURIComponent(language)}/transliteration-map`);
+}
+
+export function createWord(language: string, word: Omit<Word, "id">): Promise<Word> {
+  return postJson(`/api/vocab/${encodeURIComponent(language)}`, word);
+}
+
+export function updateWord(language: string, wordId: string, updates: Partial<Word>): Promise<Word> {
+  return putJson(`/api/vocab/${encodeURIComponent(language)}/${encodeURIComponent(wordId)}`, updates);
+}
+
+export function deleteWord(language: string, wordId: string): Promise<void> {
+  return deleteRequest(`/api/vocab/${encodeURIComponent(language)}/${encodeURIComponent(wordId)}`);
 }

@@ -1,16 +1,17 @@
 import { useEffect, useState, useCallback } from "react";
 import { useI18n } from "../i18n/context";
-import { getWords, getFilters, getPinyinMap } from "../api/vocab";
+import { getWords, getFilters, getTransliterationMap, createWord, updateWord, deleteWord } from "../api/vocab";
 import RubyText from "./RubyText";
+import WordFormModal from "./WordFormModal";
 import type { Word, PaginatedResult } from "../types";
 
 interface Props {
   language: string;
   onBack: () => void;
-  pinyinMap?: Record<string, string>;
+  transliterationMap?: Record<string, string>;
 }
 
-export default function WordList({ language, onBack, pinyinMap: externalMap }: Props) {
+export default function WordList({ language, onBack, transliterationMap: externalMap }: Props) {
   const { t } = useI18n();
   const [result, setResult] = useState<PaginatedResult<Word> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,10 +26,35 @@ export default function WordList({ language, onBack, pinyinMap: externalMap }: P
     categories: string[];
     levels: string[];
   } | null>(null);
-  const [pinyinMap, setPinyinMap] = useState<Record<string, string>>(externalMap ?? {});
+  const [transliterationMap, setTransliterationMap] = useState<Record<string, string>>(externalMap ?? {});
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingWord, setEditingWord] = useState<Word | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleCreateWord(data: Omit<Word, "id"> & { id?: string }) {
+    await createWord(language, data);
+    await fetchData();
+    getTransliterationMap(language).then(setTransliterationMap).catch(() => {});
+  }
+
+  async function handleUpdateWord(data: Omit<Word, "id"> & { id?: string }) {
+    if (!data.id) return;
+    const { id, ...updates } = data as Word;
+    await updateWord(language, id, updates);
+    await fetchData();
+    getTransliterationMap(language).then(setTransliterationMap).catch(() => {});
+  }
+
+  async function handleDeleteWord(wordId: string) {
+    await deleteWord(language, wordId);
+    setDeletingId(null);
+    setExpandedId(null);
+    await fetchData();
+    getTransliterationMap(language).then(setTransliterationMap).catch(() => {});
+  }
 
   useEffect(() => {
-    if (externalMap) setPinyinMap(externalMap);
+    if (externalMap) setTransliterationMap(externalMap);
   }, [externalMap]);
 
   useEffect(() => {
@@ -36,9 +62,9 @@ export default function WordList({ language, onBack, pinyinMap: externalMap }: P
       .then(setFilterOptions)
       .catch(() => setFilterOptions(null));
     if (!externalMap) {
-      getPinyinMap(language)
-        .then(setPinyinMap)
-        .catch(() => setPinyinMap({}));
+      getTransliterationMap(language)
+        .then(setTransliterationMap)
+        .catch(() => setTransliterationMap({}));
     }
   }, [language, externalMap]);
 
@@ -83,6 +109,12 @@ export default function WordList({ language, onBack, pinyinMap: externalMap }: P
           <h2 className="text-lg font-semibold text-gray-100">
             {t("browseWords")} — {language}
           </h2>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="ml-auto rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500"
+          >
+            + {t("addWord")}
+          </button>
         </div>
 
         {/* Search & Filters */}
@@ -149,7 +181,9 @@ export default function WordList({ language, onBack, pinyinMap: externalMap }: P
                   onToggle={() =>
                     setExpandedId(expandedId === word.id ? null : word.id)
                   }
-                  pinyinMap={pinyinMap}
+                  transliterationMap={transliterationMap}
+                  onEdit={() => setEditingWord(word)}
+                  onDelete={() => setDeletingId(word.id)}
                 />
               ))}
             </div>
@@ -172,7 +206,9 @@ export default function WordList({ language, onBack, pinyinMap: externalMap }: P
                     onToggle={() =>
                       setExpandedId(expandedId === word.id ? null : word.id)
                     }
-                    pinyinMap={pinyinMap}
+                    transliterationMap={transliterationMap}
+                    onEdit={() => setEditingWord(word)}
+                    onDelete={() => setDeletingId(word.id)}
                   />
                 ))}
               </tbody>
@@ -180,6 +216,44 @@ export default function WordList({ language, onBack, pinyinMap: externalMap }: P
           </>
         )}
       </div>
+
+      {/* Modals */}
+      {showAddModal && (
+        <WordFormModal
+          language={language}
+          onSave={handleCreateWord}
+          onClose={() => setShowAddModal(false)}
+        />
+      )}
+      {editingWord && (
+        <WordFormModal
+          language={language}
+          word={editingWord}
+          onSave={handleUpdateWord}
+          onClose={() => setEditingWord(null)}
+        />
+      )}
+      {deletingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm rounded-xl bg-gray-800 p-6 shadow-lg">
+            <p className="mb-4 text-gray-300">{t("deleteWordConfirm")}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeletingId(null)}
+                className="rounded-lg border border-gray-600 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
+              >
+                {t("cancel")}
+              </button>
+              <button
+                onClick={() => handleDeleteWord(deletingId)}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700"
+              >
+                {t("deleteWord")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pagination */}
       {result && result.totalPages > 1 && (
@@ -211,12 +285,16 @@ function WordCard({
   word,
   expanded,
   onToggle,
-  pinyinMap,
+  transliterationMap,
+  onEdit,
+  onDelete,
 }: {
   word: Word;
   expanded: boolean;
   onToggle: () => void;
-  pinyinMap: Record<string, string>;
+  transliterationMap: Record<string, string>;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   const { t } = useI18n();
   const defText = Object.values(word.definition).join("; ");
@@ -249,19 +327,23 @@ function WordCard({
         </div>
       </div>
       <p className="mt-1 text-sm text-gray-300">{defText}</p>
-      {expanded && word.examples.length > 0 && (
+      {expanded && (
         <div className="mt-2 rounded bg-gray-700 p-3">
-          <p className="mb-1 text-xs font-medium text-gray-400">
-            {t("examples")}
-          </p>
-          <ul className="space-y-1">
-            {word.examples.map((ex, i) => (
-              <li key={i} className="text-base text-gray-300">
-                <span><RubyText text={ex.sentence} pinyinMap={pinyinMap} segments={ex.segments} /></span>
-                <span className="ml-2 text-gray-400">— {ex.translation}</span>
-              </li>
-            ))}
-          </ul>
+          {word.examples.length > 0 && (
+            <>
+              <p className="mb-1 text-xs font-medium text-gray-400">
+                {t("examples")}
+              </p>
+              <ul className="space-y-1">
+                {word.examples.map((ex, i) => (
+                  <li key={i} className="text-base text-gray-300">
+                    <span><RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} /></span>
+                    <span className="ml-2 text-gray-400">— {ex.translation}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           {word.topics.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
               {word.topics.map((tp) => (
@@ -274,6 +356,20 @@ function WordCard({
               ))}
             </div>
           )}
+          <div className="mt-2 flex gap-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="rounded bg-gray-600 px-2 py-1 text-xs text-gray-200 hover:bg-gray-500"
+            >
+              {t("editWord")}
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="rounded bg-red-700 px-2 py-1 text-xs text-gray-200 hover:bg-red-600"
+            >
+              {t("deleteWord")}
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -284,12 +380,16 @@ function WordRow({
   word,
   expanded,
   onToggle,
-  pinyinMap,
+  transliterationMap,
+  onEdit,
+  onDelete,
 }: {
   word: Word;
   expanded: boolean;
   onToggle: () => void;
-  pinyinMap: Record<string, string>;
+  transliterationMap: Record<string, string>;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   const { t } = useI18n();
   const defText = Object.values(word.definition).join("; ");
@@ -312,20 +412,24 @@ function WordRow({
         <td className="py-2 pr-4 text-gray-400">{word.grammaticalCategory}</td>
         <td className="py-2 text-gray-400">{word.level ?? "—"}</td>
       </tr>
-      {expanded && word.examples.length > 0 && (
+      {expanded && (
         <tr>
           <td colSpan={4} className="bg-gray-700 px-4 py-3">
-            <p className="mb-1 text-xs font-medium text-gray-400">
-              {t("examples")}
-            </p>
-            <ul className="space-y-1">
-              {word.examples.map((ex, i) => (
-                <li key={i} className="text-base text-gray-300">
-                  <span><RubyText text={ex.sentence} pinyinMap={pinyinMap} segments={ex.segments} /></span>
-                  <span className="ml-2 text-gray-400">— {ex.translation}</span>
-                </li>
-              ))}
-            </ul>
+            {word.examples.length > 0 && (
+              <>
+                <p className="mb-1 text-xs font-medium text-gray-400">
+                  {t("examples")}
+                </p>
+                <ul className="space-y-1">
+                  {word.examples.map((ex, i) => (
+                    <li key={i} className="text-base text-gray-300">
+                      <span><RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} /></span>
+                      <span className="ml-2 text-gray-400">— {ex.translation}</span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
             {word.topics.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">
                 {word.topics.map((tp) => (
@@ -338,6 +442,20 @@ function WordRow({
                 ))}
               </div>
             )}
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                className="rounded bg-gray-600 px-2 py-1 text-xs text-gray-200 hover:bg-gray-500"
+              >
+                {t("editWord")}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                className="rounded bg-red-700 px-2 py-1 text-xs text-gray-200 hover:bg-red-600"
+              >
+                {t("deleteWord")}
+              </button>
+            </div>
           </td>
         </tr>
       )}

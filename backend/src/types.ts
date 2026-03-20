@@ -1,7 +1,7 @@
 export interface Example {
   sentence: string;
   translation: string;
-  segments?: { text: string; pinyin?: string }[];
+  segments?: { text: string; transliteration?: string }[];
 }
 
 export interface Word {
@@ -41,11 +41,7 @@ export const TOPICS = [
   "History",
   "Media & News",
   // Language Fundamentals
-  "Numbers & Time",
-  "Colors & Shapes",
-  "Verbs of Motion",
-  "Common Adjectives",
-  "Conjunctions & Prepositions",
+  "Language Fundamentals",
 ] as const;
 
 export type Topic = (typeof TOPICS)[number];
@@ -58,7 +54,7 @@ export interface WordIndexEntry {
   term: string;
   id: string;
   level: string;
-  pinyin: string;
+  transliteration: string;
 }
 
 export interface LanguageInfo {
@@ -85,9 +81,8 @@ export interface ProgressFile {
 export interface QuizQuestion {
   wordId: string;
   term: string;
-  expectedAnswer: string;
+  definition: Record<string, string>;
   transliteration?: string;
-  japaneseDefinition?: string;
   examples?: Example[];
   userCorrect?: boolean;
 }

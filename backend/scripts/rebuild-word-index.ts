@@ -29,7 +29,7 @@ interface WordIndexEntry {
   term: string;
   id: string;
   level: string;
-  pinyin: string;
+  transliteration: string;
 }
 
 interface WordIndex {
@@ -111,7 +111,7 @@ async function main() {
         term: word.term,
         id: newId,
         level: word.level ?? "",
-        pinyin: word.transliteration ?? "",
+        transliteration: word.transliteration ?? "",
       };
 
       nextId++;

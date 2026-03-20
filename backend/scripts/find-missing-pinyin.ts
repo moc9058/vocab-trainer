@@ -17,7 +17,7 @@ const LEVELS = ["HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6", "HSK7-9"];
 
 interface WordIndex {
   next_id: number;
-  terms: Record<string, { term: string; id: string; level: string; pinyin: string }>;
+  terms: Record<string, { term: string; id: string; level: string; transliteration: string }>;
 }
 
 interface VocabFile {

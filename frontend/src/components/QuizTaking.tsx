@@ -9,10 +9,10 @@ interface Props {
   onComplete: () => void;
   onBrowse: () => void;
   onStartNew: () => void;
-  pinyinMap?: Record<string, string>;
+  transliterationMap?: Record<string, string>;
 }
 
-export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, pinyinMap = {} }: Props) {
+export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, transliterationMap = {} }: Props) {
   const { t } = useI18n();
   const [currentSession, setCurrentSession] = useState(session);
   // Start from the first unanswered question (supports resume)
@@ -86,17 +86,16 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
         </button>
       ) : (
         <>
-          <p className="text-2xl text-green-400">{question!.expectedAnswer}</p>
+          <div className="text-center space-y-1">
+            {Object.entries(question!.definition).map(([lang, text]) => (
+              <p key={lang} className="text-xl text-green-400">
+                <span className="text-sm text-gray-400">{lang}: </span>{text}
+              </p>
+            ))}
+          </div>
 
           {question!.transliteration && (
             <p className="text-xl text-gray-400">{question!.transliteration}</p>
-          )}
-
-          {question!.japaneseDefinition && (
-            <p className="text-base text-gray-400">
-              <span className="font-medium text-gray-400">{t("japaneseDefinition")}: </span>
-              {question!.japaneseDefinition}
-            </p>
           )}
 
           {question!.examples && question!.examples.length > 0 && (
@@ -104,7 +103,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
               <p className="mb-2 text-sm font-medium text-gray-400">{t("examples")}</p>
               {question!.examples.map((ex, i) => (
                 <div key={i} className="mb-2 last:mb-0">
-                  <p className="text-lg text-gray-100"><RubyText text={ex.sentence} pinyinMap={pinyinMap} segments={ex.segments} /></p>
+                  <p className="text-lg text-gray-100"><RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} /></p>
                   <p className="text-sm text-gray-400">{ex.translation}</p>
                 </div>
               ))}

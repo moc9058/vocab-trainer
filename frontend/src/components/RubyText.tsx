@@ -1,24 +1,24 @@
 interface Segment {
   text: string;
-  pinyin?: string;
+  transliteration?: string;
 }
 
 interface Props {
   text: string;
-  pinyinMap: Record<string, string>;
+  transliterationMap: Record<string, string>;
   segments?: Segment[];
 }
 
-export default function RubyText({ text, pinyinMap, segments: precomputed }: Props) {
-  const segments = precomputed ?? segment(text, pinyinMap);
+export default function RubyText({ text, transliterationMap, segments: precomputed }: Props) {
+  const segments = precomputed ?? segment(text, transliterationMap);
 
   return (
     <>
       {segments.map((seg, i) =>
-        seg.pinyin ? (
+        seg.transliteration ? (
           <ruby key={i}>
             {seg.text}
-            <rt className="text-[70%]">{seg.pinyin}</rt>
+            <rt className="text-[70%]">{seg.transliteration}</rt>
           </ruby>
         ) : (
           <span key={i}>{seg.text}</span>
@@ -28,8 +28,8 @@ export default function RubyText({ text, pinyinMap, segments: precomputed }: Pro
   );
 }
 
-function segment(text: string, pinyinMap: Record<string, string>): Segment[] {
-  const maxLen = Math.max(0, ...Object.keys(pinyinMap).map((k) => k.length));
+function segment(text: string, transliterationMap: Record<string, string>): Segment[] {
+  const maxLen = Math.max(0, ...Object.keys(transliterationMap).map((k) => k.length));
   const results: Segment[] = [];
   let i = 0;
 
@@ -39,8 +39,8 @@ function segment(text: string, pinyinMap: Record<string, string>): Segment[] {
 
     for (let len = end - i; len >= 1; len--) {
       const substr = text.slice(i, i + len);
-      if (pinyinMap[substr]) {
-        results.push({ text: substr, pinyin: pinyinMap[substr] });
+      if (transliterationMap[substr]) {
+        results.push({ text: substr, transliteration: transliterationMap[substr] });
         i += len;
         matched = true;
         break;
@@ -49,7 +49,7 @@ function segment(text: string, pinyinMap: Record<string, string>): Segment[] {
 
     if (!matched) {
       // Accumulate unmatched characters into a single plain segment
-      if (results.length > 0 && !results[results.length - 1].pinyin) {
+      if (results.length > 0 && !results[results.length - 1].transliteration) {
         results[results.length - 1].text += text[i];
       } else {
         results.push({ text: text[i] });

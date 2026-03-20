@@ -3,7 +3,7 @@ export type UILanguage = "en";
 export interface Example {
   sentence: string;
   translation: string;
-  segments?: { text: string; pinyin?: string }[];
+  segments?: { text: string; transliteration?: string }[];
 }
 
 export interface QuizScore {
@@ -14,9 +14,8 @@ export interface QuizScore {
 export interface QuizQuestion {
   wordId: string;
   term: string;
-  expectedAnswer: string;
+  definition: Record<string, string>;
   transliteration?: string;
-  japaneseDefinition?: string;
   examples?: Example[];
   userCorrect?: boolean;
 }

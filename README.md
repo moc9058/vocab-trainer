@@ -133,7 +133,7 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
   - **Everyday Life:** `Greetings & Introductions`, `Food & Dining`, `Shopping & Money`, `Travel & Transportation`, `Weather & Seasons`, `Family & Relationships`, `Health & Body`, `Home & Housing`
   - **Academic / Professional:** `Economics & Finance`, `Politics & Government`, `Science & Technology`, `Law & Justice`, `Medicine`, `Education`, `Business & Commerce`
   - **Culture & Society:** `Arts & Entertainment`, `Sports & Fitness`, `Religion & Philosophy`, `History`, `Media & News`
-  - **Language Fundamentals:** `Numbers & Time`, `Colors & Shapes`, `Verbs of Motion`, `Common Adjectives`, `Conjunctions & Prepositions`
+  - **Language Fundamentals:** `Language Fundamentals`
 - **`level`** — Optional. Proficiency level tag for the word (e.g. `"HSK1"`, `"HSK2"`, …, `"HSK7~9"` for Chinese). Can be any string value.
 - **`notes`** — Optional. Free-form field for irregularities, mnemonics, etc.
 
@@ -169,9 +169,13 @@ vocab-trainer/
 │   ├── tsconfig.json
 │   ├── Dockerfile
 │   ├── scripts/
-│   │   ├── migrate-to-firestore.ts  # One-time JSON → Firestore migration
-│   │   ├── generate-extended.ts     # Generate extended vocab via Azure OpenAI
-│   │   └── find-missing-pinyin.ts   # Find words missing pinyin data
+│   │   ├── migrate-to-firestore.ts        # One-time JSON → Firestore migration
+│   │   ├── generate-extended.ts           # Generate extended vocab via Azure OpenAI
+│   │   ├── find-missing-pinyin.ts         # Find words missing pinyin data
+│   │   ├── rebuild-word-index.ts          # Rebuild word_index.json from HSK files
+│   │   ├── restructure-db.ts              # Split chinese.json into per-HSK-level files
+│   │   ├── rename-pinyin-fields.ts        # Rename pinyin → transliteration in DB files
+│   │   └── merge-language-fundamentals.ts # Merge Language Fundamentals sub-topics
 │   ├── src/
 │   │   ├── index.ts             # Fastify server entry point
 │   │   ├── types.ts             # Shared TypeScript interfaces
@@ -206,6 +210,7 @@ vocab-trainer/
 │       │   ├── RubyText.tsx      # Ruby text component for pinyin annotations
 │       │   ├── LanguageSelectModal.tsx
 │       │   ├── QuizFilterModal.tsx
+│       │   ├── WordFormModal.tsx
 │       │   └── EmptyState.tsx
 │       └── i18n/                # Internationalization (en)
 ```
@@ -378,7 +383,7 @@ Words are selected using **weighted random sampling**:
 - Lower accuracy → higher weight: `1 + (1 - correctRate) * 4`
 - Staleness bonus: `daysSinceReview * 0.5` (capped at 7 days)
 
-Each question includes: `term`, `expectedAnswer`, `transliteration` (pinyin), `japaneseDefinition`, and `examples` (sentence + translation).
+Each question includes: `term`, `definition` (all languages), `transliteration`, and `examples` (sentence + translation).
 
 **Response:** `201` with `QuizSession`.
 
@@ -416,7 +421,7 @@ React 19 single-page application for taking vocabulary quizzes. Built with Vite 
 | View                    | Description                                                                                                        |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | **Dashboard**           | Main layout. Header with "Start Quiz", "Browse Words", and "Home" buttons. The Home button appears when a quiz or word list is active and navigates back to the home page. |
-| **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows pinyin, Japanese definition, and example sentences with RubyText pinyin annotations. Wrong answers are re-queued until correct. Supports resuming from where the user left off. |
+| **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows all definitions, transliteration, and example sentences with RubyText annotations. Wrong answers are re-queued until correct. Supports resuming from where the user left off. |
 | **WordList**            | Paginated word browsing with search, topic/category/level filters, progress badges, and expandable word details with pinyin displayed via RubyText. |
 | **LanguageSelectModal** | Modal to pick the target language when starting a new quiz. Lists languages fetched from the API.                  |
 | **QuizFilterModal**     | Modal to select topic, category, and level filters before starting a quiz. Supports "Select All" / "Clear All" actions. Level column only appears when words have levels set. Starting with no filters includes all words. |
@@ -455,7 +460,7 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `words`              | Vocabulary words (one document per word)               |
 | `id_maps`            | Term → word ID mappings and next ID counter            |
 | `progress`           | Per-word progress (times seen, correct rate)            |
-| `word_index`         | Fast term → {id, level, pinyin} lookup (composite key: `{language}_{term}`) |
+| `word_index`         | Fast term → {id, level, transliteration} lookup (composite key: `{language}_{term}`) |
 | `quiz_sessions`      | One quiz session per language (keyed by language name)  |
 
 Local JSON files under `backend/DB/` serve as the source for the initial Firestore migration (run with `./migrate.sh` or `./deploy.sh ... --migrate`).
