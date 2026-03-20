@@ -51,7 +51,7 @@ export default function EmptyState({ onResume, onStartNew, onBrowse }: Props) {
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-8 p-4 sm:p-8">
-      <h2 className="text-xl sm:text-2xl font-bold text-gray-800">{t("welcome")}</h2>
+      <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("welcome")}</h2>
 
       {loading ? (
         <p className="text-sm text-gray-400">Loading...</p>
@@ -61,31 +61,29 @@ export default function EmptyState({ onResume, onStartNew, onBrowse }: Props) {
             <button
               key={session.sessionId}
               onClick={() => onResume(session)}
-              className="w-full rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-left hover:border-blue-400 hover:bg-blue-100 transition-colors"
+              className="w-full rounded-xl border border-blue-700 bg-blue-900/30 px-5 py-4 text-left hover:border-blue-500 hover:bg-blue-800/40 transition-colors"
             >
-              <p className="font-semibold text-blue-800">{t("resumePreviousQuiz")}</p>
-              <p className="mt-1 text-sm text-blue-600">
+              <p className="font-semibold text-blue-300">{t("resumePreviousQuiz")}</p>
+              <p className="mt-1 text-sm text-blue-400">
                 {displayName} — {answered(session)} / {session.questions.length} {t("questionsAnswered")}
               </p>
             </button>
           ))}
         </div>
-      ) : (
-        <p className="text-sm text-gray-400">{t("noActiveQuiz")}</p>
-      )}
+      ) : null}
 
       <div className="flex flex-col sm:flex-row gap-3">
         <button
-          onClick={onStartNew}
-          className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700"
-        >
-          {t("startQuiz")}
-        </button>
-        <button
           onClick={onBrowse}
-          className="rounded-lg border border-gray-300 px-6 py-2 text-gray-700 hover:bg-gray-100"
+          className="rounded-lg border border-gray-600 px-6 py-2 text-gray-300 hover:bg-gray-700"
         >
           {t("browseWords")}
+        </button>
+        <button
+          onClick={onStartNew}
+          className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-500"
+        >
+          {t("startNew")}
         </button>
       </div>
     </div>

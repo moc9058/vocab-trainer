@@ -93,16 +93,19 @@ export default function Dashboard() {
 
   async function handleStartNew() {
     if (!selectedLanguage || !pendingFilters) return;
+    const lang = selectedLanguage;
+    const filters = pendingFilters;
+    // Clear all modal state immediately to prevent filter modal flash
     setResumePrompt(null);
+    setSelectedLanguage(null);
+    setPendingFilters(null);
     try {
       const session = await startQuiz({
-        language: selectedLanguage,
-        topics: pendingFilters.topics,
-        categories: pendingFilters.categories,
-        levels: pendingFilters.levels,
+        language: lang,
+        topics: filters.topics,
+        categories: filters.categories,
+        levels: filters.levels,
       });
-      setSelectedLanguage(null);
-      setPendingFilters(null);
       setActiveQuiz(session);
     } catch (err) {
       console.error("Failed to start quiz:", err);
@@ -125,35 +128,31 @@ export default function Dashboard() {
     setActiveQuiz(null);
   }
 
+  function goHome() {
+    setActiveQuiz(null);
+    setBrowsingLanguage(null);
+    setShowLanguageModal(false);
+    setShowBrowseLanguageModal(false);
+    setSelectedLanguage(null);
+    setResumePrompt(null);
+    setPendingFilters(null);
+    setStarting(false);
+  }
+
+  const showBackButton = !!(activeQuiz || browsingLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal);
+
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex items-center justify-between border-b border-gray-200 bg-white px-3 sm:px-6 py-3">
-        <div className="flex items-center gap-3">
-          <h1 className="text-base sm:text-xl font-bold text-gray-800">{t("appTitle")}</h1>
-          {(activeQuiz || browsingLanguage) && (
-            <button
-              onClick={() => { setActiveQuiz(null); setBrowsingLanguage(null); }}
-              className="rounded-lg border border-gray-300 px-3 py-1 text-sm text-gray-600 hover:bg-gray-100"
-            >
-              {t("home")}
-            </button>
-          )}
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2">
+    <div className="flex min-h-screen flex-col bg-gray-900">
+      <header className="flex items-center justify-between border-b border-gray-700 bg-gray-800 px-3 sm:px-6 py-3">
+        <h1 className="text-base sm:text-xl font-bold text-gray-100">{t("appTitle")}</h1>
+        {showBackButton && (
           <button
-            onClick={() => setShowBrowseLanguageModal(true)}
-            className="rounded-lg border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+            onClick={goHome}
+            className="rounded-lg border border-gray-600 px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
           >
-            {t("browseWords")}
+            {t("back")}
           </button>
-          <button
-            onClick={() => setShowLanguageModal(true)}
-            disabled={starting}
-            className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {t("startQuiz")}
-          </button>
-        </div>
+        )}
       </header>
       {showBrowseLanguageModal && (
         <LanguageSelectModal
@@ -179,19 +178,19 @@ export default function Dashboard() {
         />
       )}
       {resumePrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
-            <p className="mb-4 text-gray-700">{t("existingQuizFound")}</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm rounded-xl bg-gray-800 p-6 shadow-lg">
+            <p className="mb-4 text-gray-300">{t("existingQuizFound")}</p>
             <div className="flex gap-3">
               <button
                 onClick={handleResume}
-                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-500"
               >
                 {t("resumeQuiz")}
               </button>
               <button
                 onClick={handleStartNew}
-                className="flex-1 rounded-lg bg-gray-200 px-4 py-2 text-gray-700 hover:bg-gray-300"
+                className="flex-1 rounded-lg bg-gray-700 px-4 py-2 text-gray-300 hover:bg-gray-600"
               >
                 {t("startNewQuiz")}
               </button>
@@ -201,7 +200,13 @@ export default function Dashboard() {
       )}
       <main className="flex-1">
         {activeQuiz ? (
-          <QuizTaking session={activeQuiz} onComplete={handleQuizComplete} pinyinMap={pinyinMap} />
+          <QuizTaking
+            session={activeQuiz}
+            onComplete={handleQuizComplete}
+            onBrowse={() => setShowBrowseLanguageModal(true)}
+            onStartNew={() => setShowLanguageModal(true)}
+            pinyinMap={pinyinMap}
+          />
         ) : browsingLanguage ? (
           <WordList
             language={browsingLanguage}

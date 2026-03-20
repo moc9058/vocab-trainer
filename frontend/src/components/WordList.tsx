@@ -72,15 +72,15 @@ export default function WordList({ language, onBack, pinyinMap: externalMap }: P
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="border-b border-gray-200 bg-white px-3 sm:px-6 py-4">
+      <div className="border-b border-gray-700 bg-gray-800 px-3 sm:px-6 py-4">
         <div className="mb-3 flex items-center gap-3">
           <button
             onClick={onBack}
-            className="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+            className="rounded-lg px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
           >
             &larr; {t("back")}
           </button>
-          <h2 className="text-lg font-semibold text-gray-800">
+          <h2 className="text-lg font-semibold text-gray-100">
             {t("browseWords")} — {language}
           </h2>
         </div>
@@ -92,14 +92,14 @@ export default function WordList({ language, onBack, pinyinMap: externalMap }: P
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("searchPlaceholder")}
-            className="w-full sm:w-auto rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-400 focus:outline-none"
+            className="w-full sm:w-auto rounded-lg border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-100 placeholder-gray-400 focus:border-blue-400 focus:outline-none"
           />
           {filterOptions && (
             <>
               <select
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-400 focus:outline-none"
+                className="rounded-lg border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
               >
                 <option value="">{t("topic")}</option>
                 {filterOptions.topics.map((t) => (
@@ -109,7 +109,7 @@ export default function WordList({ language, onBack, pinyinMap: externalMap }: P
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-400 focus:outline-none"
+                className="rounded-lg border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
               >
                 <option value="">{t("category")}</option>
                 {filterOptions.categories.map((c) => (
@@ -119,7 +119,7 @@ export default function WordList({ language, onBack, pinyinMap: externalMap }: P
               <select
                 value={level}
                 onChange={(e) => setLevel(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:border-blue-400 focus:outline-none"
+                className="rounded-lg border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
               >
                 <option value="">{t("level")}</option>
                 {filterOptions.levels.map((l) => (
@@ -136,7 +136,7 @@ export default function WordList({ language, onBack, pinyinMap: externalMap }: P
         {loading ? (
           <p className="text-gray-400">Loading...</p>
         ) : !result || result.items.length === 0 ? (
-          <p className="text-gray-500">{t("noWordsFound")}</p>
+          <p className="text-gray-400">{t("noWordsFound")}</p>
         ) : (
           <>
             {/* Mobile card layout */}
@@ -156,7 +156,7 @@ export default function WordList({ language, onBack, pinyinMap: externalMap }: P
             {/* Desktop table layout */}
             <table className="hidden md:table w-full text-left text-sm">
               <thead>
-                <tr className="border-b border-gray-200 text-gray-500">
+                <tr className="border-b border-gray-700 text-gray-400">
                   <th className="pb-2 pr-4 font-medium">{t("term")}</th>
                   <th className="pb-2 pr-4 font-medium">{t("definition")}</th>
                   <th className="pb-2 pr-4 font-medium">{t("category")}</th>
@@ -183,21 +183,21 @@ export default function WordList({ language, onBack, pinyinMap: externalMap }: P
 
       {/* Pagination */}
       {result && result.totalPages > 1 && (
-        <div className="flex items-center justify-center gap-4 border-t border-gray-200 bg-white px-3 sm:px-6 py-3">
+        <div className="flex items-center justify-center gap-4 border-t border-gray-700 bg-gray-800 px-3 sm:px-6 py-3">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
-            className="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-40"
+            className="rounded-lg px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-40"
           >
             {t("previous")}
           </button>
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-gray-400">
             {t("page")} {result.page} {t("of")} {result.totalPages}
           </span>
           <button
             onClick={() => setPage((p) => Math.min(result.totalPages, p + 1))}
             disabled={page >= result.totalPages}
-            className="rounded-lg px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:opacity-40"
+            className="rounded-lg px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-40"
           >
             {t("next")}
           </button>
@@ -224,11 +224,11 @@ function WordCard({
   return (
     <div
       onClick={onToggle}
-      className="cursor-pointer rounded-lg border border-gray-200 bg-white p-3"
+      className="cursor-pointer rounded-lg border border-gray-700 bg-gray-800 p-3"
     >
       <div className="flex items-start justify-between gap-2">
         <div>
-          <span className="font-medium text-gray-800">{word.term}</span>
+          <span className="font-medium text-gray-100">{word.term}</span>
           {word.transliteration && (
             <span className="ml-1 text-sm text-gray-400">
               ({word.transliteration})
@@ -237,26 +237,26 @@ function WordCard({
         </div>
         <div className="flex gap-2 shrink-0">
           {word.grammaticalCategory && (
-            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+            <span className="rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-300">
               {word.grammaticalCategory}
             </span>
           )}
           {word.level && (
-            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600">
+            <span className="rounded-full bg-blue-900/40 px-2 py-0.5 text-xs text-blue-300">
               {word.level}
             </span>
           )}
         </div>
       </div>
-      <p className="mt-1 text-sm text-gray-600">{defText}</p>
+      <p className="mt-1 text-sm text-gray-300">{defText}</p>
       {expanded && word.examples.length > 0 && (
-        <div className="mt-2 rounded bg-gray-50 p-3">
-          <p className="mb-1 text-xs font-medium text-gray-500">
+        <div className="mt-2 rounded bg-gray-700 p-3">
+          <p className="mb-1 text-xs font-medium text-gray-400">
             {t("examples")}
           </p>
           <ul className="space-y-1">
             {word.examples.map((ex, i) => (
-              <li key={i} className="text-base text-gray-600">
+              <li key={i} className="text-base text-gray-300">
                 <span><RubyText text={ex.sentence} pinyinMap={pinyinMap} segments={ex.segments} /></span>
                 <span className="ml-2 text-gray-400">— {ex.translation}</span>
               </li>
@@ -267,7 +267,7 @@ function WordCard({
               {word.topics.map((tp) => (
                 <span
                   key={tp}
-                  className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700"
+                  className="rounded-full bg-blue-900/40 px-2 py-0.5 text-xs text-blue-300"
                 >
                   {tp}
                 </span>
@@ -298,29 +298,29 @@ function WordRow({
     <>
       <tr
         onClick={onToggle}
-        className="cursor-pointer border-b border-gray-100 hover:bg-gray-50"
+        className="cursor-pointer border-b border-gray-700 hover:bg-gray-700"
       >
         <td className="py-2 pr-4">
-          <span className="font-medium text-gray-800">{word.term}</span>
+          <span className="font-medium text-gray-100">{word.term}</span>
           {word.transliteration && (
             <span className="ml-1 text-sm text-gray-400">
               ({word.transliteration})
             </span>
           )}
         </td>
-        <td className="py-2 pr-4 text-gray-600">{defText}</td>
-        <td className="py-2 pr-4 text-gray-500">{word.grammaticalCategory}</td>
-        <td className="py-2 text-gray-500">{word.level ?? "—"}</td>
+        <td className="py-2 pr-4 text-gray-300">{defText}</td>
+        <td className="py-2 pr-4 text-gray-400">{word.grammaticalCategory}</td>
+        <td className="py-2 text-gray-400">{word.level ?? "—"}</td>
       </tr>
       {expanded && word.examples.length > 0 && (
         <tr>
-          <td colSpan={4} className="bg-gray-50 px-4 py-3">
-            <p className="mb-1 text-xs font-medium text-gray-500">
+          <td colSpan={4} className="bg-gray-700 px-4 py-3">
+            <p className="mb-1 text-xs font-medium text-gray-400">
               {t("examples")}
             </p>
             <ul className="space-y-1">
               {word.examples.map((ex, i) => (
-                <li key={i} className="text-base text-gray-600">
+                <li key={i} className="text-base text-gray-300">
                   <span><RubyText text={ex.sentence} pinyinMap={pinyinMap} segments={ex.segments} /></span>
                   <span className="ml-2 text-gray-400">— {ex.translation}</span>
                 </li>
@@ -331,7 +331,7 @@ function WordRow({
                 {word.topics.map((tp) => (
                   <span
                     key={tp}
-                    className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700"
+                    className="rounded-full bg-blue-900/40 px-2 py-0.5 text-xs text-blue-300"
                   >
                     {tp}
                   </span>

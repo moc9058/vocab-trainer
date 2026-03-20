@@ -65,14 +65,14 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl rounded-xl bg-white p-4 sm:p-6 shadow-xl max-h-[80vh] flex flex-col"
+        className="w-full max-w-3xl rounded-xl bg-gray-800 p-4 sm:p-6 shadow-xl max-h-[80vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-lg font-semibold text-gray-800">
+        <h2 className="mb-4 text-lg font-semibold text-gray-100">
           {t("selectFilters")}
         </h2>
 
@@ -83,14 +83,14 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
             {/* Topics column */}
             <div className="flex-1 flex flex-col min-w-0">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-700">{t("topicsColumn")}</h3>
+                <h3 className="text-sm font-medium text-gray-300">{t("topicsColumn")}</h3>
                 <button
                   onClick={() =>
                     setSelectedTopics(
                       selectedTopics.size === allTopics.length ? new Set() : new Set(allTopics)
                     )
                   }
-                  className="text-xs text-blue-600 hover:text-blue-800"
+                  className="text-xs text-blue-400 hover:text-blue-300"
                 >
                   {selectedTopics.size === allTopics.length ? t("clearAll") : t("selectAll")}
                 </button>
@@ -98,7 +98,7 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
               <ul className="flex-1 overflow-y-auto space-y-1">
                 {allTopics.map((topic) => (
                   <li key={topic}>
-                    <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">
+                    <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={selectedTopics.has(topic)}
@@ -115,14 +115,14 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
             {/* Categories column */}
             <div className="flex-1 flex flex-col min-w-0">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-700">{t("grammarColumn")}</h3>
+                <h3 className="text-sm font-medium text-gray-300">{t("grammarColumn")}</h3>
                 <button
                   onClick={() =>
                     setSelectedCategories(
                       selectedCategories.size === allCategories.length ? new Set() : new Set(allCategories)
                     )
                   }
-                  className="text-xs text-blue-600 hover:text-blue-800"
+                  className="text-xs text-blue-400 hover:text-blue-300"
                 >
                   {selectedCategories.size === allCategories.length ? t("clearAll") : t("selectAll")}
                 </button>
@@ -130,7 +130,7 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
               <ul className="flex-1 overflow-y-auto space-y-1">
                 {allCategories.map((cat) => (
                   <li key={cat}>
-                    <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">
+                    <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={selectedCategories.has(cat)}
@@ -148,14 +148,14 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
             {allLevels.length > 0 && (
               <div className="flex-1 flex flex-col min-w-0">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-medium text-gray-700">{t("levelsColumn")}</h3>
+                  <h3 className="text-sm font-medium text-gray-300">{t("levelsColumn")}</h3>
                   <button
                     onClick={() =>
                       setSelectedLevels(
                         selectedLevels.size === allLevels.length ? new Set() : new Set(allLevels)
                       )
                     }
-                    className="text-xs text-blue-600 hover:text-blue-800"
+                    className="text-xs text-blue-400 hover:text-blue-300"
                   >
                     {selectedLevels.size === allLevels.length ? t("clearAll") : t("selectAll")}
                   </button>
@@ -163,7 +163,7 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
                 <ul className="flex-1 overflow-y-auto space-y-1">
                   {allLevels.map((level) => (
                     <li key={level}>
-                      <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer">
+                      <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={selectedLevels.has(level)}
@@ -187,14 +187,14 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
         <div className="mt-4 flex justify-between">
           <button
             onClick={onBack}
-            className="rounded-lg px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+            className="rounded-lg px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
           >
             {t("back")}
           </button>
           <div className="flex gap-2">
             <button
               onClick={onClose}
-              className="rounded-lg px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+              className="rounded-lg px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
             >
               {t("cancel")}
             </button>
@@ -207,7 +207,7 @@ export default function QuizFilterModal({ language, onStart, onBack, onClose }: 
                 })
               }
               disabled={loading}
-              className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-700 disabled:opacity-50"
+              className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
             >
               {t("startQuiz")}
             </button>

@@ -7,10 +7,12 @@ import type { QuizSession } from "../types";
 interface Props {
   session: QuizSession;
   onComplete: () => void;
+  onBrowse: () => void;
+  onStartNew: () => void;
   pinyinMap?: Record<string, string>;
 }
 
-export default function QuizTaking({ session, onComplete, pinyinMap = {} }: Props) {
+export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, pinyinMap = {} }: Props) {
   const { t } = useI18n();
   const [currentSession, setCurrentSession] = useState(session);
   // Start from the first unanswered question (supports resume)
@@ -46,56 +48,64 @@ export default function QuizTaking({ session, onComplete, pinyinMap = {} }: Prop
     const { correct, total } = currentSession.score;
     return (
       <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-800">{t("quizComplete")}</h2>
-        <p className="text-2xl sm:text-4xl font-semibold text-blue-600">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("congratulations")}</h2>
+        <p className="text-2xl sm:text-4xl font-semibold text-blue-400">
           {correct} / {total}
         </p>
-        <button
-          onClick={onComplete}
-          className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-700"
-        >
-          {t("backToHome")}
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={() => { onComplete(); onBrowse(); }}
+            className="rounded-lg border border-gray-600 px-6 py-2 text-gray-300 hover:bg-gray-700"
+          >
+            {t("browseWords")}
+          </button>
+          <button
+            onClick={() => { onComplete(); onStartNew(); }}
+            className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-500"
+          >
+            {t("startNew")}
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-gray-400">
         {currentIndex + 1} / {questions.length}
       </p>
-      <h2 className="text-xl sm:text-3xl font-bold text-gray-800">{question!.term}</h2>
+      <h2 className="text-xl sm:text-3xl font-bold text-gray-100">{question!.term}</h2>
 
       {!showingAnswer ? (
         <button
           onClick={() => setShowingAnswer(true)}
-          className="rounded-lg bg-gray-200 px-6 py-2 text-gray-700 hover:bg-gray-300"
+          className="rounded-lg bg-gray-700 px-6 py-2 text-gray-300 hover:bg-gray-600"
         >
           {t("showAnswer")}
         </button>
       ) : (
         <>
-          <p className="text-2xl text-green-700">{question!.expectedAnswer}</p>
+          <p className="text-2xl text-green-400">{question!.expectedAnswer}</p>
 
           {question!.transliteration && (
-            <p className="text-xl text-gray-500">{question!.transliteration}</p>
+            <p className="text-xl text-gray-400">{question!.transliteration}</p>
           )}
 
           {question!.japaneseDefinition && (
-            <p className="text-base text-gray-600">
-              <span className="font-medium text-gray-500">{t("japaneseDefinition")}: </span>
+            <p className="text-base text-gray-400">
+              <span className="font-medium text-gray-400">{t("japaneseDefinition")}: </span>
               {question!.japaneseDefinition}
             </p>
           )}
 
           {question!.examples && question!.examples.length > 0 && (
-            <div className="w-full max-w-lg rounded-lg bg-gray-50 p-4">
-              <p className="mb-2 text-sm font-medium text-gray-500">{t("examples")}</p>
+            <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
+              <p className="mb-2 text-sm font-medium text-gray-400">{t("examples")}</p>
               {question!.examples.map((ex, i) => (
                 <div key={i} className="mb-2 last:mb-0">
-                  <p className="text-lg text-gray-800"><RubyText text={ex.sentence} pinyinMap={pinyinMap} segments={ex.segments} /></p>
-                  <p className="text-sm text-gray-500">{ex.translation}</p>
+                  <p className="text-lg text-gray-100"><RubyText text={ex.sentence} pinyinMap={pinyinMap} segments={ex.segments} /></p>
+                  <p className="text-sm text-gray-400">{ex.translation}</p>
                 </div>
               ))}
             </div>
