@@ -13,6 +13,14 @@ Deploy both services to Google Cloud Run using the included script.
 - Artifact Registry repositories created: `vocab-test-backend` and `vocab-test-frontend`
 - Docker running locally
 
+### Platform Notes
+
+| Platform | Notes |
+|---|---|
+| **Mac (Apple Silicon)** | Docker Desktop must be running. The deploy script builds `linux/amd64` images automatically via `--platform` flag. |
+| **Mac (Intel)** | Works out of the box. Docker Desktop must be running. |
+| **Windows** | Run the deploy script via **WSL** or **Git Bash**. Docker Desktop must be running. |
+
 ### Deploy
 
 ```bash

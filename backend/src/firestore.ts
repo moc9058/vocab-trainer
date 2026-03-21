@@ -442,6 +442,11 @@ export async function getQuizSessionByLanguage(language: string): Promise<QuizSe
 }
 
 export async function createQuizSession(session: QuizSession): Promise<void> {
+  session.questions = session.questions.map(q => ({
+    ...q,
+    definition: q.definition ?? {},
+    examples: q.examples ?? [],
+  }));
   const data: Record<string, unknown> = { ...session };
   delete data.sessionId;
   const clean = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
@@ -449,6 +454,11 @@ export async function createQuizSession(session: QuizSession): Promise<void> {
 }
 
 export async function updateQuizSession(session: QuizSession): Promise<void> {
+  session.questions = session.questions.map(q => ({
+    ...q,
+    definition: q.definition ?? {},
+    examples: q.examples ?? [],
+  }));
   const data: Record<string, unknown> = { ...session };
   delete data.sessionId;
   const clean = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
@@ -472,8 +482,19 @@ function docToSession(doc: FirebaseFirestore.DocumentSnapshot): QuizSession {
 
 // ========== Transliteration Map ==========
 
+const transliterationCache = new Map<string, { map: Record<string, string>; ts: number }>();
+const CACHE_TTL = 60_000; // 60s
+
 export async function getTransliterationMap(language: string): Promise<Record<string, string>> {
-  const snap = await wordIndex.where("language", "in", expandLanguage(language)).get();
+  const cached = transliterationCache.get(language);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) {
+    return cached.map;
+  }
+
+  const langs = expandLanguage(language);
+
+  // 1. Build map from word_index (vocabulary terms)
+  const snap = await wordIndex.where("language", "in", langs).get();
   const map: Record<string, string> = {};
   for (const doc of snap.docs) {
     const d = doc.data();
@@ -482,6 +503,23 @@ export async function getTransliterationMap(language: string): Promise<Record<st
       map[d.term] = transliteration;
     }
   }
+
+  // 2. Harvest transliterations from precomputed example segments
+  //    so the fallback covers non-vocabulary words in sentences
+  const wordSnap = await words.where("language", "in", langs).get();
+  for (const doc of wordSnap.docs) {
+    const d = doc.data();
+    for (const ex of d.examples ?? []) {
+      for (const seg of ex.segments ?? []) {
+        const trans = seg.transliteration ?? seg.pinyin;
+        if (seg.text && trans && !map[seg.text]) {
+          map[seg.text] = trans;
+        }
+      }
+    }
+  }
+
+  transliterationCache.set(language, { map, ts: Date.now() });
   return map;
 }
 

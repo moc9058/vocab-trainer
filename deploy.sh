@@ -34,7 +34,7 @@ gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
 # Build and push backend
 echo "==> Building and pushing backend..."
-docker build -t "${BACKEND_IMAGE}" ./backend
+docker build --platform linux/amd64 -t "${BACKEND_IMAGE}" ./backend
 docker push "${BACKEND_IMAGE}"
 
 # Deploy backend to Cloud Run
@@ -59,16 +59,18 @@ echo "==> Backend deployed at: ${BACKEND_URL}"
 
 # Optionally seed Firestore with vocabulary data from local DB/ files
 if [ "$MIGRATE" = true ]; then
+  echo "==> Installing backend dependencies for migration..."
+  (cd backend && npm install --silent)
   echo "==> Running Firestore migration..."
-  FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
-    npx --prefix ./backend tsx backend/scripts/migrate-to-firestore.ts
+  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
+    npx tsx scripts/migrate-to-firestore.ts)
 else
   echo "==> Skipping Firestore migration (use --migrate to run it)"
 fi
 
 # Build and push frontend
 echo "==> Building and pushing frontend..."
-docker build -t "${FRONTEND_IMAGE}" ./frontend
+docker build --platform linux/amd64 -t "${FRONTEND_IMAGE}" ./frontend
 docker push "${FRONTEND_IMAGE}"
 
 # Deploy frontend to Cloud Run with backend URL

@@ -9,8 +9,28 @@ import {
   getQuizSessionByLanguage,
   createQuizSession,
   updateQuizSession,
+  getWord,
 } from "../firestore.js";
 import type { QuizSession, QuizQuestion, Word, WordProgress } from "../types.js";
+
+/** Re-hydrate questions whose definition/examples were stripped by Firestore. */
+async function rehydrateQuestions(session: QuizSession): Promise<void> {
+  const wordCache = new Map<string, Word>();
+  for (const q of session.questions) {
+    if (!q.definition || Object.keys(q.definition).length === 0) {
+      let word = wordCache.get(q.wordId);
+      if (!word) {
+        word = (await getWord(q.wordId)) ?? undefined;
+        if (word) wordCache.set(q.wordId, word);
+      }
+      if (word) {
+        q.definition = word.definition;
+        q.transliteration = word.transliteration;
+        q.examples = word.examples;
+      }
+    }
+  }
+}
 
 const quizRoutes: FastifyPluginAsync = async (fastify) => {
   // Start quiz session
@@ -148,6 +168,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       await updateQuizSession(session);
+      await rehydrateQuestions(session);
       return { session, wordProgress: wp };
     }
   );
@@ -158,6 +179,8 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const session = await getQuizSessionByLanguage(request.params.language);
       if (!session) return reply.notFound("No session found for this language");
+
+      await rehydrateQuestions(session);
       return session;
     }
   );
