@@ -181,6 +181,9 @@ export default function Dashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
           <div className="w-full max-w-sm rounded-xl bg-gray-800 p-6 shadow-lg">
             <p className="mb-4 text-gray-300">{t("existingQuizFound")}</p>
+            <p className="mb-4 text-lg font-semibold text-blue-400">
+              {resumePrompt.score.correct} / {resumePrompt.wordIds?.length ?? resumePrompt.questions.length}
+            </p>
             <div className="flex gap-3">
               <button
                 onClick={handleResume}

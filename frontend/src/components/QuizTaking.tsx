@@ -14,12 +14,21 @@ interface Props {
 
 export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, transliterationMap = {} }: Props) {
   const { t } = useI18n();
-  const [currentSession, setCurrentSession] = useState(session);
-  // Start from the first unanswered question (supports resume)
+  const [currentSession, setCurrentSession] = useState(() => {
+    // Shuffle unanswered questions so resume order is randomized
+    const answered = session.questions.filter((q) => q.userCorrect !== undefined);
+    const unanswered = session.questions.filter((q) => q.userCorrect === undefined);
+    for (let i = unanswered.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [unanswered[i], unanswered[j]] = [unanswered[j], unanswered[i]];
+    }
+    return { ...session, questions: [...answered, ...unanswered] };
+  });
   const [currentIndex, setCurrentIndex] = useState(() => {
     const idx = session.questions.findIndex((q) => q.userCorrect === undefined);
     return idx === -1 ? session.questions.length : idx;
   });
+  const [originalTotal] = useState(() => session.wordIds?.length ?? session.questions.length);
   const [showingAnswer, setShowingAnswer] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -31,12 +40,39 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
     if (!question || submitting) return;
     setSubmitting(true);
     try {
-      const { session: updated } = await answerQuestion({
+      await answerQuestion({
         sessionId: currentSession.sessionId,
         wordId: question.wordId,
         correct,
       });
-      setCurrentSession(updated);
+      // Merge result into existing shuffled state instead of replacing with backend order
+      setCurrentSession((prev) => {
+        const updatedQuestions = prev.questions.map((q) =>
+          q === question ? { ...q, userCorrect: correct } : q
+        );
+        // If wrong, re-queue at the end for another attempt
+        if (!correct) {
+          updatedQuestions.push({
+            wordId: question.wordId,
+            term: question.term,
+            definition: question.definition,
+            transliteration: question.transliteration,
+            examples: question.examples,
+          });
+        }
+        const newScore = {
+          correct: prev.score.correct + (correct ? 1 : 0),
+          total: prev.score.total + (correct ? 0 : 1),
+        };
+        const allAnswered = updatedQuestions.every((q) => q.userCorrect !== undefined);
+        return {
+          ...prev,
+          questions: updatedQuestions,
+          score: newScore,
+          status: allAnswered ? ("completed" as const) : prev.status,
+          ...(allAnswered ? { completedAt: new Date().toISOString() } : {}),
+        };
+      });
       setCurrentIndex((i) => i + 1);
       setShowingAnswer(false);
     } finally {
@@ -50,7 +86,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
       <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("congratulations")}</h2>
         <p className="text-2xl sm:text-4xl font-semibold text-blue-400">
-          {correct} / {total}
+          {correct} / {originalTotal}
         </p>
         <div className="flex flex-col sm:flex-row gap-3">
           <button
@@ -73,7 +109,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
       <p className="text-sm text-gray-400">
-        {currentIndex + 1} / {questions.length}
+        {currentSession.score.correct} / {originalTotal}
       </p>
       <h2 className="text-xl sm:text-3xl font-bold text-gray-100">{question!.term}</h2>
 

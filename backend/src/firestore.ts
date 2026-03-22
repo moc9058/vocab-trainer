@@ -13,6 +13,7 @@ import type {
 
 const db = new Firestore({
   databaseId: process.env.FIRESTORE_DATABASE_ID || "vocab-database",
+  ignoreUndefinedProperties: true,
 });
 
 // --- Collections ---

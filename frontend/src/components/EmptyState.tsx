@@ -46,9 +46,6 @@ export default function EmptyState({ onResume, onStartNew, onBrowse }: Props) {
     return () => { cancelled = true; };
   }, []);
 
-  const answered = (s: QuizSession) =>
-    s.questions.filter((q) => q.userCorrect !== undefined).length;
-
   return (
     <div className="flex h-full flex-col items-center justify-center gap-8 p-4 sm:p-8">
       <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("welcome")}</h2>
@@ -65,7 +62,7 @@ export default function EmptyState({ onResume, onStartNew, onBrowse }: Props) {
             >
               <p className="font-semibold text-blue-300">{t("resumePreviousQuiz")}</p>
               <p className="mt-1 text-sm text-blue-400">
-                {displayName} — {answered(session)} / {session.questions.length} {t("questionsAnswered")}
+                {displayName} — {session.score.correct} / {session.wordIds?.length ?? session.questions.length} {t("questionsAnswered")}
               </p>
             </button>
           ))}

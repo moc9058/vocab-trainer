@@ -181,6 +181,20 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       if (!session) return reply.notFound("No session found for this language");
 
       await rehydrateQuestions(session);
+
+      // Shuffle unanswered questions so resume order differs each time
+      const answered: QuizQuestion[] = [];
+      const unanswered: QuizQuestion[] = [];
+      for (const q of session.questions) {
+        if (q.userCorrect !== undefined) answered.push(q);
+        else unanswered.push(q);
+      }
+      for (let i = unanswered.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [unanswered[i], unanswered[j]] = [unanswered[j], unanswered[i]];
+      }
+      session.questions = [...answered, ...unanswered];
+
       return session;
     }
   );
