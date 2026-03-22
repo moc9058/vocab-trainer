@@ -9,6 +9,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "migrate": "tsx scripts/migrate-to-firestore.ts",
+    "export": "tsx scripts/export-from-firestore.ts",
     "restructure": "tsx scripts/restructure-db.ts",
     "generate-extended": "tsx scripts/generate-extended.ts",
     "add-pinyin-segments": "tsx scripts/add-pinyin-segments.ts",

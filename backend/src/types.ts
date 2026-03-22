@@ -47,6 +47,7 @@ export const TOPICS = [
 export type Topic = (typeof TOPICS)[number];
 
 export interface VocabFile {
+  language?: string;
   words: Word[];
 }
 

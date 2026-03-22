@@ -24,45 +24,20 @@ const wordIndex = db.collection("word_index");
 const progress = db.collection("progress");
 const quizSessions = db.collection("quiz_sessions");
 
-// ========== Helpers ==========
-
-/** Return the base language and its "-extended" variant for Firestore `in` queries. */
-function expandLanguage(language: string): string[] {
-  return [language, `${language}-extended`];
-}
-
 // ========== Languages ==========
 
 export async function listLanguages(): Promise<LanguageInfo[]> {
   const snap = await languages.get();
-
-  // Group base and "-extended" docs together
-  const baseMap = new Map<string, LanguageInfo>();
-
-  for (const doc of snap.docs) {
-    const id = doc.id;
+  return snap.docs.map((doc) => {
     const d = doc.data();
-
-    const isExtended = id.endsWith("-extended");
-    const baseId = isExtended ? id.replace(/-extended$/, "") : id;
-
-    const existing = baseMap.get(baseId);
-    if (existing) {
-      existing.wordCount += d.wordCount ?? 0;
-      existing.topics = [...new Set([...existing.topics, ...(d.topics ?? [])])];
-      existing.levels = [...new Set([...existing.levels, ...(d.levels ?? [])])].sort();
-    } else {
-      baseMap.set(baseId, {
-        filename: `${baseId}.json`,
-        language: baseId.charAt(0).toUpperCase() + baseId.slice(1),
-        topics: d.topics ?? [],
-        levels: d.levels ?? [],
-        wordCount: d.wordCount ?? 0,
-      });
-    }
-  }
-
-  return [...baseMap.values()];
+    return {
+      filename: `${doc.id}.json`,
+      language: doc.id.charAt(0).toUpperCase() + doc.id.slice(1),
+      topics: d.topics ?? [],
+      levels: d.levels ?? [],
+      wordCount: d.wordCount ?? 0,
+    };
+  });
 }
 
 export async function getLanguage(language: string): Promise<LanguageInfo | null> {
@@ -118,7 +93,7 @@ export async function getWords(
   pagination?: { page: number; limit: number }
 ): Promise<PaginatedResult<Word>> {
   // Build Firestore query with supported filters
-  let query = words.where("language", "in", expandLanguage(language)) as FirebaseFirestore.Query;
+  let query = words.where("language", "==", language) as FirebaseFirestore.Query;
 
   if (filters?.topic) {
     query = query.where("topics", "array-contains", filters.topic);
@@ -155,7 +130,7 @@ export async function getWords(
 }
 
 export async function getAllWords(language: string): Promise<Word[]> {
-  const snap = await words.where("language", "in", expandLanguage(language)).get();
+  const snap = await words.where("language", "==", language).get();
   return snap.docs.map(docToWord);
 }
 
@@ -165,19 +140,27 @@ export async function getFilteredWords(
 ): Promise<Word[]> {
   // Firestore array-contains can only filter on one topic at a time,
   // so we fetch all words and filter client-side for multi-value filters
-  const snap = await words.where("language", "in", expandLanguage(language)).get();
+  const snap = await words.where("language", "==", language).get();
   let results = snap.docs.map(docToWord);
 
-  const hasTopicFilter = filters?.topics && filters.topics.length > 0;
-  const hasCategoryFilter = filters?.categories && filters.categories.length > 0;
-  const hasLevelFilter = filters?.levels && filters.levels.length > 0;
+  // Expand base levels to include their -extended variants
+  const expandedLevels = filters?.levels?.flatMap((l) => [l, `${l}-extended`]);
+  const f = filters ? { ...filters, levels: expandedLevels } : filters;
+
+  const hasTopicFilter = f?.topics && f.topics.length > 0;
+  const hasCategoryFilter = f?.categories && f.categories.length > 0;
+  const hasLevelFilter = expandedLevels && expandedLevels.length > 0;
 
   if (hasTopicFilter || hasCategoryFilter || hasLevelFilter) {
     results = results.filter((w) => {
-      const matchesTopic = hasTopicFilter && w.topics.some((t) => filters.topics!.includes(t));
-      const matchesCategory = hasCategoryFilter && filters.categories!.includes(w.grammaticalCategory);
-      const matchesLevel = hasLevelFilter && !!w.level && filters.levels!.includes(w.level);
-      return matchesTopic || matchesCategory || matchesLevel;
+      // Level acts as a scope limiter (AND with other filters)
+      const matchesLevel = !hasLevelFilter || (!!w.level && expandedLevels!.includes(w.level));
+      // Topics and categories are additive (OR with each other)
+      const matchesContent = !hasTopicFilter && !hasCategoryFilter
+        ? true
+        : (hasTopicFilter && w.topics.some((t) => f!.topics!.includes(t))) ||
+          (hasCategoryFilter && f!.categories!.includes(w.grammaticalCategory));
+      return matchesLevel && matchesContent;
     });
   }
 
@@ -189,11 +172,11 @@ export async function getWordFilters(language: string): Promise<{
   categories: string[];
   levels: string[];
 }> {
-  const snap = await words.where("language", "in", expandLanguage(language)).get();
+  const snap = await words.where("language", "==", language).get();
   const allWords = snap.docs.map(docToWord);
   const topics = [...new Set(allWords.flatMap((w) => w.topics))] as Topic[];
   const categories = [...new Set(allWords.map((w) => w.grammaticalCategory).filter(Boolean))].sort();
-  const levels = [...new Set(allWords.map((w) => w.level).filter((l): l is string => !!l))];
+  const levels = [...new Set(allWords.map((w) => w.level?.replace(/-extended$/, "")).filter((l): l is string => !!l))].sort();
   return { topics, categories, levels };
 }
 
@@ -201,6 +184,13 @@ export async function getWord(wordId: string): Promise<Word | null> {
   const doc = await words.doc(wordId).get();
   if (!doc.exists) return null;
   return docToWord(doc);
+}
+
+export async function getWordsByIds(wordIds: string[]): Promise<Word[]> {
+  if (wordIds.length === 0) return [];
+  const refs = wordIds.map((id) => words.doc(id));
+  const docs = await db.getAll(...refs);
+  return docs.filter((d) => d.exists).map(docToWord);
 }
 
 export async function addWord(language: string, word: Word): Promise<void> {
@@ -377,7 +367,7 @@ export async function lookupWordsByTerms(language: string, terms: string[]): Pro
 // ========== Progress ==========
 
 export async function getProgressForLanguage(language: string): Promise<ProgressFile> {
-  const snap = await progress.where("language", "in", expandLanguage(language)).get();
+  const snap = await progress.where("language", "==", language).get();
   const wordsMap: Record<string, WordProgress> = {};
   snap.docs.forEach((doc) => {
     const d = doc.data();
@@ -442,25 +432,30 @@ export async function getQuizSessionByLanguage(language: string): Promise<QuizSe
   return docToSession(doc);
 }
 
-export async function createQuizSession(session: QuizSession): Promise<void> {
-  session.questions = session.questions.map(q => ({
-    ...q,
-    definition: q.definition ?? {},
-    examples: q.examples ?? [],
+/** Strip heavy word data — only persist wordId, term, and answer state. */
+function slimQuestions(questions: QuizSession["questions"]) {
+  return questions.map((q) => ({
+    wordId: q.wordId,
+    term: q.term,
+    ...(q.userCorrect !== undefined ? { userCorrect: q.userCorrect } : {}),
   }));
-  const data: Record<string, unknown> = { ...session };
+}
+
+export async function createQuizSession(session: QuizSession): Promise<void> {
+  const data: Record<string, unknown> = {
+    ...session,
+    questions: slimQuestions(session.questions),
+  };
   delete data.sessionId;
   const clean = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
   await quizSessions.doc(session.language).set(clean);
 }
 
 export async function updateQuizSession(session: QuizSession): Promise<void> {
-  session.questions = session.questions.map(q => ({
-    ...q,
-    definition: q.definition ?? {},
-    examples: q.examples ?? [],
-  }));
-  const data: Record<string, unknown> = { ...session };
+  const data: Record<string, unknown> = {
+    ...session,
+    questions: slimQuestions(session.questions),
+  };
   delete data.sessionId;
   const clean = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
   await quizSessions.doc(session.language).set(clean);
@@ -492,10 +487,8 @@ export async function getTransliterationMap(language: string): Promise<Record<st
     return cached.map;
   }
 
-  const langs = expandLanguage(language);
-
   // 1. Build map from word_index (vocabulary terms)
-  const snap = await wordIndex.where("language", "in", langs).get();
+  const snap = await wordIndex.where("language", "==", language).get();
   const map: Record<string, string> = {};
   for (const doc of snap.docs) {
     const d = doc.data();
@@ -507,7 +500,7 @@ export async function getTransliterationMap(language: string): Promise<Record<st
 
   // 2. Harvest transliterations from precomputed example segments
   //    so the fallback covers non-vocabulary words in sentences
-  const wordSnap = await words.where("language", "in", langs).get();
+  const wordSnap = await words.where("language", "==", language).get();
   for (const doc of wordSnap.docs) {
     const d = doc.data();
     for (const ex of d.examples ?? []) {

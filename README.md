@@ -391,9 +391,34 @@ Words are selected using **weighted random sampling**:
 - Lower accuracy → higher weight: `1 + (1 - correctRate) * 4`
 - Staleness bonus: `daysSinceReview * 0.5` (capped at 7 days)
 
-Each question includes: `term`, `definition` (all languages), `transliteration`, and `examples` (sentence + translation).
+The response returns a lightweight session — questions contain only `wordId` and `term`. Full question details (definitions, transliteration, examples) are fetched separately via the batch endpoint below.
 
-**Response:** `201` with `QuizSession`.
+**Response:** `201` with `QuizSession` (lightweight questions).
+
+#### `GET /api/quiz/questions/:language` — Fetch hydrated questions in batches
+
+Returns full question details (definition, transliteration, examples) for a slice of the quiz session's questions.
+
+| Query Param | Type   | Default | Description              |
+| ----------- | ------ | ------- | ------------------------ |
+| `offset`    | number | 0       | Index to start from      |
+| `limit`     | number | 50      | Number of questions      |
+
+**Response:**
+```json
+{
+  "questions": [
+    {
+      "wordId": "zh-000001",
+      "term": "你好",
+      "definition": { "English": "hello", "Japanese": "こんにちは" },
+      "transliteration": "nǐ hǎo",
+      "examples": [{ "sentence": "你好，你怎么样？", "translation": "Hello, how are you?" }]
+    }
+  ],
+  "total": 150
+}
+```
 
 #### `POST /api/quiz/answer` — Submit an answer
 
@@ -429,7 +454,7 @@ React 19 single-page application for taking vocabulary quizzes. Built with Vite 
 | View                    | Description                                                                                                        |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | **Dashboard**           | Main layout. Header with "Start Quiz", "Browse Words", and "Home" buttons. The Home button appears when a quiz or word list is active and navigates back to the home page. |
-| **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows all definitions, transliteration, and example sentences with RubyText annotations. Wrong answers are re-queued until correct. Supports resuming from where the user left off. |
+| **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows all definitions, transliteration, and example sentences with RubyText annotations. Wrong answers are re-queued until correct. Questions are lazy-loaded in batches of 50 with automatic prefetching at the halfway point. Supports resuming from where the user left off. |
 | **WordList**            | Paginated word browsing with search, topic/category/level filters, progress badges, and expandable word details with pinyin displayed via RubyText. |
 | **LanguageSelectModal** | Modal to pick the target language when starting a new quiz. Lists languages fetched from the API.                  |
 | **QuizFilterModal**     | Modal to select topic, category, and level filters before starting a quiz. Supports "Select All" / "Clear All" actions. Level column only appears when words have levels set. Starting with no filters includes all words. |
@@ -438,7 +463,7 @@ React 19 single-page application for taking vocabulary quizzes. Built with Vite 
 ### API Integration
 
 - **`api/client.ts`** — Generic `fetchJson<T>()` and `postJson<T>()` utilities wrapping the Fetch API.
-- **`api/quiz.ts`** — `getCurrentSession(language)`, `startQuiz(opts)`, and `answerQuestion(opts)`.
+- **`api/quiz.ts`** — `getCurrentSession(language)`, `startQuiz(opts)`, `getQuizQuestions(language, offset, limit)`, and `answerQuestion(opts)`.
 - **`api/vocab.ts`** — `getFilters(language)`, `getPinyinMap(language)`, `getWords(language, params)` for vocabulary browsing and data retrieval.
 - **Dev proxy:** Vite proxies `/api/*` to `http://localhost:3000` so the frontend dev server can reach the backend.
 

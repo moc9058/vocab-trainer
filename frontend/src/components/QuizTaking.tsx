@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useI18n } from "../i18n/context";
-import { answerQuestion } from "../api/quiz";
+import { answerQuestion, getQuizQuestions } from "../api/quiz";
 import RubyText from "./RubyText";
-import type { QuizSession } from "../types";
+import type { QuizSession, QuizQuestion } from "../types";
+
+const BATCH_SIZE = 50;
 
 interface Props {
   session: QuizSession;
@@ -14,27 +16,69 @@ interface Props {
 
 export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, transliterationMap = {} }: Props) {
   const { t } = useI18n();
-  const [currentSession, setCurrentSession] = useState(() => {
-    // Shuffle unanswered questions so resume order is randomized
-    const answered = session.questions.filter((q) => q.userCorrect !== undefined);
-    const unanswered = session.questions.filter((q) => q.userCorrect === undefined);
-    for (let i = unanswered.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [unanswered[i], unanswered[j]] = [unanswered[j], unanswered[i]];
-    }
-    return { ...session, questions: [...answered, ...unanswered] };
-  });
-  const [currentIndex, setCurrentIndex] = useState(() => {
-    const idx = session.questions.findIndex((q) => q.userCorrect === undefined);
-    return idx === -1 ? session.questions.length : idx;
-  });
-  const [originalTotal] = useState(() => session.wordIds?.length ?? session.questions.length);
+  const [currentSession, setCurrentSession] = useState(session);
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [showingAnswer, setShowingAnswer] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [originalTotal] = useState(() => session.wordIds?.length ?? session.questions.length);
 
-  const questions = currentSession.questions;
-  const isComplete = currentIndex >= questions.length;
-  const question = isComplete ? null : questions[currentIndex];
+  // Track how many questions have been fetched from the server
+  const fetchedCountRef = useRef(0);
+  const fetchingRef = useRef(false);
+  const totalQuestionsRef = useRef(session.questions.length);
+
+  const fetchBatch = useCallback(async (offset: number, limit: number) => {
+    if (fetchingRef.current) return;
+    fetchingRef.current = true;
+    try {
+      const { questions: batch, total } = await getQuizQuestions(session.language, offset, limit);
+      totalQuestionsRef.current = total;
+      fetchedCountRef.current = offset + batch.length;
+      setQuestions((prev) => {
+        // Append new questions, avoiding duplicates by offset
+        const newQuestions = [...prev];
+        for (let i = 0; i < batch.length; i++) {
+          const idx = offset + i;
+          if (idx >= newQuestions.length) {
+            newQuestions.push(batch[i]);
+          } else if (!newQuestions[idx].definition || Object.keys(newQuestions[idx].definition).length === 0) {
+            // Hydrate if the slot exists but has no definition
+            newQuestions[idx] = { ...newQuestions[idx], ...batch[i] };
+          }
+        }
+        return newQuestions;
+      });
+    } finally {
+      fetchingRef.current = false;
+    }
+  }, [session.language]);
+
+  // Initial load: fetch first batch
+  useEffect(() => {
+    // Find the first unanswered question index to know where to start fetching
+    const firstUnanswered = session.questions.findIndex((q) => q.userCorrect === undefined);
+    const startOffset = Math.max(0, firstUnanswered === -1 ? 0 : firstUnanswered);
+    setCurrentIndex(firstUnanswered === -1 ? session.questions.length : firstUnanswered);
+
+    fetchBatch(startOffset, BATCH_SIZE).then(() => setLoading(false));
+  }, [fetchBatch, session.questions]);
+
+  // Prefetch next batch when halfway through current loaded questions
+  useEffect(() => {
+    if (loading) return;
+    const loadedUnanswered = questions.filter((q) => q.userCorrect === undefined).length;
+    const halfway = Math.floor(loadedUnanswered / 2);
+    const answeredSinceLoad = questions.filter((q) => q.userCorrect !== undefined).length - (session.questions.filter((q) => q.userCorrect !== undefined).length);
+
+    if (answeredSinceLoad >= halfway && fetchedCountRef.current < totalQuestionsRef.current) {
+      fetchBatch(fetchedCountRef.current, BATCH_SIZE);
+    }
+  }, [currentIndex, loading, questions, fetchBatch, session.questions]);
+
+  const question = currentIndex < questions.length ? questions[currentIndex] : null;
+  const isComplete = currentSession.status === "completed";
 
   async function handleGrade(correct: boolean) {
     if (!question || submitting) return;
@@ -45,14 +89,14 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
         wordId: question.wordId,
         correct,
       });
-      // Merge result into existing shuffled state instead of replacing with backend order
-      setCurrentSession((prev) => {
-        const updatedQuestions = prev.questions.map((q) =>
-          q === question ? { ...q, userCorrect: correct } : q
+
+      setQuestions((prev) => {
+        const updated = prev.map((q, i) =>
+          i === currentIndex ? { ...q, userCorrect: correct } : q
         );
         // If wrong, re-queue at the end for another attempt
         if (!correct) {
-          updatedQuestions.push({
+          updated.push({
             wordId: question.wordId,
             term: question.term,
             definition: question.definition,
@@ -60,19 +104,26 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
             examples: question.examples,
           });
         }
+        return updated;
+      });
+
+      setCurrentSession((prev) => {
         const newScore = {
           correct: prev.score.correct + (correct ? 1 : 0),
           total: prev.score.total + (correct ? 0 : 1),
         };
-        const allAnswered = updatedQuestions.every((q) => q.userCorrect !== undefined);
+        // Check completion: all loaded questions answered and no more to fetch
+        const remainingUnanswered = questions.filter((q, i) => i !== currentIndex && q.userCorrect === undefined).length;
+        const noMoreToFetch = fetchedCountRef.current >= totalQuestionsRef.current;
+        const allDone = remainingUnanswered === 0 && noMoreToFetch && correct;
+
         return {
           ...prev,
-          questions: updatedQuestions,
           score: newScore,
-          status: allAnswered ? ("completed" as const) : prev.status,
-          ...(allAnswered ? { completedAt: new Date().toISOString() } : {}),
+          ...(allDone ? { status: "completed" as const, completedAt: new Date().toISOString() } : {}),
         };
       });
+
       setCurrentIndex((i) => i + 1);
       setShowingAnswer(false);
     } finally {
@@ -80,8 +131,16 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
     }
   }
 
-  if (isComplete) {
-    const { correct, total } = currentSession.score;
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-gray-400">Loading questions...</p>
+      </div>
+    );
+  }
+
+  if (isComplete || (!question && currentIndex >= questions.length)) {
+    const { correct } = currentSession.score;
     return (
       <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("congratulations")}</h2>

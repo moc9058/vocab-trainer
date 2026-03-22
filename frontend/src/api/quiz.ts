@@ -1,5 +1,5 @@
 import { fetchJson, postJson } from "./client";
-import type { QuizSession } from "../types";
+import type { QuizSession, QuizQuestion } from "../types";
 
 export async function getCurrentSession(language: string): Promise<QuizSession | null> {
   try {
@@ -18,6 +18,14 @@ export function startQuiz(opts: {
   questionType?: string;
 }): Promise<QuizSession> {
   return postJson<QuizSession>("/api/quiz/start", opts);
+}
+
+export function getQuizQuestions(
+  language: string,
+  offset: number,
+  limit: number
+): Promise<{ questions: QuizQuestion[]; total: number }> {
+  return fetchJson(`/api/quiz/questions/${encodeURIComponent(language)}?offset=${offset}&limit=${limit}`);
 }
 
 export function answerQuestion(opts: {

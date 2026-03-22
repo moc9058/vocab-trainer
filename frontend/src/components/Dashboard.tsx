@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
 import { getCurrentSession, startQuiz } from "../api/quiz";
 import { getTransliterationMap } from "../api/vocab";
+import { fetchJson } from "../api/client";
 import EmptyState from "./EmptyState";
 import QuizTaking from "./QuizTaking";
 import WordList from "./WordList";
 import LanguageSelectModal from "./LanguageSelectModal";
+import LevelSelectModal from "./LevelSelectModal";
 import QuizFilterModal from "./QuizFilterModal";
 import type { QuizSession } from "../types";
 
@@ -15,11 +17,11 @@ export default function Dashboard() {
   const [starting, setStarting] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
+  const [selectedLevels, setSelectedLevels] = useState<string[] | null>(null);
   const [resumePrompt, setResumePrompt] = useState<QuizSession | null>(null);
   const [pendingFilters, setPendingFilters] = useState<{
     topics: string[];
     categories: string[];
-    levels: string[];
   } | null>(null);
   const [browsingLanguage, setBrowsingLanguage] = useState<string | null>(null);
   const [showBrowseLanguageModal, setShowBrowseLanguageModal] = useState(false);
@@ -53,8 +55,17 @@ export default function Dashboard() {
     setSelectedLanguage(language);
   }
 
-  async function handleFiltersSelected(filters: { topics: string[]; categories: string[]; levels: string[] }) {
-    if (starting || !selectedLanguage) return;
+  function handleLevelsSelected(levels: string[]) {
+    setSelectedLevels(levels);
+  }
+
+  function handleLevelBack() {
+    setSelectedLanguage(null);
+    setShowLanguageModal(true);
+  }
+
+  async function handleFiltersSelected(filters: { topics: string[]; categories: string[] }) {
+    if (starting || !selectedLanguage || !selectedLevels) return;
     setStarting(true);
     try {
       // Check for existing in-progress session
@@ -69,9 +80,10 @@ export default function Dashboard() {
         language: selectedLanguage,
         topics: filters.topics,
         categories: filters.categories,
-        levels: filters.levels,
+        levels: selectedLevels,
       });
       setSelectedLanguage(null);
+      setSelectedLevels(null);
       setActiveQuiz(session);
     } catch (err) {
       console.error("Failed to start quiz:", err);
@@ -87,24 +99,27 @@ export default function Dashboard() {
       setResumePrompt(null);
       setPendingFilters(null);
       setSelectedLanguage(null);
+      setSelectedLevels(null);
       setStarting(false);
     }
   }
 
   async function handleStartNew() {
-    if (!selectedLanguage || !pendingFilters) return;
+    if (!selectedLanguage || !selectedLevels || !pendingFilters) return;
     const lang = selectedLanguage;
+    const levels = selectedLevels;
     const filters = pendingFilters;
     // Clear all modal state immediately to prevent filter modal flash
     setResumePrompt(null);
     setSelectedLanguage(null);
+    setSelectedLevels(null);
     setPendingFilters(null);
     try {
       const session = await startQuiz({
         language: lang,
         topics: filters.topics,
         categories: filters.categories,
-        levels: filters.levels,
+        levels,
       });
       setActiveQuiz(session);
     } catch (err) {
@@ -116,12 +131,12 @@ export default function Dashboard() {
   }
 
   function handleFilterBack() {
-    setSelectedLanguage(null);
-    setShowLanguageModal(true);
+    setSelectedLevels(null);
   }
 
   function handleFilterClose() {
     setSelectedLanguage(null);
+    setSelectedLevels(null);
   }
 
   function handleQuizComplete() {
@@ -134,9 +149,36 @@ export default function Dashboard() {
     setShowLanguageModal(false);
     setShowBrowseLanguageModal(false);
     setSelectedLanguage(null);
+    setSelectedLevels(null);
     setResumePrompt(null);
     setPendingFilters(null);
     setStarting(false);
+  }
+
+  async function handleStartQuiz() {
+    try {
+      const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
+      if (languages.length === 1) {
+        handleLanguageSelected(languages[0].filename.replace(/\.json$/, ""));
+      } else {
+        setShowLanguageModal(true);
+      }
+    } catch {
+      setShowLanguageModal(true);
+    }
+  }
+
+  async function handleBrowse() {
+    try {
+      const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
+      if (languages.length === 1) {
+        setBrowsingLanguage(languages[0].filename.replace(/\.json$/, ""));
+      } else {
+        setShowBrowseLanguageModal(true);
+      }
+    } catch {
+      setShowBrowseLanguageModal(true);
+    }
   }
 
   const showBackButton = !!(activeQuiz || browsingLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal);
@@ -169,7 +211,15 @@ export default function Dashboard() {
           onClose={() => setShowLanguageModal(false)}
         />
       )}
-      {selectedLanguage && !showLanguageModal && !resumePrompt && (
+      {selectedLanguage && !selectedLevels && !showLanguageModal && !resumePrompt && (
+        <LevelSelectModal
+          language={selectedLanguage}
+          onSelect={handleLevelsSelected}
+          onBack={handleLevelBack}
+          onClose={handleFilterClose}
+        />
+      )}
+      {selectedLanguage && selectedLevels && !showLanguageModal && !resumePrompt && (
         <QuizFilterModal
           language={selectedLanguage}
           onStart={handleFiltersSelected}
@@ -206,8 +256,8 @@ export default function Dashboard() {
           <QuizTaking
             session={activeQuiz}
             onComplete={handleQuizComplete}
-            onBrowse={() => setShowBrowseLanguageModal(true)}
-            onStartNew={() => setShowLanguageModal(true)}
+            onBrowse={handleBrowse}
+            onStartNew={handleStartQuiz}
             transliterationMap={transliterationMap}
           />
         ) : browsingLanguage ? (
@@ -219,8 +269,8 @@ export default function Dashboard() {
         ) : (
           <EmptyState
             onResume={(session) => setActiveQuiz(session)}
-            onStartNew={() => setShowLanguageModal(true)}
-            onBrowse={() => setShowBrowseLanguageModal(true)}
+            onStartNew={handleStartQuiz}
+            onBrowse={handleBrowse}
           />
         )}
       </main>

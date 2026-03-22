@@ -23,6 +23,8 @@ const translations = {
     selectAll: "Select All",
     clearAll: "Clear All",
     levelsColumn: "Levels",
+    selectLevel: "Select HSK Level",
+    allLevels: "All Levels",
     noFiltersHint: "Select at least one topic, category, or level to start",
     back: "Back",
     browseWords: "Browse Words",

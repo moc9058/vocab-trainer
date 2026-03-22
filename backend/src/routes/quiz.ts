@@ -9,28 +9,9 @@ import {
   getQuizSessionByLanguage,
   createQuizSession,
   updateQuizSession,
-  getWord,
+  getWordsByIds,
 } from "../firestore.js";
 import type { QuizSession, QuizQuestion, Word, WordProgress } from "../types.js";
-
-/** Re-hydrate questions whose definition/examples were stripped by Firestore. */
-async function rehydrateQuestions(session: QuizSession): Promise<void> {
-  const wordCache = new Map<string, Word>();
-  for (const q of session.questions) {
-    if (!q.definition || Object.keys(q.definition).length === 0) {
-      let word = wordCache.get(q.wordId);
-      if (!word) {
-        word = (await getWord(q.wordId)) ?? undefined;
-        if (word) wordCache.set(q.wordId, word);
-      }
-      if (word) {
-        q.definition = word.definition;
-        q.transliteration = word.transliteration;
-        q.examples = word.examples;
-      }
-    }
-  }
-}
 
 const quizRoutes: FastifyPluginAsync = async (fastify) => {
   // Start quiz session
@@ -78,7 +59,6 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const count = questionCount ? Math.min(questionCount, pool.length) : pool.length;
       const selected = weightedSample(pool, count, progressData.words);
-      const wordIds = selected.map((w) => w.id);
 
       const questions: QuizQuestion[] = selected.map((w) => ({
         wordId: w.id,
@@ -96,11 +76,72 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         score: { correct: 0, total: questions.length },
         questions,
         ...(questionType ? { questionType } : {}),
-        wordIds,
+        wordIds: selected.map((w) => w.id),
       };
 
       await createQuizSession(session);
-      return reply.status(201).send(session);
+      // Return lightweight session (no heavy word data)
+      return reply.status(201).send({
+        ...session,
+        questions: session.questions.map((q) => ({
+          wordId: q.wordId,
+          term: q.term,
+        })),
+      });
+    }
+  );
+
+  // Batch-fetch hydrated questions for a quiz session
+  fastify.get<{
+    Params: { language: string };
+    Querystring: { offset?: number; limit?: number };
+  }>(
+    "/questions/:language",
+    {
+      schema: {
+        params: {
+          type: "object",
+          required: ["language"],
+          properties: { language: { type: "string" } },
+        },
+        querystring: {
+          type: "object",
+          properties: {
+            offset: { type: "number", minimum: 0 },
+            limit: { type: "number", minimum: 1 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { language } = request.params;
+      const offset = request.query.offset ?? 0;
+      const limit = request.query.limit ?? 50;
+
+      const session = await getQuizSessionByLanguage(language);
+      if (!session) return reply.notFound("No session found for this language");
+
+      // Get the slice of questions for this batch
+      const slice = session.questions.slice(offset, offset + limit);
+      const wordIds = slice.map((q) => q.wordId);
+
+      // Fetch full word data
+      const wordsData = await getWordsByIds(wordIds);
+      const wordMap = new Map(wordsData.map((w) => [w.id, w]));
+
+      const hydrated: QuizQuestion[] = slice.map((q) => {
+        const word = wordMap.get(q.wordId);
+        return {
+          wordId: q.wordId,
+          term: q.term,
+          definition: word?.definition ?? {},
+          transliteration: word?.transliteration,
+          examples: word?.examples ?? [],
+          ...(q.userCorrect !== undefined ? { userCorrect: q.userCorrect } : {}),
+        };
+      });
+
+      return { questions: hydrated, total: session.questions.length };
     }
   );
 
@@ -139,7 +180,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         session.questions.push({
           wordId: question.wordId,
           term: question.term,
-          definition: question.definition,
+          definition: question.definition ?? {},
           transliteration: question.transliteration,
           examples: question.examples,
         });
@@ -168,19 +209,16 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       await updateQuizSession(session);
-      await rehydrateQuestions(session);
       return { session, wordProgress: wp };
     }
   );
 
-  // Get current session for a language
+  // Get current session for a language (lightweight — no word data)
   fastify.get<{ Params: { language: string } }>(
     "/session/language/:language",
     async (request, reply) => {
       const session = await getQuizSessionByLanguage(request.params.language);
       if (!session) return reply.notFound("No session found for this language");
-
-      await rehydrateQuestions(session);
 
       // Shuffle unanswered questions so resume order differs each time
       const answered: QuizQuestion[] = [];
