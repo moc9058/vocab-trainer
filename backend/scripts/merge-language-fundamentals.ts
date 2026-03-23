@@ -15,7 +15,7 @@ import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_DIR = resolve(__dirname, "../DB");
+const DB_DIR = resolve(__dirname, "../DB/word");
 
 const FILES = [
   "HSK1.json", "HSK1-extended.json",

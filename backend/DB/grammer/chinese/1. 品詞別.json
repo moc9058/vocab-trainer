@@ -1,0 +1,43 @@
+{
+  "chapter": "品詞別",
+  "chapterNumber": 1,
+  "chapterTitle": {
+    "ja": "品詞別",
+    "en": "Parts of Speech",
+    "kr": "품사별",
+    "zh": "按词类分类"
+  },
+  "language": "chinese",
+  "subchapters": [
+    {
+      "id": "1-1",
+      "title": { "ja": "代詞", "en": "Pronouns", "kr": "대사", "zh": "代词" },
+      "components": []
+    },
+    {
+      "id": "1-2",
+      "title": { "ja": "名詞", "en": "Nouns", "kr": "명사", "zh": "名词" },
+      "components": []
+    },
+    {
+      "id": "1-3",
+      "title": { "ja": "数詞", "en": "Numerals", "kr": "수사", "zh": "数词" },
+      "components": []
+    },
+    {
+      "id": "1-4",
+      "title": { "ja": "量詞", "en": "Measure Words", "kr": "양사", "zh": "量词" },
+      "components": []
+    },
+    {
+      "id": "1-5",
+      "title": { "ja": "形容詞", "en": "Adjectives", "kr": "형용사", "zh": "形容词" },
+      "components": []
+    },
+    {
+      "id": "1-6",
+      "title": { "ja": "動詞", "en": "Verbs", "kr": "동사", "zh": "动词" },
+      "components": []
+    }
+  ]
+}

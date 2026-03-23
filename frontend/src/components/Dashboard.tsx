@@ -2,15 +2,21 @@ import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
 import { getCurrentSession, startQuiz } from "../api/quiz";
 import { getTransliterationMap } from "../api/vocab";
+import { startGrammarQuiz, getCurrentGrammarSession } from "../api/grammar";
 import { fetchJson } from "../api/client";
 import EmptyState from "./EmptyState";
 import QuizTaking from "./QuizTaking";
 import WordList from "./WordList";
 import FlaggedReview from "./FlaggedReview";
+import GrammarList from "./GrammarList";
+import GrammarQuizTaking from "./GrammarQuizTaking";
+import GrammarFilterModal from "./GrammarFilterModal";
+import SmartAddWordModal from "./SmartAddWordModal";
+import GrammarFormModal from "./GrammarFormModal";
 import LanguageSelectModal from "./LanguageSelectModal";
 import LevelSelectModal from "./LevelSelectModal";
 import QuizFilterModal from "./QuizFilterModal";
-import type { QuizSession } from "../types";
+import type { QuizSession, GrammarQuizSession } from "../types";
 
 export default function Dashboard() {
   const { t } = useI18n();
@@ -29,6 +35,15 @@ export default function Dashboard() {
   const [flaggedReviewLanguage, setFlaggedReviewLanguage] = useState<string | null>(null);
   const [showFlaggedLanguageModal, setShowFlaggedLanguageModal] = useState(false);
   const [transliterationMap, setPinyinMap] = useState<Record<string, string>>({});
+  // Grammar state
+  const [activeGrammarQuiz, setActiveGrammarQuiz] = useState<GrammarQuizSession | null>(null);
+  const [browsingGrammarLanguage, setBrowsingGrammarLanguage] = useState<string | null>(null);
+  const [showGrammarLanguageModal, setShowGrammarLanguageModal] = useState(false);
+  const [showGrammarBrowseLanguageModal, setShowGrammarBrowseLanguageModal] = useState(false);
+  const [showGrammarFilterModal, setShowGrammarFilterModal] = useState<string | null>(null);
+  // Smart Add Word / Grammar state
+  const [smartAddLanguage, setSmartAddLanguage] = useState<string | null>(null);
+  const [grammarFormLanguage, setGrammarFormLanguage] = useState<string | null>(null);
 
   // Fetch pinyin map when a quiz starts or browsing begins
   const activeLang = activeQuiz?.language ?? browsingLanguage ?? flaggedReviewLanguage;
@@ -158,6 +173,39 @@ export default function Dashboard() {
     setResumePrompt(null);
     setPendingFilters(null);
     setStarting(false);
+    setActiveGrammarQuiz(null);
+    setBrowsingGrammarLanguage(null);
+    setShowGrammarLanguageModal(false);
+    setShowGrammarBrowseLanguageModal(false);
+    setShowGrammarFilterModal(null);
+    setSmartAddLanguage(null);
+    setGrammarFormLanguage(null);
+  }
+
+  async function handleAddWord() {
+    try {
+      const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
+      if (languages.length === 1) {
+        setSmartAddLanguage(languages[0].filename.replace(/\.json$/, ""));
+      } else {
+        setShowLanguageModal(true);
+      }
+    } catch {
+      setShowLanguageModal(true);
+    }
+  }
+
+  async function handleAddGrammar() {
+    try {
+      const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
+      if (languages.length === 1) {
+        setGrammarFormLanguage(languages[0].filename.replace(/\.json$/, ""));
+      } else {
+        setShowLanguageModal(true);
+      }
+    } catch {
+      setShowLanguageModal(true);
+    }
   }
 
   async function handleStartQuiz() {
@@ -199,7 +247,59 @@ export default function Dashboard() {
     }
   }
 
-  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal || showFlaggedLanguageModal);
+  async function handleStartGrammarQuiz() {
+    try {
+      const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
+      if (languages.length === 1) {
+        const lang = languages[0].filename.replace(/\.json$/, "");
+        setShowGrammarFilterModal(lang);
+      } else {
+        setShowGrammarLanguageModal(true);
+      }
+    } catch {
+      setShowGrammarLanguageModal(true);
+    }
+  }
+
+  async function handleGrammarFiltersSelected(filters: { chapters: number[]; subchapters: string[]; displayLanguage: string; quizMode: string }) {
+    const lang = showGrammarFilterModal;
+    if (!lang) return;
+    setShowGrammarFilterModal(null);
+    try {
+      // Check for existing in-progress session
+      const existing = await getCurrentGrammarSession(lang);
+      if (existing && existing.status === "in-progress") {
+        setActiveGrammarQuiz(existing);
+        return;
+      }
+      const session = await startGrammarQuiz({
+        language: lang,
+        chapters: filters.chapters.length > 0 ? filters.chapters : undefined,
+        subchapters: filters.subchapters.length > 0 ? filters.subchapters : undefined,
+        displayLanguage: filters.displayLanguage,
+        quizMode: filters.quizMode,
+      });
+      setActiveGrammarQuiz(session);
+    } catch (err) {
+      console.error("Failed to start grammar quiz:", err);
+      alert(String(err));
+    }
+  }
+
+  async function handleBrowseGrammar() {
+    try {
+      const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
+      if (languages.length === 1) {
+        setBrowsingGrammarLanguage(languages[0].filename.replace(/\.json$/, ""));
+      } else {
+        setShowGrammarBrowseLanguageModal(true);
+      }
+    } catch {
+      setShowGrammarBrowseLanguageModal(true);
+    }
+  }
+
+  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal || showFlaggedLanguageModal || activeGrammarQuiz || browsingGrammarLanguage || showGrammarLanguageModal || showGrammarBrowseLanguageModal || showGrammarFilterModal || smartAddLanguage || grammarFormLanguage);
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-900">
@@ -214,6 +314,45 @@ export default function Dashboard() {
           </button>
         )}
       </header>
+      {showGrammarLanguageModal && (
+        <LanguageSelectModal
+          onSelect={(lang) => {
+            setShowGrammarLanguageModal(false);
+            setShowGrammarFilterModal(lang);
+          }}
+          onClose={() => setShowGrammarLanguageModal(false)}
+        />
+      )}
+      {showGrammarBrowseLanguageModal && (
+        <LanguageSelectModal
+          onSelect={(lang) => {
+            setShowGrammarBrowseLanguageModal(false);
+            setBrowsingGrammarLanguage(lang);
+          }}
+          onClose={() => setShowGrammarBrowseLanguageModal(false)}
+        />
+      )}
+      {showGrammarFilterModal && (
+        <GrammarFilterModal
+          language={showGrammarFilterModal}
+          onStart={handleGrammarFiltersSelected}
+          onClose={() => setShowGrammarFilterModal(null)}
+        />
+      )}
+      {smartAddLanguage && (
+        <SmartAddWordModal
+          language={smartAddLanguage}
+          onSave={() => {}}
+          onClose={() => setSmartAddLanguage(null)}
+        />
+      )}
+      {grammarFormLanguage && (
+        <GrammarFormModal
+          language={grammarFormLanguage}
+          onSave={() => setGrammarFormLanguage(null)}
+          onClose={() => setGrammarFormLanguage(null)}
+        />
+      )}
       {showBrowseLanguageModal && (
         <LanguageSelectModal
           onSelect={(lang) => {
@@ -279,7 +418,18 @@ export default function Dashboard() {
         </div>
       )}
       <main className="flex-1">
-        {activeQuiz ? (
+        {activeGrammarQuiz ? (
+          <GrammarQuizTaking
+            session={activeGrammarQuiz}
+            onComplete={() => setActiveGrammarQuiz(null)}
+            onStartNew={handleStartGrammarQuiz}
+          />
+        ) : browsingGrammarLanguage ? (
+          <GrammarList
+            language={browsingGrammarLanguage}
+            onBack={() => setBrowsingGrammarLanguage(null)}
+          />
+        ) : activeQuiz ? (
           <QuizTaking
             session={activeQuiz}
             onComplete={handleQuizComplete}
@@ -305,6 +455,10 @@ export default function Dashboard() {
             onStartNew={handleStartQuiz}
             onBrowse={handleBrowse}
             onFlaggedReview={handleFlaggedReview}
+            onGrammarQuiz={handleStartGrammarQuiz}
+            onBrowseGrammar={handleBrowseGrammar}
+            onAddWord={handleAddWord}
+            onAddGrammar={handleAddGrammar}
           />
         )}
       </main>

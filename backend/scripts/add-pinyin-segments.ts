@@ -14,7 +14,7 @@ import { chunk, delay, segmentBatch } from "../src/llm.js";
 import type { VocabFile, WordIndexEntry, Example } from "../src/types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB = resolve(__dirname, "../DB");
+const DB = resolve(__dirname, "../DB/word");
 
 // ── helpers ──────────────────────────────────────────────────────────
 

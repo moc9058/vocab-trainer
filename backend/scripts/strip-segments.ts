@@ -8,7 +8,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
 
-const DB_DIR = resolve(import.meta.dirname, "..", "DB");
+const DB_DIR = resolve(import.meta.dirname, "..", "DB", "word");
 
 const FILES = [
   "HSK1.json", "HSK1-extended.json",

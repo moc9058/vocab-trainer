@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import type { VocabFile, ProgressFile } from "./types.js";
 
-const DB_DIR = resolve(import.meta.dirname, "..", "DB");
+const DB_DIR = resolve(import.meta.dirname, "..", "DB", "word");
 const DATA_DIR = resolve(import.meta.dirname, "..", "data");
 const PROGRESS_DIR = join(DATA_DIR, "progress");
 

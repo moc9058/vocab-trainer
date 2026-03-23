@@ -19,7 +19,7 @@ import {
 import { TOPICS, type Word, type Topic, type VocabFile, type WordIndexEntry } from "../src/types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_DIR = resolve(__dirname, "../DB");
+const DB_DIR = resolve(__dirname, "../DB/word");
 const LEVELS = ["HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6", "HSK7-9"];
 
 interface WordIndex {

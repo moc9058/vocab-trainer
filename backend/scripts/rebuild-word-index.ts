@@ -15,7 +15,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolve, join, basename } from "node:path";
 import { globSync } from "node:fs";
 
-const DB_DIR = resolve(import.meta.dirname, "..", "DB");
+const DB_DIR = resolve(import.meta.dirname, "..", "DB", "word");
 
 interface Word {
   id: string;

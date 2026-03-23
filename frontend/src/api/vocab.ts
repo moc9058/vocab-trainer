@@ -43,3 +43,16 @@ export function updateWord(language: string, wordId: string, updates: Partial<Wo
 export function deleteWord(language: string, wordId: string): Promise<void> {
   return deleteRequest(`/api/vocab/${encodeURIComponent(language)}/${encodeURIComponent(wordId)}`);
 }
+
+export function smartAddWord(
+  language: string,
+  data: {
+    term: string;
+    transliteration?: string;
+    definition?: Record<string, string>;
+    grammaticalCategory?: string;
+    notes?: string;
+  }
+): Promise<Word> {
+  return postJson(`/api/vocab/${encodeURIComponent(language)}/smart-add`, data);
+}

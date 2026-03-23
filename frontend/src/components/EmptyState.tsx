@@ -15,9 +15,13 @@ interface Props {
   onStartNew: () => void;
   onBrowse: () => void;
   onFlaggedReview: () => void;
+  onGrammarQuiz: () => void;
+  onBrowseGrammar: () => void;
+  onAddWord: () => void;
+  onAddGrammar: () => void;
 }
 
-export default function EmptyState({ onResume, onStartNew, onBrowse, onFlaggedReview }: Props) {
+export default function EmptyState({ onResume, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onAddWord, onAddGrammar }: Props) {
   const { t } = useI18n();
   const [inProgressSessions, setInProgressSessions] = useState<
     { session: QuizSession; displayName: string }[]
@@ -78,6 +82,12 @@ export default function EmptyState({ onResume, onStartNew, onBrowse, onFlaggedRe
           {t("browseWords")}
         </button>
         <button
+          onClick={onAddWord}
+          className="rounded-lg border border-green-600 px-6 py-2 text-green-300 hover:bg-green-900/30"
+        >
+          {t("smartAddWord")}
+        </button>
+        <button
           onClick={onFlaggedReview}
           className="rounded-lg border border-amber-600 px-6 py-2 text-amber-300 hover:bg-amber-900/30"
         >
@@ -87,7 +97,28 @@ export default function EmptyState({ onResume, onStartNew, onBrowse, onFlaggedRe
           onClick={onStartNew}
           className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-500"
         >
-          {t("startNew")}
+          {t("startWordQuiz")}
+        </button>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <button
+          onClick={onBrowseGrammar}
+          className="rounded-lg border border-gray-600 px-6 py-2 text-gray-300 hover:bg-gray-700"
+        >
+          {t("browseGrammar")}
+        </button>
+        <button
+          onClick={onAddGrammar}
+          className="rounded-lg border border-green-600 px-6 py-2 text-green-300 hover:bg-green-900/30"
+        >
+          {t("addGrammar")}
+        </button>
+        <button
+          onClick={onGrammarQuiz}
+          className="rounded-lg bg-emerald-600 px-6 py-2 text-white hover:bg-emerald-500"
+        >
+          {t("grammarQuiz")}
         </button>
       </div>
     </div>

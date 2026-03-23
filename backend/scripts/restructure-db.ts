@@ -11,7 +11,7 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import type { Word } from "../src/types.js";
 
-const DB_DIR = resolve(import.meta.dirname, "..", "DB");
+const DB_DIR = resolve(import.meta.dirname, "..", "DB", "word");
 
 const db = new Firestore({
   projectId: process.env.FIRESTORE_PROJECT || undefined,

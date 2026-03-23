@@ -27,10 +27,12 @@ Deploy both services to Google Cloud Run using the included script.
 ./deploy.sh vocab-trainer-490014 asia-northeast1
 ```
 
-To also run the Firestore data migration during deploy (imports local `backend/DB/` JSON files into Firestore):
+To also run Firestore data migrations during deploy:
 
 ```bash
-./deploy.sh vocab-trainer-490014 asia-northeast1 --migrate
+./deploy.sh vocab-trainer-490014 asia-northeast1 --word              # word data only
+./deploy.sh vocab-trainer-490014 asia-northeast1 --grammer           # grammar data only
+./deploy.sh vocab-trainer-490014 asia-northeast1 --word --grammer    # both
 ```
 
 ### Migrate Data Only
@@ -42,10 +44,16 @@ Run the Firestore migration without a full deploy:
 ./migrate.sh vocab-trainer-490014 my-db-id     # custom database ID
 ```
 
+### Migrate Grammar Data Locally
+
+```bash
+cd backend && npx tsx scripts/migrate-grammar-to-firestore.ts
+```
+
 This will:
 1. Build and push backend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-backend/backend`
 2. Deploy backend to Cloud Run
-3. Run Firestore migration (only with `--migrate`)
+3. Run Firestore migration (only with `--word` and/or `--grammer`)
 4. Build and push frontend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-frontend/frontend`
 5. Deploy frontend to Cloud Run with `BACKEND_URL` pointing to the backend service
 
@@ -494,7 +502,12 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `id_maps`            | Term → word ID mappings and next ID counter            |
 | `progress`           | Per-word progress (times seen, correct rate)            |
 | `word_index`         | Fast term → {id, level, transliteration} lookup (composite key: `{language}_{term}`) |
-| `quiz_sessions`      | One quiz session per language (keyed by language name)  |
+| `quiz_sessions`      | One word quiz session per language (keyed by language name)  |
+| `flagged_words`      | Flagged words for review                              |
+| `grammar_chapters`   | Grammar chapter metadata (per language)               |
+| `grammar_items`      | Flattened grammar components (denormalized chapter/subchapter) |
+| `grammar_progress`   | Per-component grammar progress                        |
+| `grammar_quiz_sessions` | One grammar quiz session per language              |
 
 Local JSON files under `backend/DB/` serve as the source for the initial Firestore migration (run with `./migrate.sh` or `./deploy.sh ... --migrate`).
 

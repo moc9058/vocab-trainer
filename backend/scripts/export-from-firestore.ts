@@ -12,7 +12,7 @@ import { writeFile, mkdir } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import type { Word, Example, VocabFile, WordProgress, ProgressFile } from "../src/types.js";
 
-const DB_DIR = resolve(import.meta.dirname, "..", "DB");
+const DB_DIR = resolve(import.meta.dirname, "..", "DB", "word");
 const DATA_DIR = resolve(import.meta.dirname, "..", "data");
 const PROGRESS_DIR = join(DATA_DIR, "progress");
 

@@ -2,20 +2,25 @@
 set -euo pipefail
 
 # Deploy vocab-trainer to Google Cloud Run
-# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--migrate]
+# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--word] [--grammer]
 #
 # Options:
-#   --migrate   Run Firestore data migration after deploying backend
+#   --word      Run Firestore word data migration after deploying backend
+#   --grammer   Run Firestore grammar data migration after deploying backend
+#
+# Both flags can be used together.
 #
 # Prerequisites:
 #   - gcloud CLI installed and authenticated
 #   - Artifact Registry API and Cloud Run API enabled
 
-MIGRATE=false
+MIGRATE_WORD=false
+MIGRATE_GRAMMER=false
 POSITIONAL=()
 for arg in "$@"; do
   case "$arg" in
-    --migrate) MIGRATE=true ;;
+    --word) MIGRATE_WORD=true ;;
+    --grammer) MIGRATE_GRAMMER=true ;;
     *) POSITIONAL+=("$arg") ;;
   esac
 done
@@ -57,15 +62,23 @@ BACKEND_URL=$(gcloud run services describe vocab-trainer-backend \
   --format="value(status.url)")
 echo "==> Backend deployed at: ${BACKEND_URL}"
 
-# Optionally seed Firestore with vocabulary data from local DB/ files
-if [ "$MIGRATE" = true ]; then
+# Optionally seed Firestore with data from local files
+if [ "$MIGRATE_WORD" = true ] || [ "$MIGRATE_GRAMMER" = true ]; then
   echo "==> Installing backend dependencies for migration..."
   (cd backend && npm install --silent)
-  echo "==> Running Firestore migration..."
+fi
+if [ "$MIGRATE_WORD" = true ]; then
+  echo "==> Running Firestore word migration..."
   (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
     npx tsx scripts/migrate-to-firestore.ts)
-else
-  echo "==> Skipping Firestore migration (use --migrate to run it)"
+fi
+if [ "$MIGRATE_GRAMMER" = true ]; then
+  echo "==> Running Firestore grammar migration..."
+  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
+    npx tsx scripts/migrate-grammar-to-firestore.ts)
+fi
+if [ "$MIGRATE_WORD" = false ] && [ "$MIGRATE_GRAMMER" = false ]; then
+  echo "==> Skipping Firestore migration (use --word and/or --grammer to run)"
 fi
 
 # Build and push frontend

@@ -51,3 +51,55 @@ export interface PaginatedResult<T> {
   limit: number;
   totalPages: number;
 }
+
+// ========== Grammar ==========
+
+export interface GrammarExample {
+  sentence: string;
+  translation: string;
+  transliteration?: string;
+}
+
+export interface GrammarComponent {
+  id: string;
+  term: Record<string, string>;
+  description: Record<string, string>;
+  examples: GrammarExample[];
+  relatedWordIds?: string[];
+  level?: string;
+  tags?: string[];
+}
+
+export interface GrammarItemDoc extends GrammarComponent {
+  language: string;
+  chapterNumber: number;
+  subchapterId: string;
+  subchapterTitle: Record<string, string>;
+}
+
+export interface GrammarQuizQuestion {
+  componentId: string;
+  displaySentence: string;
+  chineseSentence: string;
+  userCorrect?: boolean;
+}
+
+export interface GrammarQuizSession {
+  sessionId: string;
+  language: string;
+  startedAt: string;
+  completedAt?: string;
+  status: "in-progress" | "completed";
+  score: QuizScore;
+  questions: GrammarQuizQuestion[];
+  chapterFilter?: number[];
+  subchapterFilter?: string[];
+  displayLanguage?: string;
+  quizMode?: string;
+}
+
+export interface GrammarChapterInfo {
+  chapterNumber: number;
+  chapterTitle: Record<string, string>;
+  subchapterCount: number;
+}

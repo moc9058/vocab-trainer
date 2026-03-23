@@ -25,7 +25,7 @@ function stripEmptyKeys(obj: unknown): unknown {
   return obj;
 }
 
-const DB_DIR = resolve(import.meta.dirname, "..", "DB");
+const DB_DIR = resolve(import.meta.dirname, "..", "DB", "word");
 
 const db = new Firestore({
   projectId: process.env.FIRESTORE_PROJECT || undefined,
