@@ -7,6 +7,7 @@ import languagesRoutes from "./routes/languages.js";
 import vocabRoutes from "./routes/vocab.js";
 import quizRoutes from "./routes/quiz.js";
 import progressRoutes from "./routes/progress.js";
+import flaggedRoutes from "./routes/flagged.js";
 
 const LOG_DIR = resolve(import.meta.dirname, "..", "logs");
 mkdirSync(LOG_DIR, { recursive: true });
@@ -32,6 +33,7 @@ await fastify.register(languagesRoutes, { prefix: "/api/languages" });
 await fastify.register(vocabRoutes, { prefix: "/api/vocab" });
 await fastify.register(quizRoutes, { prefix: "/api/quiz" });
 await fastify.register(progressRoutes, { prefix: "/api/progress" });
+await fastify.register(flaggedRoutes, { prefix: "/api/flagged" });
 
 const port = parseInt(process.env.PORT ?? "3000", 10);
 const host = process.env.HOST ?? "0.0.0.0";

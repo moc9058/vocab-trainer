@@ -14,9 +14,10 @@ interface Props {
   onResume: (session: QuizSession) => void;
   onStartNew: () => void;
   onBrowse: () => void;
+  onFlaggedReview: () => void;
 }
 
-export default function EmptyState({ onResume, onStartNew, onBrowse }: Props) {
+export default function EmptyState({ onResume, onStartNew, onBrowse, onFlaggedReview }: Props) {
   const { t } = useI18n();
   const [inProgressSessions, setInProgressSessions] = useState<
     { session: QuizSession; displayName: string }[]
@@ -75,6 +76,12 @@ export default function EmptyState({ onResume, onStartNew, onBrowse }: Props) {
           className="rounded-lg border border-gray-600 px-6 py-2 text-gray-300 hover:bg-gray-700"
         >
           {t("browseWords")}
+        </button>
+        <button
+          onClick={onFlaggedReview}
+          className="rounded-lg border border-amber-600 px-6 py-2 text-amber-300 hover:bg-amber-900/30"
+        >
+          {t("reviewFlagged")}
         </button>
         <button
           onClick={onStartNew}

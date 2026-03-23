@@ -6,6 +6,7 @@ import { fetchJson } from "../api/client";
 import EmptyState from "./EmptyState";
 import QuizTaking from "./QuizTaking";
 import WordList from "./WordList";
+import FlaggedReview from "./FlaggedReview";
 import LanguageSelectModal from "./LanguageSelectModal";
 import LevelSelectModal from "./LevelSelectModal";
 import QuizFilterModal from "./QuizFilterModal";
@@ -25,10 +26,12 @@ export default function Dashboard() {
   } | null>(null);
   const [browsingLanguage, setBrowsingLanguage] = useState<string | null>(null);
   const [showBrowseLanguageModal, setShowBrowseLanguageModal] = useState(false);
+  const [flaggedReviewLanguage, setFlaggedReviewLanguage] = useState<string | null>(null);
+  const [showFlaggedLanguageModal, setShowFlaggedLanguageModal] = useState(false);
   const [transliterationMap, setPinyinMap] = useState<Record<string, string>>({});
 
   // Fetch pinyin map when a quiz starts or browsing begins
-  const activeLang = activeQuiz?.language ?? browsingLanguage;
+  const activeLang = activeQuiz?.language ?? browsingLanguage ?? flaggedReviewLanguage;
   useEffect(() => {
     if (activeLang) {
       getTransliterationMap(activeLang)
@@ -146,8 +149,10 @@ export default function Dashboard() {
   function goHome() {
     setActiveQuiz(null);
     setBrowsingLanguage(null);
+    setFlaggedReviewLanguage(null);
     setShowLanguageModal(false);
     setShowBrowseLanguageModal(false);
+    setShowFlaggedLanguageModal(false);
     setSelectedLanguage(null);
     setSelectedLevels(null);
     setResumePrompt(null);
@@ -168,6 +173,19 @@ export default function Dashboard() {
     }
   }
 
+  async function handleFlaggedReview() {
+    try {
+      const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
+      if (languages.length === 1) {
+        setFlaggedReviewLanguage(languages[0].filename.replace(/\.json$/, ""));
+      } else {
+        setShowFlaggedLanguageModal(true);
+      }
+    } catch {
+      setShowFlaggedLanguageModal(true);
+    }
+  }
+
   async function handleBrowse() {
     try {
       const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
@@ -181,7 +199,7 @@ export default function Dashboard() {
     }
   }
 
-  const showBackButton = !!(activeQuiz || browsingLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal);
+  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal || showFlaggedLanguageModal);
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-900">
@@ -203,6 +221,15 @@ export default function Dashboard() {
             setBrowsingLanguage(lang);
           }}
           onClose={() => setShowBrowseLanguageModal(false)}
+        />
+      )}
+      {showFlaggedLanguageModal && (
+        <LanguageSelectModal
+          onSelect={(lang) => {
+            setShowFlaggedLanguageModal(false);
+            setFlaggedReviewLanguage(lang);
+          }}
+          onClose={() => setShowFlaggedLanguageModal(false)}
         />
       )}
       {showLanguageModal && (
@@ -260,6 +287,12 @@ export default function Dashboard() {
             onStartNew={handleStartQuiz}
             transliterationMap={transliterationMap}
           />
+        ) : flaggedReviewLanguage ? (
+          <FlaggedReview
+            language={flaggedReviewLanguage}
+            onBack={() => setFlaggedReviewLanguage(null)}
+            transliterationMap={transliterationMap}
+          />
         ) : browsingLanguage ? (
           <WordList
             language={browsingLanguage}
@@ -271,6 +304,7 @@ export default function Dashboard() {
             onResume={(session) => setActiveQuiz(session)}
             onStartNew={handleStartQuiz}
             onBrowse={handleBrowse}
+            onFlaggedReview={handleFlaggedReview}
           />
         )}
       </main>

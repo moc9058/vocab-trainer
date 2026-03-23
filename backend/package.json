@@ -14,7 +14,9 @@
     "generate-extended": "tsx scripts/generate-extended.ts",
     "add-pinyin-segments": "tsx scripts/add-pinyin-segments.ts",
     "rebuild-index": "tsx scripts/rebuild-word-index.ts",
-    "strip-segments": "tsx scripts/strip-segments.ts"
+    "strip-segments": "tsx scripts/strip-segments.ts",
+    "verify-segments": "tsx scripts/verify-segment-coverage.ts",
+    "fill-missing": "tsx scripts/fill-missing-and-cleanup.ts"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",

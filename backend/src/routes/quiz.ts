@@ -10,6 +10,7 @@ import {
   createQuizSession,
   updateQuizSession,
   getWordsByIds,
+  flagWord,
 } from "../firestore.js";
 import type { QuizSession, QuizQuestion, Word, WordProgress } from "../types.js";
 
@@ -133,7 +134,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         const word = wordMap.get(q.wordId);
         return {
           wordId: q.wordId,
-          term: q.term,
+          term: word?.term ?? q.term,
           definition: word?.definition ?? {},
           transliteration: word?.transliteration,
           examples: word?.examples ?? [],
@@ -147,7 +148,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Submit answer
   fastify.post<{
-    Body: { sessionId: string; wordId: string; correct: boolean };
+    Body: { sessionId: string; wordId: string; correct: boolean; flagWordIds?: string[] };
   }>(
     "/answer",
     {
@@ -159,12 +160,13 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
             sessionId: { type: "string" },
             wordId: { type: "string" },
             correct: { type: "boolean" },
+            flagWordIds: { type: "array", items: { type: "string" } },
           },
         },
       },
     },
     async (request, reply) => {
-      const { sessionId, wordId, correct } = request.body;
+      const { sessionId, wordId, correct, flagWordIds } = request.body;
       const session = await getQuizSession(sessionId);
       if (!session) return reply.notFound(`Session '${sessionId}' not found`);
       if (session.status === "completed") return reply.badRequest("Session already completed");
@@ -201,6 +203,13 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       wp.lastReviewed = new Date().toISOString();
       await updateWordProgress(session.language, wordId, wp);
 
+      // Flag words if requested
+      if (flagWordIds && flagWordIds.length > 0) {
+        await Promise.all(
+          flagWordIds.map((id) => flagWord(session.language, id).catch(() => {}))
+        );
+      }
+
       // Check if session is complete
       const allAnswered = session.questions.every((q) => q.userCorrect !== undefined);
       if (allAnswered) {
@@ -232,6 +241,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         [unanswered[i], unanswered[j]] = [unanswered[j], unanswered[i]];
       }
       session.questions = [...answered, ...unanswered];
+      await updateQuizSession(session);
 
       return session;
     }

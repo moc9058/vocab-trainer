@@ -1,7 +1,7 @@
 export interface Example {
   sentence: string;
   translation: string;
-  segments?: { text: string; transliteration?: string }[];
+  segments?: { text: string; transliteration?: string; id?: string }[];
 }
 
 export interface Word {

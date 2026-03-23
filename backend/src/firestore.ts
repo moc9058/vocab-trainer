@@ -23,6 +23,7 @@ const idMaps = db.collection("id_maps");
 const wordIndex = db.collection("word_index");
 const progress = db.collection("progress");
 const quizSessions = db.collection("quiz_sessions");
+const flaggedWords = db.collection("flagged_words");
 
 // ========== Languages ==========
 
@@ -298,6 +299,7 @@ function docToWord(doc: FirebaseFirestore.DocumentSnapshot): Word {
       segments: ex.segments?.map((seg: any) => ({
         text: seg.text,
         transliteration: seg.transliteration ?? seg.pinyin,
+        ...(seg.id ? { id: seg.id } : {}),
       })),
     })),
     topics: d.topics ?? [],
@@ -474,6 +476,38 @@ function docToSession(doc: FirebaseFirestore.DocumentSnapshot): QuizSession {
     questionType: d.questionType,
     wordIds: d.wordIds,
   };
+}
+
+// ========== Flagged Words ==========
+
+export async function getFlaggedWords(language: string): Promise<{ wordId: string; flaggedAt: string }[]> {
+  const snap = await flaggedWords.where("language", "==", language).get();
+  return snap.docs.map((doc) => {
+    const d = doc.data();
+    return { wordId: d.wordId, flaggedAt: d.flaggedAt };
+  });
+}
+
+export async function getFlaggedWordCount(language: string): Promise<number> {
+  const snap = await flaggedWords.where("language", "==", language).get();
+  return snap.size;
+}
+
+export async function flagWord(language: string, wordId: string): Promise<void> {
+  const docId = `${language}_${wordId}`;
+  await flaggedWords.doc(docId).set({
+    language,
+    wordId,
+    flaggedAt: new Date().toISOString(),
+  });
+}
+
+export async function unflagWord(language: string, wordId: string): Promise<boolean> {
+  const docId = `${language}_${wordId}`;
+  const doc = await flaggedWords.doc(docId).get();
+  if (!doc.exists) return false;
+  await flaggedWords.doc(docId).delete();
+  return true;
 }
 
 // ========== Transliteration Map ==========

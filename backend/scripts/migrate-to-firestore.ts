@@ -192,7 +192,7 @@ async function main(): Promise<void> {
 
   // Find all vocab files
   const files = await readdir(DB_DIR);
-  const vocabFiles = files.filter((f) => f.endsWith(".json") && !f.startsWith("id_map_") && !f.startsWith("word_index")).sort();
+  const vocabFiles = files.filter((f) => f.endsWith(".json") && !f.startsWith("id_map_") && !f.startsWith("word_index") && !f.startsWith("missing-segments")).sort();
   console.log(`Found ${vocabFiles.length} vocab file(s): ${vocabFiles.join(", ")}`);
 
   for (const file of vocabFiles) {

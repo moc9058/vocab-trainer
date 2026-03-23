@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useI18n } from "../i18n/context";
 import { answerQuestion, getQuizQuestions } from "../api/quiz";
 import RubyText from "./RubyText";
@@ -22,6 +22,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
   const [loading, setLoading] = useState(true);
   const [showingAnswer, setShowingAnswer] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [originalTotal] = useState(() => session.wordIds?.length ?? session.questions.length);
 
   // Track how many questions have been fetched from the server
@@ -60,7 +61,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
     // Find the first unanswered question index to know where to start fetching
     const firstUnanswered = session.questions.findIndex((q) => q.userCorrect === undefined);
     const startOffset = Math.max(0, firstUnanswered === -1 ? 0 : firstUnanswered);
-    setCurrentIndex(firstUnanswered === -1 ? session.questions.length : firstUnanswered);
+    setCurrentIndex(firstUnanswered === -1 ? session.questions.length : 0);
 
     fetchBatch(startOffset, BATCH_SIZE).then(() => setLoading(false));
   }, [fetchBatch, session.questions]);
@@ -80,6 +81,30 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
   const question = currentIndex < questions.length ? questions[currentIndex] : null;
   const isComplete = currentSession.status === "completed";
 
+  const segmentWords = useMemo(() => {
+    if (!question?.examples) return [];
+    const seen = new Set<string>();
+    const result: { id: string; text: string; transliteration?: string }[] = [];
+    for (const ex of question.examples) {
+      for (const seg of ex.segments ?? []) {
+        if (seg.id && seg.id !== question.wordId && !seen.has(seg.id)) {
+          seen.add(seg.id);
+          result.push({ id: seg.id, text: seg.text, transliteration: seg.transliteration });
+        }
+      }
+    }
+    return result;
+  }, [question]);
+
+  function toggleFlag(id: string) {
+    setFlaggedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   async function handleGrade(correct: boolean) {
     if (!question || submitting) return;
     setSubmitting(true);
@@ -88,6 +113,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
         sessionId: currentSession.sessionId,
         wordId: question.wordId,
         correct,
+        flagWordIds: flaggedIds.size > 0 ? Array.from(flaggedIds) : undefined,
       });
 
       setQuestions((prev) => {
@@ -126,6 +152,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
 
       setCurrentIndex((i) => i + 1);
       setShowingAnswer(false);
+      setFlaggedIds(new Set());
     } finally {
       setSubmitting(false);
     }
@@ -174,7 +201,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
 
       {!showingAnswer ? (
         <button
-          onClick={() => setShowingAnswer(true)}
+          onClick={() => { setShowingAnswer(true); setFlaggedIds(new Set([question!.wordId])); }}
           className="rounded-lg bg-gray-700 px-6 py-2 text-gray-300 hover:bg-gray-600"
         >
           {t("showAnswer")}
@@ -204,6 +231,37 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
               ))}
             </div>
           )}
+
+          <div className="w-full max-w-lg space-y-1">
+            <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={flaggedIds.has(question!.wordId)}
+                onChange={() => toggleFlag(question!.wordId)}
+                className="accent-amber-500 w-4 h-4"
+              />
+              {t("flagForReview")}
+            </label>
+            {segmentWords.length > 0 && (
+              <>
+                <p className="text-xs text-gray-500 mt-2">{t("flagSegmentWords")}</p>
+                {segmentWords.map((seg) => (
+                  <label key={seg.id} className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none pl-4">
+                    <input
+                      type="checkbox"
+                      checked={flaggedIds.has(seg.id)}
+                      onChange={() => toggleFlag(seg.id)}
+                      className="accent-amber-500 w-4 h-4"
+                    />
+                    <span className="text-gray-300">{seg.text}</span>
+                    {seg.transliteration && (
+                      <span className="text-gray-500">({seg.transliteration})</span>
+                    )}
+                  </label>
+                ))}
+              </>
+            )}
+          </div>
 
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
             <button

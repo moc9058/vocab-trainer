@@ -32,6 +32,7 @@ export function answerQuestion(opts: {
   sessionId: string;
   wordId: string;
   correct: boolean;
+  flagWordIds?: string[];
 }): Promise<{ session: QuizSession }> {
   return postJson<{ session: QuizSession }>("/api/quiz/answer", opts);
 }

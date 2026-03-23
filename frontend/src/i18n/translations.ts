@@ -60,6 +60,14 @@ const translations = {
     notes: "Notes",
     transliteration: "Transliteration",
     removeDefinition: "Remove",
+    reviewFlagged: "Review Flagged",
+    flaggedWords: "Flagged Words",
+    nextWord: "Next",
+    removeFlag: "Remove",
+    noFlaggedWords: "No flagged words to review",
+    allFlaggedCleared: "All flagged words cleared!",
+    flagForReview: "Flag for review",
+    flagSegmentWords: "Also flag words from examples:",
   },
 } as const;
 
