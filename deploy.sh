@@ -2,13 +2,14 @@
 set -euo pipefail
 
 # Deploy vocab-trainer to Google Cloud Run
-# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--word] [--grammer]
+# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--word] [--grammer] [--llm]
 #
 # Options:
 #   --word      Run Firestore word data migration after deploying backend
 #   --grammer   Run Firestore grammar data migration after deploying backend
+#   --llm       Upload LLM config (Azure OpenAI keys) from .env to Firestore
 #
-# Both flags can be used together.
+# Flags can be used together.
 #
 # Prerequisites:
 #   - gcloud CLI installed and authenticated
@@ -16,11 +17,13 @@ set -euo pipefail
 
 MIGRATE_WORD=false
 MIGRATE_GRAMMER=false
+MIGRATE_LLM=false
 POSITIONAL=()
 for arg in "$@"; do
   case "$arg" in
     --word) MIGRATE_WORD=true ;;
     --grammer) MIGRATE_GRAMMER=true ;;
+    --llm) MIGRATE_LLM=true ;;
     *) POSITIONAL+=("$arg") ;;
   esac
 done
@@ -63,7 +66,7 @@ BACKEND_URL=$(gcloud run services describe vocab-trainer-backend \
 echo "==> Backend deployed at: ${BACKEND_URL}"
 
 # Optionally seed Firestore with data from local files
-if [ "$MIGRATE_WORD" = true ] || [ "$MIGRATE_GRAMMER" = true ]; then
+if [ "$MIGRATE_WORD" = true ] || [ "$MIGRATE_GRAMMER" = true ] || [ "$MIGRATE_LLM" = true ]; then
   echo "==> Installing backend dependencies for migration..."
   (cd backend && npm install --silent)
 fi
@@ -77,8 +80,13 @@ if [ "$MIGRATE_GRAMMER" = true ]; then
   (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
     npx tsx scripts/migrate-grammar-to-firestore.ts)
 fi
-if [ "$MIGRATE_WORD" = false ] && [ "$MIGRATE_GRAMMER" = false ]; then
-  echo "==> Skipping Firestore migration (use --word and/or --grammer to run)"
+if [ "$MIGRATE_LLM" = true ]; then
+  echo "==> Uploading LLM config to Firestore..."
+  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
+    npx tsx scripts/migrate-llm-config-to-firestore.ts)
+fi
+if [ "$MIGRATE_WORD" = false ] && [ "$MIGRATE_GRAMMER" = false ] && [ "$MIGRATE_LLM" = false ]; then
+  echo "==> Skipping Firestore migration (use --word, --grammer, and/or --llm to run)"
 fi
 
 # Build and push frontend

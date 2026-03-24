@@ -1,4 +1,5 @@
 import { AzureOpenAI } from "openai";
+import { Firestore } from "@google-cloud/firestore";
 import { config } from "dotenv";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -6,14 +7,58 @@ import { TOPICS, type Word, type Topic } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Load .env from project root
+// Load .env from project root (takes priority over Firestore)
 config({ path: resolve(__dirname, "../../.env") });
 
 let client: AzureOpenAI | null = null;
 let deployment = "";
+let configLoaded = false;
 
-export function createAzureClient(): AzureOpenAI {
+async function ensureLLMConfig(): Promise<void> {
+  if (configLoaded) return;
+  configLoaded = true;
+
+  // If all env vars are already set (from .env), skip Firestore
+  if (
+    process.env.AZURE_OPENAI_API_KEY &&
+    process.env.AZURE_OPENAI_ENDPOINT &&
+    process.env.AZURE_OPENAI_API_VERSION &&
+    process.env.AZURE_OPENAI_DEPLOYMENT_NAME
+  ) {
+    return;
+  }
+
+  // Fetch from Firestore config/llm
+  try {
+    const db = new Firestore({
+      databaseId: process.env.FIRESTORE_DATABASE_ID || "vocab-database",
+      ignoreUndefinedProperties: true,
+    });
+    const doc = await db.collection("config").doc("llm").get();
+    if (doc.exists) {
+      const data = doc.data()!;
+      for (const key of [
+        "AZURE_OPENAI_API_KEY",
+        "AZURE_OPENAI_ENDPOINT",
+        "AZURE_OPENAI_API_VERSION",
+        "AZURE_OPENAI_DEPLOYMENT_NAME",
+      ]) {
+        if (!process.env[key] && data[key]) {
+          process.env[key] = data[key] as string;
+        }
+      }
+      console.log("LLM config loaded from Firestore");
+    } else {
+      console.warn("No LLM config found in Firestore (config/llm)");
+    }
+  } catch (err) {
+    console.error("Failed to load LLM config from Firestore:", err);
+  }
+}
+
+export async function createAzureClient(): Promise<AzureOpenAI> {
   if (!client) {
+    await ensureLLMConfig();
     client = new AzureOpenAI({
       apiKey: process.env.AZURE_OPENAI_API_KEY,
       endpoint: process.env.AZURE_OPENAI_ENDPOINT,
@@ -25,17 +70,18 @@ export function createAzureClient(): AzureOpenAI {
   return client;
 }
 
-export function getDeployment(): string {
+export async function getDeployment(): Promise<string> {
   if (!deployment) {
+    await ensureLLMConfig();
     deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME!;
   }
   return deployment;
 }
 
 export async function callLLM(systemPrompt: string, userPrompt: string): Promise<string> {
-  const cl = createAzureClient();
+  const cl = await createAzureClient();
   const response = await cl.chat.completions.create({
-    model: getDeployment(),
+    model: await getDeployment(),
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },

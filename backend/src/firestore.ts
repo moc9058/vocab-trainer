@@ -93,22 +93,20 @@ async function updateLanguageMeta(language: string): Promise<void> {
 
 // ========== Words ==========
 
-// In-memory word cache to avoid full collection scans on search/filter
-const wordsCache = new Map<string, { data: Word[]; ts: number }>();
-
-function invalidateWordsCache(language: string): void {
-  wordsCache.delete(language);
-}
-
-async function getCachedWords(language: string): Promise<Word[]> {
-  const cached = wordsCache.get(language);
-  if (cached && Date.now() - cached.ts < CACHE_TTL) {
-    return cached.data;
+// Search word_index (small docs) to find matching word IDs, then batch-fetch full words
+async function searchWordIndex(language: string, searchTerm: string): Promise<string[]> {
+  const snap = await wordIndex.where("language", "==", language).get();
+  const q = searchTerm.toLowerCase();
+  const matchingIds: string[] = [];
+  for (const doc of snap.docs) {
+    const d = doc.data();
+    const term = (d.term as string || "").toLowerCase();
+    const transliteration = ((d.transliteration ?? d.pinyin) as string || "").toLowerCase();
+    if (term.includes(q) || transliteration.includes(q)) {
+      matchingIds.push(d.id as string);
+    }
   }
-  const snap = await words.where("language", "==", language).get();
-  const data = snap.docs.map(docToWord);
-  wordsCache.set(language, { data, ts: Date.now() });
-  return data;
+  return matchingIds;
 }
 
 function applyFilters(
@@ -162,10 +160,11 @@ export async function getWords(
     return paginateResults(results, page, limit);
   }
 
-  // Search or filter combinations: use cached word list
+  // Search: use word_index (small docs) to find matches, then batch-fetch full words
   if (filters?.search) {
-    let results = await getCachedWords(language);
-    results = applyFilters(results, filters);
+    const matchingIds = await searchWordIndex(language, filters.search);
+    let results = await getWordsByIds(matchingIds);
+    results = applyFilters(results, { ...filters, search: undefined });
     return paginateResults(results, page, limit);
   }
 
@@ -274,7 +273,7 @@ export async function addWord(language: string, word: Word): Promise<void> {
   await words.doc(word.id).set(data);
   await updateLanguageMeta(language);
   invalidateWordFiltersCache(language);
-  invalidateWordsCache(language);
+
   // Write to word_index
   const indexDocId = `${language}_${word.term}`;
   await wordIndex.doc(indexDocId).set({
@@ -321,7 +320,7 @@ export async function updateWord(language: string, wordId: string, updates: Part
   if (updates.topics || updates.level || updates.grammaticalCategory) {
     await updateLanguageMeta(language);
     invalidateWordFiltersCache(language);
-  invalidateWordsCache(language);
+
   }
 
   // Sync word_index on term/level/pinyin change
@@ -354,7 +353,7 @@ export async function deleteWord(language: string, wordId: string): Promise<bool
   await words.doc(wordId).delete();
   await updateLanguageMeta(language);
   invalidateWordFiltersCache(language);
-  invalidateWordsCache(language);
+
   // Remove from word_index
   await wordIndex.doc(`${language}_${term}`).delete();
   return true;

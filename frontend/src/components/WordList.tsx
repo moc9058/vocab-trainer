@@ -37,6 +37,7 @@ export default function WordList({ language, onBack, transliterationMap: externa
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const isInitialMount = useRef(true);
+  const requestIdRef = useRef(0);
 
   // Fetch flagged word IDs on mount
   useEffect(() => {
@@ -93,6 +94,7 @@ export default function WordList({ language, onBack, transliterationMap: externa
   }, [language, externalMap]);
 
   const fetchData = useCallback(async () => {
+    const currentRequestId = ++requestIdRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -104,12 +106,16 @@ export default function WordList({ language, onBack, transliterationMap: externa
         flaggedOnly: flaggedOnly || undefined,
       };
       const data = await getWords(language, filters, page);
+      if (currentRequestId !== requestIdRef.current) return; // stale response
       setResult(data);
     } catch (err) {
+      if (currentRequestId !== requestIdRef.current) return; // stale response
       console.error("Failed to fetch words:", err);
       setError(err instanceof Error ? err.message : "Failed to load words");
     } finally {
-      setLoading(false);
+      if (currentRequestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   }, [language, debouncedSearch, topic, category, level, flaggedOnly, page]);
 

@@ -12,13 +12,14 @@ import {
   createLanguage,
   deleteLanguage,
   lookupWordByTerm,
+  lookupWordsByTerms,
   getTransliterationMap,
   flagWord,
 } from "../firestore.js";
-import type { Word, Example } from "../types.js";
+import type { Word, Example, Topic } from "../types.js";
 import { TOPICS } from "../types.js";
 import { generateMissingWords } from "../word-generator.js";
-import { callLLM, stripMarkdownFences, validateWord, segmentBatch } from "../llm.js";
+import { callLLM, stripMarkdownFences, validateWord, type Segment } from "../llm.js";
 
 const vocabRoutes: FastifyPluginAsync = async (fastify) => {
   // List words with filtering & pagination
@@ -247,16 +248,24 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
 
 CRITICAL: If a field is marked "PROVIDED", keep that EXACT value unchanged. Only generate values for fields marked "MISSING".
 
+For each example sentence, also provide "segments": an array of word-level segments with pinyin.
+
 Return a JSON object:
 {
   "term": "the Chinese word",
   "transliteration": "pinyin with tone marks",
   "definition": { "Japanese": "...", "English": "...", "Korean": "..." },
   "grammaticalCategory": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase",
-  "examples": [{ "sentence": "Chinese sentence", "translation": "English translation" }],
+  "examples": [{ "sentence": "Chinese sentence", "translation": "English translation", "segments": [{ "text": "word", "pinyin": "pīnyīn" }] }],
   "topics": ["..."],
   "notes": "brief usage notes"
 }
+
+Segment rules:
+- Segment into natural Chinese words (not individual characters unless standalone)
+- Use tone marks on pinyin (e.g. "nǐ hǎo" not "ni3 hao3")
+- Keep punctuation as separate segments with no pinyin
+- Omit "pinyin" for non-Chinese tokens
 
 Allowed topics: ${TOPICS.join(", ")}`
         : `You are a ${language} vocabulary expert. Given a ${language} term and optionally some pre-filled fields, generate a complete vocabulary entry.
@@ -268,7 +277,7 @@ Return a JSON object:
   "term": "the ${language} word",
   "definition": { "Japanese": "...", "English": "...", "Korean": "..." },
   "grammaticalCategory": "noun|verb|adjective|adverb|preposition|conjunction|particle|pronoun|interjection|idiom|phrase",
-  "examples": [{ "sentence": "${language} sentence using the word", "translation": "English translation" }],
+  "examples": [{ "sentence": "${language} sentence using the word"${language === "english" ? "" : ', "translation": "English translation"'} }],
   "topics": ["..."],
   "notes": "brief usage notes"
 }
@@ -308,20 +317,20 @@ Allowed topics: ${TOPICS.join(", ")}`;
         merged.topics = ["Language Fundamentals"];
       }
 
-      // Auto-generate segments for example sentences (Chinese only)
-      const examplesWithSegments = merged.examples as Example[];
-      if (isChinese && examplesWithSegments.length > 0) {
-        const sentences = examplesWithSegments.map((ex) => ex.sentence);
-        try {
-          const segMap = await segmentBatch(sentences);
-          for (let i = 0; i < examplesWithSegments.length; i++) {
-            const segs = segMap.get(i);
-            if (segs) examplesWithSegments[i] = { ...examplesWithSegments[i], segments: segs };
+      // Parse segments from LLM response (Chinese only — segments are included in Call 1)
+      const examplesWithSegments: Example[] = merged.examples.map((ex: any) => {
+        if (!isChinese || !Array.isArray(ex.segments)) return ex as Example;
+        const segments: Segment[] = [];
+        for (const seg of ex.segments) {
+          if (typeof seg?.text !== "string" || seg.text.length === 0) continue;
+          if (typeof seg.pinyin === "string" && seg.pinyin.length > 0) {
+            segments.push({ text: seg.text, transliteration: seg.pinyin });
+          } else {
+            segments.push({ text: seg.text });
           }
-        } catch (err) {
-          fastify.log.warn({ err, term }, "Segment generation failed, saving without segments");
         }
-      }
+        return { sentence: ex.sentence, translation: ex.translation, segments } as Example;
+      });
 
       const id = await getNextWordId(language);
       const word: Word = {
@@ -338,7 +347,18 @@ Allowed topics: ${TOPICS.join(", ")}`;
 
       await addWord(language, word);
       await flagWord(language, word.id);
-      return reply.status(201).send(word);
+
+      // Discover and auto-generate missing words from segments
+      let generatedWords: Word[] = [];
+      if (isChinese) {
+        try {
+          generatedWords = await generateMissingWordsFromSegments(language, word, fastify.log);
+        } catch (err) {
+          fastify.log.warn({ err, term }, "Missing word generation from segments failed");
+        }
+      }
+
+      return reply.status(201).send({ ...word, generatedWords });
     }
   );
 
@@ -396,5 +416,115 @@ Allowed topics: ${TOPICS.join(", ")}`;
     }
   );
 };
+
+/** Discover unknown words from segments and batch-generate them */
+async function generateMissingWordsFromSegments(
+  language: string,
+  sourceWord: Word,
+  logger: { info: (...a: unknown[]) => void; warn: (...a: unknown[]) => void }
+): Promise<Word[]> {
+  // Collect unique segment terms (exclude punctuation and the source term)
+  const punctuation = /^[\s\p{P}\p{S}\p{N}]+$/u;
+  const segmentTerms = new Map<string, { pinyin?: string; sentence: string; translation: string }>();
+
+  for (const ex of sourceWord.examples) {
+    if (!ex.segments) continue;
+    for (const seg of ex.segments) {
+      if (
+        punctuation.test(seg.text) ||
+        seg.text === sourceWord.term ||
+        seg.text.length < 2 ||
+        segmentTerms.has(seg.text)
+      ) continue;
+      segmentTerms.set(seg.text, {
+        pinyin: seg.transliteration,
+        sentence: ex.sentence,
+        translation: ex.translation,
+      });
+    }
+  }
+
+  if (segmentTerms.size === 0) return [];
+
+  // Batch-lookup which terms already exist in the DB
+  const existing = await lookupWordsByTerms(language, [...segmentTerms.keys()]);
+  const existingSet = new Set(existing.map((e) => e.term));
+  const missing = [...segmentTerms.entries()].filter(([term]) => !existingSet.has(term));
+
+  if (missing.length === 0) return [];
+  logger.info(`[smart-add] Found ${missing.length} missing words from segments, generating...`);
+
+  // Build batch prompt — we provide term, pinyin, and example sentence; LLM fills the rest
+  const wordEntries = missing.map(([term, info]) => ({
+    term,
+    transliteration: info.pinyin ?? "",
+    example: { sentence: info.sentence, translation: info.translation },
+  }));
+
+  const systemPrompt = `You are a Chinese vocabulary expert. Generate vocabulary entries for Chinese words.
+Each word already has a term, transliteration (pinyin), and one example sentence provided.
+You need to fill: definition, grammaticalCategory, topics, notes.
+
+Return a JSON object with a "words" array:
+[{
+  "term": "the word (keep as provided)",
+  "transliteration": "keep as provided",
+  "definition": { "Japanese": "...", "English": "...", "Korean": "..." },
+  "grammaticalCategory": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase",
+  "topics": ["..."],
+  "notes": "brief usage notes or empty string"
+}]
+
+Allowed topics: ${TOPICS.join(", ")}`;
+
+  const userPrompt = wordEntries
+    .map((w) => `- ${w.term} (${w.transliteration}), example: "${w.example.sentence}" → "${w.example.translation}"`)
+    .join("\n");
+
+  const addedWords: Word[] = [];
+  try {
+    const raw = await callLLM(systemPrompt, `Generate entries for these words:\n\n${userPrompt}`);
+    const parsed = JSON.parse(stripMarkdownFences(raw));
+    const generated: unknown[] = parsed.words ?? [];
+
+    for (const g of generated) {
+      if (!g || typeof g !== "object") continue;
+      const entry = g as Record<string, unknown>;
+      const term = entry.term as string;
+      if (!term || existingSet.has(term)) continue;
+
+      // Find the original segment data for the example sentence
+      const info = segmentTerms.get(term);
+      if (!info) continue;
+
+      const id = await getNextWordId(language);
+      const topics = ((entry.topics as string[]) ?? []).filter((t) => (TOPICS as readonly string[]).includes(t));
+
+      const newWord: Word = {
+        id,
+        term,
+        transliteration: (entry.transliteration as string) || info.pinyin || "",
+        definition: (entry.definition as Record<string, string>) || { English: "" },
+        grammaticalCategory: (entry.grammaticalCategory as string) || "",
+        examples: [{ sentence: info.sentence, translation: info.translation }],
+        topics: (topics.length > 0 ? topics : ["Language Fundamentals"]) as Word["topics"],
+        level: "Advanced",
+        notes: (entry.notes as string) || "",
+      };
+
+      await addWord(language, newWord);
+      await flagWord(language, newWord.id);
+      existingSet.add(term);
+      addedWords.push(newWord);
+    }
+
+    if (addedWords.length > 0) {
+      logger.info(`[smart-add] Auto-generated ${addedWords.length} words from segments`);
+    }
+  } catch (err) {
+    logger.warn(`[smart-add] Batch generation for missing words failed:`, err);
+  }
+  return addedWords;
+}
 
 export default vocabRoutes;

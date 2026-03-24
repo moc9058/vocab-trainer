@@ -32,7 +32,9 @@ To also run Firestore data migrations during deploy:
 ```bash
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --word              # word data only
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --grammer           # grammar data only
-./deploy.sh vocab-trainer-490014 asia-northeast1 --word --grammer    # both
+./deploy.sh vocab-trainer-490014 asia-northeast1 --llm               # upload LLM config to Firestore
+./deploy.sh vocab-trainer-490014 asia-northeast1 --word --grammer    # both migrations
+./deploy.sh vocab-trainer-490014 asia-northeast1 --word --grammer --llm  # all migrations
 ```
 
 ### Migrate Data Only
@@ -50,10 +52,18 @@ Run the Firestore migration without a full deploy:
 cd backend && npx tsx scripts/migrate-grammar-to-firestore.ts
 ```
 
+### Upload LLM Config Locally
+
+```bash
+cd backend && FIRESTORE_PROJECT=vocab-trainer-490014 npx tsx scripts/migrate-llm-config-to-firestore.ts
+```
+
+Reads Azure OpenAI keys from `.env` and writes them to Firestore `config/llm`. The backend will automatically fetch LLM config from Firestore when `.env` is not available (e.g., in deployed environments).
+
 This will:
 1. Build and push backend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-backend/backend`
 2. Deploy backend to Cloud Run
-3. Run Firestore migration (only with `--word` and/or `--grammer`)
+3. Run Firestore migration (only with `--word`, `--grammer`, and/or `--llm`)
 4. Build and push frontend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-frontend/frontend`
 5. Deploy frontend to Cloud Run with `BACKEND_URL` pointing to the backend service
 
@@ -186,6 +196,8 @@ vocab-trainer/
 │   ├── Dockerfile
 │   ├── scripts/
 │   │   ├── migrate-to-firestore.ts        # One-time JSON → Firestore migration
+│   │   ├── migrate-grammar-to-firestore.ts # Grammar data → Firestore migration
+│   │   ├── migrate-llm-config-to-firestore.ts # Upload LLM config (.env) → Firestore
 │   │   ├── generate-extended.ts           # Generate extended vocab via Azure OpenAI
 │   │   ├── find-missing-pinyin.ts         # Find words missing pinyin data
 │   │   ├── rebuild-word-index.ts          # Rebuild word_index.json from HSK files
@@ -508,6 +520,7 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `grammar_items`      | Flattened grammar components (denormalized chapter/subchapter) |
 | `grammar_progress`   | Per-component grammar progress                        |
 | `grammar_quiz_sessions` | One grammar quiz session per language              |
+| `config`               | App configuration (e.g., `config/llm` stores Azure OpenAI keys) |
 
 Local JSON files under `backend/DB/` serve as the source for the initial Firestore migration (run with `./migrate.sh` or `./deploy.sh ... --migrate`).
 
@@ -518,9 +531,9 @@ Local JSON files under `backend/DB/` serve as the source for the initial Firesto
 | `PORT`                | `3000`           | Server listening port              |
 | `HOST`                | `0.0.0.0`       | Server listening address           |
 | `FIRESTORE_DATABASE_ID` | `vocab-database` | Firestore database ID            |
-| `AZURE_OPENAI_ENDPOINT` | —               | Azure OpenAI endpoint for background word generation |
-| `AZURE_OPENAI_API_KEY`  | —               | Azure OpenAI API key             |
-| `AZURE_OPENAI_DEPLOYMENT` | —             | Azure OpenAI deployment name     |
+| `AZURE_OPENAI_ENDPOINT` | —               | Azure OpenAI endpoint (falls back to Firestore `config/llm`) |
+| `AZURE_OPENAI_API_KEY`  | —               | Azure OpenAI API key (falls back to Firestore `config/llm`) |
+| `AZURE_OPENAI_DEPLOYMENT` | —             | Azure OpenAI deployment name (falls back to Firestore `config/llm`) |
 
 ## Docker
 

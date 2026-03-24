@@ -13,6 +13,7 @@ cd backend && npm run restructure       # Split chinese.json into per-HSK-level 
 cd backend && npm run generate-extended # Generate extended vocab via Azure OpenAI
 cd backend && npm run migrate           # One-time word migration from JSON files to Firestore
 cd backend && npx tsx scripts/migrate-grammar-to-firestore.ts  # Grammar migration to Firestore
+cd backend && npx tsx scripts/migrate-llm-config-to-firestore.ts  # Upload LLM config (.env) to Firestore
 ```
 
 ### Frontend
@@ -31,7 +32,9 @@ docker compose up --build      # Run full stack (backend :3000, frontend :5173)
 ./deploy.sh PROJECT_ID REGION                    # Deploy only
 ./deploy.sh PROJECT_ID REGION --word             # Deploy + word migration
 ./deploy.sh PROJECT_ID REGION --grammer          # Deploy + grammar migration
+./deploy.sh PROJECT_ID REGION --llm              # Deploy + upload LLM config to Firestore
 ./deploy.sh PROJECT_ID REGION --word --grammer   # Deploy + both migrations
+./deploy.sh PROJECT_ID REGION --word --grammer --llm  # Deploy + all migrations
 ```
 
 ### No test or lint commands are configured.
@@ -52,7 +55,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `routes/grammar-quiz.ts` — grammar quiz with self-grading, two modes (existing examples / LLM-generated)
   - `routes/grammar-progress.ts` — per-component grammar progress
 - **Database**: `firestore.ts` — Google Cloud Firestore abstraction layer
-- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM with JSON mode, validateWord, segmentBatch)
+- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM with JSON mode, validateWord, segmentBatch); config loaded from `.env` (local) or Firestore `config/llm` (deployed)
 - **Storage**: `storage.ts` — legacy file-based JSON persistence (atomic writes via temp file → rename)
 - **Types**: `types.ts` — shared interfaces (Word, VocabFile, QuizSession, WordProgress, etc.)
 - Route handlers use Fastify generics for type-safe Params/Querystring/Body and JSON schema validation
@@ -63,6 +66,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
 - `generate-extended.ts` — uses Azure OpenAI to generate additional vocabulary from existing example sentences; requires `AZURE_OPENAI_*` env vars
 - `migrate-to-firestore.ts` — one-time word migration from file-based JSON to Firestore; requires Google Cloud credentials
 - `migrate-grammar-to-firestore.ts` — grammar migration from `backend/DB/grammer/` JSON to Firestore
+- `migrate-llm-config-to-firestore.ts` — uploads Azure OpenAI config from `.env` to Firestore `config/llm` document
 
 ### Data Storage
 - **Primary**: Google Cloud Firestore (database ID: `vocab-database`)
@@ -77,6 +81,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `grammar_items` — flattened grammar components (denormalized chapter/subchapter info)
   - `grammar_progress` — per-component grammar progress
   - `grammar_quiz_sessions` — one grammar quiz session per language
+  - `config` — app configuration (e.g., `config/llm` stores Azure OpenAI keys)
 - **Local files** (legacy/scripts):
   - Vocabulary: `backend/DB/word/HSK{1-6}.json`, `backend/DB/word/HSK7-9.json` — per-level vocab files
   - Extended vocab: `backend/DB/word/HSK{1-6}-extended.json`, `backend/DB/word/HSK7-9-extended.json`

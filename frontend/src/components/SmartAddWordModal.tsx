@@ -54,6 +54,7 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [generatedWords, setGeneratedWords] = useState<Word[]>([]);
 
   function getDefLangKey(def: { langSelect: string; customLang: string }): string {
     if (def.langSelect === "__other__") return def.customLang.trim();
@@ -79,7 +80,7 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
     if (!language) return;
 
     try {
-      const word = await smartAddWord(language, {
+      const result = await smartAddWord(language, {
         term: term.trim(),
         transliteration: langSelect === "chinese" ? (transliteration.trim() || undefined) : undefined,
         definition: Object.keys(defObj).length > 0 ? defObj : undefined,
@@ -87,9 +88,13 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
         topics: topics.length > 0 ? topics : undefined,
         examples: validExamples.length > 0 ? validExamples : undefined,
       });
+      const { generatedWords: gw, ...word } = result;
       setSuccess(true);
+      setGeneratedWords(gw ?? []);
       onSave(word);
-      setTimeout(() => onClose(), 1000);
+      if (!gw || gw.length === 0) {
+        setTimeout(() => onClose(), 1000);
+      }
     } catch (err) {
       const msg = String(err);
       if (msg.includes("409")) {
@@ -112,6 +117,31 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
 
         {error && <p className="mb-3 text-sm text-red-400">{error}</p>}
         {success && <p className="mb-3 text-sm text-green-400">{t("wordAddedSuccess")}</p>}
+        {generatedWords.length > 0 && (
+          <div className="mb-3 rounded-lg border border-amber-700 bg-amber-900/30 p-3">
+            <p className="mb-2 text-sm font-medium text-amber-300">
+              {generatedWords.length} word{generatedWords.length > 1 ? "s" : ""} auto-generated from examples:
+            </p>
+            <ul className="space-y-1">
+              {generatedWords.map((w) => (
+                <li key={w.id} className="text-sm text-gray-300">
+                  <span className="font-medium text-gray-100">{w.term}</span>
+                  {w.transliteration && (
+                    <span className="ml-1 text-gray-400">({w.transliteration})</span>
+                  )}
+                  <span className="ml-1 text-gray-500">— {Object.values(w.definition).join("; ")}</span>
+                </li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              onClick={onClose}
+              className="mt-3 rounded-lg bg-gray-700 px-4 py-1.5 text-sm text-gray-200 hover:bg-gray-600"
+            >
+              OK
+            </button>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Language */}
@@ -301,17 +331,19 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
                   className="w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
                 />
                 <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={ex.translation}
-                    onChange={(e) => {
-                      const next = [...examples];
-                      next[i] = { ...next[i], translation: e.target.value };
-                      setExamples(next);
-                    }}
-                    placeholder={t("translationLabel")}
-                    className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                  />
+                  {langSelect !== "english" && (
+                    <input
+                      type="text"
+                      value={ex.translation}
+                      onChange={(e) => {
+                        const next = [...examples];
+                        next[i] = { ...next[i], translation: e.target.value };
+                        setExamples(next);
+                      }}
+                      placeholder={t("translationLabel")}
+                      className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                    />
+                  )}
                   {examples.length > 1 && (
                     <button
                       type="button"
