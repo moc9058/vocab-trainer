@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
+import { uiLanguages } from "../i18n/translations";
 import { getCurrentSession, startQuiz } from "../api/quiz";
 import { getTransliterationMap } from "../api/vocab";
 import { startGrammarQuiz, getCurrentGrammarSession } from "../api/grammar";
@@ -19,7 +20,7 @@ import QuizFilterModal from "./QuizFilterModal";
 import type { QuizSession, GrammarQuizSession } from "../types";
 
 export default function Dashboard() {
-  const { t } = useI18n();
+  const { t, language, setLanguage } = useI18n();
   const [activeQuiz, setActiveQuiz] = useState<QuizSession | null>(null);
   const [starting, setStarting] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
@@ -296,14 +297,31 @@ export default function Dashboard() {
     <div className="flex min-h-screen flex-col bg-gray-900">
       <header className="flex items-center justify-between border-b border-gray-700 bg-gray-800 px-3 sm:px-6 py-3">
         <h1 className="text-base sm:text-xl font-bold text-gray-100">{t("appTitle")}</h1>
-        {showBackButton && (
-          <button
-            onClick={goHome}
-            className="rounded-lg border border-gray-600 px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
-          >
-            {t("back")}
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-gray-600 overflow-hidden">
+            {uiLanguages.map((lang) => (
+              <button
+                key={lang}
+                onClick={() => setLanguage(lang)}
+                className={`px-2 py-1 text-xs font-medium ${
+                  language === lang
+                    ? "bg-indigo-600 text-white"
+                    : "text-gray-400 hover:bg-gray-700"
+                }`}
+              >
+                {lang.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          {showBackButton && (
+            <button
+              onClick={goHome}
+              className="rounded-lg border border-gray-600 px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
+            >
+              {t("back")}
+            </button>
+          )}
+        </div>
       </header>
       {showGrammarLanguageModal && (
         <LanguageSelectModal
