@@ -187,17 +187,8 @@ export default function Dashboard() {
     setShowSmartAdd(true);
   }
 
-  async function handleAddGrammar() {
-    try {
-      const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
-      if (languages.length === 1) {
-        setGrammarFormLanguage(languages[0].filename.replace(/\.json$/, ""));
-      } else {
-        setShowLanguageModal(true);
-      }
-    } catch {
-      setShowLanguageModal(true);
-    }
+  function handleAddGrammar() {
+    setGrammarFormLanguage("open");
   }
 
   async function handleStartQuiz() {
@@ -356,7 +347,6 @@ export default function Dashboard() {
       )}
       {grammarFormLanguage && (
         <GrammarFormModal
-          language={grammarFormLanguage}
           onSave={() => setGrammarFormLanguage(null)}
           onClose={() => setGrammarFormLanguage(null)}
         />

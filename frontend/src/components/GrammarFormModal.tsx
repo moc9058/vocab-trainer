@@ -3,14 +3,34 @@ import { useI18n } from "../i18n/context";
 import { getGrammarChapters, getSubchapters, createGrammarItem } from "../api/grammar";
 import type { GrammarChapterInfo } from "../types";
 
+const GRAMMAR_LANG_OPTIONS = [
+  { value: "chinese", label: "Chinese" },
+  { value: "english", label: "English" },
+  { value: "__other__", label: "Other" },
+] as const;
+
 interface Props {
-  language: string;
+  language?: string;
   onSave: () => void;
   onClose: () => void;
 }
 
-export default function GrammarFormModal({ language, onSave, onClose }: Props) {
+export default function GrammarFormModal({ language: initialLanguage, onSave, onClose }: Props) {
   const { t } = useI18n();
+  const [langSelect, setLangSelect] = useState(
+    initialLanguage === "chinese" || initialLanguage === "english"
+      ? initialLanguage
+      : initialLanguage
+        ? "__other__"
+        : "chinese"
+  );
+  const [customLang, setCustomLang] = useState(
+    initialLanguage && initialLanguage !== "chinese" && initialLanguage !== "english"
+      ? initialLanguage
+      : ""
+  );
+  const language =
+    langSelect === "__other__" ? customLang.trim().toLowerCase() : langSelect;
   const [chapters, setChapters] = useState<GrammarChapterInfo[]>([]);
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
   const [subchapters, setSubchapters] = useState<{ subchapterId: string; subchapterTitle: Record<string, string> }[]>([]);
@@ -94,6 +114,35 @@ export default function GrammarFormModal({ language, onSave, onClose }: Props) {
         {error && <p className="mb-3 text-sm text-red-400">{error}</p>}
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Grammar Language */}
+          <div>
+            <label className="mb-1 block text-sm text-gray-400">Language</label>
+            <div className="flex items-center gap-3">
+              {GRAMMAR_LANG_OPTIONS.map((opt) => (
+                <label key={opt.value} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="grammarLang"
+                    value={opt.value}
+                    checked={langSelect === opt.value}
+                    onChange={() => setLangSelect(opt.value)}
+                    className="accent-blue-600"
+                  />
+                  {opt.label}
+                </label>
+              ))}
+              {langSelect === "__other__" && (
+                <input
+                  type="text"
+                  value={customLang}
+                  onChange={(e) => setCustomLang(e.target.value)}
+                  placeholder="e.g. french"
+                  className="rounded border border-gray-600 bg-gray-700 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                />
+              )}
+            </div>
+          </div>
+
           {/* Input Language Selector */}
           <div>
             <label className="mb-1 block text-sm text-gray-400">{t("displayLanguage")}</label>
