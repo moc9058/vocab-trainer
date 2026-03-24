@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { getWords, getFilters, getTransliterationMap, updateWord, deleteWord } from "../api/vocab";
 import RubyText from "./RubyText";
@@ -16,6 +16,7 @@ export default function WordList({ language, onBack, transliterationMap: externa
   const { t } = useI18n();
   const [result, setResult] = useState<PaginatedResult<Word> | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [topic, setTopic] = useState("");
   const [category, setCategory] = useState("");
@@ -31,6 +32,14 @@ export default function WordList({ language, onBack, transliterationMap: externa
   const [showSmartAdd, setShowSmartAdd] = useState(false);
   const [editingWord, setEditingWord] = useState<Word | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const isInitialMount = useRef(true);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   async function handleUpdateWord(data: Omit<Word, "id"> & { id?: string }) {
     if (!data.id) return;
@@ -65,9 +74,10 @@ export default function WordList({ language, onBack, transliterationMap: externa
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const filters = {
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         topic: topic || undefined,
         category: category || undefined,
         level: level || undefined,
@@ -76,19 +86,24 @@ export default function WordList({ language, onBack, transliterationMap: externa
       setResult(data);
     } catch (err) {
       console.error("Failed to fetch words:", err);
+      setError(err instanceof Error ? err.message : "Failed to load words");
     } finally {
       setLoading(false);
     }
-  }, [language, search, topic, category, level, page]);
+  }, [language, debouncedSearch, topic, category, level, page]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Reset page when filters change
+  // Reset page when filters change (skip initial mount)
   useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     setPage(1);
-  }, [search, topic, category, level]);
+  }, [debouncedSearch, topic, category, level]);
 
   return (
     <div className="flex h-full flex-col">
@@ -162,6 +177,16 @@ export default function WordList({ language, onBack, transliterationMap: externa
       <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4">
         {loading ? (
           <p className="text-gray-400">Loading...</p>
+        ) : error ? (
+          <div className="flex flex-col items-center gap-3 py-8">
+            <p className="text-red-400">{error}</p>
+            <button
+              onClick={fetchData}
+              className="rounded-lg bg-gray-700 px-4 py-2 text-sm text-gray-200 hover:bg-gray-600"
+            >
+              Retry
+            </button>
+          </div>
         ) : !result || result.items.length === 0 ? (
           <p className="text-gray-400">{t("noWordsFound")}</p>
         ) : (
