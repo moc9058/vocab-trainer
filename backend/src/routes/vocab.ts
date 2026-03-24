@@ -24,20 +24,20 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
   // List words with filtering & pagination
   fastify.get<{
     Params: { language: string };
-    Querystring: { search?: string; topic?: string; category?: string; level?: string; page?: string; limit?: string };
+    Querystring: { search?: string; topic?: string; category?: string; level?: string; flaggedOnly?: string; page?: string; limit?: string };
   }>("/:language", async (request, reply) => {
     const { language } = request.params;
     if (!(await languageExists(language))) {
       return reply.notFound(`Language '${language}' not found`);
     }
 
-    const { search, topic, category, level } = request.query;
+    const { search, topic, category, level, flaggedOnly } = request.query;
     const page = Math.max(1, parseInt(request.query.page ?? "1", 10) || 1);
     const limit = Math.max(1, Math.min(100, parseInt(request.query.limit ?? "50", 10) || 50));
 
     return await getWords(
       language,
-      { search, topic, category, level },
+      { search, topic, category, level, flaggedOnly: flaggedOnly === "true" },
       { page, limit }
     );
   });

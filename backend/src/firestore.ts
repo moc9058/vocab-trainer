@@ -95,7 +95,7 @@ async function updateLanguageMeta(language: string): Promise<void> {
 
 export async function getWords(
   language: string,
-  filters?: { search?: string; topic?: string; category?: string; level?: string },
+  filters?: { search?: string; topic?: string; category?: string; level?: string; flaggedOnly?: boolean },
   pagination?: { page: number; limit: number }
 ): Promise<PaginatedResult<Word>> {
   const page = pagination?.page ?? 1;
@@ -114,8 +114,39 @@ export async function getWords(
     query = query.where("level", "==", filters.level);
   }
 
+  // Flagged-only: fetch only flagged words by ID (avoids full collection scan)
+  if (filters?.flaggedOnly) {
+    const flagged = await getFlaggedWords(language);
+    const flaggedWordIds = flagged.map((f) => f.wordId);
+    let results = await getWordsByIds(flaggedWordIds);
+    // Apply remaining filters in memory
+    if (filters.topic) {
+      const t = filters.topic;
+      results = results.filter((w) => (w.topics as string[]).includes(t));
+    }
+    if (filters.category) {
+      results = results.filter((w) => w.grammaticalCategory === filters.category);
+    }
+    if (filters.level) {
+      results = results.filter((w) => w.level === filters.level);
+    }
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      results = results.filter(
+        (w) =>
+          w.term.toLowerCase().includes(q) ||
+          w.transliteration?.toLowerCase().includes(q) ||
+          Object.values(w.definition).some((d) => d.toLowerCase().includes(q))
+      );
+    }
+    const total = results.length;
+    const totalPages = Math.ceil(total / limit) || 1;
+    const start = (page - 1) * limit;
+    const items = results.slice(start, start + limit);
+    return { items, total, page, limit, totalPages };
+  }
+
   // When there's a text search, we must fetch all and filter client-side
-  // (Firestore doesn't support full-text search)
   if (filters?.search) {
     const snap = await query.get();
     let results = snap.docs.map(docToWord);

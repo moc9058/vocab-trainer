@@ -6,6 +6,7 @@ interface WordFilters {
   topic?: string;
   category?: string;
   level?: string;
+  flaggedOnly?: boolean;
 }
 
 export async function getWords(
@@ -21,6 +22,7 @@ export async function getWords(
   if (filters?.topic) params.set("topic", filters.topic);
   if (filters?.category) params.set("category", filters.category);
   if (filters?.level) params.set("level", filters.level);
+  if (filters?.flaggedOnly) params.set("flaggedOnly", "true");
   return fetchJson(`/api/vocab/${encodeURIComponent(language)}?${params}`);
 }
 

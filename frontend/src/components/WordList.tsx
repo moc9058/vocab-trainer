@@ -21,6 +21,7 @@ export default function WordList({ language, onBack, transliterationMap: externa
   const [topic, setTopic] = useState("");
   const [category, setCategory] = useState("");
   const [level, setLevel] = useState("");
+  const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [filterOptions, setFilterOptions] = useState<{
@@ -81,6 +82,7 @@ export default function WordList({ language, onBack, transliterationMap: externa
         topic: topic || undefined,
         category: category || undefined,
         level: level || undefined,
+        flaggedOnly: flaggedOnly || undefined,
       };
       const data = await getWords(language, filters, page);
       setResult(data);
@@ -90,7 +92,7 @@ export default function WordList({ language, onBack, transliterationMap: externa
     } finally {
       setLoading(false);
     }
-  }, [language, debouncedSearch, topic, category, level, page]);
+  }, [language, debouncedSearch, topic, category, level, flaggedOnly, page]);
 
   useEffect(() => {
     fetchData();
@@ -103,7 +105,7 @@ export default function WordList({ language, onBack, transliterationMap: externa
       return;
     }
     setPage(1);
-  }, [debouncedSearch, topic, category, level]);
+  }, [debouncedSearch, topic, category, level, flaggedOnly]);
 
   return (
     <div className="flex h-full flex-col">
@@ -170,6 +172,15 @@ export default function WordList({ language, onBack, transliterationMap: externa
               </select>
             </>
           )}
+          <label className="flex items-center gap-1.5 rounded-lg border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-100 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={flaggedOnly}
+              onChange={(e) => setFlaggedOnly(e.target.checked)}
+              className="accent-amber-500"
+            />
+            {t("flaggedOnly")}
+          </label>
         </div>
       </div>
 
