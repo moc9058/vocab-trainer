@@ -16,7 +16,6 @@ export default function GrammarFormModal({ language, onSave, onClose }: Props) {
   const [subchapters, setSubchapters] = useState<{ subchapterId: string; subchapterTitle: Record<string, string> }[]>([]);
   const [selectedSubchapter, setSelectedSubchapter] = useState("");
   const [newSubchapterName, setNewSubchapterName] = useState("");
-  const [useNewSubchapter, setUseNewSubchapter] = useState(false);
   const [inputLang, setInputLang] = useState("ja");
   const [termText, setTermText] = useState("");
   const [descText, setDescText] = useState("");
@@ -45,14 +44,15 @@ export default function GrammarFormModal({ language, onSave, onClose }: Props) {
     e.preventDefault();
     if (selectedChapter == null || !termText.trim()) return;
 
-    const subId = useNewSubchapter
+    const isNewSubchapter = selectedSubchapter === "__new__";
+    const subId = isNewSubchapter
       ? `${selectedChapter}-${Date.now()}`
       : selectedSubchapter;
-    const subTitle = useNewSubchapter
+    const subTitle = isNewSubchapter
       ? { [inputLang]: newSubchapterName.trim() }
       : subchapters.find((s) => s.subchapterId === selectedSubchapter)?.subchapterTitle || {};
-    if (useNewSubchapter && !newSubchapterName.trim()) return;
-    if (!useNewSubchapter && !subId) return;
+    if (isNewSubchapter && !newSubchapterName.trim()) return;
+    if (!isNewSubchapter && !subId) return;
 
     setSaving(true);
     setError("");
@@ -140,25 +140,20 @@ export default function GrammarFormModal({ language, onSave, onClose }: Props) {
           {selectedChapter != null && (
             <div>
               <label className="mb-1 block text-sm text-gray-400">{t("subchapterLabel")} *</label>
-              {!useNewSubchapter && subchapters.length > 0 && (
-                <select
-                  value={selectedSubchapter}
-                  onChange={(e) => setSelectedSubchapter(e.target.value)}
-                  className="mb-2 w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                >
-                  <option value="">--</option>
-                  {subchapters.map((s) => (
-                    <option key={s.subchapterId} value={s.subchapterId}>
-                      {s.subchapterTitle[inputLang] || s.subchapterTitle.en || s.subchapterTitle.ja || s.subchapterId}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
-                <input type="checkbox" checked={useNewSubchapter} onChange={() => setUseNewSubchapter(!useNewSubchapter)} className="accent-blue-600" />
-                {t("newSubchapter")}
-              </label>
-              {useNewSubchapter && (
+              <select
+                value={selectedSubchapter}
+                onChange={(e) => setSelectedSubchapter(e.target.value)}
+                className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+              >
+                <option value="">--</option>
+                {subchapters.map((s) => (
+                  <option key={s.subchapterId} value={s.subchapterId}>
+                    {s.subchapterTitle[inputLang] || s.subchapterTitle.en || s.subchapterTitle.ja || s.subchapterId}
+                  </option>
+                ))}
+                <option value="__new__">+ {t("newSubchapter")}</option>
+              </select>
+              {selectedSubchapter === "__new__" && (
                 <div className="mt-2">
                   <input
                     type="text"

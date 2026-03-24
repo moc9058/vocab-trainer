@@ -95,7 +95,7 @@ const translations = {
     subchapterLabel: "Subchapter",
     grammarTerm: "Term",
     grammarDescription: "Description",
-    newSubchapter: "New subchapter ID",
+    newSubchapter: "Add new subchapter",
     // Word Quiz rename
     startWordQuiz: "Word Quiz",
     // Grammar Quiz Filter
