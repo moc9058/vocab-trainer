@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { getWords, getFilters, getTransliterationMap, updateWord, deleteWord } from "../api/vocab";
+import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
 import SmartAddWordModal from "./SmartAddWordModal";
@@ -34,7 +35,25 @@ export default function WordList({ language, onBack, transliterationMap: externa
   const [editingWord, setEditingWord] = useState<Word | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const isInitialMount = useRef(true);
+
+  // Fetch flagged word IDs on mount
+  useEffect(() => {
+    getFlaggedWords(language)
+      .then(({ words }) => setFlaggedIds(new Set(words.map((w) => w.id))))
+      .catch(() => setFlaggedIds(new Set()));
+  }, [language]);
+
+  async function handleToggleFlag(wordId: string) {
+    if (flaggedIds.has(wordId)) {
+      await apiUnflagWord(language, wordId);
+      setFlaggedIds((prev) => { const next = new Set(prev); next.delete(wordId); return next; });
+    } else {
+      await apiFlagWord(language, wordId);
+      setFlaggedIds((prev) => new Set(prev).add(wordId));
+    }
+  }
 
   // Debounce search input
   useEffect(() => {
@@ -213,6 +232,8 @@ export default function WordList({ language, onBack, transliterationMap: externa
                     setExpandedId(expandedId === word.id ? null : word.id)
                   }
                   transliterationMap={transliterationMap}
+                  isFlagged={flaggedIds.has(word.id)}
+                  onToggleFlag={() => handleToggleFlag(word.id)}
                   onEdit={() => setEditingWord(word)}
                   onDelete={() => setDeletingId(word.id)}
                 />
@@ -238,6 +259,8 @@ export default function WordList({ language, onBack, transliterationMap: externa
                       setExpandedId(expandedId === word.id ? null : word.id)
                     }
                     transliterationMap={transliterationMap}
+                    isFlagged={flaggedIds.has(word.id)}
+                    onToggleFlag={() => handleToggleFlag(word.id)}
                     onEdit={() => setEditingWord(word)}
                     onDelete={() => setDeletingId(word.id)}
                   />
@@ -316,6 +339,8 @@ function WordCard({
   expanded,
   onToggle,
   transliterationMap,
+  isFlagged,
+  onToggleFlag,
   onEdit,
   onDelete,
 }: {
@@ -323,6 +348,8 @@ function WordCard({
   expanded: boolean;
   onToggle: () => void;
   transliterationMap: Record<string, string>;
+  isFlagged: boolean;
+  onToggleFlag: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -388,6 +415,12 @@ function WordCard({
           )}
           <div className="mt-2 flex gap-2">
             <button
+              onClick={(e) => { e.stopPropagation(); onToggleFlag(); }}
+              className={`rounded px-2 py-1 text-xs ${isFlagged ? "bg-amber-600 text-white hover:bg-amber-500" : "bg-gray-600 text-gray-200 hover:bg-gray-500"}`}
+            >
+              {isFlagged ? t("removeFlag") : t("flagForReview")}
+            </button>
+            <button
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
               className="rounded bg-gray-600 px-2 py-1 text-xs text-gray-200 hover:bg-gray-500"
             >
@@ -411,6 +444,8 @@ function WordRow({
   expanded,
   onToggle,
   transliterationMap,
+  isFlagged,
+  onToggleFlag,
   onEdit,
   onDelete,
 }: {
@@ -418,6 +453,8 @@ function WordRow({
   expanded: boolean;
   onToggle: () => void;
   transliterationMap: Record<string, string>;
+  isFlagged: boolean;
+  onToggleFlag: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -473,6 +510,12 @@ function WordRow({
               </div>
             )}
             <div className="mt-2 flex gap-2">
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleFlag(); }}
+                className={`rounded px-2 py-1 text-xs ${isFlagged ? "bg-amber-600 text-white hover:bg-amber-500" : "bg-gray-600 text-gray-200 hover:bg-gray-500"}`}
+              >
+                {isFlagged ? t("removeFlag") : t("flagForReview")}
+              </button>
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(); }}
                 className="rounded bg-gray-600 px-2 py-1 text-xs text-gray-200 hover:bg-gray-500"
