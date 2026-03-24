@@ -1,8 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useI18n } from "../i18n/context";
-import { getWords, getFilters, getTransliterationMap, createWord, updateWord, deleteWord } from "../api/vocab";
+import { getWords, getFilters, getTransliterationMap, updateWord, deleteWord } from "../api/vocab";
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
+import SmartAddWordModal from "./SmartAddWordModal";
 import type { Word, PaginatedResult } from "../types";
 
 interface Props {
@@ -27,15 +28,9 @@ export default function WordList({ language, onBack, transliterationMap: externa
     levels: string[];
   } | null>(null);
   const [transliterationMap, setTransliterationMap] = useState<Record<string, string>>(externalMap ?? {});
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showSmartAdd, setShowSmartAdd] = useState(false);
   const [editingWord, setEditingWord] = useState<Word | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  async function handleCreateWord(data: Omit<Word, "id"> & { id?: string }) {
-    await createWord(language, data);
-    await fetchData();
-    getTransliterationMap(language).then(setTransliterationMap).catch(() => {});
-  }
 
   async function handleUpdateWord(data: Omit<Word, "id"> & { id?: string }) {
     if (!data.id) return;
@@ -110,7 +105,7 @@ export default function WordList({ language, onBack, transliterationMap: externa
             {t("browseWords")} — {language}
           </h2>
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => setShowSmartAdd(true)}
             className="ml-auto rounded-lg bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-500"
           >
             + {t("addWord")}
@@ -218,11 +213,10 @@ export default function WordList({ language, onBack, transliterationMap: externa
       </div>
 
       {/* Modals */}
-      {showAddModal && (
-        <WordFormModal
-          language={language}
-          onSave={handleCreateWord}
-          onClose={() => setShowAddModal(false)}
+      {showSmartAdd && (
+        <SmartAddWordModal
+          onSave={() => { setShowSmartAdd(false); fetchData(); }}
+          onClose={() => setShowSmartAdd(false)}
         />
       )}
       {editingWord && (

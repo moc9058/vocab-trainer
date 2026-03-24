@@ -42,7 +42,7 @@ export default function Dashboard() {
   const [showGrammarBrowseLanguageModal, setShowGrammarBrowseLanguageModal] = useState(false);
   const [showGrammarFilterModal, setShowGrammarFilterModal] = useState<string | null>(null);
   // Smart Add Word / Grammar state
-  const [smartAddLanguage, setSmartAddLanguage] = useState<string | null>(null);
+  const [showSmartAdd, setShowSmartAdd] = useState(false);
   const [grammarFormLanguage, setGrammarFormLanguage] = useState<string | null>(null);
 
   // Fetch pinyin map when a quiz starts or browsing begins
@@ -178,21 +178,12 @@ export default function Dashboard() {
     setShowGrammarLanguageModal(false);
     setShowGrammarBrowseLanguageModal(false);
     setShowGrammarFilterModal(null);
-    setSmartAddLanguage(null);
+    setShowSmartAdd(false);
     setGrammarFormLanguage(null);
   }
 
-  async function handleAddWord() {
-    try {
-      const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
-      if (languages.length === 1) {
-        setSmartAddLanguage(languages[0].filename.replace(/\.json$/, ""));
-      } else {
-        setShowLanguageModal(true);
-      }
-    } catch {
-      setShowLanguageModal(true);
-    }
+  function handleAddWord() {
+    setShowSmartAdd(true);
   }
 
   async function handleAddGrammar() {
@@ -299,7 +290,7 @@ export default function Dashboard() {
     }
   }
 
-  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal || showFlaggedLanguageModal || activeGrammarQuiz || browsingGrammarLanguage || showGrammarLanguageModal || showGrammarBrowseLanguageModal || showGrammarFilterModal || smartAddLanguage || grammarFormLanguage);
+  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal || showFlaggedLanguageModal || activeGrammarQuiz || browsingGrammarLanguage || showGrammarLanguageModal || showGrammarBrowseLanguageModal || showGrammarFilterModal || showSmartAdd || grammarFormLanguage);
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-900">
@@ -339,11 +330,10 @@ export default function Dashboard() {
           onClose={() => setShowGrammarFilterModal(null)}
         />
       )}
-      {smartAddLanguage && (
+      {showSmartAdd && (
         <SmartAddWordModal
-          language={smartAddLanguage}
           onSave={() => {}}
-          onClose={() => setSmartAddLanguage(null)}
+          onClose={() => setShowSmartAdd(false)}
         />
       )}
       {grammarFormLanguage && (

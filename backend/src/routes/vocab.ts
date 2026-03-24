@@ -18,7 +18,7 @@ import {
 import type { Word, Example } from "../types.js";
 import { TOPICS } from "../types.js";
 import { generateMissingWords } from "../word-generator.js";
-import { callLLM, stripMarkdownFences, validateWord } from "../llm.js";
+import { callLLM, stripMarkdownFences, validateWord, segmentBatch } from "../llm.js";
 
 const vocabRoutes: FastifyPluginAsync = async (fastify) => {
   // List words with filtering & pagination
@@ -208,7 +208,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { language } = request.params;
       if (!(await languageExists(language))) {
-        return reply.notFound(`Language '${language}' not found`);
+        await createLanguage(language);
       }
 
       const body = request.body;
@@ -222,9 +222,12 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Build LLM prompt
+      const isChinese = language === "chinese";
       const fields: string[] = [`Term: ${term}`];
-      if (body.transliteration) fields.push(`PROVIDED transliteration: ${body.transliteration}`);
-      else fields.push("MISSING transliteration");
+      if (isChinese) {
+        if (body.transliteration) fields.push(`PROVIDED transliteration: ${body.transliteration}`);
+        else fields.push("MISSING transliteration (generate pinyin with tone marks)");
+      }
       if (body.definition && Object.keys(body.definition).length > 0) {
         fields.push(`PROVIDED definition: ${JSON.stringify(body.definition)}`);
       } else {
@@ -239,7 +242,8 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       if (body.notes) fields.push(`PROVIDED notes: ${body.notes}`);
       else fields.push("MISSING notes");
 
-      const systemPrompt = `You are a Chinese vocabulary expert. Given a Chinese term and optionally some pre-filled fields, generate a complete vocabulary entry.
+      const systemPrompt = isChinese
+        ? `You are a Chinese vocabulary expert. Given a Chinese term and optionally some pre-filled fields, generate a complete vocabulary entry.
 
 CRITICAL: If a field is marked "PROVIDED", keep that EXACT value unchanged. Only generate values for fields marked "MISSING".
 
@@ -250,6 +254,21 @@ Return a JSON object:
   "definition": { "Japanese": "...", "English": "...", "Korean": "..." },
   "grammaticalCategory": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase",
   "examples": [{ "sentence": "Chinese sentence", "translation": "English translation" }],
+  "topics": ["..."],
+  "notes": "brief usage notes"
+}
+
+Allowed topics: ${TOPICS.join(", ")}`
+        : `You are a ${language} vocabulary expert. Given a ${language} term and optionally some pre-filled fields, generate a complete vocabulary entry.
+
+CRITICAL: If a field is marked "PROVIDED", keep that EXACT value unchanged. Only generate values for fields marked "MISSING".
+
+Return a JSON object:
+{
+  "term": "the ${language} word",
+  "definition": { "Japanese": "...", "English": "...", "Korean": "..." },
+  "grammaticalCategory": "noun|verb|adjective|adverb|preposition|conjunction|particle|pronoun|interjection|idiom|phrase",
+  "examples": [{ "sentence": "${language} sentence using the word", "translation": "English translation" }],
   "topics": ["..."],
   "notes": "brief usage notes"
 }
@@ -270,7 +289,7 @@ Allowed topics: ${TOPICS.join(", ")}`;
       // Merge: user-provided fields take priority
       const merged = {
         term,
-        transliteration: body.transliteration || (llmResult.transliteration as string) || "",
+        transliteration: isChinese ? (body.transliteration || (llmResult.transliteration as string) || "") : undefined,
         definition: (body.definition && Object.keys(body.definition).length > 0)
           ? body.definition
           : (llmResult.definition as Record<string, string>) || { English: "" },
@@ -289,6 +308,21 @@ Allowed topics: ${TOPICS.join(", ")}`;
         merged.topics = ["Language Fundamentals"];
       }
 
+      // Auto-generate segments for example sentences (Chinese only)
+      const examplesWithSegments = merged.examples as Example[];
+      if (isChinese && examplesWithSegments.length > 0) {
+        const sentences = examplesWithSegments.map((ex) => ex.sentence);
+        try {
+          const segMap = await segmentBatch(sentences);
+          for (let i = 0; i < examplesWithSegments.length; i++) {
+            const segs = segMap.get(i);
+            if (segs) examplesWithSegments[i] = { ...examplesWithSegments[i], segments: segs };
+          }
+        } catch (err) {
+          fastify.log.warn({ err, term }, "Segment generation failed, saving without segments");
+        }
+      }
+
       const id = await getNextWordId(language);
       const word: Word = {
         id,
@@ -296,7 +330,7 @@ Allowed topics: ${TOPICS.join(", ")}`;
         transliteration: merged.transliteration,
         definition: merged.definition,
         grammaticalCategory: merged.grammaticalCategory,
-        examples: merged.examples as Example[],
+        examples: examplesWithSegments,
         topics: merged.topics as Word["topics"],
         level: "Advanced",
         notes: merged.notes,

@@ -51,7 +51,8 @@ export function smartAddWord(
     transliteration?: string;
     definition?: Record<string, string>;
     grammaticalCategory?: string;
-    notes?: string;
+    topics?: string[];
+    examples?: { sentence: string; translation: string }[];
   }
 ): Promise<Word> {
   return postJson(`/api/vocab/${encodeURIComponent(language)}/smart-add`, data);
