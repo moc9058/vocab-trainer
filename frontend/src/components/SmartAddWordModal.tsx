@@ -15,9 +15,9 @@ const WORD_LANG_OPTIONS = [
 ] as const;
 
 const LANG_OPTIONS = [
-  { value: "Japanese", label: "Japanese" },
-  { value: "English", label: "English" },
-  { value: "Korean", label: "Korean" },
+  { value: "ja", label: "Japanese" },
+  { value: "en", label: "English" },
+  { value: "ko", label: "Korean" },
   { value: "__other__", label: "Other" },
 ] as const;
 

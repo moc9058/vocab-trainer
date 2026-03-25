@@ -60,9 +60,9 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
 - Errors via `@fastify/sensible`: `reply.notFound()`, `reply.badRequest()`, `reply.conflict()`
 
 ### Backend Scripts (`backend/scripts/`)
-- `migrate-to-firestore.ts` — word migration from JSON files in `DB/` to Firestore; requires Google Cloud credentials
-- `export-from-firestore.ts` — export Firestore data back to JSON files in `DB/` (inverse of migrate)
-- `migrate-grammar-to-firestore.ts` — grammar migration from `backend/DB/grammer/` JSON to Firestore
+- `migrate-to-firestore.ts` — word migration from JSON files in `DB/word/` to Firestore; backs up current Firestore words to `DB/backup/{language}_{YYYYMMDD}.json` first
+- `export-from-firestore.ts` — export words, grammar, and progress from Firestore back to JSON files in `DB/` (inverse of migrate); normalizes legacy language keys to ISO 639-1
+- `migrate-grammar-to-firestore.ts` — grammar migration from `backend/DB/grammer/` JSON to Firestore; backs up current Firestore grammar to `DB/backup/{language}/` first
 - `migrate-llm-config-to-firestore.ts` — uploads Azure OpenAI config from `.env` to Firestore `config/llm` document
 
 ### Data Storage
@@ -80,10 +80,18 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `grammar_quiz_sessions` — one grammar quiz session per language
   - `config` — app configuration (e.g., `config/llm` stores Azure OpenAI keys)
 - **Local files** (for migration/export):
-  - Vocabulary: `backend/DB/{language}.json` — one file per language (e.g. `chinese.json`)
+  - Vocabulary: `backend/DB/word/{language}.json` — one file per language (e.g. `chinese.json`)
   - Grammar: `backend/DB/grammer/chinese/*.json` — per-chapter grammar files
   - Progress: `backend/data/progress/{language}.json`
+  - Backups: `backend/DB/backup/` — date-stamped word backups + grammar backups per language
   - Logs: `backend/logs/app-{timestamp}.log`
+
+### Language Code Convention
+All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean), `zh` (Chinese). This applies to:
+- Word definition keys: `{ "ja": "...", "en": "...", "ko": "..." }`
+- Grammar data `Record<string, string>` fields (chapterTitle, subchapter title, term, description)
+- UI language selection and display language options
+- The export script normalizes legacy keys (e.g., `"Japanese"` → `"ja"`, `"kr"` → `"ko"`) on export
 
 ### Key API Endpoints
 - `GET /api/languages` — list languages
@@ -124,10 +132,10 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `GrammarList.tsx` — browse grammar by chapter/subchapter
   - `GrammarFilterModal.tsx` — grammar quiz filters (chapter, subchapter, display language, quiz mode)
   - `GrammarQuizTaking.tsx` — grammar quiz flashcard UI (display sentence → show answer → self-grade)
-  - `GrammarFormModal.tsx` — add grammar component with chapter/subchapter/title/description/examples
+  - `GrammarFormModal.tsx` — add grammar component with chapter/subchapter/topic/description/terms/examples
   - `FlaggedReview.tsx` — review flagged words
   - `EmptyState.tsx` — home screen with word quiz, grammar quiz, browse, add word/grammar buttons
-- **i18n**: `i18n/translations.ts` — English and Chinese, keyed by `TranslationKey` type
+- **i18n**: `i18n/translations.ts` — English, Japanese, and Korean, keyed by `TranslationKey` type
 - **Styling**: Tailwind CSS 4 utility classes only
 - **Proxy**: Vite proxies `/api` requests to `localhost:3000` in dev
 - **Production**: Nginx serves static assets, proxies `/api/` to backend (configured via `nginx.conf.template`)

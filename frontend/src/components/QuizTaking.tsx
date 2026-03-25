@@ -5,6 +5,7 @@ import RubyText from "./RubyText";
 import type { QuizSession, QuizQuestion } from "../types";
 
 const BATCH_SIZE = 50;
+const LANG_DISPLAY: Record<string, string> = { ja: "Japanese", en: "English", ko: "Korean" };
 
 interface Props {
   session: QuizSession;
@@ -211,7 +212,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
           <div className="text-center space-y-1">
             {Object.entries(question!.definition ?? {}).map(([lang, text]) => (
               <p key={lang} className="text-xl text-green-400">
-                <span className="text-sm text-gray-400">{lang}: </span>{text}
+                <span className="text-sm text-gray-400">{LANG_DISPLAY[lang] || lang}: </span>{text}
               </p>
             ))}
           </div>

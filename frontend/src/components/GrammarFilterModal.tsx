@@ -21,7 +21,7 @@ interface Props {
 }
 
 export default function GrammarFilterModal({ language, onStart, onClose }: Props) {
-  const { t } = useI18n();
+  const { t, language: uiLang } = useI18n();
   const [chapters, setChapters] = useState<GrammarChapterInfo[]>([]);
   const [selectedChapters, setSelectedChapters] = useState<Set<number>>(new Set());
   const [subchapterData, setSubchapterData] = useState<SubchapterInfo[]>([]);
@@ -148,7 +148,7 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
                         onChange={() => toggleChapter(ch.chapterNumber)}
                         className="accent-blue-600"
                       />
-                      {ch.chapterTitle.en || ch.chapterTitle.ja}
+                      {ch.chapterTitle[uiLang] || ch.chapterTitle.en || ch.chapterTitle.ja}
                     </label>
                     {/* Subchapters nested under selected chapter */}
                     {selectedChapters.has(ch.chapterNumber) && subsByChapter.has(ch.chapterNumber) && (
@@ -161,7 +161,7 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
                               onChange={() => toggleSubchapter(sub.subchapterId)}
                               className="accent-blue-600"
                             />
-                            {sub.subchapterTitle.en || sub.subchapterTitle.ja || sub.subchapterId}
+                            {sub.subchapterTitle[uiLang] || sub.subchapterTitle.en || sub.subchapterTitle.ja || sub.subchapterId}
                           </label>
                         ))}
                       </div>
@@ -178,7 +178,7 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
                 {[
                   { value: "ja", label: "Japanese" },
                   { value: "en", label: "English" },
-                  { value: "kr", label: "Korean" },
+                  { value: "ko", label: "Korean" },
                 ].map((opt) => (
                   <label key={opt.value} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
                     <input

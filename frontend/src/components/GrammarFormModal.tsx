@@ -39,7 +39,7 @@ export default function GrammarFormModal({ language: initialLanguage, onSave, on
   const [inputLang, setInputLang] = useState("ja");
   const [termText, setTermText] = useState("");
   const [descText, setDescText] = useState("");
-  const [wordsText, setWordsText] = useState("");
+  const [wordsList, setWordsList] = useState<string[]>([]);
   const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>([]);
   const [tags, setTags] = useState("");
   const [saving, setSaving] = useState(false);
@@ -85,9 +85,8 @@ export default function GrammarFormModal({ language: initialLanguage, onSave, on
           sentence: ex.sentence.trim(),
           translation: ex.translation.trim(),
         }));
-      const wordsArr = wordsText.trim()
-        ? wordsText.split(",").map((w) => w.trim()).filter(Boolean)
-        : undefined;
+      const wordsArr = wordsList.map((w) => w.trim()).filter(Boolean);
+      const wordsPayload = wordsArr.length > 0 ? wordsArr : undefined;
 
       await createGrammarItem(language, {
         id: componentId,
@@ -97,7 +96,7 @@ export default function GrammarFormModal({ language: initialLanguage, onSave, on
         term: { [inputLang]: termText.trim() },
         ...(descText.trim() ? { description: { [inputLang]: descText.trim() } } : {}),
         ...(filteredExamples.length > 0 ? { examples: filteredExamples } : {}),
-        ...(wordsArr ? { words: wordsArr } : {}),
+        ...(wordsPayload ? { words: wordsPayload } : {}),
         tags: tags.trim() ? tags.split(",").map((t) => t.trim()) : undefined,
       });
       onSave();
@@ -155,7 +154,7 @@ export default function GrammarFormModal({ language: initialLanguage, onSave, on
               {[
                 { value: "ja", label: "JA" },
                 { value: "en", label: "EN" },
-                { value: "kr", label: "KR" },
+                { value: "ko", label: "KO" },
               ].map((opt) => (
                 <label key={opt.value} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
                   <input
@@ -246,16 +245,28 @@ export default function GrammarFormModal({ language: initialLanguage, onSave, on
             />
           </div>
 
-          {/* Related Words */}
+          {/* Terms */}
           <div>
-            <label className="mb-1 block text-sm text-gray-400">{t("relatedWords")}</label>
-            <input
-              type="text"
-              value={wordsText}
-              onChange={(e) => setWordsText(e.target.value)}
-              placeholder="别, 吃, 去"
-              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-400 focus:outline-none"
-            />
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-sm text-gray-400">{t("grammarTerms")}</label>
+              <button type="button" onClick={() => setWordsList([...wordsList, ""])} className="text-xs text-blue-400 hover:text-blue-300">
+                + {t("addExample")}
+              </button>
+            </div>
+            {wordsList.map((w, i) => (
+              <div key={i} className="mb-2 flex gap-2">
+                <input
+                  type="text"
+                  value={w}
+                  onChange={(e) => { const n = [...wordsList]; n[i] = e.target.value; setWordsList(n); }}
+                  placeholder="e.g. 别+V+了"
+                  className="flex-1 rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-400 focus:outline-none"
+                />
+                <button type="button" onClick={() => setWordsList(wordsList.filter((_, j) => j !== i))} className="text-xs text-red-400 hover:text-red-300">
+                  {t("removeExample")}
+                </button>
+              </div>
+            ))}
           </div>
 
           {/* Examples */}

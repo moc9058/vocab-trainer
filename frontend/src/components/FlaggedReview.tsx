@@ -4,6 +4,8 @@ import { getFlaggedWords, unflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
 import type { Word } from "../types";
 
+const LANG_DISPLAY: Record<string, string> = { ja: "Japanese", en: "English", ko: "Korean" };
+
 interface Props {
   language: string;
   onBack: () => void;
@@ -94,7 +96,7 @@ export default function FlaggedReview({ language, onBack, transliterationMap = {
           <div className="text-center space-y-1">
             {Object.entries(currentWord!.definition ?? {}).map(([lang, text]) => (
               <p key={lang} className="text-xl text-green-400">
-                <span className="text-sm text-gray-400">{lang}: </span>{text}
+                <span className="text-sm text-gray-400">{LANG_DISPLAY[lang] || lang}: </span>{text}
               </p>
             ))}
           </div>

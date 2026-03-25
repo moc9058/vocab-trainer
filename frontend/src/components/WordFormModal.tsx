@@ -18,7 +18,7 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
     if (word?.definition) {
       return Object.entries(word.definition).map(([lang, text]) => ({ lang, text }));
     }
-    return [{ lang: "English", text: "" }];
+    return [{ lang: "en", text: "" }];
   });
   const [grammaticalCategory, setGrammaticalCategory] = useState(word?.grammaticalCategory ?? "");
   const [topics, setTopics] = useState<Set<string>>(new Set(word?.topics ?? []));

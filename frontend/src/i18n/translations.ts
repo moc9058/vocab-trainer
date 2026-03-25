@@ -94,7 +94,7 @@ const translations = {
     addGrammar: "Add Grammar",
     chapterLabel: "Chapter",
     subchapterLabel: "Subchapter",
-    grammarTerm: "Term",
+    grammarTerm: "Topic",
     grammarDescription: "Description",
     newSubchapter: "Add new subchapter",
     // Word Quiz rename
@@ -105,7 +105,7 @@ const translations = {
     quizMode: "Quiz Mode",
     quizModeExisting: "Existing Examples",
     quizModeLLM: "LLM-Generated",
-    relatedWords: "Related Words",
+    grammarTerms: "Terms",
   },
   ja: {
     appTitle: "単語トレーナー",
@@ -202,7 +202,7 @@ const translations = {
     addGrammar: "文法を追加",
     chapterLabel: "章",
     subchapterLabel: "節",
-    grammarTerm: "用語",
+    grammarTerm: "トピック",
     grammarDescription: "説明",
     newSubchapter: "新しい節を追加",
     // Word Quiz rename
@@ -213,7 +213,7 @@ const translations = {
     quizMode: "クイズモード",
     quizModeExisting: "既存の例文",
     quizModeLLM: "LLM生成",
-    relatedWords: "関連語彙",
+    grammarTerms: "用語",
   },
   ko: {
     appTitle: "단어 트레이너",
@@ -310,7 +310,7 @@ const translations = {
     addGrammar: "문법 추가",
     chapterLabel: "챕터",
     subchapterLabel: "소단원",
-    grammarTerm: "용어",
+    grammarTerm: "토픽",
     grammarDescription: "설명",
     newSubchapter: "새 소단원 추가",
     // Word Quiz rename
@@ -321,7 +321,7 @@ const translations = {
     quizMode: "퀴즈 모드",
     quizModeExisting: "기존 예문",
     quizModeLLM: "LLM 생성",
-    relatedWords: "관련 단어",
+    grammarTerms: "용어",
   },
 } as const;
 

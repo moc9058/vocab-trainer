@@ -15,7 +15,7 @@ import { callLLM, stripMarkdownFences } from "../llm.js";
 const LANG_NAMES: Record<string, string> = {
   ja: "Japanese",
   en: "English",
-  kr: "Korean",
+  ko: "Korean",
 };
 
 const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {

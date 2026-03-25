@@ -117,9 +117,9 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
       "term": "你好",
       "transliteration": "nǐ hǎo",
       "definition": {
-        "Japanese": "こんにちは",
-        "English": "hello",
-        "Korean": "안녕하세요"
+        "ja": "こんにちは",
+        "en": "hello",
+        "ko": "안녕하세요"
       },
       "grammaticalCategory": "interjection",
       "examples": [
@@ -146,7 +146,7 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
   | Arabic   | `ar` | `ar-000001` |
 - **`term`** — The vocabulary word in the target language.
 - **`transliteration`** — Optional. Romanized pronunciation, critical for non-Latin scripts (Arabic, Chinese).
-- **`definition`** — An object keyed by language, allowing definitions in multiple languages (English, Japanese, Korean, etc.).
+- **`definition`** — An object keyed by ISO 639-1 language code (`ja`, `en`, `ko`, etc.), allowing definitions in multiple languages.
 - **`grammaticalCategory`** — The grammatical category of the word. Possible values:
   - `noun` — person, place, thing, or concept (e.g. book, city)
   - `verb` — action or state (e.g. run, be)
@@ -185,10 +185,10 @@ vocab-trainer/
 │   ├── tsconfig.json
 │   ├── Dockerfile
 │   ├── scripts/
-│   │   ├── migrate-to-firestore.ts        # JSON → Firestore word migration
-│   │   ├── migrate-grammar-to-firestore.ts # Grammar data → Firestore migration
+│   │   ├── migrate-to-firestore.ts        # JSON → Firestore word migration (backs up to DB/backup/ first)
+│   │   ├── migrate-grammar-to-firestore.ts # Grammar data → Firestore (backs up to DB/backup/ first)
 │   │   ├── migrate-llm-config-to-firestore.ts # Upload LLM config (.env) → Firestore
-│   │   └── export-from-firestore.ts       # Export data from Firestore to JSON
+│   │   └── export-from-firestore.ts       # Export words, grammar & progress from Firestore to JSON
 │   ├── src/
 │   │   ├── index.ts             # Fastify server entry point
 │   │   ├── types.ts             # Shared TypeScript interfaces
@@ -445,7 +445,7 @@ Returns full question details (definition, transliteration, examples) for a slic
     {
       "wordId": "zh-000001",
       "term": "你好",
-      "definition": { "English": "hello", "Japanese": "こんにちは" },
+      "definition": { "en": "hello", "ja": "こんにちは" },
       "transliteration": "nǐ hǎo",
       "examples": [{ "sentence": "你好，你怎么样？", "translation": "Hello, how are you?" }]
     }
@@ -595,7 +595,7 @@ One grammar quiz session is stored per language. Supports two modes: `existing` 
 }
 ```
 
-All fields except `language` are optional. `displayLanguage` defaults to `"ja"` (Japanese). `quizMode` defaults to `"existing"` (ignored for Chinese — always `"llm"`). Supported display languages: `ja`, `en`, `ko`.
+All fields except `language` are optional. `displayLanguage` defaults to `"ja"` (Japanese). `quizMode` defaults to `"existing"` (ignored for Chinese — always `"llm"`). Supported display languages: `ja` (Japanese), `en` (English), `ko` (Korean).
 
 **Response:** `201` with `GrammarQuizSession`.
 
@@ -666,7 +666,7 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 | **GrammarList**         | Browse grammar items organized by chapter and subchapter with search and filters. |
 | **GrammarFilterModal**  | Modal to select chapter, subchapter, display language, and quiz mode filters before starting a grammar quiz. Quiz mode selector is hidden for Chinese (always LLM). |
 | **GrammarQuizTaking**   | Grammar quiz flashcard UI — displays a sentence (with grammar term shown for Chinese), reveals the answer, and allows self-grading (correct/incorrect). |
-| **GrammarFormModal**    | Modal for adding grammar components with chapter, subchapter, term (required), description (optional), related words (optional), and examples (optional). |
+| **GrammarFormModal**    | Modal for adding grammar components with chapter, subchapter, topic (required), description (optional), terms (optional, individual input per term), and examples (optional). |
 | **Home Page (EmptyState)** | Home screen that checks for in-progress quiz sessions across all languages. Shows a resume card with progress (e.g. "12 / 30 answered") if an active session exists, plus buttons for word quiz, grammar quiz, browse words, browse grammar, and add word/grammar. |
 
 ### API Integration

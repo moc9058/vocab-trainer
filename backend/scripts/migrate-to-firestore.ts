@@ -8,9 +8,9 @@
  */
 
 import { Firestore } from "@google-cloud/firestore";
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { resolve, join } from "node:path";
-import type { VocabFile } from "../src/types.js";
+import type { Word, Example, VocabFile } from "../src/types.js";
 
 /** Recursively remove empty-string keys from an object (Firestore rejects them). */
 function stripEmptyKeys(obj: unknown): unknown {
@@ -26,6 +26,8 @@ function stripEmptyKeys(obj: unknown): unknown {
 }
 
 const DB_DIR = resolve(import.meta.dirname, "..", "DB", "word");
+const BACKUP_DIR = resolve(import.meta.dirname, "..", "DB", "backup");
+const TODAY = new Date().toISOString().slice(0, 10).replace(/-/g, "");
 
 const db = new Firestore({
   projectId: process.env.FIRESTORE_PROJECT || undefined,
@@ -44,6 +46,74 @@ async function readJson<T>(path: string): Promise<T | null> {
     return JSON.parse(data) as T;
   } catch {
     return null;
+  }
+}
+
+/** Normalize legacy definition keys (full names → ISO codes). */
+const LANG_KEY_MAP: Record<string, string> = {
+  Japanese: "ja", English: "en", Korean: "ko", kr: "ko",
+};
+
+function normalizeLangKeys(obj: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    out[LANG_KEY_MAP[k] ?? k] = v;
+  }
+  return out;
+}
+
+function docToWord(doc: FirebaseFirestore.DocumentSnapshot): Word {
+  const d = doc.data()!;
+  const word: Word = {
+    id: doc.id,
+    term: d.term,
+    definition: normalizeLangKeys(d.definition ?? {}),
+    grammaticalCategory: d.grammaticalCategory ?? "",
+    examples: (d.examples ?? []).map((ex: any): Example => ({
+      sentence: ex.sentence,
+      translation: ex.translation,
+      ...(ex.segments ? {
+        segments: ex.segments.map((seg: any) => ({
+          text: seg.text,
+          ...(seg.transliteration || seg.pinyin
+            ? { transliteration: seg.transliteration ?? seg.pinyin }
+            : {}),
+          ...(seg.id ? { id: seg.id } : {}),
+        })),
+      } : {}),
+    })),
+    topics: d.topics ?? [],
+  };
+  if (d.transliteration) word.transliteration = d.transliteration;
+  if (d.level) word.level = d.level;
+  if (d.notes) word.notes = d.notes;
+  return word;
+}
+
+async function backupWords(): Promise<void> {
+  console.log("\n--- Backing up current words from Firestore ---");
+  const snap = await db.collection("words").get();
+  if (snap.empty) {
+    console.log("  No existing words to back up");
+    return;
+  }
+
+  await mkdir(BACKUP_DIR, { recursive: true });
+
+  const byLanguage = new Map<string, Word[]>();
+  for (const doc of snap.docs) {
+    const language = (doc.data().language as string) ?? "unknown";
+    if (!byLanguage.has(language)) byLanguage.set(language, []);
+    byLanguage.get(language)!.push(docToWord(doc));
+  }
+
+  for (const [language, words] of byLanguage) {
+    words.sort((a, b) => a.id.localeCompare(b.id));
+    const vocabFile: VocabFile = { language, words };
+    const filename = `${language}_${TODAY}.json`;
+    const filepath = join(BACKUP_DIR, filename);
+    await writeFile(filepath, JSON.stringify(vocabFile, null, 2) + "\n", "utf-8");
+    console.log(`  ${filename}: ${words.length} words`);
   }
 }
 
@@ -186,6 +256,9 @@ async function writeLanguageDocs(): Promise<void> {
 async function main(): Promise<void> {
   console.log("=== Vocab Trainer: Migrate to Firestore ===");
   console.log(`DB_DIR: ${DB_DIR}`);
+
+  // Back up current Firestore words before overwriting
+  await backupWords();
 
   // Clear all existing data before re-populating
   await clearCollections();

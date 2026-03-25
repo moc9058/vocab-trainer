@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function GrammarList({ language, onBack }: Props) {
-  const { t } = useI18n();
+  const { t, language: uiLang } = useI18n();
   const [chapters, setChapters] = useState<GrammarChapterInfo[]>([]);
   const [items, setItems] = useState<GrammarItemDoc[]>([]);
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
@@ -76,7 +76,7 @@ export default function GrammarList({ language, onBack }: Props) {
                 : "bg-gray-700 text-gray-300 hover:bg-gray-600"
             }`}
           >
-            {ch.chapterTitle.en || ch.chapterTitle.ja}
+            {ch.chapterTitle[uiLang] || ch.chapterTitle.en || ch.chapterTitle.ja}
           </button>
         ))}
       </div>
@@ -106,10 +106,10 @@ export default function GrammarList({ language, onBack }: Props) {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-100">
-                    {item.term.en || item.term.ja}
+                    {item.term[uiLang] || item.term.en || item.term.ja}
                   </p>
                   <p className="text-xs text-gray-400">
-                    Ch.{item.chapterNumber} — {item.subchapterTitle.en || item.subchapterTitle.ja}
+                    Ch.{item.chapterNumber} — {item.subchapterTitle[uiLang] || item.subchapterTitle.en || item.subchapterTitle.ja}
                   </p>
                 </div>
                 {item.tags && item.tags.length > 0 && (
@@ -134,7 +134,7 @@ export default function GrammarList({ language, onBack }: Props) {
 
                   {/* Words */}
                   {item.words && item.words.length > 0 && (
-                    <p className="text-sm text-gray-300">Words: {item.words.join(", ")}</p>
+                    <p className="text-sm text-gray-300">{t("grammarTerms")}: {item.words.join(", ")}</p>
                   )}
 
                   {/* Examples */}

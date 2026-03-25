@@ -171,7 +171,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       if (body.definition && Object.keys(body.definition).length > 0) {
         fields.push(`PROVIDED definition: ${JSON.stringify(body.definition)}`);
       } else {
-        fields.push("MISSING definition (generate Japanese, English, Korean)");
+        fields.push("MISSING definition (generate ja, en, ko)");
       }
       if (body.grammaticalCategory) fields.push(`PROVIDED grammaticalCategory: ${body.grammaticalCategory}`);
       else fields.push("MISSING grammaticalCategory");
@@ -193,7 +193,7 @@ Return a JSON object:
 {
   "term": "the Chinese word",
   "transliteration": "pinyin with tone marks",
-  "definition": { "Japanese": "...", "English": "...", "Korean": "..." },
+  "definition": { "ja": "...", "en": "...", "ko": "..." },
   "grammaticalCategory": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase",
   "examples": [{ "sentence": "Chinese sentence", "translation": "English translation", "segments": [{ "text": "word", "pinyin": "pīnyīn" }] }],
   "topics": ["..."],
@@ -214,7 +214,7 @@ CRITICAL: If a field is marked "PROVIDED", keep that EXACT value unchanged. Only
 Return a JSON object:
 {
   "term": "the ${language} word",
-  "definition": { "Japanese": "...", "English": "...", "Korean": "..." },
+  "definition": { "ja": "...", "en": "...", "ko": "..." },
   "grammaticalCategory": "noun|verb|adjective|adverb|preposition|conjunction|particle|pronoun|interjection|idiom|phrase",
   "examples": [{ "sentence": "${language} sentence using the word"${language === "english" ? "" : ', "translation": "English translation"'} }],
   "topics": ["..."],
@@ -240,7 +240,7 @@ Allowed topics: ${TOPICS.join(", ")}`;
         transliteration: isChinese ? (body.transliteration || (llmResult.transliteration as string) || "") : undefined,
         definition: (body.definition && Object.keys(body.definition).length > 0)
           ? body.definition
-          : (llmResult.definition as Record<string, string>) || { English: "" },
+          : (llmResult.definition as Record<string, string>) || { en: "" },
         grammaticalCategory: body.grammaticalCategory || (llmResult.grammaticalCategory as string) || "",
         examples: (body.examples && body.examples.length > 0)
           ? body.examples
@@ -408,7 +408,7 @@ Return a JSON object with a "words" array:
 [{
   "term": "the word (keep as provided)",
   "transliteration": "keep as provided",
-  "definition": { "Japanese": "...", "English": "...", "Korean": "..." },
+  "definition": { "ja": "...", "en": "...", "ko": "..." },
   "grammaticalCategory": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase",
   "topics": ["..."],
   "notes": "brief usage notes or empty string"
