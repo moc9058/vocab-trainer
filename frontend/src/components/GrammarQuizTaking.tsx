@@ -88,6 +88,11 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
       {/* Display sentence (in user's display language) */}
       <div className="w-full max-w-lg rounded-lg bg-gray-800 border border-gray-700 p-6 text-center">
         <p className="text-xl text-gray-100">{question!.displaySentence}</p>
+        {currentSession.language === "chinese" && component && (
+          <p className="text-sm text-blue-300 mt-2">
+            {component.term.ja || Object.values(component.term)[0]}
+          </p>
+        )}
       </div>
 
       {!showingAnswer ? (
@@ -110,7 +115,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
               <p className="text-sm font-medium text-blue-400 mb-1">
                 {component.term.en || component.term.ja}
               </p>
-              {Object.entries(component.description).map(([lang, text]) => (
+              {component.description && Object.entries(component.description).map(([lang, text]) => (
                 text && <p key={lang} className="text-sm text-gray-300">
                   <span className="text-xs text-gray-500">[{lang}] </span>{text}
                 </p>

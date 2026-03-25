@@ -105,67 +105,6 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Add new word
-  fastify.post<{ Params: { language: string }; Body: Omit<Word, "id"> & { id?: string } }>(
-    "/:language",
-    {
-      schema: {
-        body: {
-          type: "object",
-          required: ["term", "definition", "grammaticalCategory", "topics"],
-          properties: {
-            id: { type: "string" },
-            term: { type: "string" },
-            transliteration: { type: "string" },
-            definition: { type: "object", additionalProperties: { type: "string" } },
-            grammaticalCategory: { type: "string" },
-            examples: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  sentence: { type: "string" },
-                  translation: { type: "string" },
-                },
-              },
-            },
-            topics: { type: "array", items: { type: "string" } },
-            level: { type: "string" },
-            notes: { type: "string" },
-          },
-        },
-      },
-    },
-    async (request, reply) => {
-      const { language } = request.params;
-      if (!(await languageExists(language))) {
-        return reply.notFound(`Language '${language}' not found`);
-      }
-
-      const body = request.body;
-      const id = body.id ?? (await getNextWordId(language));
-
-      if (await wordIdExists(id)) {
-        return reply.conflict(`Word with id '${id}' already exists`);
-      }
-
-      const word: Word = {
-        id,
-        term: body.term,
-        transliteration: body.transliteration,
-        definition: body.definition,
-        grammaticalCategory: body.grammaticalCategory,
-        examples: body.examples ?? [],
-        topics: body.topics,
-        level: body.level,
-        notes: body.notes,
-      };
-
-      await addWord(language, word);
-      return reply.status(201).send(word);
-    }
-  );
-
   // Smart add word with LLM filling missing fields
   fastify.post<{
     Params: { language: string };

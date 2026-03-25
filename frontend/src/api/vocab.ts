@@ -34,10 +34,6 @@ export function getTransliterationMap(language: string): Promise<Record<string, 
   return fetchJson(`/api/vocab/${encodeURIComponent(language)}/transliteration-map`);
 }
 
-export function createWord(language: string, word: Omit<Word, "id">): Promise<Word> {
-  return postJson(`/api/vocab/${encodeURIComponent(language)}`, word);
-}
-
 export function updateWord(language: string, wordId: string, updates: Partial<Word>): Promise<Word> {
   return putJson(`/api/vocab/${encodeURIComponent(language)}/${encodeURIComponent(wordId)}`, updates);
 }

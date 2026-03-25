@@ -50,7 +50,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { language, questionCount, chapters, subchapters, displayLanguage, quizMode } = request.body;
       const dispLang = displayLanguage || "ja";
-      const mode = quizMode || "existing";
+      const mode = language === "chinese" ? "llm" : (quizMode || "existing");
 
       let pool = await getAllGrammarItems(language);
 
@@ -84,7 +84,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
           questions.push({
             componentId: item.id,
             displaySentence: Object.values(item.term).join(" / "),
-            chineseSentence: item.examples[0]?.sentence ?? "",
+            chineseSentence: item.examples?.[0]?.sentence ?? "",
           });
         }
       }
@@ -196,7 +196,7 @@ async function prepareQuestion(
 ): Promise<{ displaySentence: string; chineseSentence: string }> {
   const langName = LANG_NAMES[displayLanguage] || "Japanese";
 
-  if (mode === "existing" && item.examples.length > 0) {
+  if (mode === "existing" && item.examples && item.examples.length > 0) {
     // Pick a random example
     const ex = item.examples[Math.floor(Math.random() * item.examples.length)];
     const chineseSentence = ex.sentence;
@@ -230,15 +230,34 @@ async function generateSentencePair(
   item: GrammarItemDoc,
   langName: string
 ): Promise<{ displaySentence: string; chineseSentence: string }> {
+  const parts: string[] = [
+    `Given this Chinese grammar point:`,
+    `Term: ${JSON.stringify(item.term)}`,
+  ];
+  if (item.description && Object.keys(item.description).length > 0) {
+    parts.push(`Description: ${JSON.stringify(item.description)}`);
+  }
+  if (item.words && item.words.length > 0) {
+    parts.push(`Related words: ${item.words.join(", ")}`);
+  }
+  if (item.examples && item.examples.length > 0) {
+    parts.push(`Reference examples:`);
+    for (const ex of item.examples) {
+      parts.push(`- ${ex.sentence} (${ex.translation})`);
+    }
+  }
+  parts.push(
+    ``,
+    `Generate a NEW example sentence in Chinese that demonstrates this grammar point` +
+    (item.examples && item.examples.length > 0 ? ` (different from any reference examples)` : ``) +
+    `, and translate it to ${langName}.`,
+    ``,
+    `Return JSON: { "chineseSentence": "...", "displaySentence": "..." }`
+  );
+
   const raw = await callLLM(
     "You are a Chinese grammar example generator. Return valid JSON only.",
-    `Given this Chinese grammar point:
-Term: ${JSON.stringify(item.term)}
-Description: ${JSON.stringify(item.description)}
-
-Generate an example sentence in Chinese that demonstrates this grammar point, and translate it to ${langName}.
-
-Return JSON: { "chineseSentence": "...", "displaySentence": "..." }`
+    parts.join("\n")
   );
 
   const parsed = JSON.parse(stripMarkdownFences(raw));

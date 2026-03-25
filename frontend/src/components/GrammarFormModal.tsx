@@ -39,9 +39,8 @@ export default function GrammarFormModal({ language: initialLanguage, onSave, on
   const [inputLang, setInputLang] = useState("ja");
   const [termText, setTermText] = useState("");
   const [descText, setDescText] = useState("");
-  const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>([
-    { sentence: "", translation: "" },
-  ]);
+  const [wordsText, setWordsText] = useState("");
+  const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>([]);
   const [tags, setTags] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -80,19 +79,25 @@ export default function GrammarFormModal({ language: initialLanguage, onSave, on
     const componentId = `grammar-zh-${String(selectedChapter).padStart(3, "0")}-${Date.now()}`;
 
     try {
+      const filteredExamples = examples
+        .filter((ex) => ex.sentence.trim())
+        .map((ex) => ({
+          sentence: ex.sentence.trim(),
+          translation: ex.translation.trim(),
+        }));
+      const wordsArr = wordsText.trim()
+        ? wordsText.split(",").map((w) => w.trim()).filter(Boolean)
+        : undefined;
+
       await createGrammarItem(language, {
         id: componentId,
         chapterNumber: selectedChapter,
         subchapterId: subId,
         subchapterTitle: subTitle,
         term: { [inputLang]: termText.trim() },
-        description: { [inputLang]: descText.trim() },
-        examples: examples
-          .filter((ex) => ex.sentence.trim())
-          .map((ex) => ({
-            sentence: ex.sentence.trim(),
-            translation: ex.translation.trim(),
-          })),
+        ...(descText.trim() ? { description: { [inputLang]: descText.trim() } } : {}),
+        ...(filteredExamples.length > 0 ? { examples: filteredExamples } : {}),
+        ...(wordsArr ? { words: wordsArr } : {}),
         tags: tags.trim() ? tags.split(",").map((t) => t.trim()) : undefined,
       });
       onSave();
@@ -241,6 +246,18 @@ export default function GrammarFormModal({ language: initialLanguage, onSave, on
             />
           </div>
 
+          {/* Related Words */}
+          <div>
+            <label className="mb-1 block text-sm text-gray-400">{t("relatedWords")}</label>
+            <input
+              type="text"
+              value={wordsText}
+              onChange={(e) => setWordsText(e.target.value)}
+              placeholder="别, 吃, 去"
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-400 focus:outline-none"
+            />
+          </div>
+
           {/* Examples */}
           <div>
             <div className="mb-1 flex items-center justify-between">
@@ -254,9 +271,7 @@ export default function GrammarFormModal({ language: initialLanguage, onSave, on
                 <input type="text" value={ex.sentence} onChange={(e) => { const n = [...examples]; n[i] = { ...n[i], sentence: e.target.value }; setExamples(n); }} placeholder={t("sentence")} className="w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none" />
                 <div className="flex gap-2">
                   <input type="text" value={ex.translation} onChange={(e) => { const n = [...examples]; n[i] = { ...n[i], translation: e.target.value }; setExamples(n); }} placeholder={t("translationLabel")} className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none" />
-                  {examples.length > 1 && (
-                    <button type="button" onClick={() => setExamples(examples.filter((_, j) => j !== i))} className="text-xs text-red-400 hover:text-red-300">{t("removeExample")}</button>
-                  )}
+                  <button type="button" onClick={() => setExamples(examples.filter((_, j) => j !== i))} className="text-xs text-red-400 hover:text-red-300">{t("removeExample")}</button>
                 </div>
               </div>
             ))}

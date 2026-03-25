@@ -126,14 +126,19 @@ export default function GrammarList({ language, onBack }: Props) {
               {expandedId === item.id && (
                 <div className="mt-3 border-t border-gray-700 pt-3">
                   {/* Description */}
-                  {Object.entries(item.description).map(([lang, text]) => (
+                  {item.description && Object.entries(item.description).map(([lang, text]) => (
                     <p key={lang} className="text-sm text-gray-300 mb-1">
                       <span className="text-xs text-gray-500">[{lang}] </span>{text}
                     </p>
                   ))}
 
+                  {/* Words */}
+                  {item.words && item.words.length > 0 && (
+                    <p className="text-sm text-gray-300">Words: {item.words.join(", ")}</p>
+                  )}
+
                   {/* Examples */}
-                  {item.examples.length > 0 && (
+                  {item.examples && item.examples.length > 0 && (
                     <div className="mt-2 space-y-1">
                       <p className="text-xs font-medium text-gray-400">{t("examples")}</p>
                       {item.examples.map((ex, i) => (

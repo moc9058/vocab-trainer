@@ -105,7 +105,7 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
       schema: {
         body: {
           type: "object",
-          required: ["id", "chapterNumber", "subchapterId", "subchapterTitle", "term", "description", "examples"],
+          required: ["id", "chapterNumber", "subchapterId", "subchapterTitle", "term"],
           properties: {
             id: { type: "string" },
             chapterNumber: { type: "number" },
@@ -114,7 +114,7 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
             term: { type: "object" },
             description: { type: "object" },
             examples: { type: "array" },
-            relatedWordIds: { type: "array", items: { type: "string" } },
+            words: { type: "array", items: { type: "string" } },
             level: { type: "string" },
             tags: { type: "array", items: { type: "string" } },
           },

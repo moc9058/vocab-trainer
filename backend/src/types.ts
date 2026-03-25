@@ -124,9 +124,9 @@ export interface GrammarExample {
 export interface GrammarComponent {
   id: string;
   term: Record<string, string>;
-  description: Record<string, string>;
-  examples: GrammarExample[];
-  relatedWordIds?: string[];
+  description?: Record<string, string>;
+  examples?: GrammarExample[];
+  words?: string[];
   level?: string;
   tags?: string[];
 }

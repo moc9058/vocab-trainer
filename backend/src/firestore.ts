@@ -707,7 +707,8 @@ export async function getGrammarItems(
     results = results.filter(
       (item) =>
         Object.values(item.term).some((t) => (t as string).toLowerCase().includes(q)) ||
-        Object.values(item.description).some((d) => (d as string).toLowerCase().includes(q))
+        Object.values(item.description ?? {}).some((d) => (d as string).toLowerCase().includes(q)) ||
+        item.words?.some((w: string) => w.toLowerCase().includes(q))
     );
   }
 

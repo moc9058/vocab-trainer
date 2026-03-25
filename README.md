@@ -23,6 +23,8 @@ Deploy both services to Google Cloud Run using the included script.
 
 ### Deploy
 
+https://vocab-trainer-frontend-839843597381.asia-northeast1.run.app
+
 ```bash
 ./deploy.sh vocab-trainer-490014 asia-northeast1
 ```
@@ -169,26 +171,6 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
 - **`level`** — Optional. Proficiency level tag for the word (e.g. `"HSK1"`, `"HSK2"`, …, `"HSK7~9"` for Chinese). Can be any string value.
 - **`notes`** — Optional. Free-form field for irregularities, mnemonics, etc.
 
-## Generating Extended Vocabulary
-
-The `generate-extended` script extracts unknown words from example sentences in `HSK{N}.json`, generates full vocabulary entries via Azure OpenAI, and saves them to `HSK{N}-extended.json`.
-
-```bash
-# Run for all HSK levels
-cd backend && npm run generate-extended
-
-# Run for specific levels
-cd backend && npm run generate-extended -- HSK1 HSK3 HSK5
-```
-
-Safe to re-run — deduplicates against existing words across all levels.
-
-Requires the following environment variables:
-- `AZURE_OPENAI_ENDPOINT`
-- `AZURE_OPENAI_API_KEY`
-- `AZURE_OPENAI_DEPLOYMENT_NAME`
-- `AZURE_OPENAI_API_VERSION`
-
 ## Project Structure
 
 ```
@@ -203,22 +185,10 @@ vocab-trainer/
 │   ├── tsconfig.json
 │   ├── Dockerfile
 │   ├── scripts/
-│   │   ├── migrate-to-firestore.ts        # One-time JSON → Firestore migration
+│   │   ├── migrate-to-firestore.ts        # JSON → Firestore word migration
 │   │   ├── migrate-grammar-to-firestore.ts # Grammar data → Firestore migration
 │   │   ├── migrate-llm-config-to-firestore.ts # Upload LLM config (.env) → Firestore
-│   │   ├── export-from-firestore.ts       # Export data from Firestore to JSON
-│   │   ├── generate-extended.ts           # Generate extended vocab via Azure OpenAI
-│   │   ├── find-missing-pinyin.ts         # Find words missing pinyin data
-│   │   ├── rebuild-word-index.ts          # Rebuild word_index.json from HSK files
-│   │   ├── restructure-db.ts              # Split chinese.json into per-HSK-level files
-│   │   ├── rename-pinyin-fields.ts        # Rename pinyin → transliteration in DB files
-│   │   ├── merge-language-fundamentals.ts # Merge Language Fundamentals sub-topics
-│   │   ├── add-pinyin-segments.ts         # Add pinyin segments to words
-│   │   ├── strip-segments.ts              # Strip segment data from words
-│   │   ├── verify-segment-coverage.ts     # Verify segment coverage
-│   │   ├── fill-missing-and-cleanup.ts    # Fill missing fields and cleanup
-│   │   ├── remove-numbered-segments.ts    # Remove numbered segments
-│   │   └── retry-skipped.ts              # Retry skipped items
+│   │   └── export-from-firestore.ts       # Export data from Firestore to JSON
 │   ├── src/
 │   │   ├── index.ts             # Fastify server entry point
 │   │   ├── types.ts             # Shared TypeScript interfaces
@@ -234,7 +204,7 @@ vocab-trainer/
 │   │       ├── grammar.ts       # /api/grammar
 │   │       ├── grammar-quiz.ts  # /api/grammar-quiz
 │   │       └── grammar-progress.ts # /api/grammar-progress
-│   └── DB/                      # Per-HSK-level vocabulary JSON files
+│   └── DB/                      # Vocabulary and grammar JSON files
 ├── frontend/
 │   ├── package.json
 │   ├── package-lock.json
@@ -338,12 +308,6 @@ vocab-trainer/
 #### `GET /api/vocab/:language/:wordId` — Get single word
 
 **Response:** `Word` object (see [Vocabulary Database Format](#vocabulary-database-format)).
-
-#### `POST /api/vocab/:language` — Add new word
-
-**Body:** Word fields (`term` and `definition` required). `id` is auto-generated if omitted.
-
-**Response:** `201` with the created `Word`.
 
 #### `PUT /api/vocab/:language/:wordId` — Update word
 
@@ -585,7 +549,7 @@ Removes the flagged status from a word.
 | `chapter`    | string | —       | Filter by chapter number                       |
 | `subchapter` | string | —       | Filter by subchapter ID                        |
 | `level`      | string | —       | Filter by level                                |
-| `search`     | string | —       | Search term, description, or examples          |
+| `search`     | string | —       | Search term, description, words, or examples   |
 | `page`       | number | 1       | Page number (min 1)                            |
 | `limit`      | number | 50      | Items per page (max 100)                       |
 
@@ -597,7 +561,7 @@ Removes the flagged status from a word.
 
 #### `POST /api/grammar/:language/items` — Add grammar item
 
-**Body:** Grammar item fields (`chapterNumber`, `subchapterId`, `subchapterTitle`, `term`, `description`, `examples` required).
+**Body:** Grammar item fields (`chapterNumber`, `subchapterId`, `subchapterTitle`, `term` required; `description`, `examples`, `words` optional).
 
 **Response:** `201` with the created `GrammarItemDoc`.
 
@@ -615,7 +579,7 @@ Removes the flagged status from a word.
 
 ### Grammar Quiz
 
-One grammar quiz session is stored per language. Supports two modes: `existing` (quiz on existing example sentences) and `llm` (LLM-generated questions). Display language controls which language the prompt sentence is shown in.
+One grammar quiz session is stored per language. Supports two modes: `existing` (quiz on existing example sentences) and `llm` (LLM-generated questions). For Chinese, quiz mode is always `llm` — the LLM generates a new Chinese sentence using the grammar term, optional related words, and reference examples as context, then translates it to the user-selected display language. Display language controls which language the prompt sentence is shown in.
 
 #### `POST /api/grammar-quiz/start` — Start a grammar quiz session
 
@@ -631,7 +595,7 @@ One grammar quiz session is stored per language. Supports two modes: `existing` 
 }
 ```
 
-All fields except `language` are optional. `displayLanguage` defaults to `"ja"` (Japanese). `quizMode` defaults to `"existing"`. Supported display languages: `ja`, `en`, `ko`.
+All fields except `language` are optional. `displayLanguage` defaults to `"ja"` (Japanese). `quizMode` defaults to `"existing"` (ignored for Chinese — always `"llm"`). Supported display languages: `ja`, `en`, `ko`.
 
 **Response:** `201` with `GrammarQuizSession`.
 
@@ -700,16 +664,16 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 | **QuizFilterModal**     | Modal to select topic, category, and level filters before starting a quiz. Supports "Select All" / "Clear All" actions. Level column only appears when words have levels set. Starting with no filters includes all words. |
 | **WordFormModal**       | Modal for adding or editing a word manually with all fields. |
 | **GrammarList**         | Browse grammar items organized by chapter and subchapter with search and filters. |
-| **GrammarFilterModal**  | Modal to select chapter, subchapter, display language, and quiz mode filters before starting a grammar quiz. |
-| **GrammarQuizTaking**   | Grammar quiz flashcard UI — displays a sentence, reveals the answer, and allows self-grading (correct/incorrect). |
-| **GrammarFormModal**    | Modal for adding or editing grammar components with chapter, subchapter, title, description, and examples. |
+| **GrammarFilterModal**  | Modal to select chapter, subchapter, display language, and quiz mode filters before starting a grammar quiz. Quiz mode selector is hidden for Chinese (always LLM). |
+| **GrammarQuizTaking**   | Grammar quiz flashcard UI — displays a sentence (with grammar term shown for Chinese), reveals the answer, and allows self-grading (correct/incorrect). |
+| **GrammarFormModal**    | Modal for adding grammar components with chapter, subchapter, term (required), description (optional), related words (optional), and examples (optional). |
 | **Home Page (EmptyState)** | Home screen that checks for in-progress quiz sessions across all languages. Shows a resume card with progress (e.g. "12 / 30 answered") if an active session exists, plus buttons for word quiz, grammar quiz, browse words, browse grammar, and add word/grammar. |
 
 ### API Integration
 
 - **`api/client.ts`** — Generic `fetchJson<T>()`, `postJson<T>()`, `putJson<T>()`, and `deleteRequest()` utilities wrapping the Fetch API.
 - **`api/quiz.ts`** — `getCurrentSession(language)`, `startQuiz(opts)`, `getQuizQuestions(language, offset, limit)`, and `answerQuestion(opts)`.
-- **`api/vocab.ts`** — `getWords(language, params)`, `getFilters(language)`, `getTransliterationMap(language)`, `createWord(language, word)`, `updateWord(language, wordId, updates)`, `deleteWord(language, wordId)`, `smartAddWord(language, data)`.
+- **`api/vocab.ts`** — `getWords(language, params)`, `getFilters(language)`, `getTransliterationMap(language)`, `updateWord(language, wordId, updates)`, `deleteWord(language, wordId)`, `smartAddWord(language, data)`.
 - **`api/grammar.ts`** — `getGrammarChapters(language)`, `getGrammarItems(language, filters, page, limit)`, `getSubchapters(language, chapters)`, `createGrammarItem(language, item)`, `startGrammarQuiz(opts)`, `answerGrammarQuestion(opts)`, `getCurrentGrammarSession(language)`, `getGrammarProgress(language)`, `resetGrammarProgress(language)`.
 - **`api/flagged.ts`** — `getFlaggedWords(language)`, `getFlaggedWordCount(language)`, `flagWord(language, wordId)`, `unflagWord(language, wordId)`.
 - **Dev proxy:** Vite proxies `/api/*` to `http://localhost:3000` so the frontend dev server can reach the backend.

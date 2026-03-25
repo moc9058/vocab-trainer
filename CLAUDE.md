@@ -9,9 +9,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cd backend && npm run dev               # Dev server with watch (tsx watch src/index.ts)
 cd backend && npm run build             # TypeScript compile to dist/
 cd backend && npm start                 # Run compiled output (node dist/index.js)
-cd backend && npm run restructure       # Split chinese.json into per-HSK-level files + word_index
-cd backend && npm run generate-extended # Generate extended vocab via Azure OpenAI
 cd backend && npm run migrate           # One-time word migration from JSON files to Firestore
+cd backend && npm run export            # Export Firestore data back to local JSON files
 cd backend && npx tsx scripts/migrate-grammar-to-firestore.ts  # Grammar migration to Firestore
 cd backend && npx tsx scripts/migrate-llm-config-to-firestore.ts  # Upload LLM config (.env) to Firestore
 ```
@@ -56,15 +55,13 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `routes/grammar-progress.ts` — per-component grammar progress
 - **Database**: `firestore.ts` — Google Cloud Firestore abstraction layer
 - **LLM**: `llm.ts` — Azure OpenAI integration (callLLM with JSON mode, validateWord, segmentBatch); config loaded from `.env` (local) or Firestore `config/llm` (deployed)
-- **Storage**: `storage.ts` — legacy file-based JSON persistence (atomic writes via temp file → rename)
 - **Types**: `types.ts` — shared interfaces (Word, VocabFile, QuizSession, WordProgress, etc.)
 - Route handlers use Fastify generics for type-safe Params/Querystring/Body and JSON schema validation
 - Errors via `@fastify/sensible`: `reply.notFound()`, `reply.badRequest()`, `reply.conflict()`
 
 ### Backend Scripts (`backend/scripts/`)
-- `restructure-db.ts` — splits `chinese.json` into per-HSK-level files (`HSK1.json`–`HSK7-9.json`), creates empty extended files, builds `word_index.json`
-- `generate-extended.ts` — uses Azure OpenAI to generate additional vocabulary from existing example sentences; requires `AZURE_OPENAI_*` env vars
-- `migrate-to-firestore.ts` — one-time word migration from file-based JSON to Firestore; requires Google Cloud credentials
+- `migrate-to-firestore.ts` — word migration from JSON files in `DB/` to Firestore; requires Google Cloud credentials
+- `export-from-firestore.ts` — export Firestore data back to JSON files in `DB/` (inverse of migrate)
 - `migrate-grammar-to-firestore.ts` — grammar migration from `backend/DB/grammer/` JSON to Firestore
 - `migrate-llm-config-to-firestore.ts` — uploads Azure OpenAI config from `.env` to Firestore `config/llm` document
 
@@ -82,10 +79,8 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `grammar_progress` — per-component grammar progress
   - `grammar_quiz_sessions` — one grammar quiz session per language
   - `config` — app configuration (e.g., `config/llm` stores Azure OpenAI keys)
-- **Local files** (legacy/scripts):
-  - Vocabulary: `backend/DB/word/HSK{1-6}.json`, `backend/DB/word/HSK7-9.json` — per-level vocab files
-  - Extended vocab: `backend/DB/word/HSK{1-6}-extended.json`, `backend/DB/word/HSK7-9-extended.json`
-  - Word index: `backend/DB/word/word_index.json` — term → {id, level, pinyin}
+- **Local files** (for migration/export):
+  - Vocabulary: `backend/DB/{language}.json` — one file per language (e.g. `chinese.json`)
   - Grammar: `backend/DB/grammer/chinese/*.json` — per-chapter grammar files
   - Progress: `backend/data/progress/{language}.json`
   - Logs: `backend/logs/app-{timestamp}.log`
@@ -95,7 +90,6 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
 - `GET /api/vocab/:language` — list words (query: search, topic, category, level, page, limit)
 - `GET /api/vocab/:language/filters` — available filter options (topics, categories, levels)
 - `GET /api/vocab/:language/lookup?term=X` — word lookup via word_index
-- `POST /api/vocab/:language` — add word (auto-generates ID like `zh-000001`)
 - `POST /api/vocab/:language/smart-add` — smart add word with LLM filling missing fields, auto-flag
 - `PUT /api/vocab/:language/:wordId` — update word
 - `DELETE /api/vocab/:language/:wordId` — delete word

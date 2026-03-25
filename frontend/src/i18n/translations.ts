@@ -105,6 +105,7 @@ const translations = {
     quizMode: "Quiz Mode",
     quizModeExisting: "Existing Examples",
     quizModeLLM: "LLM-Generated",
+    relatedWords: "Related Words",
   },
   ja: {
     appTitle: "単語トレーナー",
@@ -212,6 +213,7 @@ const translations = {
     quizMode: "クイズモード",
     quizModeExisting: "既存の例文",
     quizModeLLM: "LLM生成",
+    relatedWords: "関連語彙",
   },
   ko: {
     appTitle: "단어 트레이너",
@@ -319,6 +321,7 @@ const translations = {
     quizMode: "퀴즈 모드",
     quizModeExisting: "기존 예문",
     quizModeLLM: "LLM 생성",
+    relatedWords: "관련 단어",
   },
 } as const;
 

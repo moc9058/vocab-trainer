@@ -195,34 +195,36 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
               </div>
             </div>
 
-            {/* Quiz Mode */}
-            <div>
-              <h3 className="text-sm font-medium text-gray-300 mb-2">{t("quizMode")}</h3>
-              <div className="flex gap-3">
-                <label className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="quizMode"
-                    value="existing"
-                    checked={quizMode === "existing"}
-                    onChange={() => setQuizMode("existing")}
-                    className="accent-blue-600"
-                  />
-                  {t("quizModeExisting")}
-                </label>
-                <label className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="quizMode"
-                    value="llm"
-                    checked={quizMode === "llm"}
-                    onChange={() => setQuizMode("llm")}
-                    className="accent-blue-600"
-                  />
-                  {t("quizModeLLM")}
-                </label>
+            {/* Quiz Mode — hidden for Chinese (always LLM) */}
+            {language !== "chinese" && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-300 mb-2">{t("quizMode")}</h3>
+                <div className="flex gap-3">
+                  <label className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="quizMode"
+                      value="existing"
+                      checked={quizMode === "existing"}
+                      onChange={() => setQuizMode("existing")}
+                      className="accent-blue-600"
+                    />
+                    {t("quizModeExisting")}
+                  </label>
+                  <label className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="quizMode"
+                      value="llm"
+                      checked={quizMode === "llm"}
+                      onChange={() => setQuizMode("llm")}
+                      className="accent-blue-600"
+                    />
+                    {t("quizModeLLM")}
+                  </label>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -243,7 +245,7 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
                 chapters: [...selectedChapters],
                 subchapters: [...selectedSubchapters],
                 displayLanguage,
-                quizMode,
+                quizMode: language === "chinese" ? "llm" : quizMode,
               })
             }
             disabled={loading}

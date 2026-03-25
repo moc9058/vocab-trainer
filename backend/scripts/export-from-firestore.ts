@@ -37,6 +37,7 @@ function docToWord(doc: FirebaseFirestore.DocumentSnapshot): Word {
           ...(seg.transliteration || seg.pinyin
             ? { transliteration: seg.transliteration ?? seg.pinyin }
             : {}),
+          ...(seg.id ? { id: seg.id } : {}),
         })),
       } : {}),
     })),

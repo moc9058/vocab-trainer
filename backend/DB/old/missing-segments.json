@@ -1,0 +1,94 @@
+{
+  "generatedAt": "2026-03-23T12:22:32.079Z",
+  "summary": {
+    "totalMissing": 0,
+    "totalOrphans": 0,
+    "levelsChecked": 7
+  },
+  "levels": {
+    "HSK1": {
+      "knownTerms": {
+        "total": 737,
+        "regular": 281,
+        "extended": 456
+      },
+      "segmentsChecked": 3693,
+      "missingCount": 0,
+      "missing": [],
+      "orphanCount": 0,
+      "orphans": []
+    },
+    "HSK2": {
+      "knownTerms": {
+        "total": 1178,
+        "regular": 524,
+        "extended": 654
+      },
+      "segmentsChecked": 6907,
+      "missingCount": 0,
+      "missing": [],
+      "orphanCount": 0,
+      "orphans": []
+    },
+    "HSK3": {
+      "knownTerms": {
+        "total": 1504,
+        "regular": 676,
+        "extended": 828
+      },
+      "segmentsChecked": 9748,
+      "missingCount": 0,
+      "missing": [],
+      "orphanCount": 0,
+      "orphans": []
+    },
+    "HSK4": {
+      "knownTerms": {
+        "total": 1432,
+        "regular": 666,
+        "extended": 766
+      },
+      "segmentsChecked": 9037,
+      "missingCount": 0,
+      "missing": [],
+      "orphanCount": 0,
+      "orphans": []
+    },
+    "HSK5": {
+      "knownTerms": {
+        "total": 1587,
+        "regular": 747,
+        "extended": 840
+      },
+      "segmentsChecked": 10353,
+      "missingCount": 0,
+      "missing": [],
+      "orphanCount": 0,
+      "orphans": []
+    },
+    "HSK6": {
+      "knownTerms": {
+        "total": 1700,
+        "regular": 801,
+        "extended": 899
+      },
+      "segmentsChecked": 11700,
+      "missingCount": 0,
+      "missing": [],
+      "orphanCount": 0,
+      "orphans": []
+    },
+    "HSK7-9": {
+      "knownTerms": {
+        "total": 8059,
+        "regular": 4582,
+        "extended": 3477
+      },
+      "segmentsChecked": 58077,
+      "missingCount": 0,
+      "missing": [],
+      "orphanCount": 0,
+      "orphans": []
+    }
+  }
+}
