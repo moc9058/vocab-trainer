@@ -27,6 +27,12 @@ Deploy both services to Google Cloud Run using the included script.
 ./deploy.sh vocab-trainer-490014 asia-northeast1
 ```
 
+REGION is optional and defaults to `us-central1`:
+
+```bash
+./deploy.sh vocab-trainer-490014                                     # uses us-central1
+```
+
 To also run Firestore data migrations during deploy:
 
 ```bash
@@ -180,7 +186,8 @@ Safe to re-run — deduplicates against existing words across all levels.
 Requires the following environment variables:
 - `AZURE_OPENAI_ENDPOINT`
 - `AZURE_OPENAI_API_KEY`
-- `AZURE_OPENAI_DEPLOYMENT`
+- `AZURE_OPENAI_DEPLOYMENT_NAME`
+- `AZURE_OPENAI_API_VERSION`
 
 ## Project Structure
 
@@ -188,6 +195,7 @@ Requires the following environment variables:
 vocab-trainer/
 ├── deploy.sh                    # Full Cloud Run deployment script
 ├── migrate.sh                   # Standalone Firestore data migration
+├── export.sh                    # Export data from Firestore
 ├── docker-compose.yml           # Docker orchestration
 ├── backend/
 │   ├── package.json
@@ -198,12 +206,19 @@ vocab-trainer/
 │   │   ├── migrate-to-firestore.ts        # One-time JSON → Firestore migration
 │   │   ├── migrate-grammar-to-firestore.ts # Grammar data → Firestore migration
 │   │   ├── migrate-llm-config-to-firestore.ts # Upload LLM config (.env) → Firestore
+│   │   ├── export-from-firestore.ts       # Export data from Firestore to JSON
 │   │   ├── generate-extended.ts           # Generate extended vocab via Azure OpenAI
 │   │   ├── find-missing-pinyin.ts         # Find words missing pinyin data
 │   │   ├── rebuild-word-index.ts          # Rebuild word_index.json from HSK files
 │   │   ├── restructure-db.ts              # Split chinese.json into per-HSK-level files
 │   │   ├── rename-pinyin-fields.ts        # Rename pinyin → transliteration in DB files
-│   │   └── merge-language-fundamentals.ts # Merge Language Fundamentals sub-topics
+│   │   ├── merge-language-fundamentals.ts # Merge Language Fundamentals sub-topics
+│   │   ├── add-pinyin-segments.ts         # Add pinyin segments to words
+│   │   ├── strip-segments.ts              # Strip segment data from words
+│   │   ├── verify-segment-coverage.ts     # Verify segment coverage
+│   │   ├── fill-missing-and-cleanup.ts    # Fill missing fields and cleanup
+│   │   ├── remove-numbered-segments.ts    # Remove numbered segments
+│   │   └── retry-skipped.ts              # Retry skipped items
 │   ├── src/
 │   │   ├── index.ts             # Fastify server entry point
 │   │   ├── types.ts             # Shared TypeScript interfaces
@@ -214,7 +229,11 @@ vocab-trainer/
 │   │       ├── languages.ts     # /api/languages
 │   │       ├── vocab.ts         # /api/vocab
 │   │       ├── progress.ts      # /api/progress
-│   │       └── quiz.ts          # /api/quiz
+│   │       ├── quiz.ts          # /api/quiz
+│   │       ├── flagged.ts       # /api/flagged
+│   │       ├── grammar.ts       # /api/grammar
+│   │       ├── grammar-quiz.ts  # /api/grammar-quiz
+│   │       └── grammar-progress.ts # /api/grammar-progress
 │   └── DB/                      # Per-HSK-level vocabulary JSON files
 ├── frontend/
 │   ├── package.json
@@ -228,19 +247,28 @@ vocab-trainer/
 │       ├── App.tsx
 │       ├── types.ts
 │       ├── api/
-│       │   ├── client.ts        # Generic fetch/post utilities
+│       │   ├── client.ts        # Generic fetch/post/put/delete utilities
 │       │   ├── quiz.ts          # Quiz API wrappers
-│       │   └── vocab.ts         # Vocabulary API wrappers
+│       │   ├── vocab.ts         # Vocabulary API wrappers
+│       │   ├── grammar.ts       # Grammar & grammar quiz API wrappers
+│       │   └── flagged.ts       # Flagged words API wrappers
 │       ├── components/
 │       │   ├── Dashboard.tsx     # Main layout with quiz/browse orchestration
 │       │   ├── QuizTaking.tsx    # Active quiz interface
 │       │   ├── WordList.tsx      # Paginated word browsing with filters
 │       │   ├── RubyText.tsx      # Ruby text component for pinyin annotations
 │       │   ├── LanguageSelectModal.tsx
+│       │   ├── LevelSelectModal.tsx
 │       │   ├── QuizFilterModal.tsx
 │       │   ├── WordFormModal.tsx
+│       │   ├── SmartAddWordModal.tsx  # Smart add word with LLM
+│       │   ├── FlaggedReview.tsx      # Review flagged words
+│       │   ├── GrammarList.tsx        # Browse grammar by chapter/subchapter
+│       │   ├── GrammarFilterModal.tsx # Grammar quiz filters
+│       │   ├── GrammarQuizTaking.tsx  # Grammar quiz flashcard UI
+│       │   ├── GrammarFormModal.tsx   # Add/edit grammar component
 │       │   └── EmptyState.tsx
-│       └── i18n/                # Internationalization (en)
+│       └── i18n/                # Internationalization (ja, en, ko)
 ```
 
 ## Tech Stack
@@ -283,6 +311,7 @@ vocab-trainer/
 | `level`     | string | —       | Filter by level                                |
 | `page`      | number | 1       | Page number (min 1)                            |
 | `limit`     | number | 50      | Items per page (max 100)                       |
+| `flaggedOnly` | string | —     | When `"true"`, return only flagged words       |
 
 **Response:** `PaginatedResult<Word>`
 ```json
@@ -340,9 +369,30 @@ Looks up a word by its term using the word_index for fast retrieval.
 
 **Response:** `Word` object, or `404` if not found.
 
-#### `GET /api/vocab/:language/pinyin-map` — Get pinyin map
+#### `POST /api/vocab/:language/smart-add` — Smart add word with LLM
 
-Returns a mapping of terms to their pinyin. Triggers background word generation if configured.
+Adds a word using the LLM to fill in missing fields. The word is auto-flagged for review. For Chinese, the LLM also generates word segments with pinyin for each example sentence, and any unknown words discovered in segments are auto-generated and returned.
+
+**Body:**
+```json
+{
+  "term": "努力",
+  "transliteration": "",
+  "definition": {},
+  "grammaticalCategory": "",
+  "topics": [],
+  "examples": [],
+  "notes": ""
+}
+```
+
+Only `term` is required. All other fields are optional and will be filled by the LLM if omitted or empty.
+
+**Response:** `201` with the created `Word`, plus an optional `generatedWords` array of auto-discovered words from example segments.
+
+#### `GET /api/vocab/:language/transliteration-map` — Get transliteration map
+
+Returns a mapping of terms to their transliteration (e.g., pinyin for Chinese). Triggers background word generation if configured.
 
 **Response:**
 ```json
@@ -465,9 +515,176 @@ Returns the in-progress or completed quiz session for the given language, or `40
 
 ---
 
+### Flagged Words
+
+Flagged words are marked for review (e.g., words added via smart-add are auto-flagged).
+
+#### `GET /api/flagged/:language` — List flagged words
+
+Returns all flagged words with full word data.
+
+**Response:**
+```json
+{
+  "words": [ /* Word objects */ ],
+  "count": 5
+}
+```
+
+#### `GET /api/flagged/:language/count` — Get flagged word count
+
+**Response:**
+```json
+{
+  "count": 5
+}
+```
+
+#### `POST /api/flagged/:language/:wordId` — Flag a word
+
+Marks a word for review.
+
+**Response:** `201`
+
+#### `DELETE /api/flagged/:language/:wordId` — Unflag a word
+
+Removes the flagged status from a word.
+
+**Response:** `204 No Content`
+
+---
+
+### Grammar
+
+#### `GET /api/grammar/:language/chapters` — List grammar chapters
+
+**Response:**
+```json
+[
+  {
+    "chapterNumber": 1,
+    "subchapters": [
+      { "subchapterId": "1-1", "subchapterTitle": { "ja": "...", "en": "..." } }
+    ]
+  }
+]
+```
+
+#### `GET /api/grammar/:language/subchapters` — List subchapters
+
+| Query Param | Type   | Default | Description                                    |
+| ----------- | ------ | ------- | ---------------------------------------------- |
+| `chapters`  | string | —       | Comma-separated chapter numbers to filter by   |
+
+**Response:** Array of `{ chapterNumber, subchapterId, subchapterTitle }`.
+
+#### `GET /api/grammar/:language/items` — List grammar items (with filtering and pagination)
+
+| Query Param  | Type   | Default | Description                                    |
+| ------------ | ------ | ------- | ---------------------------------------------- |
+| `chapter`    | string | —       | Filter by chapter number                       |
+| `subchapter` | string | —       | Filter by subchapter ID                        |
+| `level`      | string | —       | Filter by level                                |
+| `search`     | string | —       | Search term, description, or examples          |
+| `page`       | number | 1       | Page number (min 1)                            |
+| `limit`      | number | 50      | Items per page (max 100)                       |
+
+**Response:** `PaginatedResult<GrammarItemDoc>`
+
+#### `GET /api/grammar/:language/items/:componentId` — Get single grammar item
+
+**Response:** `GrammarItemDoc` object, or `404` if not found.
+
+#### `POST /api/grammar/:language/items` — Add grammar item
+
+**Body:** Grammar item fields (`chapterNumber`, `subchapterId`, `subchapterTitle`, `term`, `description`, `examples` required).
+
+**Response:** `201` with the created `GrammarItemDoc`.
+
+#### `PUT /api/grammar/:language/items/:componentId` — Update grammar item
+
+**Body:** Partial grammar item fields to update.
+
+**Response:** Updated `GrammarItemDoc`.
+
+#### `DELETE /api/grammar/:language/items/:componentId` — Delete grammar item
+
+**Response:** `204 No Content`
+
+---
+
+### Grammar Quiz
+
+One grammar quiz session is stored per language. Supports two modes: `existing` (quiz on existing example sentences) and `llm` (LLM-generated questions). Display language controls which language the prompt sentence is shown in.
+
+#### `POST /api/grammar-quiz/start` — Start a grammar quiz session
+
+**Body:**
+```json
+{
+  "language": "chinese",
+  "questionCount": 10,
+  "chapters": [1, 2],
+  "subchapters": ["1-1", "2-3"],
+  "displayLanguage": "ja",
+  "quizMode": "existing"
+}
+```
+
+All fields except `language` are optional. `displayLanguage` defaults to `"ja"` (Japanese). `quizMode` defaults to `"existing"`. Supported display languages: `ja`, `en`, `ko`.
+
+**Response:** `201` with `GrammarQuizSession`.
+
+#### `POST /api/grammar-quiz/answer` — Submit a self-graded answer
+
+**Body:**
+```json
+{
+  "language": "chinese",
+  "componentId": "grammar-001",
+  "correct": true
+}
+```
+
+**Response:** `{ session }` — updated session state.
+
+#### `GET /api/grammar-quiz/session/language/:language` — Get current grammar quiz session
+
+Returns the in-progress or completed grammar quiz session, or `404` if none exists.
+
+**Response:** `GrammarQuizSession` object.
+
+---
+
+### Grammar Progress
+
+#### `GET /api/grammar-progress/:language` — Get grammar progress for all components
+
+**Response:**
+```json
+{
+  "language": "chinese",
+  "components": {
+    "grammar-001": {
+      "timesSeen": 3,
+      "timesCorrect": 2,
+      "correctRate": 0.67,
+      "lastReviewed": "2026-03-08T12:00:00.000Z",
+      "streak": 1
+    }
+  }
+}
+```
+
+#### `DELETE /api/grammar-progress/:language` — Reset grammar progress for a language
+
+**Response:** `204 No Content`
+
+---
+
 ## Frontend
 
-React 19 single-page application for taking vocabulary quizzes. Built with Vite 6 and styled with Tailwind CSS 4. Supports English UI via a custom i18n context (no external library).
+React 19 single-page application for taking vocabulary and grammar quizzes. Built with Vite 6 and styled with Tailwind CSS 4. Supports Japanese, English, and Korean UI (default Japanese) via a custom i18n context (no external library).
 
 ### Screens / Views
 
@@ -476,22 +693,32 @@ React 19 single-page application for taking vocabulary quizzes. Built with Vite 
 | **Dashboard**           | Main layout. Header with "Start Quiz", "Browse Words", and "Home" buttons. The Home button appears when a quiz or word list is active and navigates back to the home page. |
 | **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows all definitions, transliteration, and example sentences with RubyText annotations. Wrong answers are re-queued until correct. Questions are lazy-loaded in batches of 50 with automatic prefetching at the halfway point. Supports resuming from where the user left off. |
 | **WordList**            | Paginated word browsing with search, topic/category/level filters, progress badges, and expandable word details with pinyin displayed via RubyText. |
+| **SmartAddWordModal**   | Modal to add a word with LLM auto-filling missing fields. Only `term` is required; the LLM generates transliteration, definition, examples, etc. |
+| **FlaggedReview**       | Review interface for flagged words. Allows browsing and unflagging words marked for review. |
 | **LanguageSelectModal** | Modal to pick the target language when starting a new quiz. Lists languages fetched from the API.                  |
+| **LevelSelectModal**    | Modal to select proficiency levels (e.g., HSK1–HSK7~9) for filtering. |
 | **QuizFilterModal**     | Modal to select topic, category, and level filters before starting a quiz. Supports "Select All" / "Clear All" actions. Level column only appears when words have levels set. Starting with no filters includes all words. |
-| **Home Page (EmptyState)** | Home screen that checks for in-progress quiz sessions across all languages. Shows a resume card with progress (e.g. "12 / 30 answered") if an active session exists, plus "Start New Quiz" and "Browse Words" buttons. |
+| **WordFormModal**       | Modal for adding or editing a word manually with all fields. |
+| **GrammarList**         | Browse grammar items organized by chapter and subchapter with search and filters. |
+| **GrammarFilterModal**  | Modal to select chapter, subchapter, display language, and quiz mode filters before starting a grammar quiz. |
+| **GrammarQuizTaking**   | Grammar quiz flashcard UI — displays a sentence, reveals the answer, and allows self-grading (correct/incorrect). |
+| **GrammarFormModal**    | Modal for adding or editing grammar components with chapter, subchapter, title, description, and examples. |
+| **Home Page (EmptyState)** | Home screen that checks for in-progress quiz sessions across all languages. Shows a resume card with progress (e.g. "12 / 30 answered") if an active session exists, plus buttons for word quiz, grammar quiz, browse words, browse grammar, and add word/grammar. |
 
 ### API Integration
 
-- **`api/client.ts`** — Generic `fetchJson<T>()` and `postJson<T>()` utilities wrapping the Fetch API.
+- **`api/client.ts`** — Generic `fetchJson<T>()`, `postJson<T>()`, `putJson<T>()`, and `deleteRequest()` utilities wrapping the Fetch API.
 - **`api/quiz.ts`** — `getCurrentSession(language)`, `startQuiz(opts)`, `getQuizQuestions(language, offset, limit)`, and `answerQuestion(opts)`.
-- **`api/vocab.ts`** — `getFilters(language)`, `getPinyinMap(language)`, `getWords(language, params)` for vocabulary browsing and data retrieval.
+- **`api/vocab.ts`** — `getWords(language, params)`, `getFilters(language)`, `getTransliterationMap(language)`, `createWord(language, word)`, `updateWord(language, wordId, updates)`, `deleteWord(language, wordId)`, `smartAddWord(language, data)`.
+- **`api/grammar.ts`** — `getGrammarChapters(language)`, `getGrammarItems(language, filters, page, limit)`, `getSubchapters(language, chapters)`, `createGrammarItem(language, item)`, `startGrammarQuiz(opts)`, `answerGrammarQuestion(opts)`, `getCurrentGrammarSession(language)`, `getGrammarProgress(language)`, `resetGrammarProgress(language)`.
+- **`api/flagged.ts`** — `getFlaggedWords(language)`, `getFlaggedWordCount(language)`, `flagWord(language, wordId)`, `unflagWord(language, wordId)`.
 - **Dev proxy:** Vite proxies `/api/*` to `http://localhost:3000` so the frontend dev server can reach the backend.
 
 ### Internationalization
 
 - Context-based (`i18n/context.tsx`): `I18nProvider` + `useI18n()` hook.
-- Translation keys defined in `i18n/translations.ts` for English.
-- Type-safe keys via the `TranslationKey` type.
+- Translation keys defined in `i18n/translations.ts` for Japanese, English, and Korean. Default UI language is Japanese.
+- Type-safe keys via the `TranslationKey` type. Available UI languages exported as `uiLanguages` array (`ja`, `en`, `ko`).
 
 ### State Management
 
@@ -533,7 +760,9 @@ Local JSON files under `backend/DB/` serve as the source for the initial Firesto
 | `FIRESTORE_DATABASE_ID` | `vocab-database` | Firestore database ID            |
 | `AZURE_OPENAI_ENDPOINT` | —               | Azure OpenAI endpoint (falls back to Firestore `config/llm`) |
 | `AZURE_OPENAI_API_KEY`  | —               | Azure OpenAI API key (falls back to Firestore `config/llm`) |
-| `AZURE_OPENAI_DEPLOYMENT` | —             | Azure OpenAI deployment name (falls back to Firestore `config/llm`) |
+| `AZURE_OPENAI_DEPLOYMENT_NAME` | —        | Azure OpenAI deployment name (falls back to Firestore `config/llm`) |
+| `AZURE_OPENAI_API_VERSION` | —            | Azure OpenAI API version (falls back to Firestore `config/llm`) |
+| `FIRESTORE_PROJECT`    | —                | Google Cloud project ID (required for Firestore in deployed environments) |
 
 ## Docker
 
