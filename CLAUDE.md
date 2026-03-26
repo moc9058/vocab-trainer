@@ -129,10 +129,10 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
   - `QuizTaking.tsx` — word quiz UI with question display, answer input, progress bar
   - `WordList.tsx` — paginated word browsing with filters, progress badges, expandable details
   - `SmartAddWordModal.tsx` — add word with LLM filling missing fields
-  - `GrammarList.tsx` — browse grammar by chapter/subchapter
+  - `GrammarList.tsx` — browse grammar by chapter/subchapter with inline edit/delete
   - `GrammarFilterModal.tsx` — grammar quiz filters (chapter, subchapter, display language, quiz mode)
   - `GrammarQuizTaking.tsx` — grammar quiz flashcard UI (display sentence → show answer → self-grade)
-  - `GrammarFormModal.tsx` — add grammar component with chapter/subchapter/topic/description/terms/examples
+  - `GrammarFormModal.tsx` — add/edit grammar component with chapter/subchapter/topic/description/terms/examples
   - `FlaggedReview.tsx` — review flagged words
   - `EmptyState.tsx` — home screen with word quiz, grammar quiz, browse, add word/grammar buttons
 - **i18n**: `i18n/translations.ts` — English, Japanese, and Korean, keyed by `TranslationKey` type

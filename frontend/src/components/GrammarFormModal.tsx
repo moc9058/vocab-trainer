@@ -21,6 +21,21 @@ function detectLangSelect(lang: string) {
   return lang ? "__other__" : "chinese";
 }
 
+function InsertButton({ onInsert }: { onInsert: () => void }) {
+  return (
+    <div className="group relative flex h-3 items-center justify-center">
+      <div className="absolute inset-x-0 top-1/2 h-px bg-gray-600 opacity-0 transition-opacity group-hover:opacity-100" />
+      <button
+        type="button"
+        onClick={onInsert}
+        className="relative z-10 flex h-5 w-5 items-center justify-center rounded-full bg-gray-600 text-xs text-gray-300 opacity-0 transition-opacity hover:bg-blue-600 hover:text-white group-hover:opacity-100"
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
 export default function GrammarFormModal({ language: initialLanguage, editItem, onSave, onClose }: Props) {
   const { t } = useI18n();
   const isEdit = !!editItem;
@@ -283,39 +298,41 @@ export default function GrammarFormModal({ language: initialLanguage, editItem, 
           <div>
             <label className="mb-1 block text-sm text-gray-400">{t("grammarTerms")}</label>
             {wordsList.map((w, i) => (
-              <div key={i} className="mb-2 flex gap-2">
-                <input
-                  type="text"
-                  value={w}
-                  onChange={(e) => { const n = [...wordsList]; n[i] = e.target.value; setWordsList(n); }}
-                  placeholder="e.g. 别+V+了"
-                  className="flex-1 rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-400 focus:outline-none"
-                />
-                <button type="button" onClick={() => setWordsList(wordsList.filter((_, j) => j !== i))} className="text-xs text-red-400 hover:text-red-300">
-                  {t("removeExample")}
-                </button>
+              <div key={i}>
+                <InsertButton onInsert={() => { const n = [...wordsList]; n.splice(i, 0, ""); setWordsList(n); }} />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={w}
+                    onChange={(e) => { const n = [...wordsList]; n[i] = e.target.value; setWordsList(n); }}
+                    placeholder="e.g. 别+V+了"
+                    className="flex-1 rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-400 focus:outline-none"
+                  />
+                  <button type="button" onClick={() => setWordsList(wordsList.filter((_, j) => j !== i))} className="text-xs text-red-400 hover:text-red-300">
+                    {t("removeExample")}
+                  </button>
+                </div>
               </div>
             ))}
-            <button type="button" onClick={() => setWordsList([...wordsList, ""])} className="text-xs text-blue-400 hover:text-blue-300">
-              + {t("addExample")}
-            </button>
+            <InsertButton onInsert={() => setWordsList([...wordsList, ""])} />
           </div>
 
           {/* Examples */}
           <div>
             <label className="mb-1 block text-sm text-gray-400">{t("examples")}</label>
             {examples.map((ex, i) => (
-              <div key={i} className="mb-2 rounded-lg border border-gray-600 bg-gray-700 p-2 space-y-1">
-                <input type="text" value={ex.sentence} onChange={(e) => { const n = [...examples]; n[i] = { ...n[i], sentence: e.target.value }; setExamples(n); }} placeholder={t("sentence")} className="w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none" />
-                <div className="flex gap-2">
-                  <input type="text" value={ex.translation} onChange={(e) => { const n = [...examples]; n[i] = { ...n[i], translation: e.target.value }; setExamples(n); }} placeholder={t("translationLabel")} className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none" />
-                  <button type="button" onClick={() => setExamples(examples.filter((_, j) => j !== i))} className="text-xs text-red-400 hover:text-red-300">{t("removeExample")}</button>
+              <div key={i}>
+                <InsertButton onInsert={() => { const n = [...examples]; n.splice(i, 0, { sentence: "", translation: "" }); setExamples(n); }} />
+                <div className="rounded-lg border border-gray-600 bg-gray-700 p-2 space-y-1">
+                  <input type="text" value={ex.sentence} onChange={(e) => { const n = [...examples]; n[i] = { ...n[i], sentence: e.target.value }; setExamples(n); }} placeholder={t("sentence")} className="w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none" />
+                  <div className="flex gap-2">
+                    <input type="text" value={ex.translation} onChange={(e) => { const n = [...examples]; n[i] = { ...n[i], translation: e.target.value }; setExamples(n); }} placeholder={t("translationLabel")} className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none" />
+                    <button type="button" onClick={() => setExamples(examples.filter((_, j) => j !== i))} className="text-xs text-red-400 hover:text-red-300">{t("removeExample")}</button>
+                  </div>
                 </div>
               </div>
             ))}
-            <button type="button" onClick={() => setExamples([...examples, { sentence: "", translation: "" }])} className="text-xs text-blue-400 hover:text-blue-300">
-              + {t("addExample")}
-            </button>
+            <InsertButton onInsert={() => setExamples([...examples, { sentence: "", translation: "" }])} />
           </div>
 
           {/* Tags */}
