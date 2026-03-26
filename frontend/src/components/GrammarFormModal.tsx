@@ -281,12 +281,7 @@ export default function GrammarFormModal({ language: initialLanguage, editItem, 
 
           {/* Terms */}
           <div>
-            <div className="mb-1 flex items-center justify-between">
-              <label className="text-sm text-gray-400">{t("grammarTerms")}</label>
-              <button type="button" onClick={() => setWordsList([...wordsList, ""])} className="text-xs text-blue-400 hover:text-blue-300">
-                + {t("addExample")}
-              </button>
-            </div>
+            <label className="mb-1 block text-sm text-gray-400">{t("grammarTerms")}</label>
             {wordsList.map((w, i) => (
               <div key={i} className="mb-2 flex gap-2">
                 <input
@@ -301,16 +296,14 @@ export default function GrammarFormModal({ language: initialLanguage, editItem, 
                 </button>
               </div>
             ))}
+            <button type="button" onClick={() => setWordsList([...wordsList, ""])} className="text-xs text-blue-400 hover:text-blue-300">
+              + {t("addExample")}
+            </button>
           </div>
 
           {/* Examples */}
           <div>
-            <div className="mb-1 flex items-center justify-between">
-              <label className="text-sm text-gray-400">{t("examples")}</label>
-              <button type="button" onClick={() => setExamples([...examples, { sentence: "", translation: "" }])} className="text-xs text-blue-400 hover:text-blue-300">
-                + {t("addExample")}
-              </button>
-            </div>
+            <label className="mb-1 block text-sm text-gray-400">{t("examples")}</label>
             {examples.map((ex, i) => (
               <div key={i} className="mb-2 rounded-lg border border-gray-600 bg-gray-700 p-2 space-y-1">
                 <input type="text" value={ex.sentence} onChange={(e) => { const n = [...examples]; n[i] = { ...n[i], sentence: e.target.value }; setExamples(n); }} placeholder={t("sentence")} className="w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none" />
@@ -320,6 +313,9 @@ export default function GrammarFormModal({ language: initialLanguage, editItem, 
                 </div>
               </div>
             ))}
+            <button type="button" onClick={() => setExamples([...examples, { sentence: "", translation: "" }])} className="text-xs text-blue-400 hover:text-blue-300">
+              + {t("addExample")}
+            </button>
           </div>
 
           {/* Tags */}
