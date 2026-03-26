@@ -1,4 +1,4 @@
-import { fetchJson, postJson, deleteRequest } from "./client";
+import { fetchJson, postJson, putJson, deleteRequest } from "./client";
 import type {
   GrammarChapterInfo,
   GrammarItemDoc,
@@ -31,6 +31,21 @@ export function createGrammarItem(
   item: Omit<GrammarItemDoc, "language">
 ): Promise<GrammarItemDoc> {
   return postJson(`/api/grammar/${encodeURIComponent(language)}/items`, item);
+}
+
+export function updateGrammarItem(
+  language: string,
+  componentId: string,
+  updates: Partial<GrammarItemDoc>
+): Promise<GrammarItemDoc> {
+  return putJson(`/api/grammar/${encodeURIComponent(language)}/items/${encodeURIComponent(componentId)}`, updates);
+}
+
+export function deleteGrammarItem(
+  language: string,
+  componentId: string
+): Promise<void> {
+  return deleteRequest(`/api/grammar/${encodeURIComponent(language)}/items/${encodeURIComponent(componentId)}`);
 }
 
 export function getSubchapters(

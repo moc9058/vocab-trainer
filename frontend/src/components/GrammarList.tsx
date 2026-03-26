@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useI18n } from "../i18n/context";
-import { getGrammarChapters, getGrammarItems } from "../api/grammar";
+import { getGrammarChapters, getGrammarItems, deleteGrammarItem } from "../api/grammar";
 import type { GrammarChapterInfo, GrammarItemDoc } from "../types";
+import GrammarFormModal from "./GrammarFormModal";
 
 interface Props {
   language: string;
@@ -18,6 +19,8 @@ export default function GrammarList({ language, onBack }: Props) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<GrammarItemDoc | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     getGrammarChapters(language)
@@ -26,7 +29,7 @@ export default function GrammarList({ language, onBack }: Props) {
       .finally(() => setLoading(false));
   }, [language]);
 
-  useEffect(() => {
+  const fetchItems = useCallback(() => {
     setLoading(true);
     getGrammarItems(
       language,
@@ -41,6 +44,20 @@ export default function GrammarList({ language, onBack }: Props) {
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
   }, [language, selectedChapter, search, page]);
+
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
+
+  async function handleDelete(componentId: string) {
+    try {
+      await deleteGrammarItem(language, componentId);
+      setDeletingId(null);
+      fetchItems();
+    } catch {
+      // keep dialog open on error
+    }
+  }
 
   return (
     <div className="mx-auto max-w-4xl p-4 sm:p-6">
@@ -152,6 +169,22 @@ export default function GrammarList({ language, onBack }: Props) {
                       ))}
                     </div>
                   )}
+
+                  {/* Edit / Delete buttons */}
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditingItem(item); }}
+                      className="rounded bg-gray-600 px-2 py-1 text-xs text-gray-200 hover:bg-gray-500"
+                    >
+                      {t("editGrammar")}
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeletingId(item.id); }}
+                      className="rounded bg-red-900/50 px-2 py-1 text-xs text-red-300 hover:bg-red-800/50"
+                    >
+                      {t("deleteGrammar")}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -179,6 +212,39 @@ export default function GrammarList({ language, onBack }: Props) {
           >
             {t("next")}
           </button>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {editingItem && (
+        <GrammarFormModal
+          language={language}
+          editItem={editingItem}
+          onSave={() => { setEditingItem(null); fetchItems(); }}
+          onClose={() => setEditingItem(null)}
+        />
+      )}
+
+      {/* Delete confirmation dialog */}
+      {deletingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setDeletingId(null)}>
+          <div className="rounded-xl bg-gray-800 p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <p className="mb-4 text-sm text-gray-200">{t("deleteGrammarConfirm")}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDeletingId(null)}
+                className="rounded-lg border border-gray-600 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
+              >
+                {t("cancel")}
+              </button>
+              <button
+                onClick={() => handleDelete(deletingId)}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-500"
+              >
+                {t("deleteGrammar")}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

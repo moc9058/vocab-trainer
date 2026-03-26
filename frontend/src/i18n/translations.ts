@@ -106,6 +106,9 @@ const translations = {
     quizModeExisting: "Existing Examples",
     quizModeLLM: "LLM-Generated",
     grammarTerms: "Terms",
+    editGrammar: "Edit Grammar",
+    deleteGrammar: "Delete",
+    deleteGrammarConfirm: "Are you sure you want to delete this grammar item?",
   },
   ja: {
     appTitle: "単語トレーナー",
@@ -214,6 +217,9 @@ const translations = {
     quizModeExisting: "既存の例文",
     quizModeLLM: "LLM生成",
     grammarTerms: "用語",
+    editGrammar: "文法を編集",
+    deleteGrammar: "削除",
+    deleteGrammarConfirm: "この文法項目を削除してもよろしいですか？",
   },
   ko: {
     appTitle: "단어 트레이너",
@@ -322,6 +328,9 @@ const translations = {
     quizModeExisting: "기존 예문",
     quizModeLLM: "LLM 생성",
     grammarTerms: "용어",
+    editGrammar: "문법 편집",
+    deleteGrammar: "삭제",
+    deleteGrammarConfirm: "이 문법 항목을 삭제하시겠습니까?",
   },
 } as const;
 

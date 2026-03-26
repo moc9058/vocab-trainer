@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
-import { getGrammarChapters, getSubchapters, createGrammarItem } from "../api/grammar";
-import type { GrammarChapterInfo } from "../types";
+import { getGrammarChapters, getSubchapters, createGrammarItem, updateGrammarItem } from "../api/grammar";
+import type { GrammarChapterInfo, GrammarItemDoc } from "../types";
 
 const GRAMMAR_LANG_OPTIONS = [
   { value: "chinese", label: "Chinese" },
@@ -11,37 +11,50 @@ const GRAMMAR_LANG_OPTIONS = [
 
 interface Props {
   language?: string;
+  editItem?: GrammarItemDoc;
   onSave: () => void;
   onClose: () => void;
 }
 
-export default function GrammarFormModal({ language: initialLanguage, onSave, onClose }: Props) {
+function detectLangSelect(lang: string) {
+  if (lang === "chinese" || lang === "english") return lang;
+  return lang ? "__other__" : "chinese";
+}
+
+export default function GrammarFormModal({ language: initialLanguage, editItem, onSave, onClose }: Props) {
   const { t } = useI18n();
-  const [langSelect, setLangSelect] = useState(
-    initialLanguage === "chinese" || initialLanguage === "english"
-      ? initialLanguage
-      : initialLanguage
-        ? "__other__"
-        : "chinese"
-  );
+  const isEdit = !!editItem;
+  const effectiveLang = editItem?.language ?? initialLanguage;
+
+  const [langSelect, setLangSelect] = useState(detectLangSelect(effectiveLang ?? ""));
   const [customLang, setCustomLang] = useState(
-    initialLanguage && initialLanguage !== "chinese" && initialLanguage !== "english"
-      ? initialLanguage
+    effectiveLang && effectiveLang !== "chinese" && effectiveLang !== "english"
+      ? effectiveLang
       : ""
   );
   const language =
     langSelect === "__other__" ? customLang.trim().toLowerCase() : langSelect;
   const [chapters, setChapters] = useState<GrammarChapterInfo[]>([]);
-  const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
+  const [selectedChapter, setSelectedChapter] = useState<number | null>(editItem?.chapterNumber ?? null);
   const [subchapters, setSubchapters] = useState<{ subchapterId: string; subchapterTitle: Record<string, string> }[]>([]);
-  const [selectedSubchapter, setSelectedSubchapter] = useState("");
+  const [selectedSubchapter, setSelectedSubchapter] = useState(editItem?.subchapterId ?? "");
   const [newSubchapterName, setNewSubchapterName] = useState("");
-  const [inputLang, setInputLang] = useState("ja");
-  const [termText, setTermText] = useState("");
-  const [descText, setDescText] = useState("");
-  const [wordsList, setWordsList] = useState<string[]>([]);
-  const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>([]);
-  const [tags, setTags] = useState("");
+
+  // Detect which input language to use from existing term keys
+  const defaultInputLang = editItem
+    ? (Object.keys(editItem.term).find((k) => ["ja", "en", "ko"].includes(k)) ?? "ja")
+    : "ja";
+  const [inputLang, setInputLang] = useState(defaultInputLang);
+
+  const [termText, setTermText] = useState(editItem ? (editItem.term[defaultInputLang] ?? Object.values(editItem.term)[0] ?? "") : "");
+  const [descText, setDescText] = useState(
+    editItem?.description ? (editItem.description[defaultInputLang] ?? Object.values(editItem.description)[0] ?? "") : ""
+  );
+  const [wordsList, setWordsList] = useState<string[]>(editItem?.words ?? []);
+  const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>(
+    editItem?.examples?.map((ex) => ({ sentence: ex.sentence, translation: ex.translation })) ?? []
+  );
+  const [tags, setTags] = useState(editItem?.tags?.join(", ") ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -76,8 +89,6 @@ export default function GrammarFormModal({ language: initialLanguage, onSave, on
     setSaving(true);
     setError("");
 
-    const componentId = `grammar-zh-${String(selectedChapter).padStart(3, "0")}-${Date.now()}`;
-
     try {
       const filteredExamples = examples
         .filter((ex) => ex.sentence.trim())
@@ -88,17 +99,38 @@ export default function GrammarFormModal({ language: initialLanguage, onSave, on
       const wordsArr = wordsList.map((w) => w.trim()).filter(Boolean);
       const wordsPayload = wordsArr.length > 0 ? wordsArr : undefined;
 
-      await createGrammarItem(language, {
-        id: componentId,
-        chapterNumber: selectedChapter,
-        subchapterId: subId,
-        subchapterTitle: subTitle,
-        term: { [inputLang]: termText.trim() },
-        ...(descText.trim() ? { description: { [inputLang]: descText.trim() } } : {}),
-        ...(filteredExamples.length > 0 ? { examples: filteredExamples } : {}),
-        ...(wordsPayload ? { words: wordsPayload } : {}),
-        tags: tags.trim() ? tags.split(",").map((t) => t.trim()) : undefined,
-      });
+      const termValue = isEdit && editItem
+        ? { ...editItem.term, [inputLang]: termText.trim() }
+        : { [inputLang]: termText.trim() };
+      const descValue = isEdit && editItem?.description
+        ? { ...editItem.description, ...(descText.trim() ? { [inputLang]: descText.trim() } : {}) }
+        : descText.trim() ? { [inputLang]: descText.trim() } : undefined;
+
+      if (isEdit && editItem) {
+        await updateGrammarItem(language, editItem.id, {
+          chapterNumber: selectedChapter,
+          subchapterId: subId,
+          subchapterTitle: subTitle,
+          term: termValue,
+          ...(descValue ? { description: descValue } : {}),
+          ...(filteredExamples.length > 0 ? { examples: filteredExamples } : {}),
+          ...(wordsPayload ? { words: wordsPayload } : {}),
+          tags: tags.trim() ? tags.split(",").map((t) => t.trim()) : undefined,
+        });
+      } else {
+        const componentId = `grammar-zh-${String(selectedChapter).padStart(3, "0")}-${Date.now()}`;
+        await createGrammarItem(language, {
+          id: componentId,
+          chapterNumber: selectedChapter,
+          subchapterId: subId,
+          subchapterTitle: subTitle,
+          term: termValue,
+          ...(descValue ? { description: descValue } : {}),
+          ...(filteredExamples.length > 0 ? { examples: filteredExamples } : {}),
+          ...(wordsPayload ? { words: wordsPayload } : {}),
+          tags: tags.trim() ? tags.split(",").map((t) => t.trim()) : undefined,
+        });
+      }
       onSave();
     } catch (err) {
       setError(String(err));
@@ -113,7 +145,7 @@ export default function GrammarFormModal({ language: initialLanguage, onSave, on
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-gray-800 p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-lg font-semibold text-gray-100">{t("addGrammar")}</h2>
+        <h2 className="mb-4 text-lg font-semibold text-gray-100">{t(isEdit ? "editGrammar" : "addGrammar")}</h2>
 
         {error && <p className="mb-3 text-sm text-red-400">{error}</p>}
 
@@ -123,13 +155,14 @@ export default function GrammarFormModal({ language: initialLanguage, onSave, on
             <label className="mb-1 block text-sm text-gray-400">Language</label>
             <div className="flex items-center gap-3">
               {GRAMMAR_LANG_OPTIONS.map((opt) => (
-                <label key={opt.value} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+                <label key={opt.value} className={`flex items-center gap-1.5 text-sm text-gray-300 ${isEdit ? "opacity-50" : "cursor-pointer"}`}>
                   <input
                     type="radio"
                     name="grammarLang"
                     value={opt.value}
                     checked={langSelect === opt.value}
                     onChange={() => setLangSelect(opt.value)}
+                    disabled={isEdit}
                     className="accent-blue-600"
                   />
                   {opt.label}
@@ -141,7 +174,8 @@ export default function GrammarFormModal({ language: initialLanguage, onSave, on
                   value={customLang}
                   onChange={(e) => setCustomLang(e.target.value)}
                   placeholder="e.g. french"
-                  className="rounded border border-gray-600 bg-gray-700 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                  disabled={isEdit}
+                  className="rounded border border-gray-600 bg-gray-700 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none disabled:opacity-50"
                 />
               )}
             </div>
