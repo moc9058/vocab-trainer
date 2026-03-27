@@ -357,7 +357,7 @@ const translations = {
 
 export type TranslationKey = keyof (typeof translations)["en"];
 export type UILanguage = keyof typeof translations;
-export const uiLanguages: UILanguage[] = ["ja", "en", "ko"];
+export const uiLanguages: UILanguage[] = ["en", "ja", "ko"];
 export const uiLanguageLabels: Record<UILanguage, string> = {
   ja: "日本語",
   en: "English",

@@ -19,7 +19,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     const stored = localStorage.getItem("uiLanguage");
     return stored && uiLanguages.includes(stored as UILanguage)
       ? (stored as UILanguage)
-      : "ja";
+      : "en";
   });
 
   const setLanguage = useCallback((lang: UILanguage) => {
