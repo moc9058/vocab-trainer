@@ -4,8 +4,8 @@ import { getGrammarChapters, getSubchapters, createGrammarItem, updateGrammarIte
 import { displayTranslation, type GrammarChapterInfo, type GrammarItemDoc } from "../types";
 
 const GRAMMAR_LANG_OPTIONS = [
-  { value: "chinese", label: "Chinese" },
   { value: "english", label: "English" },
+  { value: "chinese", label: "Chinese" },
   { value: "__other__", label: "Other" },
 ] as const;
 

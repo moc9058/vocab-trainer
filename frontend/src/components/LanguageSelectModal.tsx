@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
 import { fetchJson } from "../api/client";
+import { sortByLanguageOrder } from "../constants/languageOrder";
 
 interface LanguageInfo {
   filename: string;
@@ -21,7 +22,7 @@ export default function LanguageSelectModal({ onSelect, onClose }: Props) {
 
   useEffect(() => {
     fetchJson<LanguageInfo[]>("/api/languages/")
-      .then(setLanguages)
+      .then((langs) => setLanguages(sortByLanguageOrder(langs, (l) => l.filename.replace(/\.json$/, ""))))
       .catch(() => setLanguages([]))
       .finally(() => setLoading(false));
   }, []);

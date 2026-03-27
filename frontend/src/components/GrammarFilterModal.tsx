@@ -176,8 +176,8 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
               <h3 className="text-sm font-medium text-gray-300 mb-2">{t("displayLanguage")}</h3>
               <div className="flex gap-3">
                 {[
-                  { value: "ja", label: "Japanese" },
                   { value: "en", label: "English" },
+                  { value: "ja", label: "Japanese" },
                   { value: "ko", label: "Korean" },
                 ].map((opt) => (
                   <label key={opt.value} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
