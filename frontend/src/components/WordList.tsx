@@ -5,7 +5,7 @@ import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord }
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
 import SmartAddWordModal from "./SmartAddWordModal";
-import type { Word, PaginatedResult } from "../types";
+import { displayTranslation, type Word, type PaginatedResult } from "../types";
 
 interface Props {
   language: string;
@@ -401,7 +401,7 @@ function WordCard({
                 {word.examples.map((ex, i) => (
                   <li key={i} className="text-base text-gray-300">
                     <span><RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} /></span>
-                    <span className="ml-2 text-gray-400">— {ex.translation}</span>
+                    <span className="ml-2 text-gray-400">— {displayTranslation(ex.translation)}</span>
                   </li>
                 ))}
               </ul>
@@ -497,7 +497,7 @@ function WordRow({
                   {word.examples.map((ex, i) => (
                     <li key={i} className="text-base text-gray-300">
                       <span><RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} /></span>
-                      <span className="ml-2 text-gray-400">— {ex.translation}</span>
+                      <span className="ml-2 text-gray-400">— {displayTranslation(ex.translation)}</span>
                     </li>
                   ))}
                 </ul>

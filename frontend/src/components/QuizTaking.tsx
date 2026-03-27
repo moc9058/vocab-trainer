@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useI18n } from "../i18n/context";
 import { answerQuestion, getQuizQuestions } from "../api/quiz";
 import RubyText from "./RubyText";
-import type { QuizSession, QuizQuestion } from "../types";
+import { displayTranslation, type QuizSession, type QuizQuestion } from "../types";
 
 const BATCH_SIZE = 50;
 const LANG_DISPLAY: Record<string, string> = { ja: "Japanese", en: "English", ko: "Korean" };
@@ -227,7 +227,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
               {question!.examples.map((ex, i) => (
                 <div key={i} className="mb-2 last:mb-0">
                   <p className="text-lg text-gray-100"><RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} /></p>
-                  <p className="text-sm text-gray-400">{ex.translation}</p>
+                  <p className="text-sm text-gray-400">{displayTranslation(ex.translation)}</p>
                 </div>
               ))}
             </div>

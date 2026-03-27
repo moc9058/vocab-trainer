@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
 import { getGrammarChapters, getSubchapters, createGrammarItem, updateGrammarItem } from "../api/grammar";
-import type { GrammarChapterInfo, GrammarItemDoc } from "../types";
+import { displayTranslation, type GrammarChapterInfo, type GrammarItemDoc } from "../types";
 
 const GRAMMAR_LANG_OPTIONS = [
   { value: "chinese", label: "Chinese" },
@@ -326,7 +326,7 @@ export default function GrammarFormModal({ language: initialLanguage, editItem, 
                 <div className="rounded-lg border border-gray-600 bg-gray-700 p-2 space-y-1">
                   <input type="text" value={ex.sentence} onChange={(e) => { const n = [...examples]; n[i] = { ...n[i], sentence: e.target.value }; setExamples(n); }} placeholder={t("sentence")} className="w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none" />
                   <div className="flex gap-2">
-                    <input type="text" value={ex.translation} onChange={(e) => { const n = [...examples]; n[i] = { ...n[i], translation: e.target.value }; setExamples(n); }} placeholder={t("translationLabel")} className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none" />
+                    <input type="text" value={displayTranslation(ex.translation)} onChange={(e) => { const n = [...examples]; n[i] = { ...n[i], translation: e.target.value }; setExamples(n); }} placeholder={t("translationLabel")} className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none" />
                     <button type="button" onClick={() => setExamples(examples.filter((_, j) => j !== i))} className="text-xs text-red-400 hover:text-red-300">{t("removeExample")}</button>
                   </div>
                 </div>

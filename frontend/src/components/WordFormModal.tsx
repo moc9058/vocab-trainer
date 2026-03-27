@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
 import { getFilters } from "../api/vocab";
-import type { Word } from "../types";
+import { displayTranslation, type Word } from "../types";
 
 interface Props {
   language: string;
@@ -232,7 +232,7 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    value={ex.translation}
+                    value={displayTranslation(ex.translation)}
                     onChange={(e) => {
                       const next = [...examples];
                       next[i] = { ...next[i], translation: e.target.value };

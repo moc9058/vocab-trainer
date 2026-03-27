@@ -44,6 +44,8 @@ export const TOPICS = [
   "Media & News",
   // Language Fundamentals
   "Language Fundamentals",
+  // Other
+  "Miscellaneous",
 ] as const;
 
 export type Topic = (typeof TOPICS)[number];

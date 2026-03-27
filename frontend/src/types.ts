@@ -1,5 +1,11 @@
 export type UILanguage = "en";
 
+/** Safely convert a translation that may be a string or object to a displayable string */
+export function displayTranslation(t: string | Record<string, string>): string {
+  if (typeof t === "string") return t;
+  return Object.values(t).join("; ");
+}
+
 export interface Example {
   sentence: string;
   translation: string;

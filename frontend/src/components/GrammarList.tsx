@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useI18n } from "../i18n/context";
 import { getGrammarChapters, getGrammarItems, deleteGrammarItem } from "../api/grammar";
-import type { GrammarChapterInfo, GrammarItemDoc } from "../types";
+import { displayTranslation, type GrammarChapterInfo, type GrammarItemDoc } from "../types";
 import GrammarFormModal from "./GrammarFormModal";
 
 interface Props {
@@ -164,7 +164,7 @@ export default function GrammarList({ language, onBack }: Props) {
                           {ex.transliteration && (
                             <p className="text-xs text-gray-400">{ex.transliteration}</p>
                           )}
-                          <p className="text-xs text-gray-400">{ex.translation}</p>
+                          <p className="text-xs text-gray-400">{displayTranslation(ex.translation)}</p>
                         </div>
                       ))}
                     </div>

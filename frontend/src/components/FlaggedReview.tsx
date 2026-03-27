@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useI18n } from "../i18n/context";
 import { getFlaggedWords, unflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
-import type { Word } from "../types";
+import { displayTranslation, type Word } from "../types";
 
 const LANG_DISPLAY: Record<string, string> = { ja: "Japanese", en: "English", ko: "Korean" };
 
@@ -113,7 +113,7 @@ export default function FlaggedReview({ language, onBack, transliterationMap = {
                   <p className="text-lg text-gray-100">
                     <RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} />
                   </p>
-                  <p className="text-sm text-gray-400">{ex.translation}</p>
+                  <p className="text-sm text-gray-400">{displayTranslation(ex.translation)}</p>
                 </div>
               ))}
             </div>
