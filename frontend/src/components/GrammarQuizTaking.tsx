@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
-import { answerGrammarQuestion } from "../api/grammar";
+import { answerGrammarQuestion, checkMissingWords, addMissingWords } from "../api/grammar";
 import { fetchJson } from "../api/client";
 import type { GrammarQuizSession, GrammarItemDoc } from "../types";
 
@@ -9,6 +9,8 @@ interface Props {
   onComplete: () => void;
   onStartNew: () => void;
 }
+
+const PUNCTUATION = /^[\s\p{P}\p{S}\p{N}]+$/u;
 
 export default function GrammarQuizTaking({ session, onComplete, onStartNew }: Props) {
   const { t } = useI18n();
@@ -21,6 +23,12 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
   const [submitting, setSubmitting] = useState(false);
   const [componentCache, setComponentCache] = useState<Map<string, GrammarItemDoc>>(new Map());
   const [originalTotal] = useState(session.questions.filter((q) => q.userCorrect === undefined).length || session.questions.length);
+
+  // Missing words state
+  const [missingWords, setMissingWords] = useState<string[]>([]);
+  const [missingChecked, setMissingChecked] = useState(false);
+  const [addingWords, setAddingWords] = useState(false);
+  const [wordsAdded, setWordsAdded] = useState(false);
 
   // Fetch grammar item details for showing title/description on answer reveal
   useEffect(() => {
@@ -41,6 +49,46 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
     : null;
   const isComplete = currentSession.status === "completed";
   const component = question ? componentCache.get(question.componentId) : null;
+  const segments = question?.segments;
+
+  // Check for missing words when answer is revealed and segments exist
+  useEffect(() => {
+    if (!showingAnswer || !segments || segments.length === 0 || missingChecked) return;
+    const terms = segments
+      .filter((s) => s.pinyin && !PUNCTUATION.test(s.text) && s.text.length >= 2)
+      .map((s) => s.text);
+    if (terms.length === 0) {
+      setMissingChecked(true);
+      return;
+    }
+    checkMissingWords(currentSession.language, terms)
+      .then((res) => {
+        setMissingWords(res.missing);
+        setMissingChecked(true);
+      })
+      .catch(() => setMissingChecked(true));
+  }, [showingAnswer, segments, missingChecked, currentSession.language]);
+
+  async function handleAddMissingWords() {
+    if (!question || !segments || addingWords) return;
+    setAddingWords(true);
+    try {
+      const wordsToAdd = missingWords.map((term) => {
+        const seg = segments.find((s) => s.text === term);
+        return {
+          term,
+          pinyin: seg?.pinyin ?? "",
+          sentence: question.chineseSentence,
+          translation: question.displaySentence,
+        };
+      });
+      await addMissingWords(currentSession.language, wordsToAdd);
+      setWordsAdded(true);
+      setMissingWords([]);
+    } finally {
+      setAddingWords(false);
+    }
+  }
 
   async function handleGrade(correct: boolean) {
     if (!question || submitting) return;
@@ -54,6 +102,9 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
       setCurrentSession(result.session);
       setCurrentIndex((i) => i + 1);
       setShowingAnswer(false);
+      setMissingWords([]);
+      setMissingChecked(false);
+      setWordsAdded(false);
     } finally {
       setSubmitting(false);
     }
@@ -104,10 +155,60 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
         </button>
       ) : (
         <>
-          {/* Chinese sentence */}
+          {/* Chinese sentence with pinyin */}
           <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4 text-center">
-            <p className="text-2xl text-green-400">{question!.chineseSentence}</p>
+            {segments && segments.length > 0 ? (
+              <div className="flex flex-wrap justify-center gap-x-1 gap-y-3">
+                {segments.map((seg, i) => (
+                  <span key={i} className="inline-flex flex-col items-center">
+                    {seg.pinyin && (
+                      <span className="text-xs text-gray-400">{seg.pinyin}</span>
+                    )}
+                    <span className={`text-2xl text-green-400${missingChecked && missingWords.includes(seg.text) ? " underline decoration-amber-500 decoration-2 underline-offset-4" : ""}`}>
+                      {seg.text}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-2xl text-green-400">{question!.chineseSentence}</p>
+            )}
           </div>
+
+          {/* Missing words section */}
+          {missingChecked && missingWords.length > 0 && !wordsAdded && (
+            <div className="w-full max-w-lg rounded-lg bg-amber-900/30 border border-amber-700 p-3">
+              <p className="text-sm text-amber-300 mb-2">{t("missingWordsFound")}</p>
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {missingWords.map((word) => (
+                  <span key={word} className="rounded bg-amber-800/50 px-2 py-0.5 text-sm text-amber-200">
+                    {word}
+                  </span>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  disabled={addingWords}
+                  onClick={handleAddMissingWords}
+                  className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm text-white hover:bg-amber-500 disabled:opacity-50"
+                >
+                  {addingWords ? t("addingMissingWords") : t("addAllMissingWords")}
+                </button>
+                <button
+                  disabled={addingWords}
+                  onClick={() => { setMissingWords([]); setWordsAdded(false); }}
+                  className="rounded-lg border border-gray-600 px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
+                >
+                  {t("skipMissingWords")}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Words added confirmation */}
+          {wordsAdded && (
+            <p className="text-sm text-green-400">{t("missingWordsAdded")}</p>
+          )}
 
           {/* Grammar component details */}
           {component && (
@@ -116,7 +217,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
                 {component.term.en || component.term.ja}
               </p>
               {component.description && Object.entries(component.description).map(([lang, text]) => (
-                text && <p key={lang} className="text-sm text-gray-300">
+                text && <p key={lang} className="text-sm text-gray-300 whitespace-pre-line">
                   <span className="text-xs text-gray-500">[{lang}] </span>{text}
                 </p>
               ))}

@@ -4,6 +4,7 @@ import type {
   GrammarItemDoc,
   GrammarQuizSession,
   PaginatedResult,
+  Word,
 } from "../types";
 
 export function getGrammarChapters(language: string): Promise<GrammarChapterInfo[]> {
@@ -90,4 +91,15 @@ export function getGrammarProgress(language: string): Promise<{ language: string
 
 export function resetGrammarProgress(language: string): Promise<void> {
   return deleteRequest(`/api/grammar-progress/${encodeURIComponent(language)}`);
+}
+
+export function checkMissingWords(language: string, terms: string[]): Promise<{ missing: string[] }> {
+  return postJson("/api/grammar-quiz/check-missing-words", { language, terms });
+}
+
+export function addMissingWords(
+  language: string,
+  words: { term: string; pinyin: string; sentence: string; translation: string }[]
+): Promise<{ added: Word[] }> {
+  return postJson("/api/grammar-quiz/add-missing-words", { language, words });
 }

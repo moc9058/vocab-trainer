@@ -85,6 +85,8 @@ const translations = {
     grammarIncorrect: "Incorrect",
     nextQuestion: "Next Question",
     showGrammarAnswer: "Show Answer",
+    sectionVocabulary: "Vocabulary",
+    sectionGrammar: "Grammar",
     // Smart Add
     smartAddWord: "Add Word",
     addingWord: "Adding word...",
@@ -109,6 +111,11 @@ const translations = {
     editGrammar: "Edit Grammar",
     deleteGrammar: "Delete",
     deleteGrammarConfirm: "Are you sure you want to delete this grammar item?",
+    missingWordsFound: "Missing words found",
+    addAllMissingWords: "Add All",
+    skipMissingWords: "Skip",
+    addingMissingWords: "Adding words...",
+    missingWordsAdded: "Words added!",
   },
   ja: {
     appTitle: "単語トレーナー",
@@ -196,6 +203,8 @@ const translations = {
     grammarIncorrect: "不正解",
     nextQuestion: "次の問題",
     showGrammarAnswer: "答えを見る",
+    sectionVocabulary: "単語",
+    sectionGrammar: "文法",
     // Smart Add
     smartAddWord: "単語を追加",
     addingWord: "単語を追加中...",
@@ -220,6 +229,11 @@ const translations = {
     editGrammar: "文法を編集",
     deleteGrammar: "削除",
     deleteGrammarConfirm: "この文法項目を削除してもよろしいですか？",
+    missingWordsFound: "未登録の単語",
+    addAllMissingWords: "全て追加",
+    skipMissingWords: "スキップ",
+    addingMissingWords: "単語を追加中...",
+    missingWordsAdded: "単語が追加されました！",
   },
   ko: {
     appTitle: "단어 트레이너",
@@ -307,6 +321,8 @@ const translations = {
     grammarIncorrect: "오답",
     nextQuestion: "다음 문제",
     showGrammarAnswer: "정답 보기",
+    sectionVocabulary: "단어",
+    sectionGrammar: "문법",
     // Smart Add
     smartAddWord: "단어 추가",
     addingWord: "단어 추가 중...",
@@ -331,6 +347,11 @@ const translations = {
     editGrammar: "문법 편집",
     deleteGrammar: "삭제",
     deleteGrammarConfirm: "이 문법 항목을 삭제하시겠습니까?",
+    missingWordsFound: "미등록 단어",
+    addAllMissingWords: "모두 추가",
+    skipMissingWords: "건너뛰기",
+    addingMissingWords: "단어 추가 중...",
+    missingWordsAdded: "단어가 추가되었습니다!",
   },
 } as const;
 

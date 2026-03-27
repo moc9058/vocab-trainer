@@ -7,10 +7,15 @@ import {
   updateGrammarComponentProgress,
   getGrammarQuizSession,
   saveGrammarQuizSession,
+  lookupWordsByTerms,
+  addWord,
+  getNextWordId,
+  flagWord,
   type GrammarItemDoc,
 } from "../firestore.js";
-import type { GrammarQuizSession, GrammarQuizQuestion, GrammarProgress } from "../types.js";
-import { callLLM, stripMarkdownFences } from "../llm.js";
+import type { GrammarQuizSession, GrammarQuizQuestion, GrammarProgress, Word } from "../types.js";
+import { TOPICS } from "../types.js";
+import { callLLM, stripMarkdownFences, segmentBatch } from "../llm.js";
 
 const LANG_NAMES: Record<string, string> = {
   ja: "Japanese",
@@ -78,6 +83,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
             componentId: item.id,
             displaySentence: prepared.displaySentence,
             chineseSentence: prepared.chineseSentence,
+            segments: prepared.segments,
           });
         } catch (err) {
           fastify.log.error({ err, componentId: item.id }, "Failed to prepare grammar question");
@@ -148,6 +154,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
             componentId,
             displaySentence: question.displaySentence,
             chineseSentence: question.chineseSentence,
+            segments: question.segments,
           });
           session.score.total++;
         }
@@ -187,13 +194,143 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       return session;
     }
   );
+
+  // Check which terms are missing from the word DB
+  fastify.post<{
+    Body: { language: string; terms: string[] };
+  }>(
+    "/check-missing-words",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["language", "terms"],
+          properties: {
+            language: { type: "string" },
+            terms: { type: "array", items: { type: "string" } },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const { language, terms } = request.body;
+      if (terms.length === 0) return { missing: [] };
+      const existing = await lookupWordsByTerms(language, terms);
+      const existingSet = new Set(existing.map((e) => e.term));
+      const missing = terms.filter((t) => !existingSet.has(t));
+      return { missing };
+    }
+  );
+
+  // Batch-add missing words from grammar quiz segments
+  fastify.post<{
+    Body: {
+      language: string;
+      words: { term: string; pinyin: string; sentence: string; translation: string }[];
+    };
+  }>(
+    "/add-missing-words",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["language", "words"],
+          properties: {
+            language: { type: "string" },
+            words: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["term", "pinyin", "sentence", "translation"],
+                properties: {
+                  term: { type: "string" },
+                  pinyin: { type: "string" },
+                  sentence: { type: "string" },
+                  translation: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const { language, words } = request.body;
+      if (words.length === 0) return { added: [] };
+
+      const systemPrompt = `You are a Chinese vocabulary expert. Generate vocabulary entries for Chinese words.
+Each word already has a term, transliteration (pinyin), and one example sentence provided.
+You need to fill: definition, grammaticalCategory, topics, notes.
+
+Return a JSON object with a "words" array:
+[{
+  "term": "the word (keep as provided)",
+  "transliteration": "keep as provided",
+  "definition": { "ja": "...", "en": "...", "ko": "..." },
+  "grammaticalCategory": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase",
+  "topics": ["..."],
+  "notes": "brief usage notes or empty string"
+}]
+
+Allowed topics: ${TOPICS.join(", ")}`;
+
+      const userPrompt = words
+        .map((w) => `- ${w.term} (${w.pinyin}), example: "${w.sentence}" → "${w.translation}"`)
+        .join("\n");
+
+      const raw = await callLLM(systemPrompt, `Generate entries for these words:\n\n${userPrompt}`);
+      const parsed = JSON.parse(stripMarkdownFences(raw));
+      const generated: unknown[] = parsed.words ?? [];
+
+      const added: Word[] = [];
+      const addedTerms = new Set<string>();
+
+      for (const g of generated) {
+        if (!g || typeof g !== "object") continue;
+        const entry = g as Record<string, unknown>;
+        const term = entry.term as string;
+        if (!term || addedTerms.has(term)) continue;
+
+        const info = words.find((w) => w.term === term);
+        if (!info) continue;
+
+        const id = await getNextWordId(language);
+        const topics = ((entry.topics as string[]) ?? []).filter((t) => (TOPICS as readonly string[]).includes(t));
+
+        const newWord: Word = {
+          id,
+          term,
+          transliteration: (entry.transliteration as string) || info.pinyin || "",
+          definition: (entry.definition as Record<string, string>) || { en: "" },
+          grammaticalCategory: (entry.grammaticalCategory as string) || "",
+          examples: [{ sentence: info.sentence, translation: info.translation }],
+          topics: (topics.length > 0 ? topics : ["Language Fundamentals"]) as Word["topics"],
+          level: "Advanced",
+          notes: (entry.notes as string) || "",
+        };
+
+        await addWord(language, newWord);
+        await flagWord(language, newWord.id);
+        addedTerms.add(term);
+        added.push(newWord);
+      }
+
+      return { added };
+    }
+  );
 };
+
+interface PreparedQuestion {
+  displaySentence: string;
+  chineseSentence: string;
+  segments?: { text: string; pinyin?: string }[];
+}
 
 async function prepareQuestion(
   item: GrammarItemDoc,
   displayLanguage: string,
   mode: string
-): Promise<{ displaySentence: string; chineseSentence: string }> {
+): Promise<PreparedQuestion> {
   const langName = LANG_NAMES[displayLanguage] || "Japanese";
 
   if (mode === "existing" && item.examples && item.examples.length > 0) {
@@ -201,25 +338,30 @@ async function prepareQuestion(
     const ex = item.examples[Math.floor(Math.random() * item.examples.length)];
     const chineseSentence = ex.sentence;
 
+    let displaySentence: string;
     // Check if translation exists in display language
-    // The example.translation is typically in English; we may need to generate for other languages
     if (ex.translation) {
-      // If display language is English, we can use the translation directly
       if (displayLanguage === "en") {
-        return { displaySentence: ex.translation, chineseSentence };
-      }
-      // For other languages, try to use LLM to translate
-      const raw = await callLLM(
-        "You are a translator. Return valid JSON only.",
-        `Translate the following sentence to ${langName}. Return JSON: { "translation": "..." }
+        displaySentence = ex.translation;
+      } else {
+        const raw = await callLLM(
+          "You are a translator. Return valid JSON only.",
+          `Translate the following sentence to ${langName}. Return JSON: { "translation": "..." }
 
 Sentence: ${ex.translation}`
-      );
-      const parsed = JSON.parse(stripMarkdownFences(raw));
-      return { displaySentence: parsed.translation ?? ex.translation, chineseSentence };
+        );
+        const parsed = JSON.parse(stripMarkdownFences(raw));
+        displaySentence = parsed.translation ?? ex.translation;
+      }
+    } else {
+      const generated = await generateSentencePair(item, langName);
+      return generated;
     }
-    // No translation at all — generate via LLM
-    return await generateSentencePair(item, langName);
+
+    // Segment the Chinese sentence for pinyin display
+    const segMap = await segmentBatch([chineseSentence]);
+    const segments = segMap.get(0)?.map((s) => ({ text: s.text, pinyin: s.transliteration }));
+    return { displaySentence, chineseSentence, segments };
   }
 
   // LLM mode or no examples available — generate fresh
@@ -229,7 +371,7 @@ Sentence: ${ex.translation}`
 async function generateSentencePair(
   item: GrammarItemDoc,
   langName: string
-): Promise<{ displaySentence: string; chineseSentence: string }> {
+): Promise<PreparedQuestion> {
   const parts: string[] = [
     `Given this Chinese grammar point:`,
     `Term: ${JSON.stringify(item.term)}`,
@@ -251,19 +393,45 @@ async function generateSentencePair(
     `Generate a NEW example sentence in Chinese that demonstrates this grammar point` +
     (item.examples && item.examples.length > 0 ? ` (different from any reference examples)` : ``) +
     `, and translate it to ${langName}.`,
+    `Also segment the Chinese sentence into individual words with pinyin (tone marks).`,
     ``,
-    `Return JSON: { "chineseSentence": "...", "displaySentence": "..." }`
+    `Return JSON: { "chineseSentence": "...", "displaySentence": "...", "segments": [{ "text": "word", "pinyin": "pīnyīn" }, ...] }`,
+    `Rules for segments:`,
+    `- Segment into natural Chinese words (not individual characters unless standalone)`,
+    `- Use tone marks on pinyin (e.g. "nǐ hǎo" not "ni3 hao3")`,
+    `- Keep punctuation as separate segments with no pinyin`,
   );
 
   const raw = await callLLM(
-    "You are a Chinese grammar example generator. Follow these steps: 1) Identify the language of the provided description and other fields (they may be in Japanese, English, Korean, or other languages). 2) Understand the grammar point from the provided information. 3) Generate a new Chinese example sentence demonstrating the grammar point. Return valid JSON only.",
+    "You are a Chinese grammar example generator. Follow these steps: 1) Identify the language of the provided description and other fields (they may be in Japanese, English, Korean, or other languages). 2) Understand the grammar point from the provided information. 3) Generate a new Chinese example sentence demonstrating the grammar point. 4) Segment the sentence into words with pinyin. Return valid JSON only.",
     parts.join("\n")
   );
 
   const parsed = JSON.parse(stripMarkdownFences(raw));
+  let segments: { text: string; pinyin?: string }[] | undefined;
+
+  if (Array.isArray(parsed.segments)) {
+    segments = parsed.segments
+      .filter((s: { text?: string }) => typeof s?.text === "string" && s.text.length > 0)
+      .map((s: { text: string; pinyin?: string }) => ({
+        text: s.text,
+        ...(typeof s.pinyin === "string" && s.pinyin.length > 0 ? { pinyin: s.pinyin } : {}),
+      }));
+  }
+
+  // Fallback: if LLM didn't return valid segments, use segmentBatch
+  if (!segments || segments.length === 0) {
+    const sentence = parsed.chineseSentence ?? "";
+    if (sentence) {
+      const segMap = await segmentBatch([sentence]);
+      segments = segMap.get(0)?.map((s) => ({ text: s.text, pinyin: s.transliteration }));
+    }
+  }
+
   return {
     chineseSentence: parsed.chineseSentence ?? "",
     displaySentence: parsed.displaySentence ?? "",
+    segments,
   };
 }
 

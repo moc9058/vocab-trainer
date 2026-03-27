@@ -81,6 +81,7 @@ export interface GrammarQuizQuestion {
   componentId: string;
   displaySentence: string;
   chineseSentence: string;
+  segments?: { text: string; pinyin?: string }[];
   userCorrect?: boolean;
 }
 
