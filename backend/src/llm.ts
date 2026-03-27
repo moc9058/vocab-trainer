@@ -11,7 +11,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: resolve(__dirname, "../../.env") });
 
 let client: AzureOpenAI | null = null;
-let deployment = "";
+let deploymentMini = "";
+let deploymentFull = "";
 let configLoaded = false;
 
 async function ensureLLMConfig(): Promise<void> {
@@ -23,7 +24,7 @@ async function ensureLLMConfig(): Promise<void> {
     process.env.AZURE_OPENAI_API_KEY &&
     process.env.AZURE_OPENAI_ENDPOINT &&
     process.env.AZURE_OPENAI_API_VERSION &&
-    process.env.AZURE_OPENAI_DEPLOYMENT_NAME
+    process.env.AZURE_OPENAI_DEPLOYMENT_MINI
   ) {
     return;
   }
@@ -41,7 +42,8 @@ async function ensureLLMConfig(): Promise<void> {
         "AZURE_OPENAI_API_KEY",
         "AZURE_OPENAI_ENDPOINT",
         "AZURE_OPENAI_API_VERSION",
-        "AZURE_OPENAI_DEPLOYMENT_NAME",
+        "AZURE_OPENAI_DEPLOYMENT_MINI",
+        "AZURE_OPENAI_DEPLOYMENT_FULL",
       ]) {
         if (!process.env[key] && data[key]) {
           process.env[key] = data[key] as string;
@@ -65,23 +67,32 @@ export async function createAzureClient(): Promise<AzureOpenAI> {
       apiVersion: process.env.AZURE_OPENAI_API_VERSION,
       maxRetries: 5,
     });
-    deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME!;
+    deploymentMini = process.env.AZURE_OPENAI_DEPLOYMENT_MINI!;
+    deploymentFull = process.env.AZURE_OPENAI_DEPLOYMENT_FULL ?? "";
   }
   return client;
 }
 
-export async function getDeployment(): Promise<string> {
-  if (!deployment) {
+export async function getDeploymentMini(): Promise<string> {
+  if (!deploymentMini) {
     await ensureLLMConfig();
-    deployment = process.env.AZURE_OPENAI_DEPLOYMENT_NAME!;
+    deploymentMini = process.env.AZURE_OPENAI_DEPLOYMENT_MINI!;
   }
-  return deployment;
+  return deploymentMini;
+}
+
+export async function getDeploymentFull(): Promise<string> {
+  if (!deploymentFull) {
+    await ensureLLMConfig();
+    deploymentFull = process.env.AZURE_OPENAI_DEPLOYMENT_FULL!;
+  }
+  return deploymentFull;
 }
 
 export async function callLLM(systemPrompt: string, userPrompt: string): Promise<string> {
   const cl = await createAzureClient();
   const response = await cl.chat.completions.create({
-    model: await getDeployment(),
+    model: await getDeploymentMini(),
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
