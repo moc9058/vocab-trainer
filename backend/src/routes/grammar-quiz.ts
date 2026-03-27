@@ -256,7 +256,7 @@ async function generateSentencePair(
   );
 
   const raw = await callLLM(
-    "You are a Chinese grammar example generator. Return valid JSON only.",
+    "You are a Chinese grammar example generator. Follow these steps: 1) Identify the language of the provided description and other fields (they may be in Japanese, English, Korean, or other languages). 2) Understand the grammar point from the provided information. 3) Generate a new Chinese example sentence demonstrating the grammar point. Return valid JSON only.",
     parts.join("\n")
   );
 
