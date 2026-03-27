@@ -34,7 +34,9 @@ export const TOPICS = [
   "Medicine",
   "Education",
   "Business & Commerce",
+  "Work & Career",
   // Culture & Society
+  "Nature & Environment",
   "Arts & Entertainment",
   "Sports & Fitness",
   "Religion & Philosophy",

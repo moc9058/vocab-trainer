@@ -165,8 +165,8 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
 - **`examples`** — Array of example sentences with translations (primary language is Japanese).
 - **`topics`** — Topic tags for categorizing and filtering words. Possible values:
   - **Everyday Life:** `Greetings & Introductions`, `Food & Dining`, `Shopping & Money`, `Travel & Transportation`, `Weather & Seasons`, `Family & Relationships`, `Health & Body`, `Home & Housing`
-  - **Academic / Professional:** `Economics & Finance`, `Politics & Government`, `Science & Technology`, `Law & Justice`, `Medicine`, `Education`, `Business & Commerce`
-  - **Culture & Society:** `Arts & Entertainment`, `Sports & Fitness`, `Religion & Philosophy`, `History`, `Media & News`
+  - **Academic / Professional:** `Economics & Finance`, `Politics & Government`, `Science & Technology`, `Law & Justice`, `Medicine`, `Education`, `Business & Commerce`, `Work & Career`
+  - **Culture & Society:** `Nature & Environment`, `Arts & Entertainment`, `Sports & Fitness`, `Religion & Philosophy`, `History`, `Media & News`
   - **Language Fundamentals:** `Language Fundamentals`
 - **`level`** — Optional. Proficiency level tag for the word (e.g. `"HSK1"`, `"HSK2"`, …, `"HSK7~9"` for Chinese). Can be any string value.
 - **`notes`** — Optional. Free-form field for irregularities, mnemonics, etc.

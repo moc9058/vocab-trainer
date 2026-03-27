@@ -11,32 +11,70 @@
   "subchapters": [
     {
       "id": "1-1",
-      "title": { "ja": "代詞", "en": "Pronouns", "ko": "대사", "zh": "代词" },
-      "components": []
+      "title": {
+        "ja": "代詞",
+        "en": "Pronouns",
+        "ko": "대사",
+        "zh": "代词"
+      },
+      "components": [
+        {
+          "id": "grammar-zh-001-1774495731207",
+          "term": {},
+          "description": {
+            "ja": "１。目的語では「这个/那个」が用いられる\n２。「这个是」は「这是」より明示・強調のニュアンス\n３。「这条鱼」、「这张床」、「这块石头」など、\n４。「人称代詞・一般名詞＋这儿・这里/那儿・那里」は、「〜のところ」の意味を表す"
+          }
+        }
+      ]
     },
     {
       "id": "1-2",
-      "title": { "ja": "名詞", "en": "Nouns", "ko": "명사", "zh": "名词" },
+      "title": {
+        "ja": "名詞",
+        "en": "Nouns",
+        "ko": "명사",
+        "zh": "名词"
+      },
       "components": []
     },
     {
       "id": "1-3",
-      "title": { "ja": "数詞", "en": "Numerals", "ko": "수사", "zh": "数词" },
+      "title": {
+        "ja": "数詞",
+        "en": "Numerals",
+        "ko": "수사",
+        "zh": "数词"
+      },
       "components": []
     },
     {
       "id": "1-4",
-      "title": { "ja": "量詞", "en": "Measure Words", "ko": "양사", "zh": "量词" },
+      "title": {
+        "ja": "量詞",
+        "en": "Measure Words",
+        "ko": "양사",
+        "zh": "量词"
+      },
       "components": []
     },
     {
       "id": "1-5",
-      "title": { "ja": "形容詞", "en": "Adjectives", "ko": "형용사", "zh": "形容词" },
+      "title": {
+        "ja": "形容詞",
+        "en": "Adjectives",
+        "ko": "형용사",
+        "zh": "形容词"
+      },
       "components": []
     },
     {
       "id": "1-6",
-      "title": { "ja": "動詞", "en": "Verbs", "ko": "동사", "zh": "动词" },
+      "title": {
+        "ja": "動詞",
+        "en": "Verbs",
+        "ko": "동사",
+        "zh": "动词"
+      },
       "components": []
     }
   ]

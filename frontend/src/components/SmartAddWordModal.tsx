@@ -9,14 +9,14 @@ interface Props {
 }
 
 const WORD_LANG_OPTIONS = [
-  { value: "chinese", label: "Chinese" },
   { value: "english", label: "English" },
+  { value: "chinese", label: "Chinese" },
   { value: "__other__", label: "Other" },
 ] as const;
 
 const LANG_OPTIONS = [
-  { value: "ja", label: "Japanese" },
   { value: "en", label: "English" },
+  { value: "ja", label: "Japanese" },
   { value: "ko", label: "Korean" },
   { value: "__other__", label: "Other" },
 ] as const;
@@ -33,18 +33,19 @@ const ALL_TOPICS = [
   "Health & Body", "Home & Housing", "Economics & Finance",
   "Politics & Government", "Science & Technology", "Law & Justice",
   "Medicine", "Education", "Business & Commerce",
+  "Work & Career", "Nature & Environment",
   "Arts & Entertainment", "Sports & Fitness", "Religion & Philosophy",
   "History", "Media & News", "Language Fundamentals",
 ] as const;
 
 export default function SmartAddWordModal({ onSave, onClose }: Props) {
   const { t } = useI18n();
-  const [langSelect, setLangSelect] = useState("chinese");
+  const [langSelect, setLangSelect] = useState("english");
   const [customLang, setCustomLang] = useState("");
   const [term, setTerm] = useState("");
   const [transliteration, setTransliteration] = useState("");
   const [definitions, setDefinitions] = useState<{ langSelect: string; customLang: string; text: string }[]>([
-    { langSelect: "", customLang: "", text: "" },
+    { langSelect: "en", customLang: "", text: "" },
   ]);
   const [grammaticalCategory, setGrammaticalCategory] = useState("");
   const [topics, setTopics] = useState<string[]>([]);
