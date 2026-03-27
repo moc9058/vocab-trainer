@@ -1,6 +1,7 @@
 import { Firestore, FieldValue, FieldPath } from "@google-cloud/firestore";
 import type {
   Word,
+  Meaning,
   VocabFile,
   LanguageInfo,
   WordIndexEntry,
@@ -118,7 +119,7 @@ function applyFilters(
     results = results.filter((w) => (w.topics as string[]).includes(t));
   }
   if (filters.category) {
-    results = results.filter((w) => w.grammaticalCategory === filters.category);
+    results = results.filter((w) => w.definitions.some((m) => m.partOfSpeech === filters.category));
   }
   if (filters.level) {
     results = results.filter((w) => w.level === filters.level);
@@ -129,7 +130,7 @@ function applyFilters(
       (w) =>
         w.term.toLowerCase().includes(q) ||
         w.transliteration?.toLowerCase().includes(q) ||
-        Object.values(w.definition).some((d) => d.toLowerCase().includes(q))
+        w.definitions.some((m) => Object.values(m.text).some((d) => d.toLowerCase().includes(q)))
     );
   }
   return results;
@@ -168,17 +169,24 @@ export async function getWords(
     return paginateResults(results, page, limit);
   }
 
-  // Server-side pagination: get count + page of results
+  // Category filter requires client-side filtering (definitions is a nested array),
+  // so when category is active we fetch all and paginate in-memory.
   let query = words.where("language", "==", language) as FirebaseFirestore.Query;
   if (filters?.topic) {
     query = query.where("topics", "array-contains", filters.topic);
   }
-  if (filters?.category) {
-    query = query.where("grammaticalCategory", "==", filters.category);
-  }
   if (filters?.level) {
     query = query.where("level", "==", filters.level);
   }
+
+  if (filters?.category) {
+    const snap = await query.get();
+    let results = snap.docs.map(docToWord);
+    results = applyFilters(results, filters);
+    return paginateResults(results, page, limit);
+  }
+
+  // Server-side pagination when no category filter
   query = query.orderBy(FieldPath.documentId());
   const countSnap = await query.count().get();
   const total = countSnap.data().count;
@@ -220,7 +228,7 @@ export async function getFilteredWords(
       const matchesContent = !hasTopicFilter && !hasCategoryFilter
         ? true
         : (hasTopicFilter && w.topics.some((t) => f!.topics!.includes(t))) ||
-          (hasCategoryFilter && f!.categories!.includes(w.grammaticalCategory));
+          (hasCategoryFilter && w.definitions.some((m) => f!.categories!.includes(m.partOfSpeech)));
       return matchesLevel && matchesContent;
     });
   }
@@ -247,7 +255,7 @@ export async function getWordFilters(language: string): Promise<{
   const snap = await words.where("language", "==", language).get();
   const allWords = snap.docs.map(docToWord);
   const topics = [...new Set(allWords.flatMap((w) => w.topics))] as Topic[];
-  const categories = [...new Set(allWords.map((w) => w.grammaticalCategory).filter(Boolean))].sort();
+  const categories = [...new Set(allWords.flatMap((w) => w.definitions.map((m) => m.partOfSpeech)).filter(Boolean))].sort();
   const levels = [...new Set(allWords.map((w) => w.level?.replace(/-extended$/, "")).filter((l): l is string => !!l))].sort();
   const data = { topics, categories, levels };
   wordFiltersCache.set(language, { data, ts: Date.now() });
@@ -317,7 +325,7 @@ export async function updateWord(language: string, wordId: string, updates: Part
   await words.doc(wordId).update(data);
 
   const updated = await words.doc(wordId).get();
-  if (updates.topics || updates.level || updates.grammaticalCategory) {
+  if (updates.topics || updates.level || updates.definitions) {
     await updateLanguageMeta(language);
     invalidateWordFiltersCache(language);
 
@@ -364,14 +372,23 @@ export async function wordIdExists(wordId: string): Promise<boolean> {
   return doc.exists;
 }
 
+/** Normalize old format (definition + grammaticalCategory) to new (definitions: Meaning[]) */
+function normalizeDefinitions(d: Record<string, unknown>): Meaning[] {
+  if (Array.isArray(d.definitions)) return d.definitions as Meaning[];
+  // Backward compat: old format had definition: Record<string, string> + grammaticalCategory: string
+  if (d.definition && typeof d.definition === "object") {
+    return [{ partOfSpeech: (d.grammaticalCategory as string) || "", text: d.definition as Record<string, string> }];
+  }
+  return [];
+}
+
 function docToWord(doc: FirebaseFirestore.DocumentSnapshot): Word {
   const d = doc.data()!;
   return {
     id: doc.id,
     term: d.term,
     transliteration: d.transliteration,
-    definition: d.definition,
-    grammaticalCategory: d.grammaticalCategory,
+    definitions: normalizeDefinitions(d),
     examples: (d.examples ?? []).map((ex: any) => ({
       sentence: ex.sentence,
       translation: ex.translation,

@@ -1,7 +1,12 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
 import { getFilters } from "../api/vocab";
-import { displayTranslation, type Word } from "../types";
+import { displayTranslation, type Word, type Meaning } from "../types";
+
+interface MeaningFormState {
+  partOfSpeech: string;
+  translations: { lang: string; text: string }[];
+}
 
 interface Props {
   language: string;
@@ -14,13 +19,15 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
   const { t } = useI18n();
   const [term, setTerm] = useState(word?.term ?? "");
   const [transliteration, setTransliteration] = useState(word?.transliteration ?? "");
-  const [definitions, setDefinitions] = useState<{ lang: string; text: string }[]>(() => {
-    if (word?.definition) {
-      return Object.entries(word.definition).map(([lang, text]) => ({ lang, text }));
+  const [meanings, setMeanings] = useState<MeaningFormState[]>(() => {
+    if (word?.definitions && word.definitions.length > 0) {
+      return word.definitions.map((m) => ({
+        partOfSpeech: m.partOfSpeech,
+        translations: Object.entries(m.text).map(([lang, text]) => ({ lang, text })),
+      }));
     }
-    return [{ lang: "en", text: "" }];
+    return [{ partOfSpeech: "", translations: [{ lang: "en", text: "" }] }];
   });
-  const [grammaticalCategory, setGrammaticalCategory] = useState(word?.grammaticalCategory ?? "");
   const [topics, setTopics] = useState<Set<string>>(new Set(word?.topics ?? []));
   const [level, setLevel] = useState(word?.level ?? "");
   const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>(
@@ -37,14 +44,25 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
       .catch(() => {});
   }, [language]);
 
+  function buildDefinitions(): Meaning[] {
+    const result: Meaning[] = [];
+    for (const m of meanings) {
+      const text: Record<string, string> = {};
+      for (const tr of m.translations) {
+        if (tr.lang.trim() && tr.text.trim()) text[tr.lang.trim()] = tr.text.trim();
+      }
+      if (Object.keys(text).length > 0) {
+        result.push({ partOfSpeech: m.partOfSpeech.trim(), text });
+      }
+    }
+    return result;
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!term.trim() || !grammaticalCategory.trim()) return;
-    const defObj: Record<string, string> = {};
-    for (const d of definitions) {
-      if (d.lang.trim() && d.text.trim()) defObj[d.lang.trim()] = d.text.trim();
-    }
-    if (Object.keys(defObj).length === 0) return;
+    if (!term.trim()) return;
+    const defs = buildDefinitions();
+    if (defs.length === 0) return;
 
     setSaving(true);
     setError("");
@@ -53,8 +71,7 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
         ...(word ? { id: word.id } : {}),
         term: term.trim(),
         transliteration: transliteration.trim() || undefined,
-        definition: defObj,
-        grammaticalCategory: grammaticalCategory.trim(),
+        definitions: defs,
         topics: [...topics],
         level: level.trim() || undefined,
         examples: examples.filter((ex) => ex.sentence.trim()),
@@ -66,6 +83,20 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
     } finally {
       setSaving(false);
     }
+  }
+
+  function updateMeaning(idx: number, update: Partial<MeaningFormState>) {
+    setMeanings((prev) => prev.map((m, i) => (i === idx ? { ...m, ...update } : m)));
+  }
+
+  function updateTranslation(meaningIdx: number, trIdx: number, update: Partial<{ lang: string; text: string }>) {
+    setMeanings((prev) =>
+      prev.map((m, i) =>
+        i === meaningIdx
+          ? { ...m, translations: m.translations.map((tr, j) => (j === trIdx ? { ...tr, ...update } : tr)) }
+          : m
+      )
+    );
   }
 
   return (
@@ -104,65 +135,78 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
             />
           </div>
 
-          {/* Definitions */}
+          {/* Definitions (Meanings) */}
           <div>
             <div className="mb-1 flex items-center justify-between">
               <label className="text-sm text-gray-400">{t("definition")} *</label>
               <button
                 type="button"
-                onClick={() => setDefinitions([...definitions, { lang: "", text: "" }])}
+                onClick={() => setMeanings([...meanings, { partOfSpeech: "", translations: [{ lang: "en", text: "" }] }])}
                 className="text-xs text-blue-400 hover:text-blue-300"
               >
                 + {t("addDefinition")}
               </button>
             </div>
-            {definitions.map((def, i) => (
-              <div key={i} className="mb-2 flex gap-2">
-                <input
-                  type="text"
-                  value={def.lang}
-                  onChange={(e) => {
-                    const next = [...definitions];
-                    next[i] = { ...next[i], lang: e.target.value };
-                    setDefinitions(next);
-                  }}
-                  placeholder={t("definitionLanguage")}
-                  className="w-28 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                />
-                <input
-                  type="text"
-                  value={def.text}
-                  onChange={(e) => {
-                    const next = [...definitions];
-                    next[i] = { ...next[i], text: e.target.value };
-                    setDefinitions(next);
-                  }}
-                  placeholder={t("definitionText")}
-                  className="flex-1 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                />
-                {definitions.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setDefinitions(definitions.filter((_, j) => j !== i))}
-                    className="text-xs text-red-400 hover:text-red-300"
-                  >
-                    {t("removeDefinition")}
-                  </button>
-                )}
+            {meanings.map((meaning, mi) => (
+              <div key={mi} className="mb-3 rounded-lg border border-gray-600 bg-gray-700 p-3">
+                <div className="mb-2 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={meaning.partOfSpeech}
+                    onChange={(e) => updateMeaning(mi, { partOfSpeech: e.target.value })}
+                    placeholder={t("category")}
+                    className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                  />
+                  {meanings.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setMeanings(meanings.filter((_, j) => j !== mi))}
+                      className="text-xs text-red-400 hover:text-red-300"
+                    >
+                      {t("removeDefinition")}
+                    </button>
+                  )}
+                </div>
+                {meaning.translations.map((tr, ti) => (
+                  <div key={ti} className="mb-1 flex gap-2">
+                    <input
+                      type="text"
+                      value={tr.lang}
+                      onChange={(e) => updateTranslation(mi, ti, { lang: e.target.value })}
+                      placeholder={t("definitionLanguage")}
+                      className="w-20 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                    />
+                    <input
+                      type="text"
+                      value={tr.text}
+                      onChange={(e) => updateTranslation(mi, ti, { text: e.target.value })}
+                      placeholder={t("definitionText")}
+                      className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                    />
+                    {meaning.translations.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateMeaning(mi, { translations: meaning.translations.filter((_, j) => j !== ti) })
+                        }
+                        className="text-xs text-red-400 hover:text-red-300 shrink-0"
+                      >
+                        x
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateMeaning(mi, { translations: [...meaning.translations, { lang: "", text: "" }] })
+                  }
+                  className="mt-1 text-xs text-blue-400 hover:text-blue-300"
+                >
+                  + {t("addDefinition")}
+                </button>
               </div>
             ))}
-          </div>
-
-          {/* Grammatical Category */}
-          <div>
-            <label className="mb-1 block text-sm text-gray-400">{t("category")} *</label>
-            <input
-              type="text"
-              value={grammaticalCategory}
-              onChange={(e) => setGrammaticalCategory(e.target.value)}
-              required
-              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-            />
           </div>
 
           {/* Level */}
@@ -275,7 +319,7 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
             </button>
             <button
               type="submit"
-              disabled={saving || !term.trim() || !grammaticalCategory.trim() || !definitions.some(d => d.lang.trim() && d.text.trim())}
+              disabled={saving || !term.trim() || buildDefinitions().length === 0}
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
             >
               {saving ? "..." : t("save")}

@@ -360,7 +360,7 @@ function WordCard({
   onDelete: () => void;
 }) {
   const { t } = useI18n();
-  const defText = Object.values(word.definition).join("; ");
+  const defText = word.definitions.map((m) => Object.values(m.text).join("; ")).join(" | ");
 
   return (
     <div
@@ -377,11 +377,11 @@ function WordCard({
           )}
         </div>
         <div className="flex gap-2 shrink-0">
-          {word.grammaticalCategory && (
-            <span className="rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-300">
-              {word.grammaticalCategory}
+          {word.definitions.map((m, i) => m.partOfSpeech && (
+            <span key={i} className="rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-300">
+              {m.partOfSpeech}
             </span>
-          )}
+          ))}
           {word.level && (
             <span className="rounded-full bg-blue-900/40 px-2 py-0.5 text-xs text-blue-300">
               {word.level}
@@ -465,7 +465,7 @@ function WordRow({
   onDelete: () => void;
 }) {
   const { t } = useI18n();
-  const defText = Object.values(word.definition).join("; ");
+  const defText = word.definitions.map((m) => Object.values(m.text).join("; ")).join(" | ");
 
   return (
     <>
@@ -482,7 +482,7 @@ function WordRow({
           )}
         </td>
         <td className="py-2 pr-4 text-gray-300">{defText}</td>
-        <td className="py-2 pr-4 text-gray-400">{word.grammaticalCategory}</td>
+        <td className="py-2 pr-4 text-gray-400">{word.definitions.map((m) => m.partOfSpeech).filter(Boolean).join(", ")}</td>
         <td className="py-2 text-gray-400">{word.level ?? "—"}</td>
       </tr>
       {expanded && (

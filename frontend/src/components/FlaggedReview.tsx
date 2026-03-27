@@ -93,11 +93,16 @@ export default function FlaggedReview({ language, onBack, transliterationMap = {
         </button>
       ) : (
         <>
-          <div className="text-center space-y-1">
-            {Object.entries(currentWord!.definition ?? {}).map(([lang, text]) => (
-              <p key={lang} className="text-xl text-green-400">
-                <span className="text-sm text-gray-400">{LANG_DISPLAY[lang] || lang}: </span>{text}
-              </p>
+          <div className="text-center space-y-2">
+            {(currentWord!.definitions ?? []).map((m, mi) => (
+              <div key={mi}>
+                {m.partOfSpeech && <p className="text-xs text-gray-500 italic">{m.partOfSpeech}</p>}
+                {Object.entries(m.text).map(([lang, text]) => (
+                  <p key={lang} className="text-xl text-green-400">
+                    <span className="text-sm text-gray-400">{LANG_DISPLAY[lang] || lang}: </span>{text}
+                  </p>
+                ))}
+              </div>
             ))}
           </div>
 

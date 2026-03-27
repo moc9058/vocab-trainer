@@ -1,5 +1,5 @@
 import { fetchJson, postJson, putJson, deleteRequest } from "./client";
-import type { Word, PaginatedResult } from "../types";
+import type { Word, Meaning, PaginatedResult } from "../types";
 
 interface WordFilters {
   search?: string;
@@ -47,8 +47,7 @@ export function smartAddWord(
   data: {
     term: string;
     transliteration?: string;
-    definition?: Record<string, string>;
-    grammaticalCategory?: string;
+    definitions?: Meaning[];
     topics?: string[];
     examples?: { sentence: string; translation: string }[];
   }

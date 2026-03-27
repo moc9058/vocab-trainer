@@ -64,7 +64,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       const questions: QuizQuestion[] = selected.map((w) => ({
         wordId: w.id,
         term: w.term,
-        definition: w.definition,
+        definitions: w.definitions,
         transliteration: w.transliteration,
         examples: w.examples,
       }));
@@ -135,7 +135,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         return {
           wordId: q.wordId,
           term: word?.term ?? q.term,
-          definition: word?.definition ?? {},
+          definitions: word?.definitions ?? [],
           transliteration: word?.transliteration,
           examples: word?.examples ?? [],
           ...(q.userCorrect !== undefined ? { userCorrect: q.userCorrect } : {}),
@@ -182,7 +182,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         session.questions.push({
           wordId: question.wordId,
           term: question.term,
-          definition: question.definition ?? {},
+          definitions: question.definitions ?? [],
           transliteration: question.transliteration,
           examples: question.examples,
         });

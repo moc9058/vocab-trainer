@@ -116,12 +116,16 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
       "id": "zh-000001",
       "term": "你好",
       "transliteration": "nǐ hǎo",
-      "definition": {
-        "ja": "こんにちは",
-        "en": "hello",
-        "ko": "안녕하세요"
-      },
-      "grammaticalCategory": "interjection",
+      "definitions": [
+        {
+          "partOfSpeech": "interjection",
+          "text": {
+            "ja": "こんにちは",
+            "en": "hello",
+            "ko": "안녕하세요"
+          }
+        }
+      ],
       "examples": [
         {
           "sentence": "你好，你怎么样？",
@@ -146,22 +150,23 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
   | Arabic   | `ar` | `ar-000001` |
 - **`term`** — The vocabulary word in the target language.
 - **`transliteration`** — Optional. Romanized pronunciation, critical for non-Latin scripts (Arabic, Chinese).
-- **`definition`** — An object keyed by ISO 639-1 language code (`ja`, `en`, `ko`, etc.), allowing definitions in multiple languages.
-- **`grammaticalCategory`** — The grammatical category of the word. Possible values:
-  - `noun` — person, place, thing, or concept (e.g. book, city)
-  - `verb` — action or state (e.g. run, be)
-  - `adjective` — describes a noun (e.g. big, beautiful)
-  - `adverb` — describes a verb, adjective, or other adverb (e.g. quickly, very)
-  - `pronoun` — replaces a noun (e.g. he, they)
-  - `preposition` — shows relationship between words (e.g. in, on, at)
-  - `conjunction` — connects words or clauses (e.g. and, but)
-  - `interjection` — expresses emotion (e.g. hello, wow)
-  - `determiner` — specifies a noun (e.g. the, this, some)
-  - `particle` — grammatical function word with no direct translation (common in Chinese, Japanese, Korean)
-  - `classifier` — measure word used with nouns (common in Chinese, Japanese)
-  - `numeral` — number word (e.g. one, two, three)
-  - `onomatopoeia` — sound-imitating word (e.g. 哗哗, 咚咚, bang)
-  - `phrase` — a multi-word expression or idiom
+- **`definitions`** — Array of meaning objects. A word may have multiple meanings when there are clear semantic distinctions (e.g., "打" as "to hit" vs. "to play"). Each meaning contains:
+  - **`partOfSpeech`** — The grammatical category for this meaning. Possible values:
+    - `noun` — person, place, thing, or concept (e.g. book, city)
+    - `verb` — action or state (e.g. run, be)
+    - `adjective` — describes a noun (e.g. big, beautiful)
+    - `adverb` — describes a verb, adjective, or other adverb (e.g. quickly, very)
+    - `pronoun` — replaces a noun (e.g. he, they)
+    - `preposition` — shows relationship between words (e.g. in, on, at)
+    - `conjunction` — connects words or clauses (e.g. and, but)
+    - `interjection` — expresses emotion (e.g. hello, wow)
+    - `determiner` — specifies a noun (e.g. the, this, some)
+    - `particle` — grammatical function word with no direct translation (common in Chinese, Japanese, Korean)
+    - `classifier` — measure word used with nouns (common in Chinese, Japanese)
+    - `numeral` — number word (e.g. one, two, three)
+    - `onomatopoeia` — sound-imitating word (e.g. 哗哗, 咚咚, bang)
+    - `phrase` — a multi-word expression or idiom
+  - **`text`** — An object keyed by ISO 639-1 language code (`ja`, `en`, `ko`, etc.), providing the definition in multiple languages.
 - **`examples`** — Array of example sentences with translations (primary language is Japanese).
 - **`topics`** — Topic tags for categorizing and filtering words. Possible values:
   - **Everyday Life:** `Greetings & Introductions`, `Food & Dining`, `Shopping & Money`, `Travel & Transportation`, `Weather & Seasons`, `Family & Relationships`, `Health & Body`, `Home & Housing`
@@ -275,7 +280,7 @@ vocab-trainer/
 
 | Query Param | Type   | Default | Description                                    |
 | ----------- | ------ | ------- | ---------------------------------------------- |
-| `search`    | string | —       | Matches term, transliteration, or definition   |
+| `search`    | string | —       | Matches term, transliteration, or definitions  |
 | `topic`     | string | —       | Filter by topic                                |
 | `category`  | string | —       | Filter by grammaticalCategory                  |
 | `level`     | string | —       | Filter by level                                |
@@ -342,11 +347,9 @@ Adds a word using the LLM to fill in missing fields. The word is auto-flagged fo
 {
   "term": "努力",
   "transliteration": "",
-  "definition": {},
-  "grammaticalCategory": "",
+  "definitions": [],
   "topics": [],
-  "examples": [],
-  "notes": ""
+  "examples": []
 }
 ```
 
@@ -445,7 +448,7 @@ Returns full question details (definition, transliteration, examples) for a slic
     {
       "wordId": "zh-000001",
       "term": "你好",
-      "definition": { "en": "hello", "ja": "こんにちは" },
+      "definitions": [{ "partOfSpeech": "interjection", "text": { "en": "hello", "ja": "こんにちは" } }],
       "transliteration": "nǐ hǎo",
       "examples": [{ "sentence": "你好，你怎么样？", "translation": "Hello, how are you?" }]
     }

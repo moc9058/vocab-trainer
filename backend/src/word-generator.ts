@@ -213,8 +213,7 @@ async function doGenerate(
 Each word object must have:
 - "term": the Chinese word
 - "transliteration": pinyin with tone marks
-- "definition": {"ja": "...", "en": "...", "ko": "..."}
-- "grammaticalCategory": one of "noun", "verb", "adjective", "adverb", "numeral", "measure word", "conjunction", "preposition", "particle", "pronoun", "interjection", "phrase"
+- "definitions": [{"partOfSpeech": "noun|verb|adjective|adverb|numeral|measure word|conjunction|preposition|particle|pronoun|interjection|phrase", "text": {"ja": "...", "en": "...", "ko": "..."}}]
 - "examples": [{"sentence": "Chinese sentence using the word", "translation": "Japanese translation"}] (1-2 examples)
 - "topics": array of 1-3 topics from: ${topicsList}
 - "notes": brief usage note or empty string

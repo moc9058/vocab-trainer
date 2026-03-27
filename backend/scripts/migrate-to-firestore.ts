@@ -10,7 +10,7 @@
 import { Firestore } from "@google-cloud/firestore";
 import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { resolve, join } from "node:path";
-import type { Word, Example, VocabFile } from "../src/types.js";
+import type { Word, Meaning, Example, VocabFile } from "../src/types.js";
 
 /** Recursively remove empty-string keys from an object (Firestore rejects them). */
 function stripEmptyKeys(obj: unknown): unknown {
@@ -64,11 +64,20 @@ function normalizeLangKeys(obj: Record<string, string>): Record<string, string> 
 
 function docToWord(doc: FirebaseFirestore.DocumentSnapshot): Word {
   const d = doc.data()!;
+  // Normalize old format (definition + grammaticalCategory) to new (definitions: Meaning[])
+  let definitions: Meaning[];
+  if (Array.isArray(d.definitions)) {
+    definitions = d.definitions as Meaning[];
+  } else if (d.definition && typeof d.definition === "object") {
+    definitions = [{ partOfSpeech: (d.grammaticalCategory as string) ?? "", text: normalizeLangKeys(d.definition ?? {}) }];
+  } else {
+    definitions = [];
+  }
+
   const word: Word = {
     id: doc.id,
     term: d.term,
-    definition: normalizeLangKeys(d.definition ?? {}),
-    grammaticalCategory: d.grammaticalCategory ?? "",
+    definitions,
     examples: (d.examples ?? []).map((ex: any): Example => ({
       sentence: ex.sentence,
       translation: ex.translation,
@@ -171,6 +180,16 @@ async function migrateLanguage(filename: string): Promise<void> {
   const acc = getAccumulator(language);
 
   console.log(`  Language: ${language} (from ${vocab.language ? "JSON field" : "filename"})`);
+
+  // Normalize old format words (definition + grammaticalCategory → definitions)
+  for (const word of vocab.words) {
+    const w = word as any;
+    if (!Array.isArray(w.definitions) && w.definition) {
+      w.definitions = [{ partOfSpeech: w.grammaticalCategory ?? "", text: normalizeLangKeys(w.definition) }];
+      delete w.definition;
+      delete w.grammaticalCategory;
+    }
+  }
 
   // Accumulate metadata
   for (const word of vocab.words) {

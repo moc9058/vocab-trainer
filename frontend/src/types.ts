@@ -17,10 +17,15 @@ export interface QuizScore {
   total: number;
 }
 
+export interface Meaning {
+  partOfSpeech: string;
+  text: Record<string, string>;
+}
+
 export interface QuizQuestion {
   wordId: string;
   term: string;
-  definition: Record<string, string>;
+  definitions: Meaning[];
   transliteration?: string;
   examples?: Example[];
   userCorrect?: boolean;
@@ -42,8 +47,7 @@ export interface Word {
   id: string;
   term: string;
   transliteration?: string;
-  definition: Record<string, string>;
-  grammaticalCategory: string;
+  definitions: Meaning[];
   examples: Example[];
   topics: string[];
   level?: string;

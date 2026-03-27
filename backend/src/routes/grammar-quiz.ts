@@ -13,7 +13,7 @@ import {
   flagWord,
   type GrammarItemDoc,
 } from "../firestore.js";
-import type { GrammarQuizSession, GrammarQuizQuestion, GrammarProgress, Word } from "../types.js";
+import type { GrammarQuizSession, GrammarQuizQuestion, GrammarProgress, Word, Meaning } from "../types.js";
 import { TOPICS } from "../types.js";
 import { callLLM, stripMarkdownFences, segmentBatch } from "../llm.js";
 
@@ -260,14 +260,13 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
 
       const systemPrompt = `You are a Chinese vocabulary expert. Generate vocabulary entries for Chinese words.
 Each word already has a term, transliteration (pinyin), and one example sentence provided.
-You need to fill: definition, grammaticalCategory, topics, notes.
+You need to fill: definitions, topics, notes.
 
 Return a JSON object with a "words" array:
 [{
   "term": "the word (keep as provided)",
   "transliteration": "keep as provided",
-  "definition": { "ja": "...", "en": "...", "ko": "..." },
-  "grammaticalCategory": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase",
+  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase", "text": { "ja": "...", "en": "...", "ko": "..." } }],
   "topics": ["..."],
   "notes": "brief usage notes or empty string"
 }]
@@ -301,8 +300,7 @@ Allowed topics: ${TOPICS.join(", ")}`;
           id,
           term,
           transliteration: (entry.transliteration as string) || info.pinyin || "",
-          definition: (entry.definition as Record<string, string>) || { en: "" },
-          grammaticalCategory: (entry.grammaticalCategory as string) || "",
+          definitions: (entry.definitions as Meaning[]) || [{ partOfSpeech: "", text: { en: "" } }],
           examples: [{ sentence: info.sentence, translation: info.translation }],
           topics: (topics.length > 0 ? topics : ["Language Fundamentals"]) as Word["topics"],
           level: "Advanced",

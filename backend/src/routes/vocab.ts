@@ -16,7 +16,7 @@ import {
   getTransliterationMap,
   flagWord,
 } from "../firestore.js";
-import type { Word, Example, Topic } from "../types.js";
+import type { Word, Meaning, Example, Topic } from "../types.js";
 import { TOPICS } from "../types.js";
 import { generateMissingWords } from "../word-generator.js";
 import { callLLM, stripMarkdownFences, validateWord, type Segment } from "../llm.js";
@@ -111,8 +111,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
     Body: {
       term: string;
       transliteration?: string;
-      definition?: Record<string, string>;
-      grammaticalCategory?: string;
+      definitions?: { partOfSpeech: string; text: Record<string, string> }[];
       topics?: string[];
       examples?: { sentence: string; translation: string }[];
       notes?: string;
@@ -127,8 +126,16 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
           properties: {
             term: { type: "string" },
             transliteration: { type: "string" },
-            definition: { type: "object", additionalProperties: { type: "string" } },
-            grammaticalCategory: { type: "string" },
+            definitions: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  partOfSpeech: { type: "string" },
+                  text: { type: "object", additionalProperties: { type: "string" } },
+                },
+              },
+            },
             topics: { type: "array", items: { type: "string" } },
             examples: {
               type: "array",
@@ -168,13 +175,11 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         if (body.transliteration) fields.push(`PROVIDED transliteration: ${body.transliteration}`);
         else fields.push("MISSING transliteration (generate pinyin with tone marks)");
       }
-      if (body.definition && Object.keys(body.definition).length > 0) {
-        fields.push(`PROVIDED definition: ${JSON.stringify(body.definition)}`);
+      if (body.definitions && body.definitions.length > 0) {
+        fields.push(`PROVIDED definitions: ${JSON.stringify(body.definitions)}`);
       } else {
-        fields.push("MISSING definition (generate ja, en, ko)");
+        fields.push("MISSING definitions (generate meanings with partOfSpeech and text in ja, en, ko)");
       }
-      if (body.grammaticalCategory) fields.push(`PROVIDED grammaticalCategory: ${body.grammaticalCategory}`);
-      else fields.push("MISSING grammaticalCategory");
       if (body.topics && body.topics.length > 0) fields.push(`PROVIDED topics: ${JSON.stringify(body.topics)}`);
       else fields.push("MISSING topics");
       if (body.examples && body.examples.length > 0) fields.push(`PROVIDED examples: ${JSON.stringify(body.examples)}`);
@@ -182,10 +187,18 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       if (body.notes) fields.push(`PROVIDED notes: ${body.notes}`);
       else fields.push("MISSING notes");
 
+      const definitionGuidelines = `
+Definition guidelines:
+- Only create multiple meanings if there is a clear semantic distinction (meanings cannot be substituted in the same sentence).
+- Do NOT split meanings for minor, stylistic, or context-dependent differences.
+- If the word has only one core meaning, return a single definition entry.
+- Group closely related meanings into one definition rather than splitting them.`;
+
       const systemPrompt = isChinese
         ? `You are a Chinese vocabulary expert. Given a Chinese term and optionally some pre-filled fields, generate a complete vocabulary entry.
 
 CRITICAL: If a field is marked "PROVIDED", keep that EXACT value unchanged. Only generate values for fields marked "MISSING".
+${definitionGuidelines}
 
 For each example sentence, also provide "segments": an array of word-level segments with pinyin.
 
@@ -193,8 +206,7 @@ Return a JSON object:
 {
   "term": "the Chinese word",
   "transliteration": "pinyin with tone marks",
-  "definition": { "ja": "...", "en": "...", "ko": "..." },
-  "grammaticalCategory": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase",
+  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase", "text": { "ja": "...", "en": "...", "ko": "..." } }],
   "examples": [{ "sentence": "Chinese sentence", "translation": "English translation", "segments": [{ "text": "word", "pinyin": "pīnyīn" }] }],
   "topics": ["..."],
   "notes": "brief usage notes"
@@ -210,12 +222,12 @@ Allowed topics: ${TOPICS.join(", ")}`
         : `You are a ${language} vocabulary expert. Given a ${language} term and optionally some pre-filled fields, generate a complete vocabulary entry.
 
 CRITICAL: If a field is marked "PROVIDED", keep that EXACT value unchanged. Only generate values for fields marked "MISSING".
+${definitionGuidelines}
 
 Return a JSON object:
 {
   "term": "the ${language} word",
-  "definition": { "ja": "...", "en": "...", "ko": "..." },
-  "grammaticalCategory": "noun|verb|adjective|adverb|preposition|conjunction|particle|pronoun|interjection|idiom|phrase",
+  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|pronoun|interjection|idiom|phrase", "text": { "ja": "...", "en": "...", "ko": "..." } }],
   "examples": [{ "sentence": "${language} sentence using the word"${language === "english" ? "" : ', "translation": "English translation"'} }],
   "topics": ["..."],
   "notes": "brief usage notes"
@@ -238,10 +250,9 @@ Allowed topics: ${TOPICS.join(", ")}`;
       const merged = {
         term,
         transliteration: isChinese ? (body.transliteration || (llmResult.transliteration as string) || "") : undefined,
-        definition: (body.definition && Object.keys(body.definition).length > 0)
-          ? body.definition
-          : (llmResult.definition as Record<string, string>) || { en: "" },
-        grammaticalCategory: body.grammaticalCategory || (llmResult.grammaticalCategory as string) || "",
+        definitions: (body.definitions && body.definitions.length > 0)
+          ? body.definitions
+          : (llmResult.definitions as { partOfSpeech: string; text: Record<string, string> }[]) || [{ partOfSpeech: "", text: { en: "" } }],
         examples: (body.examples && body.examples.length > 0)
           ? body.examples
           : (llmResult.examples as { sentence: string; translation: string }[]) || [],
@@ -276,8 +287,7 @@ Allowed topics: ${TOPICS.join(", ")}`;
         id,
         term: merged.term,
         transliteration: merged.transliteration,
-        definition: merged.definition,
-        grammaticalCategory: merged.grammaticalCategory,
+        definitions: merged.definitions,
         examples: examplesWithSegments,
         topics: merged.topics as Word["topics"],
         level: "Advanced",
@@ -402,14 +412,13 @@ async function generateMissingWordsFromSegments(
 
   const systemPrompt = `You are a Chinese vocabulary expert. Generate vocabulary entries for Chinese words.
 Each word already has a term, transliteration (pinyin), and one example sentence provided.
-You need to fill: definition, grammaticalCategory, topics, notes.
+You need to fill: definitions, topics, notes.
 
 Return a JSON object with a "words" array:
 [{
   "term": "the word (keep as provided)",
   "transliteration": "keep as provided",
-  "definition": { "ja": "...", "en": "...", "ko": "..." },
-  "grammaticalCategory": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase",
+  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase", "text": { "ja": "...", "en": "...", "ko": "..." } }],
   "topics": ["..."],
   "notes": "brief usage notes or empty string"
 }]
@@ -443,8 +452,7 @@ Allowed topics: ${TOPICS.join(", ")}`;
         id,
         term,
         transliteration: (entry.transliteration as string) || info.pinyin || "",
-        definition: (entry.definition as Record<string, string>) || { English: "" },
-        grammaticalCategory: (entry.grammaticalCategory as string) || "",
+        definitions: (entry.definitions as Meaning[]) || [{ partOfSpeech: "", text: { en: "" } }],
         examples: [{ sentence: info.sentence, translation: info.translation }],
         topics: (topics.length > 0 ? topics : ["Language Fundamentals"]) as Word["topics"],
         level: "Advanced",

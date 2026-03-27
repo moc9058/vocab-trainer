@@ -10,7 +10,7 @@
 import { Firestore } from "@google-cloud/firestore";
 import { writeFile, mkdir } from "node:fs/promises";
 import { resolve, join } from "node:path";
-import type { Word, Example, VocabFile, WordProgress, ProgressFile, GrammarChapter, GrammarComponent } from "../src/types.js";
+import type { Word, Meaning, Example, VocabFile, WordProgress, ProgressFile, GrammarChapter, GrammarComponent } from "../src/types.js";
 
 const DB_DIR = resolve(import.meta.dirname, "..", "DB", "word");
 const GRAMMAR_DIR = resolve(import.meta.dirname, "..", "DB", "grammer");
@@ -37,11 +37,23 @@ function normalizeLangKeys(obj: Record<string, string>): Record<string, string> 
 
 function docToWord(doc: FirebaseFirestore.DocumentSnapshot): Word {
   const d = doc.data()!;
+  // Normalize old format (definition + grammaticalCategory) to new (definitions: Meaning[])
+  let definitions: Meaning[];
+  if (Array.isArray(d.definitions)) {
+    definitions = (d.definitions as any[]).map((m: any) => ({
+      partOfSpeech: m.partOfSpeech ?? "",
+      text: normalizeLangKeys(m.text ?? {}),
+    }));
+  } else if (d.definition && typeof d.definition === "object") {
+    definitions = [{ partOfSpeech: (d.grammaticalCategory as string) ?? "", text: normalizeLangKeys(d.definition ?? {}) }];
+  } else {
+    definitions = [];
+  }
+
   const word: Word = {
     id: doc.id,
     term: d.term,
-    definition: normalizeLangKeys(d.definition ?? {}),
-    grammaticalCategory: d.grammaticalCategory ?? "",
+    definitions,
     examples: (d.examples ?? []).map((ex: any): Example => ({
       sentence: ex.sentence,
       translation: ex.translation,

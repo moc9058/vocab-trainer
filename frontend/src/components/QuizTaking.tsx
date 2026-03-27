@@ -45,8 +45,8 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
           const idx = offset + i;
           if (idx >= newQuestions.length) {
             newQuestions.push(batch[i]);
-          } else if (!newQuestions[idx].definition || Object.keys(newQuestions[idx].definition).length === 0) {
-            // Hydrate if the slot exists but has no definition
+          } else if (!newQuestions[idx].definitions || newQuestions[idx].definitions.length === 0) {
+            // Hydrate if the slot exists but has no definitions
             newQuestions[idx] = { ...newQuestions[idx], ...batch[i] };
           }
         }
@@ -126,7 +126,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
           updated.push({
             wordId: question.wordId,
             term: question.term,
-            definition: question.definition,
+            definitions: question.definitions,
             transliteration: question.transliteration,
             examples: question.examples,
           });
@@ -209,11 +209,16 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
         </button>
       ) : (
         <>
-          <div className="text-center space-y-1">
-            {Object.entries(question!.definition ?? {}).map(([lang, text]) => (
-              <p key={lang} className="text-xl text-green-400">
-                <span className="text-sm text-gray-400">{LANG_DISPLAY[lang] || lang}: </span>{text}
-              </p>
+          <div className="text-center space-y-2">
+            {(question!.definitions ?? []).map((m, mi) => (
+              <div key={mi}>
+                {m.partOfSpeech && <p className="text-xs text-gray-500 italic">{m.partOfSpeech}</p>}
+                {Object.entries(m.text).map(([lang, text]) => (
+                  <p key={lang} className="text-xl text-green-400">
+                    <span className="text-sm text-gray-400">{LANG_DISPLAY[lang] || lang}: </span>{text}
+                  </p>
+                ))}
+              </div>
             ))}
           </div>
 

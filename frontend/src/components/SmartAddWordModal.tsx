@@ -76,6 +76,11 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
       if (key && d.text.trim()) defObj[key] = d.text.trim();
     }
 
+    // Bundle user-provided definition hints + category into a definitions array
+    const defs = Object.keys(defObj).length > 0 || grammaticalCategory
+      ? [{ partOfSpeech: grammaticalCategory || "", text: defObj }]
+      : undefined;
+
     const validExamples = examples.filter((ex) => ex.sentence.trim());
     const language = langSelect === "__other__" ? customLang.trim().toLowerCase() : langSelect;
     if (!language) return;
@@ -84,8 +89,7 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
       const result = await smartAddWord(language, {
         term: term.trim(),
         transliteration: langSelect === "chinese" ? (transliteration.trim() || undefined) : undefined,
-        definition: Object.keys(defObj).length > 0 ? defObj : undefined,
-        grammaticalCategory: grammaticalCategory || undefined,
+        definitions: defs,
         topics: topics.length > 0 ? topics : undefined,
         examples: validExamples.length > 0 ? validExamples : undefined,
       });
@@ -130,7 +134,7 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
                   {w.transliteration && (
                     <span className="ml-1 text-gray-400">({w.transliteration})</span>
                   )}
-                  <span className="ml-1 text-gray-500">— {Object.values(w.definition).join("; ")}</span>
+                  <span className="ml-1 text-gray-500">— {w.definitions.map((m) => Object.values(m.text).join("; ")).join(" | ")}</span>
                 </li>
               ))}
             </ul>
