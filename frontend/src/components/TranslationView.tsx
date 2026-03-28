@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
-import { translateStream, getTranslationHistory } from "../api/translation";
+import { translateStream, getTranslationHistory, deleteTranslationHistory } from "../api/translation";
 import type { TranslationEntry, TranslationResult, SentenceAnalysis, SentenceAnalysisResult } from "../types";
 
 interface Props {
@@ -32,10 +32,18 @@ export default function TranslationView({ mode }: Props) {
     let cancelled = false;
     (async () => {
       try {
+        if (mode === "new") {
+          await deleteTranslationHistory();
+          if (!cancelled) {
+            setHistory([]);
+            setLoadingHistory(false);
+          }
+          return;
+        }
         const { entries } = await getTranslationHistory(1, 50);
         if (!cancelled) {
           setHistory(entries);
-          if (mode === "resume" && entries.length > 0) {
+          if (entries.length > 0) {
             setHistoryIndex(0);
             setPhase("results");
             setActiveTab(0);

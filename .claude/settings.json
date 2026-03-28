@@ -7,7 +7,8 @@
       "Bash(chmod +x /home/moc90/workspace/vocab-trainer/migrate.sh)",
       "Bash(python3 -c \":*)",
       "Bash(grep -c '\"\"segments\"\"' backend/DB/HSK*.json)",
-      "Bash(timeout 5 npx tsx -e \":*)"
+      "Bash(timeout 5 npx tsx -e \":*)",
+      "Bash(npm view:*)"
     ]
   },
   "enabledPlugins": {
