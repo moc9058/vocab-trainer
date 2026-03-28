@@ -27,6 +27,7 @@ Rules:
 - **Verb tense/aspect units may stay grouped**: Auxiliary verb(s) + main verb forming a single tense or aspect can be one component. Examples: "is looking" (present progressive), "have been eating" (present perfect progressive), "will go" (future). But do NOT include adverbs that appear between auxiliaries and the main verb
 - **True multi-word expressions stay grouped**: Idioms ("kick the bucket"), phrasal verbs ("look up"), set phrases ("by the way"), collocations, and proverbs are kept as one component. Use the appropriate partOfSpeech value (idiom, phrasal verb, set phrase, collocation, proverb)
 - **Everything else splits**: Determiners, prepositions, conjunctions, pronouns, and nouns each get their own component
+- **Skip punctuation**: Do not create components for punctuation marks (periods, commas, question marks, exclamation marks, colons, semicolons, quotation marks, brackets, dashes, ellipses, etc.). Only decompose actual words and expressions
 - **When in doubt, split**: More components are better than fewer. A learner benefits from seeing each word's role individually
 
 ## Component guidelines
@@ -34,6 +35,7 @@ Rules:
 For each component, provide:
 - the original surface form
 - dictionary/basic form when applicable
+- `reading` field: if the source word contains Chinese characters (hanzi), provide pinyin with tone marks (e.g. nǐ hǎo). If it contains Japanese kanji, provide hiragana reading. Otherwise set to `null`
 - part of speech
 - a short English meaning
 - a concise grammar/function explanation

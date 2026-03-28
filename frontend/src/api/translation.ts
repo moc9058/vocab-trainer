@@ -22,12 +22,14 @@ export interface TranslateStreamCallbacks {
 export async function translateStream(
   sourceText: string,
   targetLanguages: string[],
-  callbacks: TranslateStreamCallbacks
+  callbacks: TranslateStreamCallbacks,
+  signal?: AbortSignal
 ): Promise<void> {
   const res = await fetch("/api/translation/translate-stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sourceText, targetLanguages }),
+    signal,
   });
 
   if (!res.ok) {

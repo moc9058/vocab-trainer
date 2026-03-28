@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useI18n } from "../i18n/context";
-import { translateStream, getTranslationHistory, deleteTranslationHistory } from "../api/translation";
+import { translate, translateStream, getTranslationHistory, deleteTranslationHistory } from "../api/translation";
 import type { TranslationEntry, TranslationResult, SentenceAnalysis, SentenceAnalysisResult } from "../types";
 
 interface Props {
@@ -21,12 +21,14 @@ export default function TranslationView({ mode }: Props) {
   const [phase, setPhase] = useState<"input" | "loading" | "results">("input");
   const [inputText, setInputText] = useState("");
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(["ja"]);
-  const [otherChecked, setOtherChecked] = useState(false);
-  const [otherLanguage, setOtherLanguage] = useState("");
   const [activeTab, setActiveTab] = useState(0);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [streamingChunks, setStreamingChunks] = useState<Map<string, string>>(new Map());
   const [streamResults, setStreamResults] = useState<Map<string, TranslationResult>>(new Map());
+  const abortRef = useRef<AbortController | null>(null);
+  const lastInputRef = useRef("");
+  const lastLangsRef = useRef<string[]>([]);
+  const doneRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,17 +67,19 @@ export default function TranslationView({ mode }: Props) {
   }
 
   function getTargetLanguages(): string[] {
-    const langs = [...selectedLanguages];
-    if (otherChecked && otherLanguage.trim()) {
-      langs.push(otherLanguage.trim());
-    }
-    return langs;
+    return [...selectedLanguages];
   }
 
   const canSubmit = inputText.trim().length > 0 && getTargetLanguages().length > 0;
 
   async function handleTranslate() {
     if (!canSubmit) return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    lastInputRef.current = inputText.trim();
+    lastLangsRef.current = getTargetLanguages();
+    doneRef.current = false;
     setPhase("loading");
     setStreamingChunks(new Map());
     setStreamResults(new Map());
@@ -109,6 +113,7 @@ export default function TranslationView({ mode }: Props) {
           });
         },
         onDone(entry) {
+          doneRef.current = true;
           setHistory((prev) => [entry, ...prev]);
           setHistoryIndex(0);
           setActiveTab(0);
@@ -117,12 +122,75 @@ export default function TranslationView({ mode }: Props) {
           setStreamingChunks(new Map());
           setStreamResults(new Map());
         },
-      });
+      }, controller.signal);
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error("Translation failed:", err);
       alert(String(err));
       setPhase("input");
     }
+  }
+
+  // Transition to results when all languages have results (for per-language regeneration)
+  useEffect(() => {
+    if (phase !== "loading" || doneRef.current) return;
+    const langs = lastLangsRef.current;
+    if (langs.length === 0) return;
+    if (!langs.every((l) => streamResults.has(l))) return;
+
+    doneRef.current = true;
+    const results = langs.map((l) => streamResults.get(l)!);
+    const entry: TranslationEntry = {
+      id: `local-${Date.now()}`,
+      sourceText: lastInputRef.current,
+      targetLanguages: langs,
+      results,
+      createdAt: new Date().toISOString(),
+    };
+    setHistory((prev) => [entry, ...prev]);
+    setHistoryIndex(0);
+    setActiveTab(0);
+    setPhase("results");
+    setInputText("");
+    setStreamingChunks(new Map());
+    setStreamResults(new Map());
+  }, [streamResults, phase]);
+
+  async function handleRegenerateLang(lang: string) {
+    // Abort the main stream (it may be hung)
+    abortRef.current?.abort();
+    abortRef.current = null;
+
+    // Reset state for this language
+    setStreamingChunks((prev) => {
+      const next = new Map(prev);
+      next.set(lang, "");
+      return next;
+    });
+    setStreamResults((prev) => {
+      const next = new Map(prev);
+      next.delete(lang);
+      return next;
+    });
+
+    try {
+      const entry = await translate(lastInputRef.current, [lang]);
+      const result = entry.results[0];
+      if (result) {
+        setStreamResults((prev) => {
+          const next = new Map(prev);
+          next.set(lang, result);
+          return next;
+        });
+      }
+    } catch (err) {
+      console.error(`Regenerate ${lang} failed:`, err);
+    }
+    setStreamingChunks((prev) => {
+      const next = new Map(prev);
+      next.delete(lang);
+      return next;
+    });
   }
 
   function handleNewTranslation() {
@@ -185,26 +253,7 @@ export default function TranslationView({ mode }: Props) {
                 {lang.label}
               </button>
             ))}
-            <button
-              onClick={() => setOtherChecked(!otherChecked)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                otherChecked
-                  ? "bg-violet-600 text-white"
-                  : "border border-gray-600 text-gray-400 hover:bg-gray-700"
-              }`}
-            >
-              {t("otherLanguage")}
-            </button>
           </div>
-          {otherChecked && (
-            <input
-              type="text"
-              value={otherLanguage}
-              onChange={(e) => setOtherLanguage(e.target.value)}
-              placeholder={t("otherLanguagePlaceholder")}
-              className="mt-2 w-full rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-violet-500 focus:outline-none"
-            />
-          )}
         </div>
 
         <button
@@ -267,6 +316,12 @@ export default function TranslationView({ mode }: Props) {
                     {chunks.slice(-500)}
                   </p>
                 )}
+                <button
+                  onClick={() => handleRegenerateLang(lang)}
+                  className="mt-2 rounded-md border border-gray-600 px-3 py-1 text-xs text-gray-400 hover:bg-gray-700 transition-colors"
+                >
+                  {t("regenerate")}
+                </button>
               </div>
             );
           }
@@ -274,9 +329,17 @@ export default function TranslationView({ mode }: Props) {
           // Not started yet
           return (
             <div key={lang} className="rounded-lg bg-gray-800/30 p-4">
-              <p className="text-xs text-gray-500">
-                {label} — waiting...
-              </p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-gray-500">
+                  {label} — waiting...
+                </p>
+                <button
+                  onClick={() => handleRegenerateLang(lang)}
+                  className="rounded-md border border-gray-600 px-3 py-1 text-xs text-gray-400 hover:bg-gray-700 transition-colors"
+                >
+                  {t("regenerate")}
+                </button>
+              </div>
             </div>
           );
         })}
@@ -423,7 +486,10 @@ function LegacyResultView({ result }: { result: TranslationResult }) {
   );
 }
 
+const CJK_REGEX = /[\u3000-\u9fff\uf900-\ufaff]/;
+
 function SentenceCard({ sentence }: { sentence: SentenceAnalysis }) {
+  const showReading = sentence.components.some((c) => CJK_REGEX.test(c.surface));
   return (
     <div className="space-y-3">
       <div className="rounded-lg bg-gray-800/60 p-4">
@@ -436,7 +502,7 @@ function SentenceCard({ sentence }: { sentence: SentenceAnalysis }) {
             <thead>
               <tr className="border-b border-gray-700 text-gray-500">
                 <th className="text-left py-1 pr-3">Surface</th>
-                <th className="text-left py-1 pr-3">Reading</th>
+                {showReading && <th className="text-left py-1 pr-3">Reading</th>}
                 <th className="text-left py-1 pr-3">Base Form</th>
                 <th className="text-left py-1 pr-3">POS</th>
                 <th className="text-left py-1 pr-3">Meaning</th>
@@ -447,7 +513,7 @@ function SentenceCard({ sentence }: { sentence: SentenceAnalysis }) {
               {sentence.components.map((comp) => (
                 <tr key={comp.componentId} className="border-b border-gray-800">
                   <td className="py-1.5 pr-3 font-medium text-gray-200">{comp.surface}</td>
-                  <td className="py-1.5 pr-3 text-gray-400">{comp.reading ?? "—"}</td>
+                  {showReading && <td className="py-1.5 pr-3 text-gray-400">{comp.reading ?? "—"}</td>}
                   <td className="py-1.5 pr-3 text-gray-400">{comp.baseForm ?? "—"}</td>
                   <td className="py-1.5 pr-3">
                     <span className="rounded bg-gray-700 px-1 py-0.5 text-gray-300">{comp.partOfSpeech}</span>

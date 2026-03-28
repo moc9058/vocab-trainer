@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import { readFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { callLLMFull, callLLMFullWithSchema, streamLLMFull, streamLLMFullWithSchema, stripMarkdownFences } from "../llm.js";
+import { callLLMFullWithSchema, streamLLMFullWithSchema, stripMarkdownFences } from "../llm.js";
 import {
   saveTranslationEntry,
   getTranslationHistory,
@@ -21,42 +21,6 @@ for (const [code, file] of [["en", "english"], ["ja", "japanese"], ["ko", "korea
   schemaConfigs[code] = {
     systemPrompt: readFileSync(resolve(DB_TRANSLATION_DIR, `system_prompt_${file}.md`), "utf-8"),
   };
-}
-
-// Fallback system prompt for "Other Language" (free text like "French", "Spanish", etc.)
-function getSystemPrompt(language: string): string {
-  return `You are a professional translator and language teacher. Translate the given text into ${language} and provide a detailed linguistic analysis. Respond entirely in ${language}.
-
-Return a JSON object with these exact keys:
-- "translation": the translated text
-- "grammarBreakdown": explanation of the grammar structures used in the source text
-- "keyVocabulary": array of objects with "term" and "meaning" keys, listing important vocabulary from the source
-- "alternativeExpressions": array of strings with alternative ways to express the same meaning
-- "culturalNotes": any relevant cultural context or usage notes`;
-}
-
-function parseTranslationResult(raw: string, language: string): TranslationResult {
-  try {
-    const parsed = JSON.parse(stripMarkdownFences(raw));
-    return {
-      language,
-      translation: parsed.translation ?? "",
-      grammarBreakdown: parsed.grammarBreakdown ?? "",
-      keyVocabulary: Array.isArray(parsed.keyVocabulary) ? parsed.keyVocabulary : [],
-      alternativeExpressions: Array.isArray(parsed.alternativeExpressions) ? parsed.alternativeExpressions : [],
-      culturalNotes: parsed.culturalNotes ?? "",
-    };
-  } catch {
-    return {
-      language,
-      translation: "",
-      grammarBreakdown: "",
-      keyVocabulary: [],
-      alternativeExpressions: [],
-      culturalNotes: "",
-      error: "Failed to parse LLM response",
-    };
-  }
 }
 
 function parseSchemaResult(raw: string, language: string): TranslationResult {
@@ -105,15 +69,13 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
     const results = await Promise.allSettled(
       targetLanguages.map(async (lang) => {
         const config = schemaConfigs[lang];
-        if (config) {
-          return parseSchemaResult(
-            await callLLMFullWithSchema(config.systemPrompt, sourceText, outputSchema),
-            lang
-          );
+        if (!config) {
+          throw new Error(`Unsupported language: ${lang}`);
         }
-        const systemPrompt = getSystemPrompt(lang);
-        const raw = await callLLMFull(systemPrompt, sourceText);
-        return parseTranslationResult(raw, lang);
+        return parseSchemaResult(
+          await callLLMFullWithSchema(config.systemPrompt, sourceText, outputSchema),
+          lang
+        );
       })
     );
 
@@ -177,27 +139,18 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
     const settled = await Promise.allSettled(
       targetLanguages.map(async (lang): Promise<TranslationResult> => {
         const config = schemaConfigs[lang];
-        if (config) {
-          const raw = await streamLLMFullWithSchema(
-            config.systemPrompt,
-            sourceText,
-            outputSchema,
-            (chunk) => sendEvent("chunk", { language: lang, chunk })
-          );
-          const result = parseSchemaResult(raw, lang);
-          sendEvent("result", { language: lang, result });
-          return result;
-        } else {
-          const systemPrompt = getSystemPrompt(lang);
-          const raw = await streamLLMFull(
-            systemPrompt,
-            sourceText,
-            (chunk) => sendEvent("chunk", { language: lang, chunk })
-          );
-          const result = parseTranslationResult(raw, lang);
-          sendEvent("result", { language: lang, result });
-          return result;
+        if (!config) {
+          throw new Error(`Unsupported language: ${lang}`);
         }
+        const raw = await streamLLMFullWithSchema(
+          config.systemPrompt,
+          sourceText,
+          outputSchema,
+          (chunk) => sendEvent("chunk", { language: lang, chunk })
+        );
+        const result = parseSchemaResult(raw, lang);
+        sendEvent("result", { language: lang, result });
+        return result;
       })
     );
 
