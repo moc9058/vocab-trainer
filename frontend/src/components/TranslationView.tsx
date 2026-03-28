@@ -1,0 +1,467 @@
+import { useState, useEffect } from "react";
+import { useI18n } from "../i18n/context";
+import { translateStream, getTranslationHistory } from "../api/translation";
+import type { TranslationEntry, TranslationResult, SentenceAnalysis, SentenceAnalysisResult } from "../types";
+
+interface Props {
+  mode: "new" | "resume";
+}
+
+const KNOWN_LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "ja", label: "日本語" },
+  { code: "ko", label: "한국어" },
+  { code: "zh", label: "中文" },
+];
+
+export default function TranslationView({ mode }: Props) {
+  const { t } = useI18n();
+  const [history, setHistory] = useState<TranslationEntry[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const [phase, setPhase] = useState<"input" | "loading" | "results">("input");
+  const [inputText, setInputText] = useState("");
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(["ja"]);
+  const [otherChecked, setOtherChecked] = useState(false);
+  const [otherLanguage, setOtherLanguage] = useState("");
+  const [activeTab, setActiveTab] = useState(0);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [streamingChunks, setStreamingChunks] = useState<Map<string, string>>(new Map());
+  const [streamResults, setStreamResults] = useState<Map<string, TranslationResult>>(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { entries } = await getTranslationHistory(1, 50);
+        if (!cancelled) {
+          setHistory(entries);
+          if (mode === "resume" && entries.length > 0) {
+            setHistoryIndex(0);
+            setPhase("results");
+            setActiveTab(0);
+          }
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) setLoadingHistory(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [mode]);
+
+  function toggleLanguage(code: string) {
+    setSelectedLanguages((prev) =>
+      prev.includes(code) ? prev.filter((l) => l !== code) : [...prev, code]
+    );
+  }
+
+  function getTargetLanguages(): string[] {
+    const langs = [...selectedLanguages];
+    if (otherChecked && otherLanguage.trim()) {
+      langs.push(otherLanguage.trim());
+    }
+    return langs;
+  }
+
+  const canSubmit = inputText.trim().length > 0 && getTargetLanguages().length > 0;
+
+  async function handleTranslate() {
+    if (!canSubmit) return;
+    setPhase("loading");
+    setStreamingChunks(new Map());
+    setStreamResults(new Map());
+
+    try {
+      await translateStream(inputText.trim(), getTargetLanguages(), {
+        onStart(language) {
+          setStreamingChunks((prev) => {
+            const next = new Map(prev);
+            next.set(language, "");
+            return next;
+          });
+        },
+        onChunk(language, chunk) {
+          setStreamingChunks((prev) => {
+            const next = new Map(prev);
+            next.set(language, (next.get(language) ?? "") + chunk);
+            return next;
+          });
+        },
+        onResult(language, result) {
+          setStreamResults((prev) => {
+            const next = new Map(prev);
+            next.set(language, result);
+            return next;
+          });
+          setStreamingChunks((prev) => {
+            const next = new Map(prev);
+            next.delete(language);
+            return next;
+          });
+        },
+        onDone(entry) {
+          setHistory((prev) => [entry, ...prev]);
+          setHistoryIndex(0);
+          setActiveTab(0);
+          setPhase("results");
+          setInputText("");
+          setStreamingChunks(new Map());
+          setStreamResults(new Map());
+        },
+      });
+    } catch (err) {
+      console.error("Translation failed:", err);
+      alert(String(err));
+      setPhase("input");
+    }
+  }
+
+  function handleNewTranslation() {
+    setPhase("input");
+    setInputText("");
+    setActiveTab(0);
+  }
+
+  function handlePrevious() {
+    if (historyIndex < history.length - 1) {
+      setHistoryIndex(historyIndex + 1);
+      setActiveTab(0);
+    }
+  }
+
+  function handleNext() {
+    if (historyIndex > 0) {
+      setHistoryIndex(historyIndex - 1);
+      setActiveTab(0);
+    }
+  }
+
+  const currentEntry = history[historyIndex] ?? null;
+
+  if (loadingHistory) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-400 border-t-transparent" />
+      </div>
+    );
+  }
+
+  // ===== INPUT PHASE =====
+  if (phase === "input") {
+    return (
+      <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-5">
+        <h2 className="text-lg font-bold text-gray-100">{t("sectionTranslation")}</h2>
+
+        <textarea
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          placeholder={t("enterTextPlaceholder")}
+          className="w-full rounded-lg border border-gray-600 bg-gray-800 px-4 py-3 text-gray-100 placeholder-gray-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-y"
+          rows={4}
+        />
+
+        <div>
+          <p className="mb-2 text-sm font-medium text-gray-400">{t("targetLanguagesLabel")}</p>
+          <div className="flex flex-wrap gap-2">
+            {KNOWN_LANGUAGES.map((lang) => (
+              <button
+                key={lang.code}
+                onClick={() => toggleLanguage(lang.code)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  selectedLanguages.includes(lang.code)
+                    ? "bg-violet-600 text-white"
+                    : "border border-gray-600 text-gray-400 hover:bg-gray-700"
+                }`}
+              >
+                {lang.label}
+              </button>
+            ))}
+            <button
+              onClick={() => setOtherChecked(!otherChecked)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                otherChecked
+                  ? "bg-violet-600 text-white"
+                  : "border border-gray-600 text-gray-400 hover:bg-gray-700"
+              }`}
+            >
+              {t("otherLanguage")}
+            </button>
+          </div>
+          {otherChecked && (
+            <input
+              type="text"
+              value={otherLanguage}
+              onChange={(e) => setOtherLanguage(e.target.value)}
+              placeholder={t("otherLanguagePlaceholder")}
+              className="mt-2 w-full rounded-lg border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-violet-500 focus:outline-none"
+            />
+          )}
+        </div>
+
+        <button
+          onClick={handleTranslate}
+          disabled={!canSubmit}
+          className={`w-full rounded-lg px-5 py-3 font-medium text-white transition-colors ${
+            canSubmit
+              ? "bg-violet-600 hover:bg-violet-500"
+              : "cursor-not-allowed bg-violet-600/40 text-white/50"
+          }`}
+        >
+          {t("translateAnalyze")}
+        </button>
+      </div>
+    );
+  }
+
+  // ===== LOADING PHASE =====
+  if (phase === "loading") {
+    return (
+      <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-4">
+        <h2 className="text-lg font-bold text-gray-100">{t("translating")}</h2>
+
+        {getTargetLanguages().map((lang) => {
+          const knownLang = KNOWN_LANGUAGES.find((l) => l.code === lang);
+          const label = knownLang?.label ?? lang;
+          const completed = streamResults.get(lang);
+          const chunks = streamingChunks.get(lang);
+          const isStreaming = chunks !== undefined && !completed;
+
+          if (completed) {
+            // Completed
+            return (
+              <div key={lang} className="rounded-lg bg-gray-800/60 p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-green-400 text-xs">&#10003;</span>
+                  <p className="text-xs text-violet-400 font-semibold">{label}</p>
+                </div>
+                {completed.analysis ? (
+                  <p className="text-sm text-gray-300">
+                    {completed.analysis.sentences.map((s) => s.text).join(" ")}
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-300">{completed.translation}</p>
+                )}
+              </div>
+            );
+          }
+
+          if (isStreaming) {
+            // Actively streaming
+            return (
+              <div key={lang} className="rounded-lg bg-gray-800/60 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="h-3 w-3 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
+                  <p className="text-xs text-violet-400 font-semibold">{label}</p>
+                </div>
+                {chunks && (
+                  <p className="text-sm text-gray-400 font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
+                    {chunks.slice(-500)}
+                  </p>
+                )}
+              </div>
+            );
+          }
+
+          // Not started yet
+          return (
+            <div key={lang} className="rounded-lg bg-gray-800/30 p-4">
+              <p className="text-xs text-gray-500">
+                {label} — waiting...
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // ===== RESULTS PHASE =====
+  if (!currentEntry) {
+    setPhase("input");
+    return null;
+  }
+
+  const result = currentEntry.results[activeTab];
+
+  return (
+    <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-4">
+      {/* Navigation */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handleNewTranslation}
+          className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 transition-colors"
+        >
+          {t("newTranslation")}
+        </button>
+        <div className="flex-1" />
+        {historyIndex < history.length - 1 && (
+          <button
+            onClick={handlePrevious}
+            className="rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+          >
+            {t("previous")}
+          </button>
+        )}
+        {historyIndex > 0 && (
+          <button
+            onClick={handleNext}
+            className="rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+          >
+            {t("next")}
+          </button>
+        )}
+      </div>
+
+      {/* Source text */}
+      <div className="rounded-lg bg-gray-800/60 p-4">
+        <p className="text-sm text-gray-400 mb-1">Source</p>
+        <p className="text-gray-100">{currentEntry.sourceText}</p>
+      </div>
+
+      {/* Language tabs */}
+      {currentEntry.results.length > 1 && (
+        <div className="flex gap-1 rounded-lg bg-gray-800/40 p-1">
+          {currentEntry.results.map((r, i) => {
+            const knownLang = KNOWN_LANGUAGES.find((l) => l.code === r.language);
+            const label = knownLang?.label ?? r.language;
+            return (
+              <button
+                key={r.language}
+                onClick={() => setActiveTab(i)}
+                className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeTab === i
+                    ? "bg-violet-600 text-white"
+                    : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Result content */}
+      {result && (
+        <div className="space-y-4">
+          {result.error ? (
+            <div className="rounded-lg bg-red-900/30 border border-red-700 p-4">
+              <p className="text-red-300">{t("translationError")}</p>
+              <p className="mt-1 text-sm text-red-400">{result.error}</p>
+            </div>
+          ) : result.analysis ? (
+            <AnalysisView analysis={result.analysis} />
+          ) : (
+            <LegacyResultView result={result} />
+          )}
+        </div>
+      )}
+
+      {/* History position indicator */}
+      {history.length > 1 && (
+        <p className="text-center text-xs text-gray-500">
+          {history.length - historyIndex} / {history.length}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function LegacyResultView({ result }: { result: TranslationResult }) {
+  const { t } = useI18n();
+  return (
+    <>
+      <div className="rounded-lg bg-gray-800/60 p-4">
+        <p className="text-lg text-gray-100 leading-relaxed">{result.translation}</p>
+      </div>
+      {result.grammarBreakdown && (
+        <div className="rounded-lg bg-gray-800/60 p-4">
+          <h4 className="mb-2 text-sm font-semibold text-violet-400">{t("translationGrammarBreakdown")}</h4>
+          <p className="text-sm text-gray-300 whitespace-pre-wrap">{result.grammarBreakdown}</p>
+        </div>
+      )}
+      {result.keyVocabulary.length > 0 && (
+        <div className="rounded-lg bg-gray-800/60 p-4">
+          <h4 className="mb-2 text-sm font-semibold text-violet-400">{t("translationKeyVocabulary")}</h4>
+          <div className="space-y-1">
+            {result.keyVocabulary.map((v, i) => (
+              <div key={i} className="flex gap-2 text-sm">
+                <span className="font-medium text-gray-200">{v.term}</span>
+                <span className="text-gray-400">—</span>
+                <span className="text-gray-400">{v.meaning}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {result.alternativeExpressions.length > 0 && (
+        <div className="rounded-lg bg-gray-800/60 p-4">
+          <h4 className="mb-2 text-sm font-semibold text-violet-400">{t("translationAlternatives")}</h4>
+          <ul className="space-y-1">
+            {result.alternativeExpressions.map((expr, i) => (
+              <li key={i} className="text-sm text-gray-300">• {expr}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {result.culturalNotes && (
+        <div className="rounded-lg bg-gray-800/60 p-4">
+          <h4 className="mb-2 text-sm font-semibold text-violet-400">{t("translationCulturalNotes")}</h4>
+          <p className="text-sm text-gray-300 whitespace-pre-wrap">{result.culturalNotes}</p>
+        </div>
+      )}
+    </>
+  );
+}
+
+function SentenceCard({ sentence }: { sentence: SentenceAnalysis }) {
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg bg-gray-800/60 p-4">
+        <p className="text-gray-100 font-medium">{sentence.text}</p>
+      </div>
+
+      {sentence.components.length > 0 && (
+        <div className="rounded-lg bg-gray-800/60 p-4 overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-gray-700 text-gray-500">
+                <th className="text-left py-1 pr-3">Surface</th>
+                <th className="text-left py-1 pr-3">Reading</th>
+                <th className="text-left py-1 pr-3">Base Form</th>
+                <th className="text-left py-1 pr-3">POS</th>
+                <th className="text-left py-1 pr-3">Meaning</th>
+                <th className="text-left py-1">Explanation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sentence.components.map((comp) => (
+                <tr key={comp.componentId} className="border-b border-gray-800">
+                  <td className="py-1.5 pr-3 font-medium text-gray-200">{comp.surface}</td>
+                  <td className="py-1.5 pr-3 text-gray-400">{comp.reading ?? "—"}</td>
+                  <td className="py-1.5 pr-3 text-gray-400">{comp.baseForm ?? "—"}</td>
+                  <td className="py-1.5 pr-3">
+                    <span className="rounded bg-gray-700 px-1 py-0.5 text-gray-300">{comp.partOfSpeech}</span>
+                  </td>
+                  <td className="py-1.5 pr-3 text-gray-300">{comp.meaning}</td>
+                  <td className="py-1.5 text-gray-400">{comp.explanation}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AnalysisView({ analysis }: { analysis: SentenceAnalysisResult }) {
+  return (
+    <div className="space-y-6">
+      {analysis.sentences.map((sentence) => (
+        <SentenceCard key={sentence.sentenceId} sentence={sentence} />
+      ))}
+    </div>
+  );
+}

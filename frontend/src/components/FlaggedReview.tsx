@@ -97,7 +97,7 @@ export default function FlaggedReview({ language, onBack, transliterationMap = {
             {(currentWord!.definitions ?? []).map((m, mi) => (
               <div key={mi}>
                 {m.partOfSpeech && <p className="text-xs text-gray-500 italic">{m.partOfSpeech}</p>}
-                {Object.entries(m.text).map(([lang, text]) => (
+                {Object.entries(m.text || {}).map(([lang, text]) => (
                   <p key={lang} className="text-xl text-green-400">
                     <span className="text-sm text-gray-400">{LANG_DISPLAY[lang] || lang}: </span>{text}
                   </p>

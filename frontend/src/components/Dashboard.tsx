@@ -14,9 +14,11 @@ import GrammarQuizTaking from "./GrammarQuizTaking";
 import GrammarFilterModal from "./GrammarFilterModal";
 import SmartAddWordModal from "./SmartAddWordModal";
 import GrammarFormModal from "./GrammarFormModal";
+import TranslationView from "./TranslationView";
 import LanguageSelectModal from "./LanguageSelectModal";
 import LevelSelectModal from "./LevelSelectModal";
 import QuizFilterModal from "./QuizFilterModal";
+import { getTranslationHistory } from "../api/translation";
 import type { QuizSession, GrammarQuizSession } from "../types";
 
 export default function Dashboard() {
@@ -45,6 +47,9 @@ export default function Dashboard() {
   // Smart Add Word / Grammar state
   const [showSmartAdd, setShowSmartAdd] = useState(false);
   const [grammarFormLanguage, setGrammarFormLanguage] = useState<string | null>(null);
+  // Translation state
+  const [translationMode, setTranslationMode] = useState<"new" | "resume" | null>(null);
+  const [hasTranslationHistory, setHasTranslationHistory] = useState(false);
 
   // Fetch pinyin map when a quiz starts or browsing begins
   const activeLang = activeQuiz?.language ?? browsingLanguage ?? flaggedReviewLanguage;
@@ -57,6 +62,13 @@ export default function Dashboard() {
       setPinyinMap({});
     }
   }, [activeLang]);
+
+  // Check for translation history on mount
+  useEffect(() => {
+    getTranslationHistory(1, 1)
+      .then(({ total }) => setHasTranslationHistory(total > 0))
+      .catch(() => {});
+  }, [translationMode]);
 
   // Re-fetch pinyin map every 30s to pick up newly generated words
   useEffect(() => {
@@ -181,6 +193,7 @@ export default function Dashboard() {
     setShowGrammarFilterModal(null);
     setShowSmartAdd(false);
     setGrammarFormLanguage(null);
+    setTranslationMode(null);
   }
 
   function handleAddWord() {
@@ -282,7 +295,7 @@ export default function Dashboard() {
     }
   }
 
-  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal || showFlaggedLanguageModal || activeGrammarQuiz || browsingGrammarLanguage || showGrammarLanguageModal || showGrammarBrowseLanguageModal || showGrammarFilterModal || showSmartAdd || grammarFormLanguage);
+  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal || showFlaggedLanguageModal || activeGrammarQuiz || browsingGrammarLanguage || showGrammarLanguageModal || showGrammarBrowseLanguageModal || showGrammarFilterModal || showSmartAdd || grammarFormLanguage || translationMode);
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-900">
@@ -447,9 +460,12 @@ export default function Dashboard() {
             onBack={() => setBrowsingLanguage(null)}
             transliterationMap={transliterationMap}
           />
+        ) : translationMode ? (
+          <TranslationView mode={translationMode} />
         ) : (
           <EmptyState
             onResume={(session) => setActiveQuiz(session)}
+            onResumeGrammar={(session) => setActiveGrammarQuiz(session)}
             onStartNew={handleStartQuiz}
             onBrowse={handleBrowse}
             onFlaggedReview={handleFlaggedReview}
@@ -457,6 +473,9 @@ export default function Dashboard() {
             onBrowseGrammar={handleBrowseGrammar}
             onAddWord={handleAddWord}
             onAddGrammar={handleAddGrammar}
+            onStartTranslation={() => setTranslationMode("new")}
+            onResumeTranslation={() => setTranslationMode("resume")}
+            hasTranslationHistory={hasTranslationHistory}
           />
         )}
       </main>

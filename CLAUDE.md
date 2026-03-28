@@ -53,9 +53,10 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `routes/grammar.ts` — CRUD for grammar items, chapters, subchapters
   - `routes/grammar-quiz.ts` — grammar quiz with self-grading, two modes (existing examples / LLM-generated)
   - `routes/grammar-progress.ts` — per-component grammar progress
+  - `routes/translation.ts` — translation/analysis with parallel LLM calls, history persistence
 - **Database**: `firestore.ts` — Google Cloud Firestore abstraction layer
-- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM with JSON mode, validateWord, segmentBatch); config loaded from `.env` (local) or Firestore `config/llm` (deployed)
-- **Types**: `types.ts` — shared interfaces (Word, VocabFile, QuizSession, WordProgress, etc.)
+- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, validateWord, segmentBatch); `callLLM` uses MINI deployment, `callLLMFull` uses FULL deployment (for translation); config loaded from `.env` (local) or Firestore `config/llm` (deployed)
+- **Types**: `types.ts` — shared interfaces (Word, VocabFile, QuizSession, WordProgress, TranslationEntry, etc.)
 - Route handlers use Fastify generics for type-safe Params/Querystring/Body and JSON schema validation
 - Errors via `@fastify/sensible`: `reply.notFound()`, `reply.badRequest()`, `reply.conflict()`
 
@@ -78,6 +79,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `grammar_items` — flattened grammar components (denormalized chapter/subchapter info)
   - `grammar_progress` — per-component grammar progress
   - `grammar_quiz_sessions` — one grammar quiz session per language
+  - `translation_history` — translation/analysis entries with structured LLM results
   - `config` — app configuration (e.g., `config/llm` stores Azure OpenAI keys)
 - **Local files** (for migration/export):
   - Vocabulary: `backend/DB/word/{language}.json` — one file per language (e.g. `chinese.json`)
@@ -117,11 +119,15 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 - `GET /api/grammar-quiz/session/language/:language` — get current grammar quiz session
 - `GET /api/grammar-progress/:language` — all grammar progress
 - `DELETE /api/grammar-progress/:language` — reset grammar progress
+- `POST /api/translation/translate` — parallel LLM translation/analysis (uses FULL model)
+- `GET /api/translation/history` — paginated translation history
+- `DELETE /api/translation/history` — clear all translation history
+- `DELETE /api/translation/history/:id` — delete single translation entry
 
 ### Frontend (`frontend/src/`)
 - **Entry**: `main.tsx` → `App.tsx` → `Dashboard.tsx`
 - **State**: React hooks + Context API (i18n only via `i18n/context.tsx`)
-- **API layer**: `api/client.ts` (generic fetchJson/postJson), `api/quiz.ts`, `api/vocab.ts`, `api/grammar.ts`
+- **API layer**: `api/client.ts` (generic fetchJson/postJson), `api/quiz.ts`, `api/vocab.ts`, `api/grammar.ts`, `api/translation.ts`
 - **Components**:
   - `Dashboard.tsx` — main layout with header, modals, quiz/word list/grammar orchestration
   - `LanguageSelectModal.tsx` — language picker modal
@@ -134,7 +140,8 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
   - `GrammarQuizTaking.tsx` — grammar quiz flashcard UI (display sentence → show answer → self-grade)
   - `GrammarFormModal.tsx` — add/edit grammar component with chapter/subchapter/topic/description/terms/examples
   - `FlaggedReview.tsx` — review flagged words
-  - `EmptyState.tsx` — home screen with word quiz, grammar quiz, browse, add word/grammar buttons
+  - `TranslationView.tsx` — translation/analysis UI with language selection, structured results, and history navigation
+  - `EmptyState.tsx` — home screen with vocabulary, translation, speaking & writing (placeholder), and grammar sections
 - **i18n**: `i18n/translations.ts` — English, Japanese, and Korean, keyed by `TranslationKey` type
 - **Styling**: Tailwind CSS 4 utility classes only
 - **Proxy**: Vite proxies `/api` requests to `localhost:3000` in dev

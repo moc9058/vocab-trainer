@@ -360,7 +360,7 @@ function WordCard({
   onDelete: () => void;
 }) {
   const { t } = useI18n();
-  const defText = word.definitions.map((m) => Object.values(m.text).join("; ")).join(" | ");
+  const defText = word.definitions.map((m) => Object.values(m.text || {}).join("; ")).join(" | ");
 
   return (
     <div
@@ -465,7 +465,7 @@ function WordRow({
   onDelete: () => void;
 }) {
   const { t } = useI18n();
-  const defText = word.definitions.map((m) => Object.values(m.text).join("; ")).join(" | ");
+  const defText = word.definitions.map((m) => Object.values(m.text || {}).join("; ")).join(" | ");
 
   return (
     <>

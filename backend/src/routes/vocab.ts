@@ -206,7 +206,7 @@ Return a JSON object:
 {
   "term": "the Chinese word",
   "transliteration": "pinyin with tone marks",
-  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase", "text": { "ja": "...", "en": "...", "ko": "..." } }],
+  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { "ja": "...", "en": "...", "ko": "..." } }],
   "examples": [{ "sentence": "Chinese sentence", "translation": "English translation", "segments": [{ "text": "word", "pinyin": "pīnyīn" }] }],
   "topics": ["..."],
   "notes": "brief usage notes"
@@ -227,7 +227,7 @@ ${definitionGuidelines}
 Return a JSON object:
 {
   "term": "the ${language} word",
-  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|pronoun|interjection|idiom|phrase", "text": { "ja": "...", "en": "...", "ko": "..." } }],
+  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { "ja": "...", "en": "...", "ko": "..." } }],
   "examples": [{ "sentence": "${language} sentence using the word"${language === "english" ? "" : ', "translation": "English translation"'} }],
   "topics": ["..."],
   "notes": "brief usage notes"

@@ -165,7 +165,11 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
     - `classifier` — measure word used with nouns (common in Chinese, Japanese)
     - `numeral` — number word (e.g. one, two, three)
     - `onomatopoeia` — sound-imitating word (e.g. 哗哗, 咚咚, bang)
-    - `phrase` — a multi-word expression or idiom
+    - `set phrase` — fixed, conventionalized expression (e.g. 不客气, "by the way")
+    - `phrasal verb` — verb + particle with non-compositional meaning (e.g. "give up", 放下)
+    - `collocation` — commonly co-occurring word combination (e.g. 不太, "take a shower")
+    - `proverb` — saying, maxim, or proverb (e.g. 三人行必有我师)
+    - `greeting` — social formula phrase (e.g. 你好, おはよう)
   - **`text`** — An object keyed by ISO 639-1 language code (`ja`, `en`, `ko`, etc.), providing the definition in multiple languages.
 - **`examples`** — Array of example sentences with translations (primary language is Japanese).
 - **`topics`** — Topic tags for categorizing and filtering words. Possible values:
@@ -208,7 +212,8 @@ vocab-trainer/
 │   │       ├── flagged.ts       # /api/flagged
 │   │       ├── grammar.ts       # /api/grammar
 │   │       ├── grammar-quiz.ts  # /api/grammar-quiz
-│   │       └── grammar-progress.ts # /api/grammar-progress
+│   │       ├── grammar-progress.ts # /api/grammar-progress
+│   │       └── translation.ts  # /api/translation
 │   └── DB/                      # Vocabulary and grammar JSON files
 ├── frontend/
 │   ├── package.json
@@ -226,7 +231,8 @@ vocab-trainer/
 │       │   ├── quiz.ts          # Quiz API wrappers
 │       │   ├── vocab.ts         # Vocabulary API wrappers
 │       │   ├── grammar.ts       # Grammar & grammar quiz API wrappers
-│       │   └── flagged.ts       # Flagged words API wrappers
+│       │   ├── flagged.ts       # Flagged words API wrappers
+│       │   └── translation.ts   # Translation API wrappers
 │       ├── components/
 │       │   ├── Dashboard.tsx     # Main layout with quiz/browse orchestration
 │       │   ├── QuizTaking.tsx    # Active quiz interface
@@ -242,6 +248,7 @@ vocab-trainer/
 │       │   ├── GrammarFilterModal.tsx # Grammar quiz filters
 │       │   ├── GrammarQuizTaking.tsx  # Grammar quiz flashcard UI
 │       │   ├── GrammarFormModal.tsx   # Add/edit grammar component
+│       │   ├── TranslationView.tsx  # Translation/analysis UI with history
 │       │   └── EmptyState.tsx
 │       └── i18n/                # Internationalization (ja, en, ko)
 ```
@@ -649,6 +656,61 @@ Returns the in-progress or completed grammar quiz session, or `404` if none exis
 
 ---
 
+### Translation
+
+#### `POST /api/translation/translate` — Translate and analyze text
+
+Runs parallel LLM calls (one per target language, using the FULL model) and returns structured analysis. Results are saved to Firestore.
+
+**Body:**
+```json
+{
+  "sourceText": "今天天气很好",
+  "targetLanguages": ["en", "ja", "ko"]
+}
+```
+
+`targetLanguages` accepts ISO 639-1 codes for known languages (`en`, `ja`, `ko`, `zh`) or free-text language names (e.g., `"French"`, `"Spanish"`).
+
+**Response:** `TranslationEntry`
+```json
+{
+  "id": "abc123",
+  "sourceText": "今天天气很好",
+  "targetLanguages": ["en", "ja"],
+  "results": [
+    {
+      "language": "en",
+      "translation": "The weather is nice today",
+      "grammarBreakdown": "...",
+      "keyVocabulary": [{ "term": "天气", "meaning": "weather" }],
+      "alternativeExpressions": ["Today's weather is great"],
+      "culturalNotes": "..."
+    }
+  ],
+  "createdAt": "2026-03-28T12:00:00.000Z"
+}
+```
+
+#### `GET /api/translation/history` — Get translation history
+
+| Query Param | Type   | Default | Description        |
+| ----------- | ------ | ------- | ------------------ |
+| `page`      | number | 1       | Page number        |
+| `limit`     | number | 20      | Items per page     |
+
+**Response:** `{ entries: TranslationEntry[], total: number }`
+
+#### `DELETE /api/translation/history` — Clear all translation history
+
+**Response:** `{ ok: true }`
+
+#### `DELETE /api/translation/history/:id` — Delete single translation entry
+
+**Response:** `{ ok: true }`, or `404` if not found.
+
+---
+
 ## Frontend
 
 React 19 single-page application for taking vocabulary and grammar quizzes. Built with Vite 6 and styled with Tailwind CSS 4. Supports Japanese, English, and Korean UI (default Japanese) via a custom i18n context (no external library).
@@ -670,7 +732,8 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 | **GrammarFilterModal**  | Modal to select chapter, subchapter, display language, and quiz mode filters before starting a grammar quiz. Quiz mode selector is hidden for Chinese (always LLM). |
 | **GrammarQuizTaking**   | Grammar quiz flashcard UI — displays a sentence (with grammar term shown for Chinese), reveals the answer, and allows self-grading (correct/incorrect). |
 | **GrammarFormModal**    | Modal for adding or editing grammar components with chapter, subchapter, topic (required), description (optional), terms (optional, individual input per term), and examples (optional). |
-| **Home Page (EmptyState)** | Home screen that checks for in-progress quiz sessions across all languages. Shows a resume card with progress (e.g. "12 / 30 answered") if an active session exists, plus buttons for word quiz, grammar quiz, browse words, browse grammar, and add word/grammar. |
+| **TranslationView**    | Translation/analysis UI. Input text, select target languages (EN/JA/KO/ZH/Other), get structured LLM results (translation, grammar breakdown, key vocabulary, alternative expressions, cultural notes). History persisted to Firestore with previous/next navigation. |
+| **Home Page (EmptyState)** | Home screen with four sections: Vocabulary (blue), Translation (violet), Speaking & Writing (teal, placeholder), Grammar (emerald). Checks for in-progress quiz sessions and translation history. |
 
 ### API Integration
 
@@ -679,6 +742,7 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 - **`api/vocab.ts`** — `getWords(language, params)`, `getFilters(language)`, `getTransliterationMap(language)`, `updateWord(language, wordId, updates)`, `deleteWord(language, wordId)`, `smartAddWord(language, data)`.
 - **`api/grammar.ts`** — `getGrammarChapters(language)`, `getGrammarItems(language, filters, page, limit)`, `getSubchapters(language, chapters)`, `createGrammarItem(language, item)`, `updateGrammarItem(language, componentId, updates)`, `deleteGrammarItem(language, componentId)`, `startGrammarQuiz(opts)`, `answerGrammarQuestion(opts)`, `getCurrentGrammarSession(language)`, `getGrammarProgress(language)`, `resetGrammarProgress(language)`.
 - **`api/flagged.ts`** — `getFlaggedWords(language)`, `getFlaggedWordCount(language)`, `flagWord(language, wordId)`, `unflagWord(language, wordId)`.
+- **`api/translation.ts`** — `translate(sourceText, targetLanguages)`, `getTranslationHistory(page, limit)`, `deleteTranslationHistory()`, `deleteTranslationEntryById(id)`.
 - **Dev proxy:** Vite proxies `/api/*` to `http://localhost:3000` so the frontend dev server can reach the backend.
 
 ### Internationalization
@@ -714,6 +778,7 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `grammar_items`      | Flattened grammar components (denormalized chapter/subchapter) |
 | `grammar_progress`   | Per-component grammar progress                        |
 | `grammar_quiz_sessions` | One grammar quiz session per language              |
+| `translation_history`  | Translation/analysis entries with structured LLM results |
 | `config`               | App configuration (e.g., `config/llm` stores Azure OpenAI keys) |
 
 Local JSON files under `backend/DB/` serve as the source for the initial Firestore migration (run with `./migrate.sh` or `./deploy.sh ... --migrate`).
@@ -727,7 +792,8 @@ Local JSON files under `backend/DB/` serve as the source for the initial Firesto
 | `FIRESTORE_DATABASE_ID` | `vocab-database` | Firestore database ID            |
 | `AZURE_OPENAI_ENDPOINT` | —               | Azure OpenAI endpoint (falls back to Firestore `config/llm`) |
 | `AZURE_OPENAI_API_KEY`  | —               | Azure OpenAI API key (falls back to Firestore `config/llm`) |
-| `AZURE_OPENAI_DEPLOYMENT_NAME` | —        | Azure OpenAI deployment name (falls back to Firestore `config/llm`) |
+| `AZURE_OPENAI_DEPLOYMENT_MINI` | —        | Azure OpenAI MINI deployment name for fast tasks (falls back to Firestore `config/llm`) |
+| `AZURE_OPENAI_DEPLOYMENT_FULL` | —        | Azure OpenAI FULL deployment name for translation/analysis (falls back to Firestore `config/llm`) |
 | `AZURE_OPENAI_API_VERSION` | —            | Azure OpenAI API version (falls back to Firestore `config/llm`) |
 | `FIRESTORE_PROJECT`    | —                | Google Cloud project ID (required for Firestore in deployed environments) |
 

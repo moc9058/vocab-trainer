@@ -13,6 +13,8 @@ import type {
   GrammarComponent,
   GrammarProgress,
   GrammarQuizSession,
+  TranslationEntry,
+  TranslationResult,
 } from "./types.js";
 
 const db = new Firestore({
@@ -851,6 +853,54 @@ export async function saveGrammarQuizSession(session: GrammarQuizSession): Promi
   delete data.sessionId;
   const clean = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
   await grammarQuizSessions.doc(session.language).set(clean);
+}
+
+// ========== Translation History ==========
+
+const translationHistory = db.collection("translation_history");
+
+export async function saveTranslationEntry(
+  entry: Omit<TranslationEntry, "id">
+): Promise<TranslationEntry> {
+  const docRef = translationHistory.doc();
+  await docRef.set(entry);
+  return { id: docRef.id, ...entry };
+}
+
+export async function getTranslationHistory(
+  page = 1,
+  limit = 20
+): Promise<{ entries: TranslationEntry[]; total: number }> {
+  const countSnap = await translationHistory.count().get();
+  const total = countSnap.data().count;
+  const offset = (page - 1) * limit;
+  const snap = await translationHistory
+    .orderBy("createdAt", "desc")
+    .offset(offset)
+    .limit(limit)
+    .get();
+  const entries = snap.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  })) as TranslationEntry[];
+  return { entries, total };
+}
+
+export async function deleteTranslationEntry(id: string): Promise<boolean> {
+  const doc = await translationHistory.doc(id).get();
+  if (!doc.exists) return false;
+  await translationHistory.doc(id).delete();
+  return true;
+}
+
+export async function clearTranslationHistory(): Promise<void> {
+  const snap = await translationHistory.get();
+  const BATCH_LIMIT = 500;
+  for (let i = 0; i < snap.docs.length; i += BATCH_LIMIT) {
+    const batch = db.batch();
+    snap.docs.slice(i, i + BATCH_LIMIT).forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+  }
 }
 
 export { db };

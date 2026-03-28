@@ -13,12 +13,9 @@ config({ path: resolve(__dirname, "../../.env") });
 let client: AzureOpenAI | null = null;
 let deploymentMini = "";
 let deploymentFull = "";
-let configLoaded = false;
+let initPromise: Promise<void> | null = null;
 
-async function ensureLLMConfig(): Promise<void> {
-  if (configLoaded) return;
-  configLoaded = true;
-
+async function loadLLMConfig(): Promise<void> {
   // If all env vars are already set (from .env), skip Firestore
   if (
     process.env.AZURE_OPENAI_API_KEY &&
@@ -58,33 +55,38 @@ async function ensureLLMConfig(): Promise<void> {
   }
 }
 
-export async function createAzureClient(): Promise<AzureOpenAI> {
-  if (!client) {
-    await ensureLLMConfig();
-    client = new AzureOpenAI({
-      apiKey: process.env.AZURE_OPENAI_API_KEY,
-      endpoint: process.env.AZURE_OPENAI_ENDPOINT,
-      apiVersion: process.env.AZURE_OPENAI_API_VERSION,
-      maxRetries: 5,
-    });
-    deploymentMini = process.env.AZURE_OPENAI_DEPLOYMENT_MINI!;
-    deploymentFull = process.env.AZURE_OPENAI_DEPLOYMENT_FULL ?? "";
+// Single shared promise — all concurrent callers await the same initialization
+async function ensureInit(): Promise<void> {
+  if (!initPromise) {
+    initPromise = (async () => {
+      await loadLLMConfig();
+      client = new AzureOpenAI({
+        apiKey: process.env.AZURE_OPENAI_API_KEY,
+        endpoint: process.env.AZURE_OPENAI_ENDPOINT,
+        apiVersion: process.env.AZURE_OPENAI_API_VERSION,
+        maxRetries: 5,
+      });
+      deploymentMini = process.env.AZURE_OPENAI_DEPLOYMENT_MINI!;
+      deploymentFull = process.env.AZURE_OPENAI_DEPLOYMENT_FULL ?? "";
+    })();
   }
-  return client;
+  return initPromise;
+}
+
+export async function createAzureClient(): Promise<AzureOpenAI> {
+  await ensureInit();
+  return client!;
 }
 
 export async function getDeploymentMini(): Promise<string> {
-  if (!deploymentMini) {
-    await ensureLLMConfig();
-    deploymentMini = process.env.AZURE_OPENAI_DEPLOYMENT_MINI!;
-  }
+  await ensureInit();
   return deploymentMini;
 }
 
 export async function getDeploymentFull(): Promise<string> {
+  await ensureInit();
   if (!deploymentFull) {
-    await ensureLLMConfig();
-    deploymentFull = process.env.AZURE_OPENAI_DEPLOYMENT_FULL!;
+    throw new Error("AZURE_OPENAI_DEPLOYMENT_FULL is not configured");
   }
   return deploymentFull;
 }
@@ -100,6 +102,95 @@ export async function callLLM(systemPrompt: string, userPrompt: string): Promise
     response_format: { type: "json_object" },
   });
   return response.choices[0]?.message?.content ?? "";
+}
+
+export async function callLLMFull(systemPrompt: string, userPrompt: string): Promise<string> {
+  const cl = await createAzureClient();
+  const response = await cl.chat.completions.create({
+    model: await getDeploymentFull(),
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+  });
+  return response.choices[0]?.message?.content ?? "";
+}
+
+export async function callLLMFullWithSchema(
+  systemPrompt: string,
+  userPrompt: string,
+  jsonSchema: Record<string, unknown>
+): Promise<string> {
+  const cl = await createAzureClient();
+  const response = await cl.chat.completions.create({
+    model: await getDeploymentFull(),
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: jsonSchema,
+    } as unknown as { type: "json_object" },
+  });
+  return response.choices[0]?.message?.content ?? "";
+}
+
+export async function streamLLMFull(
+  systemPrompt: string,
+  userPrompt: string,
+  onChunk: (chunk: string) => void
+): Promise<string> {
+  const cl = await createAzureClient();
+  const stream = await cl.chat.completions.create({
+    model: await getDeploymentFull(),
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: { type: "json_object" },
+    stream: true,
+  });
+  let full = "";
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content ?? "";
+    if (delta) {
+      full += delta;
+      onChunk(delta);
+    }
+  }
+  return full;
+}
+
+export async function streamLLMFullWithSchema(
+  systemPrompt: string,
+  userPrompt: string,
+  jsonSchema: Record<string, unknown>,
+  onChunk: (chunk: string) => void
+): Promise<string> {
+  const cl = await createAzureClient();
+  const stream = await cl.chat.completions.create({
+    model: await getDeploymentFull(),
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: jsonSchema,
+    } as unknown as { type: "json_object" },
+    stream: true,
+  });
+  let full = "";
+  for await (const chunk of stream) {
+    const delta = chunk.choices[0]?.delta?.content ?? "";
+    if (delta) {
+      full += delta;
+      onChunk(delta);
+    }
+  }
+  return full;
 }
 
 export function stripMarkdownFences(text: string): string {

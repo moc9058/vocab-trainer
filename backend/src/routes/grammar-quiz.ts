@@ -266,7 +266,7 @@ Return a JSON object with a "words" array:
 [{
   "term": "the word (keep as provided)",
   "transliteration": "keep as provided",
-  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase", "text": { "ja": "...", "en": "...", "ko": "..." } }],
+  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { "ja": "...", "en": "...", "ko": "..." } }],
   "topics": ["..."],
   "notes": "brief usage notes or empty string"
 }]

@@ -23,7 +23,7 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
     if (word?.definitions && word.definitions.length > 0) {
       return word.definitions.map((m) => ({
         partOfSpeech: m.partOfSpeech,
-        translations: Object.entries(m.text).map(([lang, text]) => ({ lang, text })),
+        translations: Object.entries(m.text || {}).map(([lang, text]) => ({ lang, text })),
       }));
     }
     return [{ partOfSpeech: "", translations: [{ lang: "en", text: "" }] }];

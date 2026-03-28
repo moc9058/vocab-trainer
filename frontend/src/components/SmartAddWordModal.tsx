@@ -24,7 +24,8 @@ const LANG_OPTIONS = [
 const CATEGORIES = [
   "noun", "verb", "adjective", "adverb", "preposition", "conjunction",
   "particle", "numeral", "classifier", "determiner", "pronoun",
-  "interjection", "idiom", "phrase",
+  "interjection", "idiom", "set phrase", "phrasal verb", "collocation",
+  "proverb", "greeting",
 ] as const;
 
 const ALL_TOPICS = [
@@ -134,7 +135,7 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
                   {w.transliteration && (
                     <span className="ml-1 text-gray-400">({w.transliteration})</span>
                   )}
-                  <span className="ml-1 text-gray-500">— {w.definitions.map((m) => Object.values(m.text).join("; ")).join(" | ")}</span>
+                  <span className="ml-1 text-gray-500">— {w.definitions.map((m) => Object.values(m.text || {}).join("; ")).join(" | ")}</span>
                 </li>
               ))}
             </ul>

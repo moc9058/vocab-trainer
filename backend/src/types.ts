@@ -182,3 +182,45 @@ export interface GrammarQuizSession {
   displayLanguage?: string;
   quizMode?: string;
 }
+
+// ========== Translation ==========
+
+export interface AnalysisComponent {
+  componentId: string;
+  surface: string;
+  baseForm: string | null;
+  reading: string | null;
+  partOfSpeech: string;
+  meaning: string;
+  explanation: string;
+}
+
+export interface SentenceAnalysis {
+  sentenceId: string;
+  text: string;
+  components: AnalysisComponent[];
+}
+
+export interface SentenceAnalysisResult {
+  inputText: string;
+  sentences: SentenceAnalysis[];
+}
+
+export interface TranslationResult {
+  language: string;
+  translation: string;
+  grammarBreakdown: string;
+  keyVocabulary: { term: string; meaning: string }[];
+  alternativeExpressions: string[];
+  culturalNotes: string;
+  error?: string;
+  analysis?: SentenceAnalysisResult;
+}
+
+export interface TranslationEntry {
+  id: string;
+  sourceText: string;
+  targetLanguages: string[];
+  results: TranslationResult[];
+  createdAt: string;
+}
