@@ -23,6 +23,8 @@ export default function TranslationView({ mode }: Props) {
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(["ja"]);
   const [activeTab, setActiveTab] = useState(0);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [decomposeChunks, setDecomposeChunks] = useState<string>("");
+  const [decomposeComplete, setDecomposeComplete] = useState(false);
   const [streamingChunks, setStreamingChunks] = useState<Map<string, string>>(new Map());
   const [streamResults, setStreamResults] = useState<Map<string, TranslationResult>>(new Map());
   const abortRef = useRef<AbortController | null>(null);
@@ -81,11 +83,19 @@ export default function TranslationView({ mode }: Props) {
     lastLangsRef.current = getTargetLanguages();
     doneRef.current = false;
     setPhase("loading");
+    setDecomposeChunks("");
+    setDecomposeComplete(false);
     setStreamingChunks(new Map());
     setStreamResults(new Map());
 
     try {
       await translateStream(inputText.trim(), getTargetLanguages(), {
+        onDecomposeChunk(chunk) {
+          setDecomposeChunks((prev) => prev + chunk);
+        },
+        onDecomposeResult() {
+          setDecomposeComplete(true);
+        },
         onStart(language) {
           setStreamingChunks((prev) => {
             const next = new Map(prev);
@@ -292,6 +302,26 @@ export default function TranslationView({ mode }: Props) {
       <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-4">
         <h2 className="text-lg font-bold text-gray-100">{t("translating")}</h2>
 
+        {/* Step 1: Decomposition */}
+        <div className="rounded-lg bg-gray-800/60 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            {decomposeComplete ? (
+              <span className="text-green-400 text-xs">&#10003;</span>
+            ) : (
+              <div className="h-3 w-3 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
+            )}
+            <p className="text-xs text-violet-400 font-semibold">
+              {decomposeComplete ? t("decompositionComplete") : t("analyzingStructure")}
+            </p>
+          </div>
+          {decomposeChunks && !decomposeComplete && (
+            <p className="text-sm text-gray-400 font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
+              {decomposeChunks.slice(-500)}
+            </p>
+          )}
+        </div>
+
+        {/* Step 2: Per-language translation */}
         {getTargetLanguages().map((lang) => {
           const knownLang = KNOWN_LANGUAGES.find((l) => l.code === lang);
           const label = knownLang?.label ?? lang;

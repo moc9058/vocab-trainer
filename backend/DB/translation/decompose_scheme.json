@@ -53,7 +53,6 @@
                   "surface",
                   "start",
                   "end",
-                  "meaning",
                   "components"
                 ],
                 "properties": {
@@ -71,9 +70,6 @@
                     "type": "integer",
                     "minimum": 0
                   },
-                  "meaning": {
-                    "type": "string"
-                  },
                   "components": {
                     "type": "array",
                     "items": {
@@ -86,9 +82,7 @@
                         "end",
                         "baseForm",
                         "reading",
-                        "partOfSpeech",
-                        "meaning",
-                        "explanation"
+                        "partOfSpeech"
                       ],
                       "properties": {
                         "componentId": {
@@ -106,10 +100,16 @@
                           "minimum": 0
                         },
                         "baseForm": {
-                          "type": ["string", "null"]
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "reading": {
-                          "type": ["string", "null"]
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "partOfSpeech": {
                           "type": "string",
@@ -135,12 +135,6 @@
                             "proverb",
                             "greeting"
                           ]
-                        },
-                        "meaning": {
-                          "type": "string"
-                        },
-                        "explanation": {
-                          "type": "string"
                         }
                       }
                     }

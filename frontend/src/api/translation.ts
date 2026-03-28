@@ -12,6 +12,9 @@ export async function translate(
 }
 
 export interface TranslateStreamCallbacks {
+  onDecomposeStart?: () => void;
+  onDecomposeChunk?: (chunk: string) => void;
+  onDecomposeResult?: (decomposition: string) => void;
   onStart?: (language: string) => void;
   onChunk?: (language: string, chunk: string) => void;
   onResult?: (language: string, result: TranslationResult) => void;
@@ -58,6 +61,15 @@ export async function translateStream(
         try {
           const data = JSON.parse(line.slice(6));
           switch (currentEvent) {
+            case "decompose-start":
+              callbacks.onDecomposeStart?.();
+              break;
+            case "decompose-chunk":
+              callbacks.onDecomposeChunk?.(data.chunk);
+              break;
+            case "decompose-result":
+              callbacks.onDecomposeResult?.(data.decomposition);
+              break;
             case "start":
               callbacks.onStart?.(data.language);
               break;

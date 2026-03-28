@@ -121,6 +121,8 @@ export interface GrammarChapterInfo {
 export interface AnalysisComponent {
   componentId: string;
   surface: string;
+  start?: number;
+  end?: number;
   baseForm: string | null;
   reading: string | null;
   partOfSpeech: string;
@@ -131,6 +133,8 @@ export interface AnalysisComponent {
 export interface AnalysisChunk {
   chunkId: string;
   surface: string;
+  start?: number;
+  end?: number;
   meaning: string;
   components: AnalysisComponent[];
 }
@@ -138,6 +142,9 @@ export interface AnalysisChunk {
 export interface SentenceAnalysis {
   sentenceId: string;
   text: string;
+  language?: string;
+  start?: number;
+  end?: number;
   chunks: AnalysisChunk[];
   components?: AnalysisComponent[];
 }

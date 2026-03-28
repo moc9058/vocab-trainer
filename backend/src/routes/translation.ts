@@ -14,13 +14,15 @@ import type { TranslationResult, SentenceAnalysisResult } from "../types.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DB_TRANSLATION_DIR = resolve(__dirname, "../../DB/translation");
 
-// Load shared schema + per-language system prompts
-const outputSchema = JSON.parse(readFileSync(resolve(DB_TRANSLATION_DIR, "output_scheme.json"), "utf-8"));
-const schemaConfigs: Record<string, { systemPrompt: string }> = {};
+// Step 1: decomposition (language-agnostic)
+const decomposeSchema = JSON.parse(readFileSync(resolve(DB_TRANSLATION_DIR, "decompose_scheme.json"), "utf-8"));
+const decomposePrompt = readFileSync(resolve(DB_TRANSLATION_DIR, "system_prompt_decompose.md"), "utf-8");
+
+// Step 2: translation (per-language) — uses the full output schema
+const translateSchema = JSON.parse(readFileSync(resolve(DB_TRANSLATION_DIR, "output_scheme.json"), "utf-8"));
+const translatePrompts: Record<string, string> = {};
 for (const [code, file] of [["en", "english"], ["ja", "japanese"], ["ko", "korean"], ["zh", "chinese"]] as const) {
-  schemaConfigs[code] = {
-    systemPrompt: readFileSync(resolve(DB_TRANSLATION_DIR, `system_prompt_${file}.md`), "utf-8"),
-  };
+  translatePrompts[code] = readFileSync(resolve(DB_TRANSLATION_DIR, `system_prompt_${file}.md`), "utf-8");
 }
 
 function parseSchemaResult(raw: string, language: string): TranslationResult {
@@ -49,7 +51,7 @@ function parseSchemaResult(raw: string, language: string): TranslationResult {
 }
 
 const translationRoutes: FastifyPluginAsync = async (fastify) => {
-  // POST /translate — run parallel translations
+  // POST /translate — run two-step translation (non-streaming)
   fastify.post<{
     Body: { sourceText: string; targetLanguages: string[] };
   }>("/translate", {
@@ -66,14 +68,17 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
   }, async (request) => {
     const { sourceText, targetLanguages } = request.body;
 
+    // Step 1: decompose
+    const decomposeRaw = await callLLMFullWithSchema(decomposePrompt, sourceText, decomposeSchema);
+    const decomposition = stripMarkdownFences(decomposeRaw);
+
+    // Step 2: translate in parallel
     const results = await Promise.allSettled(
       targetLanguages.map(async (lang) => {
-        const config = schemaConfigs[lang];
-        if (!config) {
-          throw new Error(`Unsupported language: ${lang}`);
-        }
+        const prompt = translatePrompts[lang];
+        if (!prompt) throw new Error(`Unsupported language: ${lang}`);
         return parseSchemaResult(
-          await callLLMFullWithSchema(config.systemPrompt, sourceText, outputSchema),
+          await callLLMFullWithSchema(prompt, decomposition, translateSchema),
           lang
         );
       })
@@ -102,7 +107,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
     return entry;
   });
 
-  // POST /translate-stream — SSE streaming translation
+  // POST /translate-stream — SSE streaming two-step translation
   fastify.post<{
     Body: { sourceText: string; targetLanguages: string[] };
   }>("/translate-stream", {
@@ -130,22 +135,30 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
       reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     }
 
-    // Send start events for all languages immediately
+    // Step 1: decompose with streaming
+    sendEvent("decompose-start", {});
+    const decomposeRaw = await streamLLMFullWithSchema(
+      decomposePrompt,
+      sourceText,
+      decomposeSchema,
+      (chunk) => sendEvent("decompose-chunk", { chunk })
+    );
+    const decomposition = stripMarkdownFences(decomposeRaw);
+    sendEvent("decompose-result", { decomposition });
+
+    // Step 2: translate each language in parallel with streaming
     for (const lang of targetLanguages) {
       sendEvent("start", { language: lang });
     }
 
-    // Fire all LLM calls in parallel
     const settled = await Promise.allSettled(
       targetLanguages.map(async (lang): Promise<TranslationResult> => {
-        const config = schemaConfigs[lang];
-        if (!config) {
-          throw new Error(`Unsupported language: ${lang}`);
-        }
+        const prompt = translatePrompts[lang];
+        if (!prompt) throw new Error(`Unsupported language: ${lang}`);
         const raw = await streamLLMFullWithSchema(
-          config.systemPrompt,
-          sourceText,
-          outputSchema,
+          prompt,
+          decomposition,
+          translateSchema,
           (chunk) => sendEvent("chunk", { language: lang, chunk })
         );
         const result = parseSchemaResult(raw, lang);
