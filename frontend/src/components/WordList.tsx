@@ -482,7 +482,7 @@ function WordRow({
           )}
         </td>
         <td className="py-2 pr-4 text-gray-300">{defText}</td>
-        <td className="py-2 pr-4 text-gray-400">{word.definitions.map((m) => m.partOfSpeech).filter(Boolean).join(", ")}</td>
+        <td className="py-2 pr-4 text-gray-400">{[...new Set(word.definitions.map((m) => m.partOfSpeech).filter(Boolean))].join(", ")}</td>
         <td className="py-2 text-gray-400">{word.level ?? "—"}</td>
       </tr>
       {expanded && (

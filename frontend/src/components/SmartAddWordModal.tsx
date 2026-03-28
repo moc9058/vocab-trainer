@@ -28,6 +28,11 @@ const CATEGORIES = [
   "proverb", "greeting",
 ] as const;
 
+const LEVEL_OPTIONS: Record<string, string[]> = {
+  chinese: ["HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6", "HSK7~9", "Advanced"],
+  japanese: ["JLPT5", "JLPT4", "JLPT3", "JLPT2", "JLPT1", "Advanced"],
+};
+
 const ALL_TOPICS = [
   "Greetings & Introductions", "Food & Dining", "Shopping & Money",
   "Travel & Transportation", "Weather & Seasons", "Family & Relationships",
@@ -49,6 +54,7 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
     { langSelect: "en", customLang: "", text: "" },
   ]);
   const [grammaticalCategory, setGrammaticalCategory] = useState("");
+  const [level, setLevel] = useState("");
   const [topics, setTopics] = useState<string[]>([]);
   const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>([
     { sentence: "", translation: "" },
@@ -93,6 +99,7 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
         definitions: defs,
         topics: topics.length > 0 ? topics : undefined,
         examples: validExamples.length > 0 ? validExamples : undefined,
+        level: level || undefined,
       });
       const { generatedWords: gw, ...word } = result;
       setSuccess(true);
@@ -285,6 +292,23 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
               ))}
             </select>
           </div>
+
+          {/* Level (optional, non-English languages with defined levels) */}
+          {LEVEL_OPTIONS[langSelect] && (
+            <div>
+              <label className="mb-1 block text-sm text-gray-400">{t("levelsColumn")}</label>
+              <select
+                value={level}
+                onChange={(e) => setLevel(e.target.value)}
+                className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+              >
+                <option value="">-- LLM will assign --</option>
+                {LEVEL_OPTIONS[langSelect].map((lv) => (
+                  <option key={lv} value={lv}>{lv}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Topics (optional, multi-select) */}
           <div>

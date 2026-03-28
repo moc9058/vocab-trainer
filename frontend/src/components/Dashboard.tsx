@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
 import { uiLanguages } from "../i18n/translations";
 import { getCurrentSession, startQuiz } from "../api/quiz";
-import { getTransliterationMap } from "../api/vocab";
+import { getFilters, getTransliterationMap } from "../api/vocab";
 import { startGrammarQuiz, getCurrentGrammarSession } from "../api/grammar";
 import { fetchJson } from "../api/client";
 import EmptyState from "./EmptyState";
@@ -81,9 +81,14 @@ export default function Dashboard() {
     return () => clearInterval(id);
   }, [activeLang]);
 
-  function handleLanguageSelected(language: string) {
+  async function handleLanguageSelected(language: string) {
     setShowLanguageModal(false);
     setSelectedLanguage(language);
+    // Auto-skip level selection if language has no levels
+    const { levels } = await getFilters(language);
+    if (levels.length === 0) {
+      setSelectedLevels([]);
+    }
   }
 
   function handleLevelsSelected(levels: string[]) {

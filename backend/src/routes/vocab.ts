@@ -21,6 +21,11 @@ import { TOPICS } from "../types.js";
 import { generateMissingWords } from "../word-generator.js";
 import { callLLM, stripMarkdownFences, validateWord, type Segment } from "../llm.js";
 
+const LEVEL_OPTIONS: Record<string, string[]> = {
+  chinese: ["HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6", "HSK7~9", "Advanced"],
+  japanese: ["JLPT5", "JLPT4", "JLPT3", "JLPT2", "JLPT1", "Advanced"],
+};
+
 const vocabRoutes: FastifyPluginAsync = async (fastify) => {
   // List words with filtering & pagination
   fastify.get<{
@@ -114,6 +119,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       definitions?: { partOfSpeech: string; text: Record<string, string> }[];
       topics?: string[];
       examples?: { sentence: string; translation: string }[];
+      level?: string;
       notes?: string;
     };
   }>(
@@ -147,6 +153,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
                 },
               },
             },
+            level: { type: "string" },
             notes: { type: "string" },
           },
         },
@@ -184,6 +191,11 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       else fields.push("MISSING topics");
       if (body.examples && body.examples.length > 0) fields.push(`PROVIDED examples: ${JSON.stringify(body.examples)}`);
       else fields.push("MISSING examples (generate 2-3 example sentences with translations)");
+      const langLevels = LEVEL_OPTIONS[language];
+      if (langLevels) {
+        if (body.level) fields.push(`PROVIDED level: ${body.level}`);
+        else fields.push(`MISSING level (assign one of: ${langLevels.join(", ")})`);
+      }
       if (body.notes) fields.push(`PROVIDED notes: ${body.notes}`);
       else fields.push("MISSING notes");
 
@@ -209,6 +221,7 @@ Return a JSON object:
   "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { "ja": "...", "en": "...", "ko": "..." } }],
   "examples": [{ "sentence": "Chinese sentence", "translation": "English translation", "segments": [{ "text": "word", "pinyin": "pīnyīn" }] }],
   "topics": ["..."],
+  "level": "one of the allowed levels",
   "notes": "brief usage notes"
 }
 
@@ -218,7 +231,8 @@ Segment rules:
 - Keep punctuation as separate segments with no pinyin
 - Omit "pinyin" for non-Chinese tokens
 
-Allowed topics: ${TOPICS.join(", ")}`
+Allowed topics: ${TOPICS.join(", ")}
+Allowed levels: ${LEVEL_OPTIONS.chinese.join(", ")}`
         : `You are a ${language} vocabulary expert. Given a ${language} term and optionally some pre-filled fields, generate a complete vocabulary entry.
 
 CRITICAL: If a field is marked "PROVIDED", keep that EXACT value unchanged. Only generate values for fields marked "MISSING".
@@ -229,11 +243,11 @@ Return a JSON object:
   "term": "the ${language} word",
   "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { "ja": "...", "en": "...", "ko": "..." } }],
   "examples": [{ "sentence": "${language} sentence using the word"${language === "english" ? "" : ', "translation": "English translation"'} }],
-  "topics": ["..."],
+  "topics": ["..."],${langLevels ? `\n  "level": "one of the allowed levels",` : ""}
   "notes": "brief usage notes"
 }
 
-Allowed topics: ${TOPICS.join(", ")}`;
+Allowed topics: ${TOPICS.join(", ")}${langLevels ? `\nAllowed levels: ${langLevels.join(", ")}` : ""}`;
 
       const userPrompt = fields.join("\n");
 
@@ -259,6 +273,7 @@ Allowed topics: ${TOPICS.join(", ")}`;
         topics: (body.topics && body.topics.length > 0)
           ? body.topics
           : ((llmResult.topics as string[]) || []).filter((t) => (TOPICS as readonly string[]).includes(t)),
+        level: langLevels ? (body.level || (llmResult.level as string) || "") : "",
         notes: body.notes || (llmResult.notes as string) || "",
       };
 
@@ -290,7 +305,7 @@ Allowed topics: ${TOPICS.join(", ")}`;
         definitions: merged.definitions,
         examples: examplesWithSegments,
         topics: merged.topics as Word["topics"],
-        level: "Advanced",
+        level: merged.level,
         notes: merged.notes,
       };
 
@@ -455,7 +470,7 @@ Allowed topics: ${TOPICS.join(", ")}`;
         definitions: (entry.definitions as Meaning[]) || [{ partOfSpeech: "", text: { en: "" } }],
         examples: [{ sentence: info.sentence, translation: info.translation }],
         topics: (topics.length > 0 ? topics : ["Language Fundamentals"]) as Word["topics"],
-        level: "Advanced",
+        level: (entry.level as string) || "",
         notes: (entry.notes as string) || "",
       };
 
