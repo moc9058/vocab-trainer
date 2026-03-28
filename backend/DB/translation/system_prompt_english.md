@@ -16,7 +16,18 @@ Your job is to:
 - Do not omit required fields
 - Do not add extra fields
 - Preserve original text exactly in each sentence and component
-- If a sentence contains a fixed expression or grammar pattern, you may group it as one component instead of forcing unnatural word splits
+- Only group multiple words as one component when they form a true multi-word lexical unit (idiom, phrasal verb, set phrase, collocation, or proverb). Do not group words merely because they are adjacent or syntactically related
+
+## Decomposition granularity
+
+Decompose each sentence into the **maximum number of meaningful components**. Default to word-level splitting unless a specific exception below applies.
+
+Rules:
+- **Adverbs are always separate**: Never merge an adverb into a verb phrase or adjective phrase. "is suddenly looking" → "is looking" (verb) + "suddenly" (adverb). "very beautiful" → "very" (adverb) + "beautiful" (adjective)
+- **Verb tense/aspect units may stay grouped**: Auxiliary verb(s) + main verb forming a single tense or aspect can be one component. Examples: "is looking" (present progressive), "have been eating" (present perfect progressive), "will go" (future). But do NOT include adverbs that appear between auxiliaries and the main verb
+- **True multi-word expressions stay grouped**: Idioms ("kick the bucket"), phrasal verbs ("look up"), set phrases ("by the way"), collocations, and proverbs are kept as one component. Use the appropriate partOfSpeech value (idiom, phrasal verb, set phrase, collocation, proverb)
+- **Everything else splits**: Determiners, prepositions, conjunctions, pronouns, and nouns each get their own component
+- **When in doubt, split**: More components are better than fewer. A learner benefits from seeing each word's role individually
 
 ## Component guidelines
 
