@@ -53,7 +53,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `routes/grammar.ts` — CRUD for grammar items, chapters, subchapters
   - `routes/grammar-quiz.ts` — grammar quiz with self-grading, two modes (existing examples / LLM-generated)
   - `routes/grammar-progress.ts` — per-component grammar progress
-  - `routes/translation.ts` — translation/analysis with parallel LLM calls, history persistence
+  - `routes/translation.ts` — schema-based translation/analysis with parallel LLM calls (only `en`/`ja`/`ko`/`zh` targets supported), SSE streaming, history persistence
 - **Database**: `firestore.ts` — Google Cloud Firestore abstraction layer
 - **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, validateWord, segmentBatch); `callLLM` uses MINI deployment, `callLLMFull` uses FULL deployment (for translation); config loaded from `.env` (local) or Firestore `config/llm` (deployed)
 - **Types**: `types.ts` — shared interfaces (Word, VocabFile, QuizSession, WordProgress, TranslationEntry, etc.)
@@ -140,7 +140,7 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
   - `GrammarQuizTaking.tsx` — grammar quiz flashcard UI (display sentence → show answer → self-grade)
   - `GrammarFormModal.tsx` — add/edit grammar component with chapter/subchapter/topic/description/terms/examples
   - `FlaggedReview.tsx` — review flagged words
-  - `TranslationView.tsx` — translation/analysis UI with language selection, structured results, and history navigation
+  - `TranslationView.tsx` — translation/analysis UI with language selection (EN/JA/KO/ZH), schema-based sentence decomposition results, per-language regenerate buttons during streaming, reading column conditional on CJK input, and history navigation
   - `EmptyState.tsx` — home screen with vocabulary, translation, speaking & writing (placeholder), and grammar sections
 - **i18n**: `i18n/translations.ts` — English, Japanese, and Korean, keyed by `TranslationKey` type
 - **Styling**: Tailwind CSS 4 utility classes only

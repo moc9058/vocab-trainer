@@ -670,9 +670,9 @@ Runs parallel LLM calls (one per target language, using the FULL model) and retu
 }
 ```
 
-`targetLanguages` accepts ISO 639-1 codes for known languages (`en`, `ja`, `ko`, `zh`) or free-text language names (e.g., `"French"`, `"Spanish"`).
+`targetLanguages` accepts ISO 639-1 codes: `en`, `ja`, `ko`, `zh`.
 
-**Response:** `TranslationEntry`
+**Response:** `TranslationEntry` — each result contains a schema-based sentence analysis with per-component breakdown (surface form, reading, base form, part of speech, meaning, explanation). Reading values (furigana/pinyin) are only populated when the source text contains CJK characters.
 ```json
 {
   "id": "abc123",
@@ -681,11 +681,26 @@ Runs parallel LLM calls (one per target language, using the FULL model) and retu
   "results": [
     {
       "language": "en",
-      "translation": "The weather is nice today",
-      "grammarBreakdown": "...",
-      "keyVocabulary": [{ "term": "天气", "meaning": "weather" }],
-      "alternativeExpressions": ["Today's weather is great"],
-      "culturalNotes": "..."
+      "analysis": {
+        "inputText": "今天天气很好",
+        "sentences": [
+          {
+            "sentenceId": "s1",
+            "text": "今天天气很好",
+            "components": [
+              {
+                "componentId": "c1",
+                "surface": "今天",
+                "baseForm": "今天",
+                "reading": "jīntiān",
+                "partOfSpeech": "noun",
+                "meaning": "today",
+                "explanation": "Time noun indicating the current day"
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "createdAt": "2026-03-28T12:00:00.000Z"
@@ -732,7 +747,7 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 | **GrammarFilterModal**  | Modal to select chapter, subchapter, display language, and quiz mode filters before starting a grammar quiz. Quiz mode selector is hidden for Chinese (always LLM). |
 | **GrammarQuizTaking**   | Grammar quiz flashcard UI — displays a sentence (with grammar term shown for Chinese), reveals the answer, and allows self-grading (correct/incorrect). |
 | **GrammarFormModal**    | Modal for adding or editing grammar components with chapter, subchapter, topic (required), description (optional), terms (optional, individual input per term), and examples (optional). |
-| **TranslationView**    | Translation/analysis UI. Input text, select target languages (EN/JA/KO/ZH/Other), get structured LLM results (translation, grammar breakdown, key vocabulary, alternative expressions, cultural notes). History persisted to Firestore with previous/next navigation. |
+| **TranslationView**    | Translation/analysis UI. Input text, select target languages (EN/JA/KO/ZH), get schema-based sentence decomposition with per-component analysis. Reading column (furigana/pinyin) shown only when source text contains CJK characters. Per-language regenerate buttons during streaming for stuck translations. History persisted to Firestore with previous/next navigation. |
 | **Home Page (EmptyState)** | Home screen with four sections: Vocabulary (blue), Translation (violet), Speaking & Writing (teal, placeholder), Grammar (emerald). Checks for in-progress quiz sessions and translation history. |
 
 ### API Integration
@@ -742,7 +757,7 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 - **`api/vocab.ts`** — `getWords(language, params)`, `getFilters(language)`, `getTransliterationMap(language)`, `updateWord(language, wordId, updates)`, `deleteWord(language, wordId)`, `smartAddWord(language, data)`.
 - **`api/grammar.ts`** — `getGrammarChapters(language)`, `getGrammarItems(language, filters, page, limit)`, `getSubchapters(language, chapters)`, `createGrammarItem(language, item)`, `updateGrammarItem(language, componentId, updates)`, `deleteGrammarItem(language, componentId)`, `startGrammarQuiz(opts)`, `answerGrammarQuestion(opts)`, `getCurrentGrammarSession(language)`, `getGrammarProgress(language)`, `resetGrammarProgress(language)`.
 - **`api/flagged.ts`** — `getFlaggedWords(language)`, `getFlaggedWordCount(language)`, `flagWord(language, wordId)`, `unflagWord(language, wordId)`.
-- **`api/translation.ts`** — `translate(sourceText, targetLanguages)`, `getTranslationHistory(page, limit)`, `deleteTranslationHistory()`, `deleteTranslationEntryById(id)`.
+- **`api/translation.ts`** — `translate(sourceText, targetLanguages)`, `translateStream(sourceText, targetLanguages, callbacks, signal?)`, `getTranslationHistory(page, limit)`, `deleteTranslationHistory()`, `deleteTranslationEntryById(id)`.
 - **Dev proxy:** Vite proxies `/api/*` to `http://localhost:3000` so the frontend dev server can reach the backend.
 
 ### Internationalization
