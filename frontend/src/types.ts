@@ -128,10 +128,18 @@ export interface AnalysisComponent {
   explanation: string;
 }
 
+export interface AnalysisChunk {
+  chunkId: string;
+  surface: string;
+  meaning: string;
+  components: AnalysisComponent[];
+}
+
 export interface SentenceAnalysis {
   sentenceId: string;
   text: string;
-  components: AnalysisComponent[];
+  chunks: AnalysisChunk[];
+  components?: AnalysisComponent[];
 }
 
 export interface SentenceAnalysisResult {

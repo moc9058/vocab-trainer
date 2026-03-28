@@ -20,7 +20,7 @@
           "required": [
             "sentenceId",
             "text",
-            "components"
+            "chunks"
           ],
           "properties": {
             "sentenceId": {
@@ -29,62 +29,87 @@
             "text": {
               "type": "string"
             },
-            "components": {
+            "chunks": {
               "type": "array",
               "items": {
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
-                  "componentId",
+                  "chunkId",
                   "surface",
-                  "baseForm",
-                  "reading",
-                  "partOfSpeech",
                   "meaning",
-                  "explanation"
+                  "components"
                 ],
                 "properties": {
-                  "componentId": {
+                  "chunkId": {
                     "type": "string"
                   },
                   "surface": {
                     "type": "string"
                   },
-                  "baseForm": {
-                    "type": ["string", "null"]
-                  },
-                  "reading": {
-                    "type": ["string", "null"]
-                  },
-                  "partOfSpeech": {
-                    "type": "string",
-                    "enum": [
-                      "noun",
-                      "verb",
-                      "adjective",
-                      "adverb",
-                      "pronoun",
-                      "preposition",
-                      "conjunction",
-                      "interjection",
-                      "determiner",
-                      "particle",
-                      "classifier",
-                      "numeral",
-                      "onomatopoeia",
-                      "idiom",
-                      "set phrase",
-                      "phrasal verb",
-                      "collocation",
-                      "proverb",
-                      "greeting"
-                    ]
-                  },
                   "meaning": {
                     "type": "string"
                   },
-                  "explanation": {
-                    "type": "string"
+                  "components": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "componentId",
+                        "surface",
+                        "baseForm",
+                        "reading",
+                        "partOfSpeech",
+                        "meaning",
+                        "explanation"
+                      ],
+                      "properties": {
+                        "componentId": {
+                          "type": "string"
+                        },
+                        "surface": {
+                          "type": "string"
+                        },
+                        "baseForm": {
+                          "type": ["string", "null"]
+                        },
+                        "reading": {
+                          "type": ["string", "null"]
+                        },
+                        "partOfSpeech": {
+                          "type": "string",
+                          "enum": [
+                            "noun",
+                            "verb",
+                            "adjective",
+                            "adverb",
+                            "pronoun",
+                            "preposition",
+                            "conjunction",
+                            "interjection",
+                            "determiner",
+                            "particle",
+                            "classifier",
+                            "numeral",
+                            "onomatopoeia",
+                            "idiom",
+                            "set phrase",
+                            "phrasal verb",
+                            "prepositional verb",
+                            "collocation",
+                            "proverb",
+                            "greeting"
+                          ]
+                        },
+                        "meaning": {
+                          "type": "string"
+                        },
+                        "explanation": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }

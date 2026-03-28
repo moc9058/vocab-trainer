@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useI18n } from "../i18n/context";
-import { translate, translateStream, getTranslationHistory, deleteTranslationHistory } from "../api/translation";
-import type { TranslationEntry, TranslationResult, SentenceAnalysis, SentenceAnalysisResult } from "../types";
+import { translateStream, getTranslationHistory, deleteTranslationHistory } from "../api/translation";
+import type { TranslationEntry, TranslationResult, SentenceAnalysis, SentenceAnalysisResult, AnalysisChunk } from "../types";
 
 interface Props {
   mode: "new" | "resume";
@@ -159,7 +159,9 @@ export default function TranslationView({ mode }: Props) {
   async function handleRegenerateLang(lang: string) {
     // Abort the main stream (it may be hung)
     abortRef.current?.abort();
-    abortRef.current = null;
+
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     // Reset state for this language
     setStreamingChunks((prev) => {
@@ -174,16 +176,29 @@ export default function TranslationView({ mode }: Props) {
     });
 
     try {
-      const entry = await translate(lastInputRef.current, [lang]);
-      const result = entry.results[0];
-      if (result) {
-        setStreamResults((prev) => {
-          const next = new Map(prev);
-          next.set(lang, result);
-          return next;
-        });
-      }
+      await translateStream(lastInputRef.current, [lang], {
+        onChunk(_language, chunk) {
+          setStreamingChunks((prev) => {
+            const next = new Map(prev);
+            next.set(lang, (prev.get(lang) ?? "") + chunk);
+            return next;
+          });
+        },
+        onResult(_language, result) {
+          setStreamResults((prev) => {
+            const next = new Map(prev);
+            next.set(lang, result);
+            return next;
+          });
+          setStreamingChunks((prev) => {
+            const next = new Map(prev);
+            next.delete(lang);
+            return next;
+          });
+        },
+      }, controller.signal);
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error(`Regenerate ${lang} failed:`, err);
     }
     setStreamingChunks((prev) => {
@@ -488,44 +503,83 @@ function LegacyResultView({ result }: { result: TranslationResult }) {
 
 const CJK_REGEX = /[\u3000-\u9fff\uf900-\ufaff]/;
 
+function ComponentTable({ components, showReading }: { components: import("../types").AnalysisComponent[]; showReading: boolean }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-gray-700 text-gray-500">
+            <th className="text-left py-1 pr-3">Surface</th>
+            {showReading && <th className="text-left py-1 pr-3">Reading</th>}
+            <th className="text-left py-1 pr-3">Base Form</th>
+            <th className="text-left py-1 pr-3">POS</th>
+            <th className="text-left py-1 pr-3">Meaning</th>
+            <th className="text-left py-1">Explanation</th>
+          </tr>
+        </thead>
+        <tbody>
+          {components.map((comp) => (
+            <tr key={comp.componentId} className="border-b border-gray-800">
+              <td className="py-1.5 pr-3 font-medium text-gray-200">{comp.surface}</td>
+              {showReading && <td className="py-1.5 pr-3 text-gray-400">{comp.reading ?? "—"}</td>}
+              <td className="py-1.5 pr-3 text-gray-400">{comp.baseForm ?? "—"}</td>
+              <td className="py-1.5 pr-3">
+                <span className="rounded bg-gray-700 px-1 py-0.5 text-gray-300">{comp.partOfSpeech}</span>
+              </td>
+              <td className="py-1.5 pr-3 text-gray-300">{comp.meaning}</td>
+              <td className="py-1.5 text-gray-400">{comp.explanation}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ChunkRow({ chunk, showReading }: { chunk: AnalysisChunk; showReading: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className="border-b border-gray-700/50 last:border-b-0">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-2 w-full py-2.5 px-3 text-left hover:bg-gray-700/30 transition-colors rounded-md"
+      >
+        <span className={`text-gray-500 text-xs transition-transform ${expanded ? "rotate-90" : ""}`}>&#9654;</span>
+        <span className="text-sm font-medium text-gray-200">{chunk.surface}</span>
+        <span className="text-sm text-gray-500 ml-auto">{chunk.meaning}</span>
+      </button>
+      {expanded && (
+        <div className="pl-6 pb-3 pr-3">
+          <ComponentTable components={chunk.components} showReading={showReading} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SentenceCard({ sentence }: { sentence: SentenceAnalysis }) {
-  const showReading = sentence.components.some((c) => CJK_REGEX.test(c.surface));
+  const allComponents = sentence.chunks?.length
+    ? sentence.chunks.flatMap((ch) => ch.components)
+    : sentence.components ?? [];
+  const showReading = allComponents.some((c) => CJK_REGEX.test(c.surface));
+
   return (
     <div className="space-y-3">
       <div className="rounded-lg bg-gray-800/60 p-4">
         <p className="text-gray-100 font-medium">{sentence.text}</p>
       </div>
 
-      {sentence.components.length > 0 && (
-        <div className="rounded-lg bg-gray-800/60 p-4 overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-gray-700 text-gray-500">
-                <th className="text-left py-1 pr-3">Surface</th>
-                {showReading && <th className="text-left py-1 pr-3">Reading</th>}
-                <th className="text-left py-1 pr-3">Base Form</th>
-                <th className="text-left py-1 pr-3">POS</th>
-                <th className="text-left py-1 pr-3">Meaning</th>
-                <th className="text-left py-1">Explanation</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sentence.components.map((comp) => (
-                <tr key={comp.componentId} className="border-b border-gray-800">
-                  <td className="py-1.5 pr-3 font-medium text-gray-200">{comp.surface}</td>
-                  {showReading && <td className="py-1.5 pr-3 text-gray-400">{comp.reading ?? "—"}</td>}
-                  <td className="py-1.5 pr-3 text-gray-400">{comp.baseForm ?? "—"}</td>
-                  <td className="py-1.5 pr-3">
-                    <span className="rounded bg-gray-700 px-1 py-0.5 text-gray-300">{comp.partOfSpeech}</span>
-                  </td>
-                  <td className="py-1.5 pr-3 text-gray-300">{comp.meaning}</td>
-                  <td className="py-1.5 text-gray-400">{comp.explanation}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {sentence.chunks?.length ? (
+        <div className="rounded-lg bg-gray-800/60 p-2">
+          {sentence.chunks.map((chunk) => (
+            <ChunkRow key={chunk.chunkId} chunk={chunk} showReading={showReading} />
+          ))}
         </div>
-      )}
+      ) : allComponents.length > 0 ? (
+        <div className="rounded-lg bg-gray-800/60 p-4 overflow-x-auto">
+          <ComponentTable components={allComponents} showReading={showReading} />
+        </div>
+      ) : null}
     </div>
   );
 }
