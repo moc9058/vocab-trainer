@@ -409,14 +409,33 @@ function CostInput({
   value: number;
   onChange: (v: string) => void;
 }) {
+  const [localValue, setLocalValue] = useState(value ? String(value) : "");
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) {
+      setLocalValue(value ? String(value) : "");
+    }
+  }, [value, focused]);
+
   return (
     <label className="block">
       <span className="text-xs text-gray-500">{label}</span>
       <input
-        type="number"
-        step="any"
-        value={value || ""}
-        onChange={(e) => onChange(e.target.value)}
+        type="text"
+        inputMode="decimal"
+        value={localValue}
+        onChange={(e) => {
+          const v = e.target.value.replace(/[^0-9.]/g, "").replace(/(\..*)\./g, "$1");
+          if (v === "" || /^[0-9]*\.?[0-9]*$/.test(v)) {
+            setLocalValue(v);
+          }
+        }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => {
+          setFocused(false);
+          onChange(localValue);
+        }}
         placeholder="0"
         className="mt-1 w-full rounded bg-gray-900 border border-gray-600 px-2 py-1.5 text-sm text-gray-200"
       />
