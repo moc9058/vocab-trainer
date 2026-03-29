@@ -251,11 +251,30 @@ export default function TranslationView({ mode }: Props) {
     );
   }
 
+  const hasTranslationNav = history.length > 0;
+
+  function TranslationNavBar() {
+    if (!hasTranslationNav) return null;
+    return (
+      <div className="flex items-center gap-2">
+        <div className="flex-1" />
+        <button
+          onClick={() => { setHistoryIndex(0); setActiveTab(0); setPhase("results"); }}
+          className="rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+        >
+          {t("previous")}
+        </button>
+      </div>
+    );
+  }
+
   // ===== INPUT PHASE =====
   if (phase === "input") {
     return (
       <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-5">
         <h2 className="text-lg font-bold text-gray-100">{t("sectionTranslation")}</h2>
+
+        {phase === "input" && <TranslationNavBar />}
 
         <textarea
           value={inputText}
@@ -304,6 +323,7 @@ export default function TranslationView({ mode }: Props) {
     return (
       <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-4">
         <h2 className="text-lg font-bold text-gray-100">{t("translating")}</h2>
+        <TranslationNavBar />
 
         {/* Step 1: Decomposition */}
         <div className="rounded-lg bg-gray-800/60 p-4">

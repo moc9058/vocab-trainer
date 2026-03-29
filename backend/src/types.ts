@@ -249,9 +249,14 @@ export interface CorrectionItem {
   severity: "error" | "improvement" | "style";
 }
 
-export interface CorrectionResult {
-  overallCorrectedText: string;
+export interface SentenceCorrection {
+  original: string;
+  corrected: string;
   corrections: CorrectionItem[];
+}
+
+export interface CorrectionResult {
+  sentences: SentenceCorrection[];
   overallFeedback: string;
 }
 
@@ -265,6 +270,7 @@ export interface SpeakingWritingSession {
   sessionId: string;
   language: string;
   mode: "speaking" | "writing";
+  useCase: string;
   startedAt: string;
   status: "in-progress" | "completed";
   corrections: SpeakingWritingEntry[];

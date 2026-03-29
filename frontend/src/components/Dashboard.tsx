@@ -79,14 +79,12 @@ export default function Dashboard() {
       .catch(() => {});
   }, [translationMode]);
 
-  // Check for speaking/writing sessions
+  // Check for speaking/writing sessions (keyed by ISO code, not filename)
   useEffect(() => {
     (async () => {
       try {
-        const languages = await fetchJson<{ filename: string }[]>("/api/languages/");
-        for (const lang of languages) {
-          const key = lang.filename.replace(/\.json$/, "");
-          const sess = await getSpeakingWritingSession(key);
+        for (const code of ["en", "ja", "ko", "zh"]) {
+          const sess = await getSpeakingWritingSession(code);
           if (sess && sess.corrections.length > 0) {
             setHasSWSession(true);
             return;

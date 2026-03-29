@@ -154,6 +154,16 @@ const translations = {
     swSelectLanguage: "Correction Language",
     originalText: "Original Text",
     corrections: "Corrections",
+    // Speaking use cases
+    useCaseProfessional: "Professional / Academic",
+    useCaseCasual: "Casual / Daily",
+    useCasePresentation: "Presentation",
+    useCaseInterview: "Interview",
+    // Writing use cases
+    useCaseAcademic: "Academic / Business",
+    useCaseSocial: "Casual / Social Media",
+    useCaseEmail: "Email / Correspondence",
+    useCaseCreative: "Creative",
     // Settings
     settings: "Settings",
     settingsLanguageOrder: "Language Display Order",
@@ -318,6 +328,16 @@ const translations = {
     swSelectLanguage: "添削言語",
     originalText: "元のテキスト",
     corrections: "修正箇所",
+    // Speaking use cases
+    useCaseProfessional: "プロフェッショナル / 学術",
+    useCaseCasual: "カジュアル / 日常",
+    useCasePresentation: "プレゼンテーション",
+    useCaseInterview: "面接",
+    // Writing use cases
+    useCaseAcademic: "学術 / ビジネス",
+    useCaseSocial: "カジュアル / SNS",
+    useCaseEmail: "メール / 書簡",
+    useCaseCreative: "クリエイティブ",
     // Settings
     settings: "設定",
     settingsLanguageOrder: "言語表示順序",
@@ -482,6 +502,16 @@ const translations = {
     swSelectLanguage: "첨삭 언어",
     originalText: "원본 텍스트",
     corrections: "수정 사항",
+    // Speaking use cases
+    useCaseProfessional: "전문 / 학술",
+    useCaseCasual: "캐주얼 / 일상",
+    useCasePresentation: "프레젠테이션",
+    useCaseInterview: "면접",
+    // Writing use cases
+    useCaseAcademic: "학술 / 비즈니스",
+    useCaseSocial: "캐주얼 / SNS",
+    useCaseEmail: "이메일 / 서신",
+    useCaseCreative: "크리에이티브",
     // Settings
     settings: "설정",
     settingsLanguageOrder: "언어 표시 순서",

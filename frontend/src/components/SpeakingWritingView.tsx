@@ -1,10 +1,9 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { ALL_KNOWN_LANGUAGES } from "../settings/defaults";
-import { submitCorrection, getSpeakingWritingSession, deleteSpeakingWritingSession } from "../api/speaking-writing";
-import { fetchJson } from "../api/client";
-import type { SpeakingWritingSession, CorrectionItem } from "../types";
+import { submitCorrectionStream, getSpeakingWritingSession, deleteSpeakingWritingSession } from "../api/speaking-writing";
+import type { SpeakingWritingSession, SentenceCorrection, CorrectionItem } from "../types";
 
 interface Props {
   mode: "new" | "resume";
@@ -21,14 +20,32 @@ export default function SpeakingWritingView({ mode }: Props) {
     [settings.languageOrder],
   );
 
+  const SPEAKING_USE_CASES = [
+    { key: "professional", label: t("useCaseProfessional") },
+    { key: "casual", label: t("useCaseCasual") },
+    { key: "presentation", label: t("useCasePresentation") },
+    { key: "interview", label: t("useCaseInterview") },
+  ];
+  const WRITING_USE_CASES = [
+    { key: "academic", label: t("useCaseAcademic") },
+    { key: "social", label: t("useCaseSocial") },
+    { key: "email", label: t("useCaseEmail") },
+    { key: "creative", label: t("useCaseCreative") },
+  ];
+
   const [phase, setPhase] = useState<"input" | "loading" | "results">("input");
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>("en");
-  const [selectedMode, setSelectedMode] = useState<"speaking" | "writing">("writing");
+  const [selectedMode, setSelectedMode] = useState<"speaking" | "writing">("speaking");
+  const [selectedUseCase, setSelectedUseCase] = useState("professional");
   const [inputText, setInputText] = useState("");
   const [session, setSession] = useState<SpeakingWritingSession | null>(null);
   const [correctionIndex, setCorrectionIndex] = useState(0);
   const [loadingSession, setLoadingSession] = useState(mode === "resume");
   const [error, setError] = useState<string | null>(null);
+  const [streamingChunks, setStreamingChunks] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
+
+  const LANG_CODES = ["en", "ja", "ko", "zh"];
 
   // Resume: find existing session
   useEffect(() => {
@@ -36,15 +53,14 @@ export default function SpeakingWritingView({ mode }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const languages = await fetchJson<{ filename: string }[]>("/api/languages/");
-        for (const lang of languages) {
-          const key = lang.filename.replace(/\.json$/, "");
-          const sess = await getSpeakingWritingSession(key);
+        for (const code of LANG_CODES) {
+          const sess = await getSpeakingWritingSession(code);
           if (sess && sess.corrections.length > 0) {
             if (!cancelled) {
               setSession(sess);
               setSelectedLanguage(sess.language);
               setSelectedMode(sess.mode);
+              setSelectedUseCase(sess.useCase || (sess.mode === "speaking" ? "professional" : "academic"));
               setCorrectionIndex(sess.currentIndex);
               setPhase("results");
             }
@@ -67,14 +83,8 @@ export default function SpeakingWritingView({ mode }: Props) {
     if (mode !== "new") return;
     let cancelled = false;
     (async () => {
-      try {
-        const languages = await fetchJson<{ filename: string }[]>("/api/languages/");
-        for (const lang of languages) {
-          const key = lang.filename.replace(/\.json$/, "");
-          await deleteSpeakingWritingSession(key).catch(() => {});
-        }
-      } catch {
-        // ignore
+      for (const code of LANG_CODES) {
+        await deleteSpeakingWritingSession(code).catch(() => {});
       }
       if (!cancelled) {
         setSession(null);
@@ -88,15 +98,34 @@ export default function SpeakingWritingView({ mode }: Props) {
 
   async function handleSubmit() {
     if (!canSubmit || !selectedLanguage) return;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setError(null);
+    setStreamingChunks("");
     setPhase("loading");
     try {
-      const updatedSession = await submitCorrection(selectedLanguage, selectedMode, inputText.trim());
-      setSession(updatedSession);
-      setCorrectionIndex(updatedSession.corrections.length - 1);
-      setInputText("");
-      setPhase("results");
+      await submitCorrectionStream(
+        selectedLanguage,
+        selectedMode,
+        selectedUseCase,
+        inputText.trim(),
+        {
+          onChunk(chunk) {
+            setStreamingChunks((prev) => prev + chunk);
+          },
+          onDone(updatedSession) {
+            setSession(updatedSession);
+            setCorrectionIndex(updatedSession.corrections.length - 1);
+            setInputText("");
+            setStreamingChunks("");
+            setPhase("results");
+          },
+        },
+        controller.signal,
+      );
     } catch (err) {
+      if (controller.signal.aborted) return;
       console.error("Correction failed:", err);
       setError(String(err));
       setPhase("input");
@@ -112,14 +141,20 @@ export default function SpeakingWritingView({ mode }: Props) {
   function handlePrevious() {
     if (correctionIndex > 0) {
       setCorrectionIndex(correctionIndex - 1);
+      if (phase !== "results") setPhase("results");
     }
   }
 
   function handleNext() {
     if (session && correctionIndex < session.corrections.length - 1) {
       setCorrectionIndex(correctionIndex + 1);
+      if (phase !== "results") setPhase("results");
     }
   }
+
+  const hasPrevious = session !== null && correctionIndex > 0;
+  const hasNext = session !== null && correctionIndex < (session.corrections.length ?? 0) - 1;
+  const hasHistory = session !== null && session.corrections.length > 0;
 
   if (loadingSession) {
     return (
@@ -129,11 +164,29 @@ export default function SpeakingWritingView({ mode }: Props) {
     );
   }
 
+  // Shared navigation bar — shown in input/loading phases when history exists
+  function NavigationBar() {
+    if (phase === "results" || !hasHistory) return null;
+    return (
+      <div className="flex items-center gap-2">
+        <div className="flex-1" />
+        <button
+          onClick={() => { setCorrectionIndex((session?.corrections.length ?? 1) - 1); setPhase("results"); }}
+          className="rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+        >
+          {t("previous")}
+        </button>
+      </div>
+    );
+  }
+
   // ===== INPUT PHASE =====
   if (phase === "input") {
     return (
       <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-5">
         <h2 className="text-lg font-bold text-gray-100">{t("sectionSpeakingWriting")}</h2>
+
+        <NavigationBar />
 
         {/* Language selector */}
         <div>
@@ -159,7 +212,7 @@ export default function SpeakingWritingView({ mode }: Props) {
         <div>
           <div className="flex gap-2">
             <button
-              onClick={() => setSelectedMode("speaking")}
+              onClick={() => { setSelectedMode("speaking"); setSelectedUseCase("professional"); }}
               className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                 selectedMode === "speaking"
                   ? "bg-teal-600 text-white"
@@ -169,7 +222,7 @@ export default function SpeakingWritingView({ mode }: Props) {
               {t("modeSpeaking")}
             </button>
             <button
-              onClick={() => setSelectedMode("writing")}
+              onClick={() => { setSelectedMode("writing"); setSelectedUseCase("academic"); }}
               className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                 selectedMode === "writing"
                   ? "bg-teal-600 text-white"
@@ -179,6 +232,23 @@ export default function SpeakingWritingView({ mode }: Props) {
               {t("modeWriting")}
             </button>
           </div>
+        </div>
+
+        {/* Use case selector */}
+        <div className="flex flex-wrap gap-2">
+          {(selectedMode === "speaking" ? SPEAKING_USE_CASES : WRITING_USE_CASES).map((uc) => (
+            <button
+              key={uc.key}
+              onClick={() => setSelectedUseCase(uc.key)}
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                selectedUseCase === uc.key
+                  ? "bg-teal-700 text-teal-100 border border-teal-500"
+                  : "border border-gray-600 text-gray-400 hover:bg-gray-700"
+              }`}
+            >
+              {uc.label}
+            </button>
+          ))}
         </div>
 
         {/* Input text */}
@@ -217,9 +287,17 @@ export default function SpeakingWritingView({ mode }: Props) {
     return (
       <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-4">
         <h2 className="text-lg font-bold text-gray-100">{t("sectionSpeakingWriting")}</h2>
-        <div className="flex items-center justify-center gap-3 py-12">
-          <div className="h-6 w-6 animate-spin rounded-full border-4 border-teal-400 border-t-transparent" />
-          <p className="text-teal-400 font-medium">{t("correcting")}</p>
+        <NavigationBar />
+        <div className="rounded-lg bg-gray-800/60 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="h-3 w-3 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
+            <p className="text-xs text-teal-400 font-semibold">{t("correcting")}</p>
+          </div>
+          {streamingChunks && (
+            <p className="text-sm text-gray-400 font-mono whitespace-pre-wrap break-all max-h-60 overflow-y-auto">
+              {streamingChunks.slice(-800)}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -250,7 +328,7 @@ export default function SpeakingWritingView({ mode }: Props) {
           {t("newCorrection")}
         </button>
         <div className="flex-1" />
-        {correctionIndex > 0 && (
+        {hasPrevious && (
           <button
             onClick={handlePrevious}
             className="rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
@@ -258,7 +336,7 @@ export default function SpeakingWritingView({ mode }: Props) {
             {t("previous")}
           </button>
         )}
-        {correctionIndex < session.corrections.length - 1 && (
+        {hasNext && (
           <button
             onClick={handleNext}
             className="rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
@@ -268,27 +346,10 @@ export default function SpeakingWritingView({ mode }: Props) {
         )}
       </div>
 
-      {/* Original text */}
-      <div className="rounded-lg bg-gray-800/60 p-4">
-        <p className="text-sm text-gray-400 mb-1">{t("originalText")}</p>
-        <p className="text-gray-100 whitespace-pre-wrap">{entry.inputText}</p>
-      </div>
-
-      {/* Corrected text */}
-      <div className="rounded-lg bg-teal-900/30 border border-teal-700 p-4">
-        <p className="text-sm text-teal-400 mb-1 font-semibold">{t("overallCorrectedText")}</p>
-        <p className="text-gray-100 whitespace-pre-wrap">{result.overallCorrectedText}</p>
-      </div>
-
-      {/* Individual corrections */}
-      {result.corrections.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-gray-400">{t("corrections")}</h3>
-          {result.corrections.map((correction, i) => (
-            <CorrectionCard key={i} correction={correction} />
-          ))}
-        </div>
-      )}
+      {/* Per-sentence corrections */}
+      {result.sentences.map((sentence, i) => (
+        <SentenceCorrectionCard key={i} sentence={sentence} index={i} />
+      ))}
 
       {/* Overall feedback */}
       <div className="rounded-lg bg-gray-800/60 p-4">
@@ -306,6 +367,35 @@ export default function SpeakingWritingView({ mode }: Props) {
   );
 }
 
+function SentenceCorrectionCard({ sentence, index }: { sentence: SentenceCorrection; index: number }) {
+  const { t } = useI18n();
+
+  return (
+    <div className="space-y-3">
+      {/* Original sentence */}
+      <div className="rounded-lg bg-gray-800/60 p-4">
+        <p className="text-xs text-gray-500 mb-1">{t("originalText")} #{index + 1}</p>
+        <p className="text-gray-100 whitespace-pre-wrap">{sentence.original}</p>
+      </div>
+
+      {/* Corrected sentence */}
+      <div className="rounded-lg bg-teal-900/30 border border-teal-700 p-4">
+        <p className="text-xs text-teal-400 mb-1 font-semibold">{t("overallCorrectedText")}</p>
+        <p className="text-gray-100 whitespace-pre-wrap">{sentence.corrected}</p>
+      </div>
+
+      {/* Individual corrections for this sentence */}
+      {sentence.corrections.length > 0 && (
+        <div className="space-y-2 pl-2 border-l-2 border-gray-700">
+          {sentence.corrections.map((correction, i) => (
+            <CorrectionCard key={i} correction={correction} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CorrectionCard({ correction }: { correction: CorrectionItem }) {
   const { t } = useI18n();
 
@@ -318,7 +408,7 @@ function CorrectionCard({ correction }: { correction: CorrectionItem }) {
   const config = severityConfig[correction.severity];
 
   return (
-    <div className={`rounded-lg ${config.bg} border ${config.border} p-4 space-y-2`}>
+    <div className={`rounded-lg ${config.bg} border ${config.border} p-3 space-y-2`}>
       <div className="flex items-center gap-2">
         <span className={`rounded px-2 py-0.5 text-xs font-medium ${config.badge}`}>
           {config.label}

@@ -918,6 +918,7 @@ export async function getSpeakingWritingSession(
     sessionId: doc.id,
     language: d.language,
     mode: d.mode,
+    useCase: d.useCase ?? "",
     startedAt: d.startedAt,
     status: d.status,
     corrections: d.corrections ?? [],

@@ -1,0 +1,54 @@
+{
+  "speaking": {
+    "professional": {
+      "en": "The user is practicing professional or academic speaking — meetings, conferences, lectures, or workplace discussions. Prioritize clarity, precise vocabulary, appropriate register, and professional tone. Flag overly casual language, slang, or filler words. Suggest formal alternatives where appropriate.",
+      "ja": "ユーザーはプロフェッショナル・学術的なスピーキングを練習しています — 会議、学会、講義、職場での議論など。明確さ、正確な語彙、適切な敬語レベル、プロフェッショナルなトーンを優先してください。カジュアルすぎる言葉遣いや口語表現を指摘し、適切なフォーマル表現を提案してください。",
+      "ko": "사용자는 전문적/학술적 스피킹을 연습하고 있습니다 — 회의, 학회, 강의, 직장 토론 등. 명확성, 정확한 어휘, 적절한 존댓말 수준, 전문적인 톤을 우선시하세요. 지나치게 캐주얼한 표현이나 구어체를 지적하고, 적절한 격식체를 제안하세요.",
+      "zh": "用户正在练习专业/学术口语 — 会议、学术会议、讲座、职场讨论等。优先考虑清晰度、准确的词汇、适当的语域和专业语气。指出过于随意的用语或口语化表达，建议适当的正式替代方案。"
+    },
+    "casual": {
+      "en": "The user is practicing casual, everyday speaking — chatting with friends, family, or in relaxed social settings. Prioritize natural flow, colloquial expressions, and conversational tone. Overly formal or stiff phrasing should be flagged. Contractions and informal grammar are acceptable when natural.",
+      "ja": "ユーザーはカジュアルな日常会話を練習しています — 友人、家族、リラックスした場面での会話。自然な流れ、口語表現、会話的なトーンを優先してください。堅すぎる表現や不自然な敬語を指摘してください。タメ口や省略形は自然であれば許容してください。",
+      "ko": "사용자는 캐주얼한 일상 대화를 연습하고 있습니다 — 친구, 가족, 편안한 사교 상황에서의 대화. 자연스러운 흐름, 구어적 표현, 대화체 톤을 우선시하세요. 지나치게 격식적이거나 딱딱한 표현을 지적하세요. 반말이나 축약형은 자연스러우면 허용하세요.",
+      "zh": "用户正在练习日常休闲口语 — 与朋友、家人聊天或在轻松的社交场合。优先考虑自然流畅、口语化表达和对话语气。应指出过于正式或生硬的表达。口语化的语法和省略在自然的情况下是可以接受的。"
+    },
+    "presentation": {
+      "en": "The user is practicing for a presentation, public speech, or formal talk — pitches, keynotes, or panel discussions. Prioritize clear structure, impactful phrasing, audience engagement, and rhetorical effectiveness. Flag filler words, vague language, and unclear transitions. Suggest more compelling alternatives.",
+      "ja": "ユーザーはプレゼンテーション、スピーチ、フォーマルな発表を練習しています — ピッチ、基調講演、パネルディスカッションなど。明確な構成、インパクトのある表現、聴衆への訴求力、修辞的効果を優先してください。つなぎ言葉、曖昧な表現、不明確な接続を指摘し、より説得力のある表現を提案してください。",
+      "ko": "사용자는 프레젠테이션, 공개 연설, 공식 발표를 연습하고 있습니다 — 피치, 기조연설, 패널 토론 등. 명확한 구조, 임팩트 있는 표현, 청중 참여, 수사적 효과를 우선시하세요. 군더더기 표현, 모호한 언어, 불명확한 전환을 지적하고, 더 설득력 있는 대안을 제안하세요.",
+      "zh": "用户正在练习演讲、公开发言或正式报告 — 提案展示、主题演讲、小组讨论等。优先考虑清晰的结构、有影响力的措辞、受众参与度和修辞效果。指出填充词、模糊语言和不清晰的过渡，建议更有说服力的替代方案。"
+    },
+    "interview": {
+      "en": "The user is practicing for an interview — job interviews, admissions interviews, or formal Q&A settings. Prioritize concise, confident answers with professional vocabulary. Flag rambling, hedging, or overly casual language. Suggest ways to sound more structured, direct, and polished.",
+      "ja": "ユーザーは面接の練習をしています — 就職面接、入試面接、フォーマルなQ&Aなど。簡潔で自信のある回答、プロフェッショナルな語彙を優先してください。冗長な表現、曖昧な言い回し、カジュアルすぎる言葉遣いを指摘してください。より構造的で直接的、洗練された表現を提案してください。",
+      "ko": "사용자는 면접을 연습하고 있습니다 — 취업 면접, 입학 면접, 공식 Q&A 등. 간결하고 자신감 있는 답변과 전문적인 어휘를 우선시하세요. 장황한 표현, 애매한 표현, 지나치게 캐주얼한 언어를 지적하세요. 더 체계적이고 직접적이며 세련된 표현 방법을 제안하세요.",
+      "zh": "用户正在练习面试 — 求职面试、入学面试或正式问答场合。优先考虑简洁自信的回答和专业词汇。指出冗长、含糊或过于随意的语言。建议更有条理、更直接、更精练的表达方式。"
+    }
+  },
+  "writing": {
+    "academic": {
+      "en": "The user is practicing academic or business writing — essays, reports, research papers, proposals, or professional documents. Prioritize formal register, precise terminology, logical structure, and proper citation-style language. Flag colloquialisms, contractions, and informal tone.",
+      "ja": "ユーザーは学術的・ビジネス文書の作成を練習しています — エッセイ、レポート、研究論文、提案書、ビジネス文書など。格式高い文体、正確な用語、論理的な構成、適切な表現を優先してください。口語表現、省略形、インフォーマルなトーンを指摘してください。",
+      "ko": "사용자는 학술적/비즈니스 글쓰기를 연습하고 있습니다 — 에세이, 보고서, 연구 논문, 제안서, 업무 문서 등. 격식체, 정확한 용어, 논리적 구조, 적절한 표현을 우선시하세요. 구어적 표현, 축약형, 비격식적인 톤을 지적하세요.",
+      "zh": "用户正在练习学术/商务写作 — 论文、报告、研究论文、提案、专业文档等。优先考虑正式语域、准确术语、逻辑结构和规范的表达。指出口语化表达、缩写和非正式语气。"
+    },
+    "social": {
+      "en": "The user is practicing casual online writing — social media posts (Twitter/X, Reddit, Instagram), comments, or text messages. Prioritize natural, engaging tone appropriate for the platform. Formal or stiff phrasing should be flagged. Abbreviations, emoji references, and internet-native expressions are acceptable when natural.",
+      "ja": "ユーザーはカジュアルなオンライン文章を練習しています — SNS投稿（Twitter/X、Reddit、Instagram）、コメント、メッセージなど。プラットフォームに適した自然で魅力的なトーンを優先してください。堅すぎる表現を指摘してください。略語やネットスラングは自然であれば許容してください。",
+      "ko": "사용자는 캐주얼한 온라인 글쓰기를 연습하고 있습니다 — SNS 게시물(트위터/X, 레딧, 인스타그램), 댓글, 문자 메시지 등. 플랫폼에 맞는 자연스럽고 매력적인 톤을 우선시하세요. 격식적이거나 딱딱한 표현을 지적하세요. 약어나 인터넷 표현은 자연스러우면 허용하세요.",
+      "zh": "用户正在练习休闲网络写作 — 社交媒体帖子（Twitter/X、Reddit、Instagram）、评论或消息等。优先考虑适合平台的自然且吸引人的语气。应指出过于正式或生硬的表达。缩写和网络用语在自然的情况下是可以接受的。"
+    },
+    "email": {
+      "en": "The user is practicing email or correspondence writing — formal emails, informal emails, business letters, or official communications. Prioritize appropriate greeting/closing conventions, clear subject communication, professional but approachable tone, and proper email etiquette.",
+      "ja": "ユーザーはメール・書簡の作成を練習しています — フォーマルメール、カジュアルメール、ビジネスレター、公式通知など。適切な挨拶・締めの慣例、明確な用件の伝達、プロフェッショナルかつ親しみやすいトーン、適切なメールマナーを優先してください。",
+      "ko": "사용자는 이메일/서신 작성을 연습하고 있습니다 — 격식 이메일, 비격식 이메일, 비즈니스 서신, 공식 커뮤니케이션 등. 적절한 인사/맺음말 관례, 명확한 용건 전달, 전문적이면서 친근한 톤, 적절한 이메일 에티켓을 우선시하세요.",
+      "zh": "用户正在练习邮件/书信写作 — 正式邮件、非正式邮件、商务信函、官方通知等。优先考虑适当的问候/结束语惯例、清晰的主题传达、专业而亲切的语气和适当的邮件礼仪。"
+    },
+    "creative": {
+      "en": "The user is practicing creative writing — stories, blog posts, personal essays, or narrative content. Prioritize vivid expression, engaging narrative voice, varied sentence structure, and stylistic flair. Overly dry or formulaic language should be flagged. Creative liberties with grammar are acceptable when intentional and effective.",
+      "ja": "ユーザーはクリエイティブ・ライティングを練習しています — 物語、ブログ記事、エッセイ、ナラティブコンテンツなど。鮮やかな表現、魅力的な語り口、多様な文構造、文体的な独自性を優先してください。単調で型にはまった表現を指摘してください。意図的で効果的であれば、文法の創造的な使い方は許容してください。",
+      "ko": "사용자는 창작 글쓰기를 연습하고 있습니다 — 소설, 블로그 글, 개인 에세이, 서사적 콘텐츠 등. 생생한 표현, 매력적인 서술, 다양한 문장 구조, 문체적 개성을 우선시하세요. 단조롭거나 틀에 박힌 표현을 지적하세요. 의도적이고 효과적인 경우 문법의 창의적 활용은 허용하세요.",
+      "zh": "用户正在练习创意写作 — 故事、博客文章、个人散文或叙事性内容。优先考虑生动的表达、吸引人的叙事声音、多样的句式结构和风格特色。应指出过于枯燥或公式化的语言。有意且有效的语法创造性使用是可以接受的。"
+    }
+  }
+}
