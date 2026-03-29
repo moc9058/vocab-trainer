@@ -69,7 +69,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
     const { sourceText, targetLanguages } = request.body;
 
     // Step 1: decompose
-    const decomposeRaw = await callLLMFullWithSchema(decomposePrompt, sourceText, decomposeSchema);
+    const decomposeRaw = await callLLMFullWithSchema(decomposePrompt, sourceText, decomposeSchema, "translation/decompose");
     const decomposition = stripMarkdownFences(decomposeRaw);
 
     // Step 2: translate in parallel
@@ -78,7 +78,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
         const prompt = translatePrompts[lang];
         if (!prompt) throw new Error(`Unsupported language: ${lang}`);
         return parseSchemaResult(
-          await callLLMFullWithSchema(prompt, decomposition, translateSchema),
+          await callLLMFullWithSchema(prompt, decomposition, translateSchema, "translation/translate"),
           lang
         );
       })
@@ -142,7 +142,8 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
         decomposePrompt,
         sourceText,
         decomposeSchema,
-        (chunk) => sendEvent("decompose-chunk", { chunk })
+        (chunk) => sendEvent("decompose-chunk", { chunk }),
+        "translation/decompose-stream"
       );
       const decomposition = stripMarkdownFences(decomposeRaw);
       sendEvent("decompose-result", { decomposition });
@@ -160,7 +161,8 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
             prompt,
             decomposition,
             translateSchema,
-            (chunk) => sendEvent("chunk", { language: lang, chunk })
+            (chunk) => sendEvent("chunk", { language: lang, chunk }),
+            "translation/translate-stream"
           );
           const result = parseSchemaResult(raw, lang);
           sendEvent("result", { language: lang, result });

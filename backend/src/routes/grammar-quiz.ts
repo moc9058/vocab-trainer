@@ -277,7 +277,7 @@ Allowed topics: ${TOPICS.join(", ")}`;
         .map((w) => `- ${w.term} (${w.pinyin}), example: "${w.sentence}" → "${w.translation}"`)
         .join("\n");
 
-      const raw = await callLLM(systemPrompt, `Generate entries for these words:\n\n${userPrompt}`);
+      const raw = await callLLM(systemPrompt, `Generate entries for these words:\n\n${userPrompt}`, "grammar-quiz/batch-add");
       const parsed = JSON.parse(stripMarkdownFences(raw));
       const generated: unknown[] = parsed.words ?? [];
 
@@ -346,7 +346,8 @@ async function prepareQuestion(
           "You are a translator. Return valid JSON only.",
           `Translate the following sentence to ${langName}. Return JSON: { "translation": "..." }
 
-Sentence: ${ex.translation}`
+Sentence: ${ex.translation}`,
+          "grammar-quiz/translate"
         );
         const parsed = JSON.parse(stripMarkdownFences(raw));
         displaySentence = parsed.translation ?? ex.translation;
@@ -402,7 +403,8 @@ async function generateSentencePair(
 
   const raw = await callLLM(
     "You are a Chinese grammar example generator. Follow these steps: 1) Identify the language of the provided description and other fields (they may be in Japanese, English, Korean, or other languages). 2) Understand the grammar point from the provided information. 3) Generate a new Chinese example sentence demonstrating the grammar point. 4) Segment the sentence into words with pinyin. Return valid JSON only.",
-    parts.join("\n")
+    parts.join("\n"),
+    "grammar-quiz/generate-sentence"
   );
 
   const parsed = JSON.parse(stripMarkdownFences(raw));

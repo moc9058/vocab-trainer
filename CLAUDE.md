@@ -55,8 +55,9 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `routes/grammar-progress.ts` — per-component grammar progress
   - `routes/translation.ts` — schema-based translation/analysis with parallel LLM calls (only `en`/`ja`/`ko`/`zh` targets supported), SSE streaming, history persistence
   - `routes/speaking-writing.ts` — text correction for speaking/writing practice; SSE streaming LLM call with language-specific system prompts + use-case context (professional/casual/presentation/interview for speaking; academic/social/email/creative for writing), per-sentence corrections, session persistence
+  - `routes/metrics.ts` — LLM token usage tracking and cost estimation; paginated usage logs, daily aggregates, cost-per-token configuration per model
 - **Database**: `firestore.ts` — Google Cloud Firestore abstraction layer
-- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, validateWord, segmentBatch); `callLLM` uses MINI deployment, `callLLMFull` uses FULL deployment (for translation, speaking & writing correction); config loaded from `.env` (local) or Firestore `config/llm` (deployed); `validateWord` accepts any word with at least one definition language (not limited to ja/en/ko)
+- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, validateWord, segmentBatch); `callLLM` uses MINI deployment, `callLLMFull` uses FULL deployment (for translation, speaking & writing correction); config loaded from `.env` (local) or Firestore `config/llm` (deployed); `validateWord` accepts any word with at least one definition language (not limited to ja/en/ko); all LLM functions accept a `route` parameter for token usage tracking and automatically log token counts to Firestore
 - **Types**: `types.ts` — shared interfaces (Word, VocabFile, QuizSession, WordProgress, TranslationEntry, SpeakingWritingSession, etc.)
 - Route handlers use Fastify generics for type-safe Params/Querystring/Body and JSON schema validation
 - Errors via `@fastify/sensible`: `reply.notFound()`, `reply.badRequest()`, `reply.conflict()`
@@ -82,7 +83,9 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `grammar_quiz_sessions` — one grammar quiz session per language
   - `translation_history` — translation/analysis entries with structured LLM results
   - `speaking_writing_sessions` — one speaking/writing correction session per language (keyed by language code)
-  - `config` — app configuration (e.g., `config/llm` stores Azure OpenAI keys)
+  - `config` — app configuration (e.g., `config/llm` stores Azure OpenAI keys, `config/token_costs` stores cost-per-token rates)
+  - `token_usage` — individual LLM call logs with token counts per call
+  - `token_usage_daily` — daily aggregates by model (doc ID: `{model}_{YYYY-MM-DD}`)
 - **Local files** (for migration/export):
   - Vocabulary: `backend/DB/word/{language}.json` — one file per language (e.g. `chinese.json`)
   - Grammar: `backend/DB/grammer/chinese/*.json` — per-chapter grammar files
@@ -131,6 +134,11 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 - `POST /api/speaking-writing/correct-stream` — SSE streaming version of correction (same body; streams chunk events then done with full session)
 - `GET /api/speaking-writing/session/:language` — get current speaking/writing session (returns null if none, not 404)
 - `DELETE /api/speaking-writing/session/:language` — delete speaking/writing session
+- `GET /api/metrics/usage` — paginated raw token usage logs (query: model, route, from, to, page, limit)
+- `GET /api/metrics/summary` — aggregated usage summary with cost estimates (query: from, to)
+- `GET /api/metrics/costs` — get cost-per-token configuration
+- `PUT /api/metrics/costs` — update cost-per-token rates (body: { models: Record<string, TokenCostRate> })
+- `DELETE /api/metrics/usage` — clear all usage logs and daily summaries
 
 ### Frontend (`frontend/src/`)
 - **Entry**: `main.tsx` → `App.tsx` → `Dashboard.tsx`
@@ -158,7 +166,8 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
   - `FlaggedReview.tsx` — review flagged words
   - `TranslationView.tsx` — translation/analysis UI with language selection ordered by settings, schema-based sentence decomposition results, per-language regenerate buttons during streaming, reading column conditional on CJK input, and history navigation
   - `SpeakingWritingView.tsx` — text correction UI with language selection (ordered by settings), speaking/writing mode toggle, use-case selector (professional/casual/presentation/interview or academic/social/email/creative), SSE streaming with live JSON preview, per-sentence corrections with severity-coded feedback (error/improvement/style), previous/next navigation between corrections, session persistence
-  - `EmptyState.tsx` — home screen with vocabulary, translation, speaking & writing, and grammar sections
+  - `MetricsView.tsx` — LLM token usage dashboard with summary (per-model breakdown, daily table, cost estimates), paginated usage logs, and cost-per-token configuration editor
+  - `EmptyState.tsx` — home screen with vocabulary, translation, speaking & writing, grammar, and system sections
 - **i18n**: `i18n/translations.ts` — English, Japanese, and Korean, keyed by `TranslationKey` type
 - **Styling**: Tailwind CSS 4 utility classes only
 - **Proxy**: Vite proxies `/api` requests to `localhost:3000` in dev

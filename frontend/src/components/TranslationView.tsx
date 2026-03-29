@@ -30,21 +30,19 @@ export default function TranslationView({ mode }: Props) {
   const [decomposeComplete, setDecomposeComplete] = useState(false);
   const [streamingChunks, setStreamingChunks] = useState<Map<string, string>>(new Map());
   const [streamResults, setStreamResults] = useState<Map<string, TranslationResult>>(new Map());
+  const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastInputRef = useRef("");
   const lastLangsRef = useRef<string[]>([]);
   const doneRef = useRef(false);
+  const needsCleanupRef = useRef(mode === "new");
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         if (mode === "new") {
-          await deleteTranslationHistory();
-          if (!cancelled) {
-            setHistory([]);
-            setLoadingHistory(false);
-          }
+          if (!cancelled) setLoadingHistory(false);
           return;
         }
         const { entries } = await getTranslationHistory(1, 50);
@@ -85,6 +83,7 @@ export default function TranslationView({ mode }: Props) {
     lastInputRef.current = inputText.trim();
     lastLangsRef.current = getTargetLanguages();
     doneRef.current = false;
+    setError(null);
     setPhase("loading");
     setDecomposeChunks("");
     setDecomposeComplete(false);
@@ -127,7 +126,13 @@ export default function TranslationView({ mode }: Props) {
         },
         onDone(entry) {
           doneRef.current = true;
-          setHistory((prev) => [entry, ...prev]);
+          if (needsCleanupRef.current) {
+            needsCleanupRef.current = false;
+            deleteTranslationHistory().catch(() => {});
+            setHistory([entry]);
+          } else {
+            setHistory((prev) => [entry, ...prev]);
+          }
           setHistoryIndex(0);
           setActiveTab(0);
           setPhase("results");
@@ -135,12 +140,18 @@ export default function TranslationView({ mode }: Props) {
           setStreamingChunks(new Map());
           setStreamResults(new Map());
         },
+        onError(err) {
+          setError(err.message);
+          setStreamingChunks(new Map());
+          setDecomposeChunks("");
+        },
       }, controller.signal);
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error("Translation failed:", err);
-      alert(String(err));
-      setPhase("input");
+      setError(String(err));
+      setStreamingChunks(new Map());
+      setDecomposeChunks("");
     }
   }
 
@@ -225,6 +236,14 @@ export default function TranslationView({ mode }: Props) {
     setPhase("input");
     setInputText("");
     setActiveTab(0);
+  }
+
+  function handleRegenerateTranslation() {
+    if (!currentEntry) return;
+    setInputText(currentEntry.sourceText);
+    setSelectedLanguages(currentEntry.targetLanguages);
+    setPhase("input");
+    setError(null);
   }
 
   function handlePrevious() {
@@ -325,27 +344,49 @@ export default function TranslationView({ mode }: Props) {
         <h2 className="text-lg font-bold text-gray-100">{t("translating")}</h2>
         <TranslationNavBar />
 
-        {/* Step 1: Decomposition */}
-        <div className="rounded-lg bg-gray-800/60 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            {decomposeComplete ? (
-              <span className="text-green-400 text-xs">&#10003;</span>
-            ) : (
-              <div className="h-3 w-3 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
-            )}
-            <p className="text-xs text-violet-400 font-semibold">
-              {decomposeComplete ? t("decompositionComplete") : t("analyzingStructure")}
-            </p>
+        {error && (
+          <div className="rounded-lg bg-red-900/30 border border-red-700 p-4 space-y-3">
+            <p className="text-sm text-red-300">{error}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleTranslate}
+                className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 transition-colors"
+              >
+                {t("regenerate")}
+              </button>
+              <button
+                onClick={() => { setError(null); setPhase("input"); }}
+                className="rounded-lg border border-gray-600 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+              >
+                {t("back")}
+              </button>
+            </div>
           </div>
-          {decomposeChunks && !decomposeComplete && (
-            <p className="text-sm text-gray-400 font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
-              {decomposeChunks.slice(-500)}
-            </p>
-          )}
-        </div>
+        )}
+
+        {/* Step 1: Decomposition */}
+        {!error && (
+          <div className="rounded-lg bg-gray-800/60 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              {decomposeComplete ? (
+                <span className="text-green-400 text-xs">&#10003;</span>
+              ) : (
+                <div className="h-3 w-3 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
+              )}
+              <p className="text-xs text-violet-400 font-semibold">
+                {decomposeComplete ? t("decompositionComplete") : t("analyzingStructure")}
+              </p>
+            </div>
+            {decomposeChunks && !decomposeComplete && (
+              <p className="text-sm text-gray-400 font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
+                {decomposeChunks.slice(-500)}
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Step 2: Per-language translation */}
-        {getTargetLanguages().map((lang) => {
+        {!error && getTargetLanguages().map((lang) => {
           const knownLang = KNOWN_LANGUAGES.find((l) => l.code === lang);
           const label = knownLang?.label ?? lang;
           const completed = streamResults.get(lang);
@@ -432,6 +473,12 @@ export default function TranslationView({ mode }: Props) {
           className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 transition-colors"
         >
           {t("newTranslation")}
+        </button>
+        <button
+          onClick={handleRegenerateTranslation}
+          className="rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+        >
+          {t("regenerate")}
         </button>
         <div className="flex-1" />
         {historyIndex < history.length - 1 && (

@@ -18,6 +18,7 @@ import SmartAddWordModal from "./SmartAddWordModal";
 import GrammarFormModal from "./GrammarFormModal";
 import TranslationView from "./TranslationView";
 import SpeakingWritingView from "./SpeakingWritingView";
+import MetricsView from "./MetricsView";
 import LanguageSelectModal from "./LanguageSelectModal";
 import LevelSelectModal from "./LevelSelectModal";
 import QuizFilterModal from "./QuizFilterModal";
@@ -59,6 +60,7 @@ export default function Dashboard() {
   // Speaking & Writing state
   const [speakingWritingMode, setSpeakingWritingMode] = useState<"new" | "resume" | null>(null);
   const [hasSWSession, setHasSWSession] = useState(false);
+  const [showMetrics, setShowMetrics] = useState(false);
 
   // Fetch pinyin map when a quiz starts or browsing begins
   const activeLang = activeQuiz?.language ?? browsingLanguage ?? flaggedReviewLanguage;
@@ -227,6 +229,7 @@ export default function Dashboard() {
     setGrammarFormLanguage(null);
     setTranslationMode(null);
     setSpeakingWritingMode(null);
+    setShowMetrics(false);
   }
 
   function handleAddWord() {
@@ -328,7 +331,7 @@ export default function Dashboard() {
     }
   }
 
-  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal || showFlaggedLanguageModal || activeGrammarQuiz || browsingGrammarLanguage || showGrammarLanguageModal || showGrammarBrowseLanguageModal || showGrammarFilterModal || showSmartAdd || grammarFormLanguage || translationMode || speakingWritingMode);
+  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal || showFlaggedLanguageModal || activeGrammarQuiz || browsingGrammarLanguage || showGrammarLanguageModal || showGrammarBrowseLanguageModal || showGrammarFilterModal || showSmartAdd || grammarFormLanguage || translationMode || speakingWritingMode || showMetrics);
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-900">
@@ -509,6 +512,8 @@ export default function Dashboard() {
           <TranslationView mode={translationMode} />
         ) : speakingWritingMode ? (
           <SpeakingWritingView mode={speakingWritingMode} />
+        ) : showMetrics ? (
+          <MetricsView />
         ) : (
           <EmptyState
             onResume={(session) => setActiveQuiz(session)}
@@ -526,6 +531,7 @@ export default function Dashboard() {
             onStartSpeakingWriting={() => setSpeakingWritingMode("new")}
             onResumeSpeakingWriting={() => setSpeakingWritingMode("resume")}
             hasSWSession={hasSWSession}
+            onOpenMetrics={() => setShowMetrics(true)}
           />
         )}
       </main>

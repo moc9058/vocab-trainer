@@ -172,6 +172,9 @@ const translations = {
     settingsDefaultExLangs: "Default Example Translation Languages",
     settingsReset: "Reset to Default",
     settingsAtLeastOne: "At least one language must be selected",
+    // System / Metrics
+    sectionSystem: "System",
+    viewMetrics: "LLM Usage & Costs",
   },
   ja: {
     appTitle: "単語トレーナー",
@@ -346,6 +349,8 @@ const translations = {
     settingsDefaultExLangs: "デフォルト例文翻訳言語",
     settingsReset: "デフォルトに戻す",
     settingsAtLeastOne: "少なくとも1つの言語を選択してください",
+    sectionSystem: "システム",
+    viewMetrics: "LLM使用量・コスト",
   },
   ko: {
     appTitle: "단어 트레이너",
@@ -520,6 +525,8 @@ const translations = {
     settingsDefaultExLangs: "기본 예문 번역 언어",
     settingsReset: "기본값으로 재설정",
     settingsAtLeastOne: "최소 1개의 언어를 선택해야 합니다",
+    sectionSystem: "시스템",
+    viewMetrics: "LLM 사용량 및 비용",
   },
 } as const;
 

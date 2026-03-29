@@ -1,9 +1,11 @@
 import { AzureOpenAI } from "openai";
+import type { CompletionUsage } from "openai/resources/completions";
 import { Firestore } from "@google-cloud/firestore";
 import { config } from "dotenv";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 import { TOPICS, type Word, type Topic } from "./types.js";
+import { logTokenUsage, ensureModelInCostConfig } from "./firestore.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -91,40 +93,70 @@ export async function getDeploymentFull(): Promise<string> {
   return deploymentFull;
 }
 
-export async function callLLM(systemPrompt: string, userPrompt: string): Promise<string> {
+async function recordUsage(
+  usage: CompletionUsage | undefined,
+  model: string,
+  caller: string,
+  route: string
+): Promise<void> {
+  if (!usage) return;
+  try {
+    ensureModelInCostConfig(model).catch(() => {});
+    await logTokenUsage({
+      timestamp: new Date().toISOString(),
+      model,
+      caller,
+      route,
+      promptTokens: usage.prompt_tokens,
+      completionTokens: usage.completion_tokens,
+      totalTokens: usage.total_tokens,
+      cachedTokens: usage.prompt_tokens_details?.cached_tokens ?? undefined,
+    });
+  } catch (err) {
+    console.error("Failed to record token usage:", err);
+  }
+}
+
+export async function callLLM(systemPrompt: string, userPrompt: string, route = "unknown"): Promise<string> {
   const cl = await createAzureClient();
+  const model = await getDeploymentMini();
   const response = await cl.chat.completions.create({
-    model: await getDeploymentMini(),
+    model,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
     response_format: { type: "json_object" },
   });
+  recordUsage(response.usage, model, "callLLM", route);
   return response.choices[0]?.message?.content ?? "";
 }
 
-export async function callLLMFull(systemPrompt: string, userPrompt: string): Promise<string> {
+export async function callLLMFull(systemPrompt: string, userPrompt: string, route = "unknown"): Promise<string> {
   const cl = await createAzureClient();
+  const model = await getDeploymentFull();
   const response = await cl.chat.completions.create({
-    model: await getDeploymentFull(),
+    model,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
     response_format: { type: "json_object" },
   });
+  recordUsage(response.usage, model, "callLLMFull", route);
   return response.choices[0]?.message?.content ?? "";
 }
 
 export async function callLLMFullWithSchema(
   systemPrompt: string,
   userPrompt: string,
-  jsonSchema: Record<string, unknown>
+  jsonSchema: Record<string, unknown>,
+  route = "unknown"
 ): Promise<string> {
   const cl = await createAzureClient();
+  const model = await getDeploymentFull();
   const response = await cl.chat.completions.create({
-    model: await getDeploymentFull(),
+    model,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
@@ -134,32 +166,41 @@ export async function callLLMFullWithSchema(
       json_schema: jsonSchema,
     } as unknown as { type: "json_object" },
   });
+  recordUsage(response.usage, model, "callLLMFullWithSchema", route);
   return response.choices[0]?.message?.content ?? "";
 }
 
 export async function streamLLMFull(
   systemPrompt: string,
   userPrompt: string,
-  onChunk: (chunk: string) => void
+  onChunk: (chunk: string) => void,
+  route = "unknown"
 ): Promise<string> {
   const cl = await createAzureClient();
+  const model = await getDeploymentFull();
   const stream = await cl.chat.completions.create({
-    model: await getDeploymentFull(),
+    model,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ],
     response_format: { type: "json_object" },
     stream: true,
+    stream_options: { include_usage: true },
   });
   let full = "";
+  let usage: CompletionUsage | undefined;
   for await (const chunk of stream) {
     const delta = chunk.choices[0]?.delta?.content ?? "";
     if (delta) {
       full += delta;
       onChunk(delta);
     }
+    if (chunk.usage) {
+      usage = chunk.usage;
+    }
   }
+  recordUsage(usage, model, "streamLLMFull", route);
   return full;
 }
 
@@ -167,11 +208,13 @@ export async function streamLLMFullWithSchema(
   systemPrompt: string,
   userPrompt: string,
   jsonSchema: Record<string, unknown>,
-  onChunk: (chunk: string) => void
+  onChunk: (chunk: string) => void,
+  route = "unknown"
 ): Promise<string> {
   const cl = await createAzureClient();
+  const model = await getDeploymentFull();
   const stream = await cl.chat.completions.create({
-    model: await getDeploymentFull(),
+    model,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
@@ -181,15 +224,21 @@ export async function streamLLMFullWithSchema(
       json_schema: jsonSchema,
     } as unknown as { type: "json_object" },
     stream: true,
+    stream_options: { include_usage: true },
   });
   let full = "";
+  let usage: CompletionUsage | undefined;
   for await (const chunk of stream) {
     const delta = chunk.choices[0]?.delta?.content ?? "";
     if (delta) {
       full += delta;
       onChunk(delta);
     }
+    if (chunk.usage) {
+      usage = chunk.usage;
+    }
   }
+  recordUsage(usage, model, "streamLLMFullWithSchema", route);
   return full;
 }
 
@@ -218,7 +267,7 @@ export async function generatePinyinForChars(
   const systemPrompt = `You are a Chinese pronunciation expert. Given a list of individual Chinese characters, return their most common pinyin with tone marks. Return a JSON object with a "results" key containing an array of {"char": "...", "pinyin": "..."} objects.`;
   const userPrompt = `Provide pinyin for these characters: ${chars.join(", ")}`;
 
-  const raw = await callLLM(systemPrompt, userPrompt);
+  const raw = await callLLM(systemPrompt, userPrompt, "llm/generate-pinyin");
   const parsed = JSON.parse(stripMarkdownFences(raw));
   const results: { char: string; pinyin: string }[] = [];
 
@@ -290,7 +339,7 @@ Rules:
     .join("\n");
   const userPrompt = `Segment these Chinese sentences:\n\n${numbered}`;
 
-  const raw = await callLLM(systemPrompt, userPrompt);
+  const raw = await callLLM(systemPrompt, userPrompt, "llm/segment-batch");
   const parsed = JSON.parse(stripMarkdownFences(raw));
   const results = new Map<number, Segment[]>();
 

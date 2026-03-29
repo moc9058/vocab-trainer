@@ -16,6 +16,9 @@ import type {
   TranslationEntry,
   TranslationResult,
   SpeakingWritingSession,
+  TokenUsageRecord,
+  TokenUsageDailySummary,
+  TokenCostConfig,
 } from "./types.js";
 
 const db = new Firestore({
@@ -940,6 +943,158 @@ export async function deleteSpeakingWritingSession(
   if (!doc.exists) return false;
   await speakingWritingSessions.doc(language).delete();
   return true;
+}
+
+// ========== Token Usage Metrics ==========
+
+const tokenUsage = db.collection("token_usage");
+const tokenUsageDaily = db.collection("token_usage_daily");
+
+export async function logTokenUsage(
+  record: Omit<TokenUsageRecord, "id">
+): Promise<void> {
+  // Write individual record
+  await tokenUsage.doc().set(record);
+
+  // Increment daily aggregate
+  const date = record.timestamp.slice(0, 10); // YYYY-MM-DD
+  const dailyDocId = `${record.model}_${date}`;
+  const dailyRef = tokenUsageDaily.doc(dailyDocId);
+
+  await dailyRef.set(
+    {
+      model: record.model,
+      date,
+      totalCalls: FieldValue.increment(1),
+      promptTokens: FieldValue.increment(record.promptTokens),
+      completionTokens: FieldValue.increment(record.completionTokens),
+      totalTokens: FieldValue.increment(record.totalTokens),
+      cachedTokens: FieldValue.increment(record.cachedTokens ?? 0),
+      [`byRoute.${record.route}.calls`]: FieldValue.increment(1),
+      [`byRoute.${record.route}.promptTokens`]: FieldValue.increment(record.promptTokens),
+      [`byRoute.${record.route}.completionTokens`]: FieldValue.increment(record.completionTokens),
+      [`byRoute.${record.route}.totalTokens`]: FieldValue.increment(record.totalTokens),
+    },
+    { merge: true }
+  );
+}
+
+export async function getTokenUsageLogs(filters?: {
+  model?: string;
+  route?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+}): Promise<{ records: TokenUsageRecord[]; total: number }> {
+  let query = tokenUsage.orderBy("timestamp", "desc") as FirebaseFirestore.Query;
+
+  if (filters?.model) {
+    query = query.where("model", "==", filters.model);
+  }
+  if (filters?.route) {
+    query = query.where("route", "==", filters.route);
+  }
+  if (filters?.from) {
+    query = query.where("timestamp", ">=", filters.from);
+  }
+  if (filters?.to) {
+    query = query.where("timestamp", "<=", filters.to);
+  }
+
+  const countSnap = await query.count().get();
+  const total = countSnap.data().count;
+
+  const page = filters?.page ?? 1;
+  const limit = filters?.limit ?? 50;
+  const offset = (page - 1) * limit;
+
+  const snap = await query.offset(offset).limit(limit).get();
+  const records = snap.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  })) as TokenUsageRecord[];
+
+  return { records, total };
+}
+
+export async function getDailyUsageSummaries(
+  from?: string,
+  to?: string
+): Promise<TokenUsageDailySummary[]> {
+  let query = tokenUsageDaily.orderBy("date", "desc") as FirebaseFirestore.Query;
+
+  if (from) {
+    query = query.where("date", ">=", from);
+  }
+  if (to) {
+    query = query.where("date", "<=", to);
+  }
+
+  const snap = await query.get();
+  return snap.docs.map((doc) => ({
+    ...doc.data(),
+  })) as TokenUsageDailySummary[];
+}
+
+const knownModels = new Set<string>();
+
+export async function ensureModelInCostConfig(model: string): Promise<void> {
+  if (knownModels.has(model)) return;
+  const docRef = db.collection("config").doc("token_costs");
+  const doc = await docRef.get();
+  if (doc.exists) {
+    const data = doc.data() as TokenCostConfig;
+    if (data.models?.[model]) {
+      knownModels.add(model);
+      return;
+    }
+  }
+  // Add model with zero rates
+  await docRef.set(
+    {
+      models: {
+        [model]: {
+          input: 0,
+          cachedInput: 0,
+          output: 0,
+        },
+      },
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+  knownModels.add(model);
+}
+
+export async function getTokenCostConfig(): Promise<TokenCostConfig | null> {
+  const doc = await db.collection("config").doc("token_costs").get();
+  if (!doc.exists) return null;
+  return doc.data() as TokenCostConfig;
+}
+
+export async function setTokenCostConfig(config: TokenCostConfig): Promise<void> {
+  await db.collection("config").doc("token_costs").set(config);
+}
+
+export async function clearTokenUsage(): Promise<void> {
+  const BATCH_LIMIT = 500;
+
+  // Clear individual records
+  const usageSnap = await tokenUsage.get();
+  for (let i = 0; i < usageSnap.docs.length; i += BATCH_LIMIT) {
+    const batch = db.batch();
+    usageSnap.docs.slice(i, i + BATCH_LIMIT).forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+  }
+
+  // Clear daily summaries
+  const dailySnap = await tokenUsageDaily.get();
+  for (let i = 0; i < dailySnap.docs.length; i += BATCH_LIMIT) {
+    const batch = db.batch();
+    dailySnap.docs.slice(i, i + BATCH_LIMIT).forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+  }
 }
 
 export { db };

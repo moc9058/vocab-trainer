@@ -80,7 +80,7 @@ const speakingWritingRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const userPrompt = `Mode: ${mode}\nContext: ${useCase}\n\nText to correct:\n${inputText}`;
-    const raw = await callLLMFullWithSchema(prompt, userPrompt, outputSchema);
+    const raw = await callLLMFullWithSchema(prompt, userPrompt, outputSchema, "speaking-writing/correct");
     const result = JSON.parse(stripMarkdownFences(raw)) as CorrectionResult;
 
     // Load existing session or create new
@@ -162,7 +162,8 @@ const speakingWritingRoutes: FastifyPluginAsync = async (fastify) => {
         prompt,
         userPrompt,
         outputSchema,
-        (chunk) => sendEvent("chunk", { chunk })
+        (chunk) => sendEvent("chunk", { chunk }),
+        "speaking-writing/correct-stream"
       );
       const result = JSON.parse(stripMarkdownFences(raw)) as CorrectionResult;
 

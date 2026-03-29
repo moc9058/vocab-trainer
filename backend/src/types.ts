@@ -276,3 +276,60 @@ export interface SpeakingWritingSession {
   corrections: SpeakingWritingEntry[];
   currentIndex: number;
 }
+
+// ========== Token Usage Metrics ==========
+
+export interface TokenUsageRecord {
+  id: string;
+  timestamp: string;
+  model: string;
+  caller: string;
+  route: string;
+
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cachedTokens?: number;
+}
+
+export interface TokenUsageDailySummary {
+  model: string;
+  date: string;
+  totalCalls: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cachedTokens: number;
+
+  byRoute: Record<string, {
+    calls: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  }>;
+}
+
+export interface TokenCostRate {
+  input: number;
+  cachedInput: number;
+  output: number;
+}
+
+export interface TokenCostConfig {
+  models: Record<string, TokenCostRate>;
+  updatedAt: string;
+}
+
+export interface UsageMetricsSummary {
+  period: { from: string; to: string };
+  byModel: Record<string, {
+    totalCalls: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    cachedTokens: number;
+    estimatedCost: number;
+  }>;
+  totalEstimatedCost: number;
+  daily: TokenUsageDailySummary[];
+}

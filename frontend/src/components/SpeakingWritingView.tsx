@@ -44,6 +44,7 @@ export default function SpeakingWritingView({ mode }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [streamingChunks, setStreamingChunks] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+  const needsCleanupRef = useRef(mode === "new");
 
   const LANG_CODES = ["en", "ja", "ko", "zh"];
 
@@ -78,22 +79,6 @@ export default function SpeakingWritingView({ mode }: Props) {
     return () => { cancelled = true; };
   }, [mode]);
 
-  // New mode: delete all existing sessions on mount
-  useEffect(() => {
-    if (mode !== "new") return;
-    let cancelled = false;
-    (async () => {
-      for (const code of LANG_CODES) {
-        await deleteSpeakingWritingSession(code).catch(() => {});
-      }
-      if (!cancelled) {
-        setSession(null);
-        setCorrectionIndex(0);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [mode]);
-
   const canSubmit = inputText.trim().length > 0 && selectedLanguage;
 
   async function handleSubmit() {
@@ -104,6 +89,13 @@ export default function SpeakingWritingView({ mode }: Props) {
     setError(null);
     setStreamingChunks("");
     setPhase("loading");
+
+    if (needsCleanupRef.current) {
+      needsCleanupRef.current = false;
+      for (const code of LANG_CODES) {
+        await deleteSpeakingWritingSession(code).catch(() => {});
+      }
+    }
     let settled = false;
     try {
       await submitCorrectionStream(
@@ -127,7 +119,6 @@ export default function SpeakingWritingView({ mode }: Props) {
             settled = true;
             setError(message);
             setStreamingChunks("");
-            setPhase("input");
           },
         },
         controller.signal,
@@ -135,14 +126,12 @@ export default function SpeakingWritingView({ mode }: Props) {
       if (!settled && !controller.signal.aborted) {
         setError("Correction failed: connection closed unexpectedly");
         setStreamingChunks("");
-        setPhase("input");
       }
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error("Correction failed:", err);
       setError(String(err));
       setStreamingChunks("");
-      setPhase("input");
     }
   }
 
@@ -310,17 +299,37 @@ export default function SpeakingWritingView({ mode }: Props) {
       <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-4">
         <h2 className="text-lg font-bold text-gray-100">{t("sectionSpeakingWriting")}</h2>
         <NavigationBar />
-        <div className="rounded-lg bg-gray-800/60 p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="h-3 w-3 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
-            <p className="text-xs text-teal-400 font-semibold">{t("correcting")}</p>
+        {error ? (
+          <div className="rounded-lg bg-red-900/30 border border-red-700 p-4 space-y-3">
+            <p className="text-sm text-red-300">{error}</p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleSubmit}
+                className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500 transition-colors"
+              >
+                {t("regenerate")}
+              </button>
+              <button
+                onClick={() => { setError(null); setPhase("input"); }}
+                className="rounded-lg border border-gray-600 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+              >
+                {t("back")}
+              </button>
+            </div>
           </div>
-          {streamingChunks && (
-            <p className="text-sm text-gray-400 font-mono whitespace-pre-wrap break-all max-h-60 overflow-y-auto">
-              {streamingChunks.slice(-800)}
-            </p>
-          )}
-        </div>
+        ) : (
+          <div className="rounded-lg bg-gray-800/60 p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="h-3 w-3 animate-spin rounded-full border-2 border-teal-400 border-t-transparent" />
+              <p className="text-xs text-teal-400 font-semibold">{t("correcting")}</p>
+            </div>
+            {streamingChunks && (
+              <p className="text-sm text-gray-400 font-mono whitespace-pre-wrap break-all max-h-60 overflow-y-auto">
+                {streamingChunks.slice(-800)}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -397,23 +406,38 @@ export default function SpeakingWritingView({ mode }: Props) {
 
 function SentenceCorrectionCard({ sentence, index }: { sentence: SentenceCorrection; index: number }) {
   const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const hasCorrections = sentence.corrections.length > 0;
 
   return (
     <div className="space-y-3">
-      {/* Original sentence */}
-      <div className="rounded-lg bg-gray-800/60 p-4">
-        <p className="text-xs text-gray-500 mb-1">{t("originalText")} #{index + 1}</p>
-        <p className="text-gray-100 whitespace-pre-wrap">{sentence.original}</p>
-      </div>
+      {/* Original + corrected sentence — clickable to expand corrections */}
+      <button
+        type="button"
+        onClick={() => hasCorrections && setOpen((v) => !v)}
+        className={`w-full rounded-lg bg-gray-800/60 p-4 text-left transition-colors ${hasCorrections ? "cursor-pointer hover:bg-gray-800/80" : "cursor-default"}`}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1 space-y-2">
+            <div>
+              <p className="text-xs text-gray-500 mb-1">{t("originalText")} #{index + 1}</p>
+              <p className="text-gray-100 whitespace-pre-wrap">{sentence.original}</p>
+            </div>
+            <div className="rounded-md bg-teal-900/30 border border-teal-700 p-3">
+              <p className="text-xs text-teal-400 mb-1 font-semibold">{t("overallCorrectedText")}</p>
+              <p className="text-gray-100 whitespace-pre-wrap">{sentence.corrected}</p>
+            </div>
+          </div>
+          {hasCorrections && (
+            <span className={`mt-1 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}>
+              &#9662;
+            </span>
+          )}
+        </div>
+      </button>
 
-      {/* Corrected sentence */}
-      <div className="rounded-lg bg-teal-900/30 border border-teal-700 p-4">
-        <p className="text-xs text-teal-400 mb-1 font-semibold">{t("overallCorrectedText")}</p>
-        <p className="text-gray-100 whitespace-pre-wrap">{sentence.corrected}</p>
-      </div>
-
-      {/* Individual corrections for this sentence */}
-      {sentence.corrections.length > 0 && (
+      {/* Individual corrections — shown when expanded */}
+      {open && hasCorrections && (
         <div className="space-y-2 pl-2 border-l-2 border-gray-700">
           {sentence.corrections.map((correction, i) => (
             <CorrectionCard key={i} correction={correction} />

@@ -264,7 +264,7 @@ Allowed topics: ${TOPICS.join(", ")}${langLevels ? `\nAllowed levels: ${langLeve
 
       let llmResult: Record<string, unknown>;
       try {
-        const raw = await callLLM(systemPrompt, userPrompt);
+        const raw = await callLLM(systemPrompt, userPrompt, "vocab/smart-add");
         llmResult = JSON.parse(stripMarkdownFences(raw));
       } catch (err) {
         fastify.log.error({ err, term }, "LLM call failed for smart-add");
@@ -466,7 +466,7 @@ Allowed topics: ${TOPICS.join(", ")}`;
 
   const addedWords: Word[] = [];
   try {
-    const raw = await callLLM(systemPrompt, `Generate entries for these words:\n\n${userPrompt}`);
+    const raw = await callLLM(systemPrompt, `Generate entries for these words:\n\n${userPrompt}`, "vocab/batch-add");
     const parsed = JSON.parse(stripMarkdownFences(raw));
     const generated: unknown[] = parsed.words ?? [];
 

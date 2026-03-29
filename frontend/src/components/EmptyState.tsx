@@ -28,9 +28,10 @@ interface Props {
   onStartSpeakingWriting: () => void;
   onResumeSpeakingWriting: () => void;
   hasSWSession: boolean;
+  onOpenMetrics: () => void;
 }
 
-export default function EmptyState({ onResume, onResumeGrammar, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession }: Props) {
+export default function EmptyState({ onResume, onResumeGrammar, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onOpenMetrics }: Props) {
   const { t } = useI18n();
   const { sortByLanguageOrder } = useSettings();
   const [vocabSessions, setVocabSessions] = useState<
@@ -212,6 +213,18 @@ export default function EmptyState({ onResume, onResumeGrammar, onStartNew, onBr
               {t("addGrammar")}
             </button>
           </div>
+        </section>
+
+        <section className="rounded-xl bg-gray-800/60 p-4 sm:p-5">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">
+            {t("sectionSystem") ?? "System"}
+          </h3>
+          <button
+            onClick={onOpenMetrics}
+            className="w-full rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+          >
+            {t("viewMetrics") ?? "LLM Usage & Costs"}
+          </button>
         </section>
       </div>
     </div>
