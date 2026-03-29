@@ -253,7 +253,7 @@ Return a JSON object:
 {
   "term": "the ${language} word",
   "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { ${defLangStr} } }],
-  "examples": [{ "sentence": "${language} sentence using the word"${language === "english" ? "" : `, ${exTranslationSpec}`} }],
+  "examples": [{ "sentence": "${language} sentence using the word"${language === "english" && exLangs.length === 1 && exLangs[0] === "en" ? "" : `, ${exTranslationSpec}`} }],
   "topics": ["..."],${langLevels ? `\n  "level": "one of the allowed levels",` : ""}
   "notes": "brief usage notes"
 }

@@ -55,7 +55,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `routes/grammar-progress.ts` — per-component grammar progress
   - `routes/translation.ts` — schema-based translation/analysis with parallel LLM calls (only `en`/`ja`/`ko`/`zh` targets supported), SSE streaming, history persistence
 - **Database**: `firestore.ts` — Google Cloud Firestore abstraction layer
-- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, validateWord, segmentBatch); `callLLM` uses MINI deployment, `callLLMFull` uses FULL deployment (for translation); config loaded from `.env` (local) or Firestore `config/llm` (deployed)
+- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, validateWord, segmentBatch); `callLLM` uses MINI deployment, `callLLMFull` uses FULL deployment (for translation); config loaded from `.env` (local) or Firestore `config/llm` (deployed); `validateWord` accepts any word with at least one definition language (not limited to ja/en/ko)
 - **Types**: `types.ts` — shared interfaces (Word, VocabFile, QuizSession, WordProgress, TranslationEntry, etc.)
 - Route handlers use Fastify generics for type-safe Params/Querystring/Body and JSON schema validation
 - Errors via `@fastify/sensible`: `reply.notFound()`, `reply.badRequest()`, `reply.conflict()`
@@ -90,9 +90,10 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
 
 ### Language Code Convention
 All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean), `zh` (Chinese). This applies to:
-- Word definition keys: `{ "ja": "...", "en": "...", "ko": "..." }`
+- Word definition keys: `{ "ja": "...", "en": "...", "ko": "..." }` (configurable via settings — not limited to these three)
+- Example sentence translations: `string` (legacy single-language) or `Record<string, string>` (multi-language, e.g. `{ "ja": "...", "ko": "..." }`)
 - Grammar data `Record<string, string>` fields (chapterTitle, subchapter title, term, description)
-- UI language selection and display language options
+- UI language selection and display language options (order and visibility controlled by settings)
 - The export script normalizes legacy keys (e.g., `"Japanese"` → `"ja"`, `"kr"` → `"ko"`) on export
 
 ### Key API Endpoints
@@ -100,7 +101,7 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 - `GET /api/vocab/:language` — list words (query: search, topic, category, level, page, limit)
 - `GET /api/vocab/:language/filters` — available filter options (topics, categories, levels)
 - `GET /api/vocab/:language/lookup?term=X` — word lookup via word_index
-- `POST /api/vocab/:language/smart-add` — smart add word with LLM filling missing fields, auto-flag
+- `POST /api/vocab/:language/smart-add` — smart add word with LLM filling missing fields, auto-flag; accepts optional `definitionLanguages` and `exampleTranslationLanguages` arrays to configure which languages the LLM generates
 - `PUT /api/vocab/:language/:wordId` — update word
 - `DELETE /api/vocab/:language/:wordId` — delete word
 - `POST /api/quiz/start` — start word quiz session
@@ -126,21 +127,29 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 
 ### Frontend (`frontend/src/`)
 - **Entry**: `main.tsx` → `App.tsx` → `Dashboard.tsx`
-- **State**: React hooks + Context API (i18n only via `i18n/context.tsx`)
+- **State**: React hooks + Context API (`i18n/context.tsx` for UI language, `settings/context.tsx` for app settings)
+- **Settings**: `settings/context.tsx` — `SettingsProvider` + `useSettings()` hook; persisted to `localStorage("appSettings")`. Controls:
+  - Language display order (affects definition ordering, language selector ordering, UI language button ordering)
+  - Active UI languages (subset of supported languages shown in header toggle)
+  - Default definition languages (which languages the LLM generates definitions in during smart-add)
+  - Default example translation languages (which languages the LLM generates example translations in during smart-add)
+  - Centralized helpers: `sortByLanguageOrder()` and `sortedEntries()` used by all components
+- **Settings defaults**: `settings/defaults.ts` — `ALL_KNOWN_LANGUAGES` (en/ja/ko/zh with labels), `LANG_LABEL_MAP`, `DEFAULT_SETTINGS`
 - **API layer**: `api/client.ts` (generic fetchJson/postJson), `api/quiz.ts`, `api/vocab.ts`, `api/grammar.ts`, `api/translation.ts`
 - **Components**:
-  - `Dashboard.tsx` — main layout with header, modals, quiz/word list/grammar orchestration
+  - `Dashboard.tsx` — main layout with header (settings gear button, dynamic UI language buttons ordered by settings), modals, quiz/word list/grammar orchestration
+  - `SettingsModal.tsx` — settings modal with drag-and-drop language reordering (@dnd-kit), checkboxes for UI languages, definition languages, and example translation languages
   - `LanguageSelectModal.tsx` — language picker modal
   - `QuizFilterModal.tsx` — multi-select filters (topic, category, level) before starting word quiz
   - `QuizTaking.tsx` — word quiz UI with question display, answer input, progress bar
   - `WordList.tsx` — paginated word browsing with filters, progress badges, expandable details
-  - `SmartAddWordModal.tsx` — add word with LLM filling missing fields
+  - `SmartAddWordModal.tsx` — add word with LLM filling missing fields; passes configured definition/example languages to backend
   - `GrammarList.tsx` — browse grammar by chapter/subchapter with inline edit/delete
-  - `GrammarFilterModal.tsx` — grammar quiz filters (chapter, subchapter, display language, quiz mode)
+  - `GrammarFilterModal.tsx` — grammar quiz filters (chapter, subchapter, display language, quiz mode); display language options follow settings order
   - `GrammarQuizTaking.tsx` — grammar quiz flashcard UI (display sentence → show answer → self-grade)
-  - `GrammarFormModal.tsx` — add/edit grammar component with chapter/subchapter/topic/description/terms/examples
+  - `GrammarFormModal.tsx` — add/edit grammar component with chapter/subchapter/topic/description/terms/examples; input language selector follows settings order
   - `FlaggedReview.tsx` — review flagged words
-  - `TranslationView.tsx` — translation/analysis UI with language selection (EN/JA/KO/ZH), schema-based sentence decomposition results, per-language regenerate buttons during streaming, reading column conditional on CJK input, and history navigation
+  - `TranslationView.tsx` — translation/analysis UI with language selection ordered by settings, schema-based sentence decomposition results, per-language regenerate buttons during streaming, reading column conditional on CJK input, and history navigation
   - `EmptyState.tsx` — home screen with vocabulary, translation, speaking & writing (placeholder), and grammar sections
 - **i18n**: `i18n/translations.ts` — English, Japanese, and Korean, keyed by `TranslationKey` type
 - **Styling**: Tailwind CSS 4 utility classes only
@@ -153,4 +162,4 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 
 ### Key Dependencies
 - Backend: fastify, @fastify/cors, @fastify/sensible, @google-cloud/firestore, openai (Azure), dotenv
-- Frontend: react, react-dom, vite, @vitejs/plugin-react, tailwindcss, @tailwindcss/vite
+- Frontend: react, react-dom, vite, @vitejs/plugin-react, tailwindcss, @tailwindcss/vite, @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities

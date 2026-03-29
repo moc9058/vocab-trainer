@@ -129,7 +129,7 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
       "examples": [
         {
           "sentence": "你好，你怎么样？",
-          "translation": "こんにちは、お元気ですか？"
+          "translation": "Hello, how are you?"
         }
       ],
       "topics": ["Greetings & Introductions"],
@@ -171,7 +171,7 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
     - `proverb` — saying, maxim, or proverb (e.g. 三人行必有我师)
     - `greeting` — social formula phrase (e.g. 你好, おはよう)
   - **`text`** — An object keyed by ISO 639-1 language code (`ja`, `en`, `ko`, etc.), providing the definition in multiple languages.
-- **`examples`** — Array of example sentences with translations (primary language is Japanese).
+- **`examples`** — Array of example sentences with translations. `translation` can be a plain string (single-language) or a `Record<string, string>` keyed by ISO 639-1 code for multi-language translations (e.g., `{ "en": "Hello", "ja": "こんにちは" }`).
 - **`topics`** — Topic tags for categorizing and filtering words. Possible values:
   - **Everyday Life:** `Greetings & Introductions`, `Food & Dining`, `Shopping & Money`, `Travel & Transportation`, `Weather & Seasons`, `Family & Relationships`, `Health & Body`, `Home & Housing`
   - **Academic / Professional:** `Economics & Finance`, `Politics & Government`, `Science & Technology`, `Law & Justice`, `Medicine`, `Education`, `Business & Commerce`, `Work & Career`
@@ -235,6 +235,7 @@ vocab-trainer/
 │       │   └── translation.ts   # Translation API wrappers
 │       ├── components/
 │       │   ├── Dashboard.tsx     # Main layout with quiz/browse orchestration
+│       │   ├── SettingsModal.tsx  # Settings: language order, UI langs, definition/example langs
 │       │   ├── QuizTaking.tsx    # Active quiz interface
 │       │   ├── WordList.tsx      # Paginated word browsing with filters
 │       │   ├── RubyText.tsx      # Ruby text component for pinyin annotations
@@ -250,6 +251,10 @@ vocab-trainer/
 │       │   ├── GrammarFormModal.tsx   # Add/edit grammar component
 │       │   ├── TranslationView.tsx  # Translation/analysis UI with history
 │       │   └── EmptyState.tsx
+│       ├── settings/            # App settings (language order, defaults)
+│       │   ├── types.ts         # AppSettings interface
+│       │   ├── defaults.ts      # ALL_KNOWN_LANGUAGES, LANG_LABEL_MAP, DEFAULT_SETTINGS
+│       │   └── context.tsx      # SettingsProvider + useSettings() hook (localStorage)
 │       └── i18n/                # Internationalization (ja, en, ko)
 ```
 
@@ -258,7 +263,7 @@ vocab-trainer/
 | Layer    | Technology                                            |
 | -------- | ----------------------------------------------------- |
 | Backend  | Fastify 5, TypeScript, Google Cloud Firestore, @fastify/cors, @fastify/sensible |
-| Frontend | React 19, Vite 6, Tailwind CSS 4                     |
+| Frontend | React 19, Vite 6, Tailwind CSS 4, @dnd-kit (drag-and-drop) |
 | Deploy   | Docker (Node 24 Alpine), Nginx Alpine for static frontend |
 
 ## Backend API Reference
@@ -356,11 +361,13 @@ Adds a word using the LLM to fill in missing fields. The word is auto-flagged fo
   "transliteration": "",
   "definitions": [],
   "topics": [],
-  "examples": []
+  "examples": [],
+  "definitionLanguages": ["en", "ja", "ko"],
+  "exampleTranslationLanguages": ["en"]
 }
 ```
 
-Only `term` is required. All other fields are optional and will be filled by the LLM if omitted or empty.
+Only `term` is required. All other fields are optional and will be filled by the LLM if omitted or empty. `definitionLanguages` controls which languages the LLM generates definitions in (defaults to `["ja", "en", "ko"]`). `exampleTranslationLanguages` controls which languages the LLM generates example translations in (defaults to `["en"]`); when multiple languages are specified, `translation` is stored as a `Record<string, string>`.
 
 **Response:** `201` with the created `Word`, plus an optional `generatedWords` array of auto-discovered words from example segments.
 
@@ -728,16 +735,17 @@ Runs parallel LLM calls (one per target language, using the FULL model) and retu
 
 ## Frontend
 
-React 19 single-page application for taking vocabulary and grammar quizzes. Built with Vite 6 and styled with Tailwind CSS 4. Supports Japanese, English, and Korean UI (default Japanese) via a custom i18n context (no external library).
+React 19 single-page application for taking vocabulary and grammar quizzes. Built with Vite 6 and styled with Tailwind CSS 4. Supports Japanese, English, and Korean UI (default English) via a custom i18n context (no external library). App-wide settings (language display order, active UI languages, default definition/example languages) are managed via a SettingsContext persisted to localStorage.
 
 ### Screens / Views
 
 | View                    | Description                                                                                                        |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Dashboard**           | Main layout. Header with "Start Quiz", "Browse Words", and "Home" buttons. The Home button appears when a quiz or word list is active and navigates back to the home page. |
+| **Dashboard**           | Main layout. Header with settings gear button, dynamic UI language toggle (ordered and filtered by settings), and "Back" button. |
+| **SettingsModal**       | Settings modal with four sections: (1) drag-and-drop language display order reordering via @dnd-kit, (2) active UI language checkboxes, (3) default definition language checkboxes for smart-add, (4) default example translation language checkboxes for smart-add. Persisted to localStorage. |
 | **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows all definitions, transliteration, and example sentences with RubyText annotations. Wrong answers are re-queued until correct. Questions are lazy-loaded in batches of 50 with automatic prefetching at the halfway point. Supports resuming from where the user left off. |
 | **WordList**            | Paginated word browsing with search, topic/category/level filters, progress badges, and expandable word details with pinyin displayed via RubyText. |
-| **SmartAddWordModal**   | Modal to add a word with LLM auto-filling missing fields. Only `term` is required; the LLM generates transliteration, definition, examples, etc. |
+| **SmartAddWordModal**   | Modal to add a word with LLM auto-filling missing fields. Only `term` is required; the LLM generates transliteration, definitions (in configured languages), examples (with translations in configured languages), etc. Definition and example translation languages come from app settings. |
 | **FlaggedReview**       | Review interface for flagged words. Allows browsing and unflagging words marked for review. |
 | **LanguageSelectModal** | Modal to pick the target language when starting a new quiz. Lists languages fetched from the API.                  |
 | **LevelSelectModal**    | Modal to select proficiency levels (e.g., HSK1–HSK7~9) for filtering. |
@@ -754,7 +762,7 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 
 - **`api/client.ts`** — Generic `fetchJson<T>()`, `postJson<T>()`, `putJson<T>()`, and `deleteRequest()` utilities wrapping the Fetch API.
 - **`api/quiz.ts`** — `getCurrentSession(language)`, `startQuiz(opts)`, `getQuizQuestions(language, offset, limit)`, and `answerQuestion(opts)`.
-- **`api/vocab.ts`** — `getWords(language, params)`, `getFilters(language)`, `getTransliterationMap(language)`, `updateWord(language, wordId, updates)`, `deleteWord(language, wordId)`, `smartAddWord(language, data)`.
+- **`api/vocab.ts`** — `getWords(language, params)`, `getFilters(language)`, `getTransliterationMap(language)`, `updateWord(language, wordId, updates)`, `deleteWord(language, wordId)`, `smartAddWord(language, data)` (accepts `definitionLanguages` and `exampleTranslationLanguages`).
 - **`api/grammar.ts`** — `getGrammarChapters(language)`, `getGrammarItems(language, filters, page, limit)`, `getSubchapters(language, chapters)`, `createGrammarItem(language, item)`, `updateGrammarItem(language, componentId, updates)`, `deleteGrammarItem(language, componentId)`, `startGrammarQuiz(opts)`, `answerGrammarQuestion(opts)`, `getCurrentGrammarSession(language)`, `getGrammarProgress(language)`, `resetGrammarProgress(language)`.
 - **`api/flagged.ts`** — `getFlaggedWords(language)`, `getFlaggedWordCount(language)`, `flagWord(language, wordId)`, `unflagWord(language, wordId)`.
 - **`api/translation.ts`** — `translate(sourceText, targetLanguages)`, `translateStream(sourceText, targetLanguages, callbacks, signal?)`, `getTranslationHistory(page, limit)`, `deleteTranslationHistory()`, `deleteTranslationEntryById(id)`.
@@ -763,12 +771,12 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 ### Internationalization
 
 - Context-based (`i18n/context.tsx`): `I18nProvider` + `useI18n()` hook.
-- Translation keys defined in `i18n/translations.ts` for Japanese, English, and Korean. Default UI language is Japanese.
-- Type-safe keys via the `TranslationKey` type. Available UI languages exported as `uiLanguages` array (`ja`, `en`, `ko`).
+- Translation keys defined in `i18n/translations.ts` for Japanese, English, and Korean. Default UI language is English.
+- Type-safe keys via the `TranslationKey` type. Supported UI languages exported as `uiLanguages` array (`en`, `ja`, `ko`). Which languages appear in the header is controlled by `settings.activeUiLanguages`.
 
 ### State Management
 
-React hooks (`useState`, `useEffect`) + Context API. No external state library.
+React hooks (`useState`, `useEffect`) + Context API (`I18nProvider` for UI language, `SettingsProvider` for app settings). No external state library. Settings are persisted to `localStorage("appSettings")`.
 
 ### Styling
 
