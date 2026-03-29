@@ -104,6 +104,7 @@ export default function SpeakingWritingView({ mode }: Props) {
     setError(null);
     setStreamingChunks("");
     setPhase("loading");
+    let settled = false;
     try {
       await submitCorrectionStream(
         selectedLanguage,
@@ -115,19 +116,32 @@ export default function SpeakingWritingView({ mode }: Props) {
             setStreamingChunks((prev) => prev + chunk);
           },
           onDone(updatedSession) {
+            settled = true;
             setSession(updatedSession);
             setCorrectionIndex(updatedSession.corrections.length - 1);
             setInputText("");
             setStreamingChunks("");
             setPhase("results");
           },
+          onError(message) {
+            settled = true;
+            setError(message);
+            setStreamingChunks("");
+            setPhase("input");
+          },
         },
         controller.signal,
       );
+      if (!settled && !controller.signal.aborted) {
+        setError("Correction failed: connection closed unexpectedly");
+        setStreamingChunks("");
+        setPhase("input");
+      }
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error("Correction failed:", err);
       setError(String(err));
+      setStreamingChunks("");
       setPhase("input");
     }
   }
@@ -135,6 +149,14 @@ export default function SpeakingWritingView({ mode }: Props) {
   function handleNewCorrection() {
     setPhase("input");
     setInputText("");
+    setError(null);
+  }
+
+  function handleRegenerate() {
+    if (!session || !session.corrections[correctionIndex]) return;
+    const entry = session.corrections[correctionIndex];
+    setInputText(entry.inputText);
+    setPhase("input");
     setError(null);
   }
 
@@ -326,6 +348,12 @@ export default function SpeakingWritingView({ mode }: Props) {
           className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-500 transition-colors"
         >
           {t("newCorrection")}
+        </button>
+        <button
+          onClick={handleRegenerate}
+          className="rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+        >
+          {t("regenerate")}
         </button>
         <div className="flex-1" />
         {hasPrevious && (

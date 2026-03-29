@@ -746,32 +746,43 @@ LLM-powered text correction for speaking and writing practice. One session per l
 ```json
 {
   "language": "en",
-  "mode": "writing",
+  "mode": "speaking",
+  "useCase": "professional",
   "inputText": "I goed to the store yesterday and buyed some foods."
 }
 ```
 
-`language` accepts ISO 639-1 codes: `en`, `ja`, `ko`, `zh`. `mode` is `"speaking"` or `"writing"` — speaking focuses on conversational naturalness, writing on formal accuracy.
+`language` accepts ISO 639-1 codes: `en`, `ja`, `ko`, `zh`. `mode` is `"speaking"` or `"writing"`. `useCase` depends on mode:
+- Speaking: `professional`, `casual`, `presentation`, `interview`
+- Writing: `academic`, `social`, `email`, `creative`
 
-**Response:** `SpeakingWritingSession` — the session with the new correction appended:
+The system prompt is assembled from a base prompt (per language) + a use-case context block (per mode/useCase/language) appended at the end.
+
+**Response:** `SpeakingWritingSession` — the session with the new correction appended. Corrections are structured per-sentence:
 ```json
 {
   "sessionId": "en",
   "language": "en",
-  "mode": "writing",
+  "mode": "speaking",
+  "useCase": "professional",
   "startedAt": "2026-03-29T12:00:00.000Z",
   "status": "in-progress",
   "corrections": [
     {
       "inputText": "I goed to the store yesterday and buyed some foods.",
       "result": {
-        "overallCorrectedText": "I went to the store yesterday and bought some food.",
-        "corrections": [
+        "sentences": [
           {
-            "original": "goed",
-            "corrected": "went",
-            "explanation": "\"Go\" is an irregular verb. The past tense is \"went\", not \"goed\".",
-            "severity": "error"
+            "original": "I goed to the store yesterday and buyed some foods.",
+            "corrected": "I went to the store yesterday and bought some food.",
+            "corrections": [
+              {
+                "original": "goed",
+                "corrected": "went",
+                "explanation": "\"Go\" is an irregular verb. The past tense is \"went\", not \"goed\".",
+                "severity": "error"
+              }
+            ]
           }
         ],
         "overallFeedback": "Good sentence structure. Focus on irregular verb forms."
@@ -783,11 +794,18 @@ LLM-powered text correction for speaking and writing practice. One session per l
 }
 ```
 
+#### `POST /api/speaking-writing/correct-stream` — SSE streaming correction
+
+Same body as `/correct`. Returns an SSE stream with events:
+- `start` — correction started
+- `chunk` — `{ chunk: string }` — raw JSON token from LLM
+- `done` — `SpeakingWritingSession` — final session with parsed result
+
 #### `GET /api/speaking-writing/session/:language` — Get current session
 
-Returns the speaking/writing session for the given language, or `404` if none exists.
+Returns the speaking/writing session for the given language, or `null` (200) if none exists.
 
-**Response:** `SpeakingWritingSession` object.
+**Response:** `SpeakingWritingSession` object or `null`.
 
 #### `DELETE /api/speaking-writing/session/:language` — Delete session
 
@@ -818,7 +836,7 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 | **GrammarQuizTaking**   | Grammar quiz flashcard UI — displays a sentence (with grammar term shown for Chinese), reveals the answer, and allows self-grading (correct/incorrect). |
 | **GrammarFormModal**    | Modal for adding or editing grammar components with chapter, subchapter, topic (required), description (optional), terms (optional, individual input per term), and examples (optional). |
 | **TranslationView**    | Translation/analysis UI. Input text, select target languages (EN/JA/KO/ZH), get schema-based sentence decomposition with per-component analysis. Reading column (furigana/pinyin) shown only when source text contains CJK characters. Per-language regenerate buttons during streaming for stuck translations. History persisted to Firestore with previous/next navigation. |
-| **SpeakingWritingView** | Text correction UI. Select correction language (EN/JA/KO/ZH), choose speaking or writing mode, submit text for LLM-powered correction. Displays corrected text, individual corrections with severity badges (error/improvement/style), and overall feedback. Previous/next navigation between corrections within a session. Sessions persisted to Firestore for resume. |
+| **SpeakingWritingView** | Text correction UI. Select correction language (EN/JA/KO/ZH), choose speaking or writing mode with use-case context (professional/casual/presentation/interview or academic/social/email/creative), submit text for SSE streaming LLM correction. Displays per-sentence corrections with severity badges (error/improvement/style), and overall feedback. Previous/next navigation between corrections within a session. Sessions persisted to Firestore for resume. |
 | **Home Page (EmptyState)** | Home screen with four sections: Vocabulary (blue), Translation (violet), Speaking & Writing (teal), Grammar (emerald). Checks for in-progress quiz sessions, translation history, and speaking/writing sessions. |
 
 ### API Integration
@@ -829,7 +847,7 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 - **`api/grammar.ts`** — `getGrammarChapters(language)`, `getGrammarItems(language, filters, page, limit)`, `getSubchapters(language, chapters)`, `createGrammarItem(language, item)`, `updateGrammarItem(language, componentId, updates)`, `deleteGrammarItem(language, componentId)`, `startGrammarQuiz(opts)`, `answerGrammarQuestion(opts)`, `getCurrentGrammarSession(language)`, `getGrammarProgress(language)`, `resetGrammarProgress(language)`.
 - **`api/flagged.ts`** — `getFlaggedWords(language)`, `getFlaggedWordCount(language)`, `flagWord(language, wordId)`, `unflagWord(language, wordId)`.
 - **`api/translation.ts`** — `translate(sourceText, targetLanguages)`, `translateStream(sourceText, targetLanguages, callbacks, signal?)`, `getTranslationHistory(page, limit)`, `deleteTranslationHistory()`, `deleteTranslationEntryById(id)`.
-- **`api/speaking-writing.ts`** — `submitCorrection(language, mode, inputText)`, `getSpeakingWritingSession(language)`, `deleteSpeakingWritingSession(language)`.
+- **`api/speaking-writing.ts`** — `submitCorrection(language, mode, useCase, inputText)`, `submitCorrectionStream(language, mode, useCase, inputText, callbacks, signal?)`, `getSpeakingWritingSession(language)`, `deleteSpeakingWritingSession(language)`.
 - **Dev proxy:** Vite proxies `/api/*` to `http://localhost:3000` so the frontend dev server can reach the backend.
 
 ### Internationalization

@@ -135,63 +135,74 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
       reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     }
 
-    // Step 1: decompose with streaming
-    sendEvent("decompose-start", {});
-    const decomposeRaw = await streamLLMFullWithSchema(
-      decomposePrompt,
-      sourceText,
-      decomposeSchema,
-      (chunk) => sendEvent("decompose-chunk", { chunk })
-    );
-    const decomposition = stripMarkdownFences(decomposeRaw);
-    sendEvent("decompose-result", { decomposition });
+    try {
+      // Step 1: decompose with streaming
+      sendEvent("decompose-start", {});
+      const decomposeRaw = await streamLLMFullWithSchema(
+        decomposePrompt,
+        sourceText,
+        decomposeSchema,
+        (chunk) => sendEvent("decompose-chunk", { chunk })
+      );
+      const decomposition = stripMarkdownFences(decomposeRaw);
+      sendEvent("decompose-result", { decomposition });
 
-    // Step 2: translate each language in parallel with streaming
-    for (const lang of targetLanguages) {
-      sendEvent("start", { language: lang });
+      // Step 2: translate each language in parallel with streaming
+      for (const lang of targetLanguages) {
+        sendEvent("start", { language: lang });
+      }
+
+      const settled = await Promise.allSettled(
+        targetLanguages.map(async (lang): Promise<TranslationResult> => {
+          const prompt = translatePrompts[lang];
+          if (!prompt) throw new Error(`Unsupported language: ${lang}`);
+          const raw = await streamLLMFullWithSchema(
+            prompt,
+            decomposition,
+            translateSchema,
+            (chunk) => sendEvent("chunk", { language: lang, chunk })
+          );
+          const result = parseSchemaResult(raw, lang);
+          sendEvent("result", { language: lang, result });
+          return result;
+        })
+      );
+
+      const translationResults: TranslationResult[] = settled.map((r, i) => {
+        if (r.status === "fulfilled") return r.value;
+        const errorResult: TranslationResult = {
+          language: targetLanguages[i],
+          translation: "",
+          grammarBreakdown: "",
+          keyVocabulary: [],
+          alternativeExpressions: [],
+          culturalNotes: "",
+          error: r.reason?.message ?? "Translation failed",
+        };
+        sendEvent("result", { language: targetLanguages[i], result: errorResult });
+        return errorResult;
+      });
+
+      // Save to Firestore and send final entry
+      const entry = await saveTranslationEntry({
+        sourceText,
+        targetLanguages,
+        results: translationResults,
+        createdAt: new Date().toISOString(),
+      });
+
+      sendEvent("done", entry);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error processing translation";
+      fastify.log.error({ err }, "Streaming translation failed");
+      if (!reply.raw.destroyed) {
+        sendEvent("error", { message });
+      }
+    } finally {
+      if (!reply.raw.destroyed) {
+        reply.raw.end();
+      }
     }
-
-    const settled = await Promise.allSettled(
-      targetLanguages.map(async (lang): Promise<TranslationResult> => {
-        const prompt = translatePrompts[lang];
-        if (!prompt) throw new Error(`Unsupported language: ${lang}`);
-        const raw = await streamLLMFullWithSchema(
-          prompt,
-          decomposition,
-          translateSchema,
-          (chunk) => sendEvent("chunk", { language: lang, chunk })
-        );
-        const result = parseSchemaResult(raw, lang);
-        sendEvent("result", { language: lang, result });
-        return result;
-      })
-    );
-
-    const translationResults: TranslationResult[] = settled.map((r, i) => {
-      if (r.status === "fulfilled") return r.value;
-      const errorResult: TranslationResult = {
-        language: targetLanguages[i],
-        translation: "",
-        grammarBreakdown: "",
-        keyVocabulary: [],
-        alternativeExpressions: [],
-        culturalNotes: "",
-        error: r.reason?.message ?? "Translation failed",
-      };
-      sendEvent("result", { language: targetLanguages[i], result: errorResult });
-      return errorResult;
-    });
-
-    // Save to Firestore and send final entry
-    const entry = await saveTranslationEntry({
-      sourceText,
-      targetLanguages,
-      results: translationResults,
-      createdAt: new Date().toISOString(),
-    });
-
-    sendEvent("done", entry);
-    reply.raw.end();
   });
 
   // GET /history — paginated translation history

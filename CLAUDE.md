@@ -54,7 +54,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `routes/grammar-quiz.ts` — grammar quiz with self-grading, two modes (existing examples / LLM-generated)
   - `routes/grammar-progress.ts` — per-component grammar progress
   - `routes/translation.ts` — schema-based translation/analysis with parallel LLM calls (only `en`/`ja`/`ko`/`zh` targets supported), SSE streaming, history persistence
-  - `routes/speaking-writing.ts` — text correction for speaking/writing practice; single-step LLM call with language-specific system prompts, session persistence with correction history
+  - `routes/speaking-writing.ts` — text correction for speaking/writing practice; SSE streaming LLM call with language-specific system prompts + use-case context (professional/casual/presentation/interview for speaking; academic/social/email/creative for writing), per-sentence corrections, session persistence
 - **Database**: `firestore.ts` — Google Cloud Firestore abstraction layer
 - **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, validateWord, segmentBatch); `callLLM` uses MINI deployment, `callLLMFull` uses FULL deployment (for translation, speaking & writing correction); config loaded from `.env` (local) or Firestore `config/llm` (deployed); `validateWord` accepts any word with at least one definition language (not limited to ja/en/ko)
 - **Types**: `types.ts` — shared interfaces (Word, VocabFile, QuizSession, WordProgress, TranslationEntry, SpeakingWritingSession, etc.)
@@ -127,8 +127,9 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 - `GET /api/translation/history` — paginated translation history
 - `DELETE /api/translation/history` — clear all translation history
 - `DELETE /api/translation/history/:id` — delete single translation entry
-- `POST /api/speaking-writing/correct` — submit text for LLM correction (body: language, mode, inputText; uses FULL model)
-- `GET /api/speaking-writing/session/:language` — get current speaking/writing session
+- `POST /api/speaking-writing/correct` — submit text for LLM correction (body: language, mode, useCase, inputText; uses FULL model)
+- `POST /api/speaking-writing/correct-stream` — SSE streaming version of correction (same body; streams chunk events then done with full session)
+- `GET /api/speaking-writing/session/:language` — get current speaking/writing session (returns null if none, not 404)
 - `DELETE /api/speaking-writing/session/:language` — delete speaking/writing session
 
 ### Frontend (`frontend/src/`)
@@ -156,7 +157,7 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
   - `GrammarFormModal.tsx` — add/edit grammar component with chapter/subchapter/topic/description/terms/examples; input language selector follows settings order
   - `FlaggedReview.tsx` — review flagged words
   - `TranslationView.tsx` — translation/analysis UI with language selection ordered by settings, schema-based sentence decomposition results, per-language regenerate buttons during streaming, reading column conditional on CJK input, and history navigation
-  - `SpeakingWritingView.tsx` — text correction UI with language selection (ordered by settings), speaking/writing mode toggle, LLM-powered correction with severity-coded feedback (error/improvement/style), previous/next navigation between corrections, session persistence
+  - `SpeakingWritingView.tsx` — text correction UI with language selection (ordered by settings), speaking/writing mode toggle, use-case selector (professional/casual/presentation/interview or academic/social/email/creative), SSE streaming with live JSON preview, per-sentence corrections with severity-coded feedback (error/improvement/style), previous/next navigation between corrections, session persistence
   - `EmptyState.tsx` — home screen with vocabulary, translation, speaking & writing, and grammar sections
 - **i18n**: `i18n/translations.ts` — English, Japanese, and Korean, keyed by `TranslationKey` type
 - **Styling**: Tailwind CSS 4 utility classes only

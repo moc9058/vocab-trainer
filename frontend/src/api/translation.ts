@@ -44,6 +44,7 @@ export async function translateStream(
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let terminated = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -80,7 +81,12 @@ export async function translateStream(
               callbacks.onResult?.(data.language, data.result);
               break;
             case "done":
+              terminated = true;
               callbacks.onDone?.(data);
+              break;
+            case "error":
+              terminated = true;
+              callbacks.onError?.(new Error(data.message ?? "Unknown error"));
               break;
           }
         } catch {
@@ -89,6 +95,10 @@ export async function translateStream(
         currentEvent = "";
       }
     }
+  }
+
+  if (!terminated) {
+    callbacks.onError?.(new Error("Connection closed unexpectedly"));
   }
 }
 

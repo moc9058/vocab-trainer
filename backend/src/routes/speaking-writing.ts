@@ -156,37 +156,48 @@ const speakingWritingRoutes: FastifyPluginAsync = async (fastify) => {
 
     const userPrompt = `Mode: ${mode}\nContext: ${useCase}\n\nText to correct:\n${inputText}`;
 
-    sendEvent("start", {});
-    const raw = await streamLLMFullWithSchema(
-      prompt,
-      userPrompt,
-      outputSchema,
-      (chunk) => sendEvent("chunk", { chunk })
-    );
-    const result = JSON.parse(stripMarkdownFences(raw)) as CorrectionResult;
+    try {
+      sendEvent("start", {});
+      const raw = await streamLLMFullWithSchema(
+        prompt,
+        userPrompt,
+        outputSchema,
+        (chunk) => sendEvent("chunk", { chunk })
+      );
+      const result = JSON.parse(stripMarkdownFences(raw)) as CorrectionResult;
 
-    // Save to session
-    let session = await getSpeakingWritingSession(language);
-    if (!session) {
-      session = {
-        sessionId: language,
-        language,
-        mode,
-        useCase,
-        startedAt: new Date().toISOString(),
-        status: "in-progress",
-        corrections: [],
-        currentIndex: 0,
-      };
+      // Save to session
+      let session = await getSpeakingWritingSession(language);
+      if (!session) {
+        session = {
+          sessionId: language,
+          language,
+          mode,
+          useCase,
+          startedAt: new Date().toISOString(),
+          status: "in-progress",
+          corrections: [],
+          currentIndex: 0,
+        };
+      }
+      session.mode = mode;
+      session.useCase = useCase;
+      session.corrections.push({ inputText, result, createdAt: new Date().toISOString() });
+      session.currentIndex = session.corrections.length - 1;
+      await saveSpeakingWritingSession(session);
+
+      sendEvent("done", session);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error processing correction";
+      fastify.log.error({ err }, "Streaming correction failed");
+      if (!reply.raw.destroyed) {
+        sendEvent("error", { message });
+      }
+    } finally {
+      if (!reply.raw.destroyed) {
+        reply.raw.end();
+      }
     }
-    session.mode = mode;
-    session.useCase = useCase;
-    session.corrections.push({ inputText, result, createdAt: new Date().toISOString() });
-    session.currentIndex = session.corrections.length - 1;
-    await saveSpeakingWritingSession(session);
-
-    sendEvent("done", session);
-    reply.raw.end();
   });
 
   // GET /session/:language — get current session (returns null if none)

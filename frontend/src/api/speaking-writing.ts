@@ -18,6 +18,7 @@ export async function submitCorrection(
 export interface CorrectionStreamCallbacks {
   onChunk?: (chunk: string) => void;
   onDone?: (session: SpeakingWritingSession) => void;
+  onError?: (error: string) => void;
 }
 
 export async function submitCorrectionStream(
@@ -44,6 +45,7 @@ export async function submitCorrectionStream(
 
   const decoder = new TextDecoder();
   let buffer = "";
+  let terminated = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -65,7 +67,12 @@ export async function submitCorrectionStream(
               callbacks.onChunk?.(data.chunk);
               break;
             case "done":
+              terminated = true;
               callbacks.onDone?.(data);
+              break;
+            case "error":
+              terminated = true;
+              callbacks.onError?.(data.message ?? "Unknown error");
               break;
           }
         } catch {
@@ -74,6 +81,10 @@ export async function submitCorrectionStream(
         currentEvent = "";
       }
     }
+  }
+
+  if (!terminated) {
+    callbacks.onError?.("Connection closed unexpectedly");
   }
 }
 
