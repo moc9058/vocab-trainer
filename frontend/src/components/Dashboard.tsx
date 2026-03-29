@@ -17,10 +17,12 @@ import GrammarFilterModal from "./GrammarFilterModal";
 import SmartAddWordModal from "./SmartAddWordModal";
 import GrammarFormModal from "./GrammarFormModal";
 import TranslationView from "./TranslationView";
+import SpeakingWritingView from "./SpeakingWritingView";
 import LanguageSelectModal from "./LanguageSelectModal";
 import LevelSelectModal from "./LevelSelectModal";
 import QuizFilterModal from "./QuizFilterModal";
 import { getTranslationHistory } from "../api/translation";
+import { getSpeakingWritingSession } from "../api/speaking-writing";
 import type { QuizSession, GrammarQuizSession } from "../types";
 
 export default function Dashboard() {
@@ -54,6 +56,9 @@ export default function Dashboard() {
   // Translation state
   const [translationMode, setTranslationMode] = useState<"new" | "resume" | null>(null);
   const [hasTranslationHistory, setHasTranslationHistory] = useState(false);
+  // Speaking & Writing state
+  const [speakingWritingMode, setSpeakingWritingMode] = useState<"new" | "resume" | null>(null);
+  const [hasSWSession, setHasSWSession] = useState(false);
 
   // Fetch pinyin map when a quiz starts or browsing begins
   const activeLang = activeQuiz?.language ?? browsingLanguage ?? flaggedReviewLanguage;
@@ -73,6 +78,26 @@ export default function Dashboard() {
       .then(({ total }) => setHasTranslationHistory(total > 0))
       .catch(() => {});
   }, [translationMode]);
+
+  // Check for speaking/writing sessions
+  useEffect(() => {
+    (async () => {
+      try {
+        const languages = await fetchJson<{ filename: string }[]>("/api/languages/");
+        for (const lang of languages) {
+          const key = lang.filename.replace(/\.json$/, "");
+          const sess = await getSpeakingWritingSession(key);
+          if (sess && sess.corrections.length > 0) {
+            setHasSWSession(true);
+            return;
+          }
+        }
+        setHasSWSession(false);
+      } catch {
+        setHasSWSession(false);
+      }
+    })();
+  }, [speakingWritingMode]);
 
   // Re-fetch pinyin map every 30s to pick up newly generated words
   useEffect(() => {
@@ -203,6 +228,7 @@ export default function Dashboard() {
     setShowSmartAdd(false);
     setGrammarFormLanguage(null);
     setTranslationMode(null);
+    setSpeakingWritingMode(null);
   }
 
   function handleAddWord() {
@@ -304,7 +330,7 @@ export default function Dashboard() {
     }
   }
 
-  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal || showFlaggedLanguageModal || activeGrammarQuiz || browsingGrammarLanguage || showGrammarLanguageModal || showGrammarBrowseLanguageModal || showGrammarFilterModal || showSmartAdd || grammarFormLanguage || translationMode);
+  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal || showFlaggedLanguageModal || activeGrammarQuiz || browsingGrammarLanguage || showGrammarLanguageModal || showGrammarBrowseLanguageModal || showGrammarFilterModal || showSmartAdd || grammarFormLanguage || translationMode || speakingWritingMode);
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-900">
@@ -483,6 +509,8 @@ export default function Dashboard() {
           />
         ) : translationMode ? (
           <TranslationView mode={translationMode} />
+        ) : speakingWritingMode ? (
+          <SpeakingWritingView mode={speakingWritingMode} />
         ) : (
           <EmptyState
             onResume={(session) => setActiveQuiz(session)}
@@ -497,6 +525,9 @@ export default function Dashboard() {
             onStartTranslation={() => setTranslationMode("new")}
             onResumeTranslation={() => setTranslationMode("resume")}
             hasTranslationHistory={hasTranslationHistory}
+            onStartSpeakingWriting={() => setSpeakingWritingMode("new")}
+            onResumeSpeakingWriting={() => setSpeakingWritingMode("resume")}
+            hasSWSession={hasSWSession}
           />
         )}
       </main>

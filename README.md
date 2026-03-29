@@ -213,7 +213,8 @@ vocab-trainer/
 │   │       ├── grammar.ts       # /api/grammar
 │   │       ├── grammar-quiz.ts  # /api/grammar-quiz
 │   │       ├── grammar-progress.ts # /api/grammar-progress
-│   │       └── translation.ts  # /api/translation
+│   │       ├── translation.ts  # /api/translation
+│   │       └── speaking-writing.ts # /api/speaking-writing
 │   └── DB/                      # Vocabulary and grammar JSON files
 ├── frontend/
 │   ├── package.json
@@ -232,7 +233,8 @@ vocab-trainer/
 │       │   ├── vocab.ts         # Vocabulary API wrappers
 │       │   ├── grammar.ts       # Grammar & grammar quiz API wrappers
 │       │   ├── flagged.ts       # Flagged words API wrappers
-│       │   └── translation.ts   # Translation API wrappers
+│       │   ├── translation.ts   # Translation API wrappers
+│       │   └── speaking-writing.ts # Speaking & writing correction API wrappers
 │       ├── components/
 │       │   ├── Dashboard.tsx     # Main layout with quiz/browse orchestration
 │       │   ├── SettingsModal.tsx  # Settings: language order, UI langs, definition/example langs
@@ -250,6 +252,7 @@ vocab-trainer/
 │       │   ├── GrammarQuizTaking.tsx  # Grammar quiz flashcard UI
 │       │   ├── GrammarFormModal.tsx   # Add/edit grammar component
 │       │   ├── TranslationView.tsx  # Translation/analysis UI with history
+│       │   ├── SpeakingWritingView.tsx # Speaking & writing correction UI
 │       │   └── EmptyState.tsx
 │       ├── settings/            # App settings (language order, defaults)
 │       │   ├── types.ts         # AppSettings interface
@@ -733,6 +736,65 @@ Runs parallel LLM calls (one per target language, using the FULL model) and retu
 
 ---
 
+### Speaking & Writing
+
+LLM-powered text correction for speaking and writing practice. One session per language, with a history of corrections within each session. Uses language-specific system prompts from `backend/DB/speaking&writing/` and the FULL model deployment.
+
+#### `POST /api/speaking-writing/correct` — Submit text for correction
+
+**Body:**
+```json
+{
+  "language": "en",
+  "mode": "writing",
+  "inputText": "I goed to the store yesterday and buyed some foods."
+}
+```
+
+`language` accepts ISO 639-1 codes: `en`, `ja`, `ko`, `zh`. `mode` is `"speaking"` or `"writing"` — speaking focuses on conversational naturalness, writing on formal accuracy.
+
+**Response:** `SpeakingWritingSession` — the session with the new correction appended:
+```json
+{
+  "sessionId": "en",
+  "language": "en",
+  "mode": "writing",
+  "startedAt": "2026-03-29T12:00:00.000Z",
+  "status": "in-progress",
+  "corrections": [
+    {
+      "inputText": "I goed to the store yesterday and buyed some foods.",
+      "result": {
+        "overallCorrectedText": "I went to the store yesterday and bought some food.",
+        "corrections": [
+          {
+            "original": "goed",
+            "corrected": "went",
+            "explanation": "\"Go\" is an irregular verb. The past tense is \"went\", not \"goed\".",
+            "severity": "error"
+          }
+        ],
+        "overallFeedback": "Good sentence structure. Focus on irregular verb forms."
+      },
+      "createdAt": "2026-03-29T12:00:00.000Z"
+    }
+  ],
+  "currentIndex": 0
+}
+```
+
+#### `GET /api/speaking-writing/session/:language` — Get current session
+
+Returns the speaking/writing session for the given language, or `404` if none exists.
+
+**Response:** `SpeakingWritingSession` object.
+
+#### `DELETE /api/speaking-writing/session/:language` — Delete session
+
+**Response:** `{ ok: true }`, or `404` if not found.
+
+---
+
 ## Frontend
 
 React 19 single-page application for taking vocabulary and grammar quizzes. Built with Vite 6 and styled with Tailwind CSS 4. Supports Japanese, English, and Korean UI (default English) via a custom i18n context (no external library). App-wide settings (language display order, active UI languages, default definition/example languages) are managed via a SettingsContext persisted to localStorage.
@@ -756,7 +818,8 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 | **GrammarQuizTaking**   | Grammar quiz flashcard UI — displays a sentence (with grammar term shown for Chinese), reveals the answer, and allows self-grading (correct/incorrect). |
 | **GrammarFormModal**    | Modal for adding or editing grammar components with chapter, subchapter, topic (required), description (optional), terms (optional, individual input per term), and examples (optional). |
 | **TranslationView**    | Translation/analysis UI. Input text, select target languages (EN/JA/KO/ZH), get schema-based sentence decomposition with per-component analysis. Reading column (furigana/pinyin) shown only when source text contains CJK characters. Per-language regenerate buttons during streaming for stuck translations. History persisted to Firestore with previous/next navigation. |
-| **Home Page (EmptyState)** | Home screen with four sections: Vocabulary (blue), Translation (violet), Speaking & Writing (teal, placeholder), Grammar (emerald). Checks for in-progress quiz sessions and translation history. |
+| **SpeakingWritingView** | Text correction UI. Select correction language (EN/JA/KO/ZH), choose speaking or writing mode, submit text for LLM-powered correction. Displays corrected text, individual corrections with severity badges (error/improvement/style), and overall feedback. Previous/next navigation between corrections within a session. Sessions persisted to Firestore for resume. |
+| **Home Page (EmptyState)** | Home screen with four sections: Vocabulary (blue), Translation (violet), Speaking & Writing (teal), Grammar (emerald). Checks for in-progress quiz sessions, translation history, and speaking/writing sessions. |
 
 ### API Integration
 
@@ -766,6 +829,7 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 - **`api/grammar.ts`** — `getGrammarChapters(language)`, `getGrammarItems(language, filters, page, limit)`, `getSubchapters(language, chapters)`, `createGrammarItem(language, item)`, `updateGrammarItem(language, componentId, updates)`, `deleteGrammarItem(language, componentId)`, `startGrammarQuiz(opts)`, `answerGrammarQuestion(opts)`, `getCurrentGrammarSession(language)`, `getGrammarProgress(language)`, `resetGrammarProgress(language)`.
 - **`api/flagged.ts`** — `getFlaggedWords(language)`, `getFlaggedWordCount(language)`, `flagWord(language, wordId)`, `unflagWord(language, wordId)`.
 - **`api/translation.ts`** — `translate(sourceText, targetLanguages)`, `translateStream(sourceText, targetLanguages, callbacks, signal?)`, `getTranslationHistory(page, limit)`, `deleteTranslationHistory()`, `deleteTranslationEntryById(id)`.
+- **`api/speaking-writing.ts`** — `submitCorrection(language, mode, inputText)`, `getSpeakingWritingSession(language)`, `deleteSpeakingWritingSession(language)`.
 - **Dev proxy:** Vite proxies `/api/*` to `http://localhost:3000` so the frontend dev server can reach the backend.
 
 ### Internationalization
@@ -802,6 +866,7 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `grammar_progress`   | Per-component grammar progress                        |
 | `grammar_quiz_sessions` | One grammar quiz session per language              |
 | `translation_history`  | Translation/analysis entries with structured LLM results |
+| `speaking_writing_sessions` | One speaking/writing correction session per language |
 | `config`               | App configuration (e.g., `config/llm` stores Azure OpenAI keys) |
 
 Local JSON files under `backend/DB/` serve as the source for the initial Firestore migration (run with `./migrate.sh` or `./deploy.sh ... --migrate`).

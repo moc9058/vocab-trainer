@@ -25,9 +25,12 @@ interface Props {
   onStartTranslation: () => void;
   onResumeTranslation: () => void;
   hasTranslationHistory: boolean;
+  onStartSpeakingWriting: () => void;
+  onResumeSpeakingWriting: () => void;
+  hasSWSession: boolean;
 }
 
-export default function EmptyState({ onResume, onResumeGrammar, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory }: Props) {
+export default function EmptyState({ onResume, onResumeGrammar, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession }: Props) {
   const { t } = useI18n();
   const { sortByLanguageOrder } = useSettings();
   const [vocabSessions, setVocabSessions] = useState<
@@ -151,11 +154,21 @@ export default function EmptyState({ onResume, onResumeGrammar, onStartNew, onBr
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">
             {t("sectionSpeakingWriting")}
           </h3>
+          {!loading && hasSWSession && (
+            <div className="mb-3">
+              <button
+                onClick={onResumeSpeakingWriting}
+                className="w-full rounded-lg border border-teal-700 bg-teal-900/30 px-4 py-3 text-left hover:border-teal-500 hover:bg-teal-800/40 transition-colors"
+              >
+                <p className="font-semibold text-sm text-teal-300">{t("resumeSpeakingWriting")}</p>
+              </button>
+            </div>
+          )}
           <button
-            disabled
-            className="w-full rounded-lg bg-teal-600/50 px-5 py-3 text-center font-medium text-white/50 cursor-not-allowed"
+            onClick={onStartSpeakingWriting}
+            className="w-full rounded-lg bg-teal-600 px-5 py-3 text-center font-medium text-white hover:bg-teal-500 transition-colors"
           >
-            {t("comingSoon")}
+            {t("startSpeakingWriting")}
           </button>
         </section>
 

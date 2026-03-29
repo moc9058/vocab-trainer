@@ -54,9 +54,10 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `routes/grammar-quiz.ts` — grammar quiz with self-grading, two modes (existing examples / LLM-generated)
   - `routes/grammar-progress.ts` — per-component grammar progress
   - `routes/translation.ts` — schema-based translation/analysis with parallel LLM calls (only `en`/`ja`/`ko`/`zh` targets supported), SSE streaming, history persistence
+  - `routes/speaking-writing.ts` — text correction for speaking/writing practice; single-step LLM call with language-specific system prompts, session persistence with correction history
 - **Database**: `firestore.ts` — Google Cloud Firestore abstraction layer
-- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, validateWord, segmentBatch); `callLLM` uses MINI deployment, `callLLMFull` uses FULL deployment (for translation); config loaded from `.env` (local) or Firestore `config/llm` (deployed); `validateWord` accepts any word with at least one definition language (not limited to ja/en/ko)
-- **Types**: `types.ts` — shared interfaces (Word, VocabFile, QuizSession, WordProgress, TranslationEntry, etc.)
+- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, validateWord, segmentBatch); `callLLM` uses MINI deployment, `callLLMFull` uses FULL deployment (for translation, speaking & writing correction); config loaded from `.env` (local) or Firestore `config/llm` (deployed); `validateWord` accepts any word with at least one definition language (not limited to ja/en/ko)
+- **Types**: `types.ts` — shared interfaces (Word, VocabFile, QuizSession, WordProgress, TranslationEntry, SpeakingWritingSession, etc.)
 - Route handlers use Fastify generics for type-safe Params/Querystring/Body and JSON schema validation
 - Errors via `@fastify/sensible`: `reply.notFound()`, `reply.badRequest()`, `reply.conflict()`
 
@@ -80,10 +81,12 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `grammar_progress` — per-component grammar progress
   - `grammar_quiz_sessions` — one grammar quiz session per language
   - `translation_history` — translation/analysis entries with structured LLM results
+  - `speaking_writing_sessions` — one speaking/writing correction session per language (keyed by language code)
   - `config` — app configuration (e.g., `config/llm` stores Azure OpenAI keys)
 - **Local files** (for migration/export):
   - Vocabulary: `backend/DB/word/{language}.json` — one file per language (e.g. `chinese.json`)
   - Grammar: `backend/DB/grammer/chinese/*.json` — per-chapter grammar files
+  - Speaking & Writing: `backend/DB/speaking&writing/` — system prompts per language + output schema
   - Progress: `backend/data/progress/{language}.json`
   - Backups: `backend/DB/backup/` — date-stamped word backups + grammar backups per language
   - Logs: `backend/logs/app-{timestamp}.log`
@@ -124,6 +127,9 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 - `GET /api/translation/history` — paginated translation history
 - `DELETE /api/translation/history` — clear all translation history
 - `DELETE /api/translation/history/:id` — delete single translation entry
+- `POST /api/speaking-writing/correct` — submit text for LLM correction (body: language, mode, inputText; uses FULL model)
+- `GET /api/speaking-writing/session/:language` — get current speaking/writing session
+- `DELETE /api/speaking-writing/session/:language` — delete speaking/writing session
 
 ### Frontend (`frontend/src/`)
 - **Entry**: `main.tsx` → `App.tsx` → `Dashboard.tsx`
@@ -135,7 +141,7 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
   - Default example translation languages (which languages the LLM generates example translations in during smart-add)
   - Centralized helpers: `sortByLanguageOrder()` and `sortedEntries()` used by all components
 - **Settings defaults**: `settings/defaults.ts` — `ALL_KNOWN_LANGUAGES` (en/ja/ko/zh with labels), `LANG_LABEL_MAP`, `DEFAULT_SETTINGS`
-- **API layer**: `api/client.ts` (generic fetchJson/postJson), `api/quiz.ts`, `api/vocab.ts`, `api/grammar.ts`, `api/translation.ts`
+- **API layer**: `api/client.ts` (generic fetchJson/postJson), `api/quiz.ts`, `api/vocab.ts`, `api/grammar.ts`, `api/translation.ts`, `api/speaking-writing.ts`
 - **Components**:
   - `Dashboard.tsx` — main layout with header (settings gear button, dynamic UI language buttons ordered by settings), modals, quiz/word list/grammar orchestration
   - `SettingsModal.tsx` — settings modal with drag-and-drop language reordering (@dnd-kit), checkboxes for UI languages, definition languages, and example translation languages
@@ -150,7 +156,8 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
   - `GrammarFormModal.tsx` — add/edit grammar component with chapter/subchapter/topic/description/terms/examples; input language selector follows settings order
   - `FlaggedReview.tsx` — review flagged words
   - `TranslationView.tsx` — translation/analysis UI with language selection ordered by settings, schema-based sentence decomposition results, per-language regenerate buttons during streaming, reading column conditional on CJK input, and history navigation
-  - `EmptyState.tsx` — home screen with vocabulary, translation, speaking & writing (placeholder), and grammar sections
+  - `SpeakingWritingView.tsx` — text correction UI with language selection (ordered by settings), speaking/writing mode toggle, LLM-powered correction with severity-coded feedback (error/improvement/style), previous/next navigation between corrections, session persistence
+  - `EmptyState.tsx` — home screen with vocabulary, translation, speaking & writing, and grammar sections
 - **i18n**: `i18n/translations.ts` — English, Japanese, and Korean, keyed by `TranslationKey` type
 - **Styling**: Tailwind CSS 4 utility classes only
 - **Proxy**: Vite proxies `/api` requests to `localhost:3000` in dev

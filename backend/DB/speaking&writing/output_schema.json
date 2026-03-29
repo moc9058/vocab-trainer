@@ -1,0 +1,47 @@
+{
+  "name": "speaking_writing_correction",
+  "strict": true,
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["overallCorrectedText", "corrections", "overallFeedback"],
+    "properties": {
+      "overallCorrectedText": {
+        "type": "string",
+        "description": "The full text after applying all corrections"
+      },
+      "corrections": {
+        "type": "array",
+        "description": "Individual corrections with explanations",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["original", "corrected", "explanation", "severity"],
+          "properties": {
+            "original": {
+              "type": "string",
+              "description": "The problematic fragment from the input"
+            },
+            "corrected": {
+              "type": "string",
+              "description": "The corrected fragment"
+            },
+            "explanation": {
+              "type": "string",
+              "description": "Why this change was made"
+            },
+            "severity": {
+              "type": "string",
+              "enum": ["error", "improvement", "style"],
+              "description": "error = grammatical mistake, improvement = awkward but not wrong, style = stylistic suggestion"
+            }
+          }
+        }
+      },
+      "overallFeedback": {
+        "type": "string",
+        "description": "A brief overall assessment of the learner's text"
+      }
+    }
+  }
+}

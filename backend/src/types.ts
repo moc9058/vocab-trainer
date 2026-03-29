@@ -239,3 +239,34 @@ export interface TranslationEntry {
   results: TranslationResult[];
   createdAt: string;
 }
+
+// ========== Speaking & Writing ==========
+
+export interface CorrectionItem {
+  original: string;
+  corrected: string;
+  explanation: string;
+  severity: "error" | "improvement" | "style";
+}
+
+export interface CorrectionResult {
+  overallCorrectedText: string;
+  corrections: CorrectionItem[];
+  overallFeedback: string;
+}
+
+export interface SpeakingWritingEntry {
+  inputText: string;
+  result: CorrectionResult;
+  createdAt: string;
+}
+
+export interface SpeakingWritingSession {
+  sessionId: string;
+  language: string;
+  mode: "speaking" | "writing";
+  startedAt: string;
+  status: "in-progress" | "completed";
+  corrections: SpeakingWritingEntry[];
+  currentIndex: number;
+}

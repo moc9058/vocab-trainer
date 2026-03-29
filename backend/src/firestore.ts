@@ -15,6 +15,7 @@ import type {
   GrammarQuizSession,
   TranslationEntry,
   TranslationResult,
+  SpeakingWritingSession,
 } from "./types.js";
 
 const db = new Firestore({
@@ -901,6 +902,43 @@ export async function clearTranslationHistory(): Promise<void> {
     snap.docs.slice(i, i + BATCH_LIMIT).forEach((doc) => batch.delete(doc.ref));
     await batch.commit();
   }
+}
+
+// ========== Speaking & Writing Sessions ==========
+
+const speakingWritingSessions = db.collection("speaking_writing_sessions");
+
+export async function getSpeakingWritingSession(
+  language: string
+): Promise<SpeakingWritingSession | null> {
+  const doc = await speakingWritingSessions.doc(language).get();
+  if (!doc.exists) return null;
+  const d = doc.data()!;
+  return {
+    sessionId: doc.id,
+    language: d.language,
+    mode: d.mode,
+    startedAt: d.startedAt,
+    status: d.status,
+    corrections: d.corrections ?? [],
+    currentIndex: d.currentIndex ?? 0,
+  };
+}
+
+export async function saveSpeakingWritingSession(
+  session: SpeakingWritingSession
+): Promise<void> {
+  const { sessionId, ...data } = session;
+  await speakingWritingSessions.doc(session.language).set(data);
+}
+
+export async function deleteSpeakingWritingSession(
+  language: string
+): Promise<boolean> {
+  const doc = await speakingWritingSessions.doc(language).get();
+  if (!doc.exists) return false;
+  await speakingWritingSessions.doc(language).delete();
+  return true;
 }
 
 export { db };

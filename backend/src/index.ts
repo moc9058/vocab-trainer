@@ -12,6 +12,7 @@ import grammarRoutes from "./routes/grammar.js";
 import grammarQuizRoutes from "./routes/grammar-quiz.js";
 import grammarProgressRoutes from "./routes/grammar-progress.js";
 import translationRoutes from "./routes/translation.js";
+import speakingWritingRoutes from "./routes/speaking-writing.js";
 
 const LOG_DIR = resolve(import.meta.dirname, "..", "logs");
 mkdirSync(LOG_DIR, { recursive: true });
@@ -42,6 +43,7 @@ await fastify.register(grammarRoutes, { prefix: "/api/grammar" });
 await fastify.register(grammarQuizRoutes, { prefix: "/api/grammar-quiz" });
 await fastify.register(grammarProgressRoutes, { prefix: "/api/grammar-progress" });
 await fastify.register(translationRoutes, { prefix: "/api/translation" });
+await fastify.register(speakingWritingRoutes, { prefix: "/api/speaking-writing" });
 
 const port = parseInt(process.env.PORT ?? "3000", 10);
 const host = process.env.HOST ?? "0.0.0.0";
