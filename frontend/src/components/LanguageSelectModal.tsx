@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
+import { useSettings } from "../settings/context";
 import { fetchJson } from "../api/client";
-import { sortByLanguageOrder } from "../constants/languageOrder";
 
 interface LanguageInfo {
   filename: string;
@@ -17,6 +17,7 @@ interface Props {
 
 export default function LanguageSelectModal({ onSelect, onClose }: Props) {
   const { t } = useI18n();
+  const { sortByLanguageOrder } = useSettings();
   const [languages, setLanguages] = useState<LanguageInfo[]>([]);
   const [loading, setLoading] = useState(true);
 

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
 import { uiLanguages } from "../i18n/translations";
+import { useSettings } from "../settings/context";
+import SettingsModal from "./SettingsModal";
 import { getCurrentSession, startQuiz } from "../api/quiz";
 import { getFilters, getTransliterationMap } from "../api/vocab";
 import { startGrammarQuiz, getCurrentGrammarSession } from "../api/grammar";
@@ -23,6 +25,8 @@ import type { QuizSession, GrammarQuizSession } from "../types";
 
 export default function Dashboard() {
   const { t, language, setLanguage } = useI18n();
+  const { settings } = useSettings();
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<QuizSession | null>(null);
   const [starting, setStarting] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
@@ -308,10 +312,12 @@ export default function Dashboard() {
         <h1 className="text-base sm:text-xl font-bold text-gray-100">{t("appTitle")}</h1>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border border-gray-600 overflow-hidden">
-            {uiLanguages.map((lang) => (
+            {settings.languageOrder
+              .filter((c) => settings.activeUiLanguages.includes(c) && (uiLanguages as readonly string[]).includes(c))
+              .map((lang) => (
               <button
                 key={lang}
-                onClick={() => setLanguage(lang)}
+                onClick={() => setLanguage(lang as typeof language)}
                 className={`px-2 py-1 text-xs font-medium ${
                   language === lang
                     ? "bg-indigo-600 text-white"
@@ -322,6 +328,13 @@ export default function Dashboard() {
               </button>
             ))}
           </div>
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            className="rounded-lg border border-gray-600 px-2 py-1 text-sm text-gray-400 hover:bg-gray-700"
+            title={t("settings")}
+          >
+            &#9881;
+          </button>
           {showBackButton && (
             <button
               onClick={goHome}
@@ -332,6 +345,9 @@ export default function Dashboard() {
           )}
         </div>
       </header>
+      {showSettingsModal && (
+        <SettingsModal onClose={() => setShowSettingsModal(false)} />
+      )}
       {showGrammarLanguageModal && (
         <LanguageSelectModal
           onSelect={(lang) => {

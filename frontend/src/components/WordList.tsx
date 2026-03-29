@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
+import { useSettings } from "../settings/context";
 import { getWords, getFilters, getTransliterationMap, updateWord, deleteWord } from "../api/vocab";
 import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
@@ -360,7 +361,8 @@ function WordCard({
   onDelete: () => void;
 }) {
   const { t } = useI18n();
-  const defText = word.definitions.map((m) => Object.values(m.text || {}).join("; ")).join(" | ");
+  const { sortedEntries } = useSettings();
+  const defText = word.definitions.map((m) => sortedEntries(m.text || {}).map(([, v]) => v).join("; ")).join(" | ");
 
   return (
     <div
@@ -392,8 +394,34 @@ function WordCard({
       <p className="mt-1 text-sm text-gray-300">{defText}</p>
       {expanded && (
         <div className="mt-2 rounded bg-gray-700 p-3">
-          {word.examples.length > 0 && (
+          {word.definitions.length > 0 && (
             <>
+              <p className="mb-1 text-xs font-medium text-gray-400">
+                {t("definitions")}
+              </p>
+              <div className="space-y-2">
+                {word.definitions.map((m, i) => (
+                  <div key={i} className={`${i > 0 ? "border-t border-gray-600 pt-2" : ""}`}>
+                    {m.partOfSpeech && (
+                      <span className="mr-2 rounded-full bg-gray-600 px-2 py-0.5 text-xs text-gray-300">
+                        {m.partOfSpeech}
+                      </span>
+                    )}
+                    <div className="mt-1 space-y-0.5">
+                      {sortedEntries(m.text || {}).map(([lang, def]) => (
+                        <p key={lang} className="text-sm text-gray-300">
+                          <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>
+                          {def}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {word.examples.length > 0 && (
+            <div className={word.definitions.length > 0 ? "mt-3" : ""}>
               <p className="mb-1 text-xs font-medium text-gray-400">
                 {t("examples")}
               </p>
@@ -401,11 +429,15 @@ function WordCard({
                 {word.examples.map((ex, i) => (
                   <li key={i} className="text-base text-gray-300">
                     <span><RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} /></span>
-                    <span className="ml-2 text-gray-400">— {displayTranslation(ex.translation)}</span>
+                    {typeof ex.translation === "string" ? (
+                      <span className="ml-2 text-gray-400">— {ex.translation}</span>
+                    ) : ex.translation ? (
+                      <span className="ml-2 text-gray-400">— {sortedEntries(ex.translation).map(([l, t]) => `${l.toUpperCase()}: ${t}`).join(" / ")}</span>
+                    ) : null}
                   </li>
                 ))}
               </ul>
-            </>
+            </div>
           )}
           {word.topics.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
@@ -465,7 +497,8 @@ function WordRow({
   onDelete: () => void;
 }) {
   const { t } = useI18n();
-  const defText = word.definitions.map((m) => Object.values(m.text || {}).join("; ")).join(" | ");
+  const { sortedEntries } = useSettings();
+  const defText = word.definitions.map((m) => sortedEntries(m.text || {}).map(([, v]) => v).join("; ")).join(" | ");
 
   return (
     <>
@@ -488,8 +521,34 @@ function WordRow({
       {expanded && (
         <tr>
           <td colSpan={4} className="bg-gray-700 px-4 py-3">
-            {word.examples.length > 0 && (
+            {word.definitions.length > 0 && (
               <>
+                <p className="mb-1 text-xs font-medium text-gray-400">
+                  {t("definitions")}
+                </p>
+                <div className="space-y-2">
+                  {word.definitions.map((m, i) => (
+                    <div key={i} className={`${i > 0 ? "border-t border-gray-600 pt-2" : ""}`}>
+                      {m.partOfSpeech && (
+                        <span className="mr-2 rounded-full bg-gray-600 px-2 py-0.5 text-xs text-gray-300">
+                          {m.partOfSpeech}
+                        </span>
+                      )}
+                      <div className="mt-1 space-y-0.5">
+                        {sortedEntries(m.text || {}).map(([lang, def]) => (
+                          <p key={lang} className="text-sm text-gray-300">
+                            <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>
+                            {def}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            {word.examples.length > 0 && (
+              <div className={word.definitions.length > 0 ? "mt-3" : ""}>
                 <p className="mb-1 text-xs font-medium text-gray-400">
                   {t("examples")}
                 </p>
@@ -497,11 +556,15 @@ function WordRow({
                   {word.examples.map((ex, i) => (
                     <li key={i} className="text-base text-gray-300">
                       <span><RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} /></span>
-                      <span className="ml-2 text-gray-400">— {displayTranslation(ex.translation)}</span>
+                      {typeof ex.translation === "string" ? (
+                        <span className="ml-2 text-gray-400">— {ex.translation}</span>
+                      ) : ex.translation ? (
+                        <span className="ml-2 text-gray-400">— {sortedEntries(ex.translation).map(([l, t]) => `${l.toUpperCase()}: ${t}`).join(" / ")}</span>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
-              </>
+              </div>
             )}
             {word.topics.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">

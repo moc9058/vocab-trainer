@@ -1,0 +1,205 @@
+import { useState } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { useI18n } from "../i18n/context";
+import { useSettings } from "../settings/context";
+import { ALL_KNOWN_LANGUAGES, DEFAULT_SETTINGS, LANG_LABEL_MAP } from "../settings/defaults";
+import { uiLanguages } from "../i18n/translations";
+
+interface Props {
+  onClose: () => void;
+}
+
+function SortableItem({ id }: { id: string }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="flex items-center gap-3 rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 cursor-grab active:cursor-grabbing"
+    >
+      <span className="text-gray-500">⠿</span>
+      <span className="text-sm font-medium uppercase text-gray-400 w-6">{id}</span>
+      <span className="text-sm text-gray-200">{LANG_LABEL_MAP[id] ?? id}</span>
+    </div>
+  );
+}
+
+export default function SettingsModal({ onClose }: Props) {
+  const { t } = useI18n();
+  const { settings, updateSettings } = useSettings();
+
+  const [order, setOrder] = useState<string[]>([...settings.languageOrder]);
+  const [activeUi, setActiveUi] = useState<Set<string>>(new Set(settings.activeUiLanguages));
+  const [defLangs, setDefLangs] = useState<Set<string>>(new Set(settings.defaultDefinitionLanguages));
+  const [exLangs, setExLangs] = useState<Set<string>>(new Set(settings.defaultExampleTranslationLanguages));
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setOrder((prev) => {
+        const oldIndex = prev.indexOf(active.id as string);
+        const newIndex = prev.indexOf(over.id as string);
+        return arrayMove(prev, oldIndex, newIndex);
+      });
+    }
+  }
+
+  function toggleSet(set: Set<string>, code: string, setter: (s: Set<string>) => void) {
+    const next = new Set(set);
+    if (next.has(code)) {
+      if (next.size > 1) next.delete(code);
+    } else {
+      next.add(code);
+    }
+    setter(next);
+  }
+
+  function handleSave() {
+    updateSettings({
+      languageOrder: order,
+      activeUiLanguages: order.filter((c) => activeUi.has(c)),
+      defaultDefinitionLanguages: order.filter((c) => defLangs.has(c)),
+      defaultExampleTranslationLanguages: order.filter((c) => exLangs.has(c)),
+    });
+    onClose();
+  }
+
+  function handleReset() {
+    setOrder([...DEFAULT_SETTINGS.languageOrder]);
+    setActiveUi(new Set(DEFAULT_SETTINGS.activeUiLanguages));
+    setDefLangs(new Set(DEFAULT_SETTINGS.defaultDefinitionLanguages));
+    setExLangs(new Set(DEFAULT_SETTINGS.defaultExampleTranslationLanguages));
+  }
+
+  const supportedUiLanguages = new Set(uiLanguages as readonly string[]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-gray-800 p-6 shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="mb-5 text-lg font-semibold text-gray-100">{t("settings")}</h2>
+
+        {/* 1. Language Display Order */}
+        <section className="mb-5">
+          <h3 className="mb-2 text-sm font-medium text-gray-300">{t("settingsLanguageOrder")}</h3>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={order} strategy={verticalListSortingStrategy}>
+              <div className="space-y-1.5">
+                {order.map((code) => (
+                  <SortableItem key={code} id={code} />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
+        </section>
+
+        {/* 2. Active UI Languages */}
+        <section className="mb-5">
+          <h3 className="mb-2 text-sm font-medium text-gray-300">{t("settingsActiveUiLanguages")}</h3>
+          <div className="flex flex-wrap gap-2">
+            {order.filter((c) => supportedUiLanguages.has(c)).map((code) => (
+              <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={activeUi.has(code)}
+                  onChange={() => toggleSet(activeUi, code, setActiveUi)}
+                  className="accent-blue-600"
+                />
+                {LANG_LABEL_MAP[code] ?? code}
+              </label>
+            ))}
+          </div>
+        </section>
+
+        {/* 3. Default Definition Languages */}
+        <section className="mb-5">
+          <h3 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDefaultDefLangs")}</h3>
+          <div className="flex flex-wrap gap-2">
+            {order.map((code) => (
+              <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={defLangs.has(code)}
+                  onChange={() => toggleSet(defLangs, code, setDefLangs)}
+                  className="accent-blue-600"
+                />
+                {LANG_LABEL_MAP[code] ?? code}
+              </label>
+            ))}
+          </div>
+        </section>
+
+        {/* 4. Default Example Translation Languages */}
+        <section className="mb-5">
+          <h3 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDefaultExLangs")}</h3>
+          <div className="flex flex-wrap gap-2">
+            {order.map((code) => (
+              <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={exLangs.has(code)}
+                  onChange={() => toggleSet(exLangs, code, setExLangs)}
+                  className="accent-blue-600"
+                />
+                {LANG_LABEL_MAP[code] ?? code}
+              </label>
+            ))}
+          </div>
+        </section>
+
+        {/* Actions */}
+        <div className="flex items-center justify-between pt-2">
+          <button
+            type="button"
+            onClick={handleReset}
+            className="text-sm text-gray-400 hover:text-gray-200"
+          >
+            {t("settingsReset")}
+          </button>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg border border-gray-600 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
+            >
+              {t("cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-500"
+            >
+              {t("save")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

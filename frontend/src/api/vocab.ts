@@ -51,6 +51,8 @@ export function smartAddWord(
     topics?: string[];
     examples?: { sentence: string; translation: string }[];
     level?: string;
+    definitionLanguages?: string[];
+    exampleTranslationLanguages?: string[];
   }
 ): Promise<Word & { generatedWords?: Word[] }> {
   return postJson(`/api/vocab/${encodeURIComponent(language)}/smart-add`, data);

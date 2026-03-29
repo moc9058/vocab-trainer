@@ -1,5 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useI18n } from "../i18n/context";
+import { useSettings } from "../settings/context";
+import { LANG_LABEL_MAP } from "../settings/defaults";
 import { getGrammarChapters, getSubchapters, createGrammarItem, updateGrammarItem } from "../api/grammar";
 import { displayTranslation, type GrammarChapterInfo, type GrammarItemDoc } from "../types";
 
@@ -38,6 +40,7 @@ function InsertButton({ onInsert }: { onInsert: () => void }) {
 
 export default function GrammarFormModal({ language: initialLanguage, editItem, onSave, onClose }: Props) {
   const { t } = useI18n();
+  const { settings } = useSettings();
   const isEdit = !!editItem;
   const effectiveLang = editItem?.language ?? initialLanguage;
 
@@ -200,11 +203,10 @@ export default function GrammarFormModal({ language: initialLanguage, editItem, 
           <div>
             <label className="mb-1 block text-sm text-gray-400">{t("displayLanguage")}</label>
             <div className="flex gap-3">
-              {[
-                { value: "ja", label: "JA" },
-                { value: "en", label: "EN" },
-                { value: "ko", label: "KO" },
-              ].map((opt) => (
+              {settings.languageOrder
+                .filter((c) => LANG_LABEL_MAP[c])
+                .map((c) => ({ value: c, label: c.toUpperCase() }))
+                .map((opt) => (
                 <label key={opt.value} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
                   <input
                     type="radio"

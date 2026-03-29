@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useI18n } from "../i18n/context";
+import { useSettings } from "../settings/context";
+import { LANG_LABEL_MAP } from "../settings/defaults";
 import { answerQuestion, getQuizQuestions } from "../api/quiz";
 import RubyText from "./RubyText";
 import { displayTranslation, type QuizSession, type QuizQuestion } from "../types";
 
 const BATCH_SIZE = 50;
-const LANG_DISPLAY: Record<string, string> = { ja: "Japanese", en: "English", ko: "Korean" };
 
 interface Props {
   session: QuizSession;
@@ -15,8 +16,24 @@ interface Props {
   transliterationMap?: Record<string, string>;
 }
 
+function TranslationDisplay({ translation }: { translation: string | Record<string, string> }) {
+  const { sortedEntries } = useSettings();
+  if (!translation) return null;
+  if (typeof translation === "string") return <p className="text-sm text-gray-400">{translation}</p>;
+  return (
+    <>
+      {sortedEntries(translation).map(([lang, text]) => (
+        <p key={lang} className="text-sm text-gray-400">
+          <span className="text-xs font-medium uppercase text-gray-500 mr-1">{lang}</span>{text}
+        </p>
+      ))}
+    </>
+  );
+}
+
 export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, transliterationMap = {} }: Props) {
   const { t } = useI18n();
+  const { sortedEntries } = useSettings();
   const [currentSession, setCurrentSession] = useState(session);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -213,9 +230,9 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
             {(question!.definitions ?? []).map((m, mi) => (
               <div key={mi}>
                 {m.partOfSpeech && <p className="text-xs text-gray-500 italic">{m.partOfSpeech}</p>}
-                {Object.entries(m.text || {}).map(([lang, text]) => (
+                {sortedEntries(m.text || {}).map(([lang, text]) => (
                   <p key={lang} className="text-xl text-green-400">
-                    <span className="text-sm text-gray-400">{LANG_DISPLAY[lang] || lang}: </span>{text}
+                    <span className="text-sm text-gray-400">{LANG_LABEL_MAP[lang] || lang}: </span>{text}
                   </p>
                 ))}
               </div>
@@ -232,7 +249,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew, 
               {question!.examples.map((ex, i) => (
                 <div key={i} className="mb-2 last:mb-0">
                   <p className="text-lg text-gray-100"><RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} /></p>
-                  <p className="text-sm text-gray-400">{displayTranslation(ex.translation)}</p>
+                  <TranslationDisplay translation={ex.translation} />
                 </div>
               ))}
             </div>

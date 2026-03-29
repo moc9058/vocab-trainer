@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
+import { useSettings } from "../settings/context";
+import { LANG_LABEL_MAP } from "../settings/defaults";
 import { getGrammarChapters, getSubchapters } from "../api/grammar";
 import type { GrammarChapterInfo } from "../types";
 
@@ -22,6 +24,7 @@ interface Props {
 
 export default function GrammarFilterModal({ language, onStart, onClose }: Props) {
   const { t, language: uiLang } = useI18n();
+  const { settings } = useSettings();
   const [chapters, setChapters] = useState<GrammarChapterInfo[]>([]);
   const [selectedChapters, setSelectedChapters] = useState<Set<number>>(new Set());
   const [subchapterData, setSubchapterData] = useState<SubchapterInfo[]>([]);
@@ -175,11 +178,10 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
             <div>
               <h3 className="text-sm font-medium text-gray-300 mb-2">{t("displayLanguage")}</h3>
               <div className="flex gap-3">
-                {[
-                  { value: "en", label: "English" },
-                  { value: "ja", label: "Japanese" },
-                  { value: "ko", label: "Korean" },
-                ].map((opt) => (
+                {settings.languageOrder
+                  .filter((c) => LANG_LABEL_MAP[c])
+                  .map((c) => ({ value: c, label: LANG_LABEL_MAP[c] }))
+                  .map((opt) => (
                   <label key={opt.value} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
                     <input
                       type="radio"

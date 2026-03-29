@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useI18n } from "../i18n/context";
+import { useSettings } from "../settings/context";
+import { LANG_LABEL_MAP } from "../settings/defaults";
 import { getFlaggedWords, unflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
 import { displayTranslation, type Word } from "../types";
-
-const LANG_DISPLAY: Record<string, string> = { ja: "Japanese", en: "English", ko: "Korean" };
 
 interface Props {
   language: string;
@@ -18,8 +18,24 @@ function pickRandom(words: Word[], excludeId?: string): Word | null {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+function TranslationDisplay({ translation }: { translation: string | Record<string, string> }) {
+  const { sortedEntries } = useSettings();
+  if (!translation) return null;
+  if (typeof translation === "string") return <p className="text-sm text-gray-400">{translation}</p>;
+  return (
+    <>
+      {sortedEntries(translation).map(([lang, text]) => (
+        <p key={lang} className="text-sm text-gray-400">
+          <span className="text-xs font-medium uppercase text-gray-500 mr-1">{lang}</span>{text}
+        </p>
+      ))}
+    </>
+  );
+}
+
 export default function FlaggedReview({ language, onBack, transliterationMap = {} }: Props) {
   const { t } = useI18n();
+  const { sortedEntries } = useSettings();
   const [words, setWords] = useState<Word[]>([]);
   const [currentWord, setCurrentWord] = useState<Word | null>(null);
   const [showingAnswer, setShowingAnswer] = useState(false);
@@ -97,9 +113,9 @@ export default function FlaggedReview({ language, onBack, transliterationMap = {
             {(currentWord!.definitions ?? []).map((m, mi) => (
               <div key={mi}>
                 {m.partOfSpeech && <p className="text-xs text-gray-500 italic">{m.partOfSpeech}</p>}
-                {Object.entries(m.text || {}).map(([lang, text]) => (
+                {sortedEntries(m.text || {}).map(([lang, text]) => (
                   <p key={lang} className="text-xl text-green-400">
-                    <span className="text-sm text-gray-400">{LANG_DISPLAY[lang] || lang}: </span>{text}
+                    <span className="text-sm text-gray-400">{LANG_LABEL_MAP[lang] || lang}: </span>{text}
                   </p>
                 ))}
               </div>
@@ -118,7 +134,7 @@ export default function FlaggedReview({ language, onBack, transliterationMap = {
                   <p className="text-lg text-gray-100">
                     <RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} />
                   </p>
-                  <p className="text-sm text-gray-400">{displayTranslation(ex.translation)}</p>
+                  <TranslationDisplay translation={ex.translation} />
                 </div>
               ))}
             </div>

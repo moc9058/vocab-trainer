@@ -121,6 +121,8 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       examples?: { sentence: string; translation: string }[];
       level?: string;
       notes?: string;
+      definitionLanguages?: string[];
+      exampleTranslationLanguages?: string[];
     };
   }>(
     "/:language/smart-add",
@@ -149,12 +151,14 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
                 type: "object",
                 properties: {
                   sentence: { type: "string" },
-                  translation: { type: "string" },
+                  translation: {},
                 },
               },
             },
             level: { type: "string" },
             notes: { type: "string" },
+            definitionLanguages: { type: "array", items: { type: "string" } },
+            exampleTranslationLanguages: { type: "array", items: { type: "string" } },
           },
         },
       },
@@ -177,6 +181,13 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Build LLM prompt
       const isChinese = language === "chinese";
+      const defLangs = body.definitionLanguages ?? ["ja", "en", "ko"];
+      const exLangs = body.exampleTranslationLanguages ?? ["en"];
+      const defLangStr = defLangs.map((l) => `"${l}": "..."`).join(", ");
+      const exTranslationSpec = exLangs.length === 1
+        ? `"translation": "${exLangs[0] === "en" ? "English" : exLangs[0]} translation"`
+        : `"translation": { ${exLangs.map((l) => `"${l}": "..."`).join(", ")} }`;
+
       const fields: string[] = [`Term: ${term}`];
       if (isChinese) {
         if (body.transliteration) fields.push(`PROVIDED transliteration: ${body.transliteration}`);
@@ -185,7 +196,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       if (body.definitions && body.definitions.length > 0) {
         fields.push(`PROVIDED definitions: ${JSON.stringify(body.definitions)}`);
       } else {
-        fields.push("MISSING definitions (generate meanings with partOfSpeech and text in ja, en, ko)");
+        fields.push(`MISSING definitions (generate meanings with partOfSpeech and text in ${defLangs.join(", ")})`);
       }
       if (body.topics && body.topics.length > 0) fields.push(`PROVIDED topics: ${JSON.stringify(body.topics)}`);
       else fields.push("MISSING topics");
@@ -218,8 +229,8 @@ Return a JSON object:
 {
   "term": "the Chinese word",
   "transliteration": "pinyin with tone marks",
-  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { "ja": "...", "en": "...", "ko": "..." } }],
-  "examples": [{ "sentence": "Chinese sentence", "translation": "English translation", "segments": [{ "text": "word", "pinyin": "pīnyīn" }] }],
+  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { ${defLangStr} } }],
+  "examples": [{ "sentence": "Chinese sentence", ${exTranslationSpec}, "segments": [{ "text": "word", "pinyin": "pīnyīn" }] }],
   "topics": ["..."],
   "level": "one of the allowed levels",
   "notes": "brief usage notes"
@@ -241,8 +252,8 @@ ${definitionGuidelines}
 Return a JSON object:
 {
   "term": "the ${language} word",
-  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { "ja": "...", "en": "...", "ko": "..." } }],
-  "examples": [{ "sentence": "${language} sentence using the word"${language === "english" ? "" : ', "translation": "English translation"'} }],
+  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { ${defLangStr} } }],
+  "examples": [{ "sentence": "${language} sentence using the word"${language === "english" ? "" : `, ${exTranslationSpec}`} }],
   "topics": ["..."],${langLevels ? `\n  "level": "one of the allowed levels",` : ""}
   "notes": "brief usage notes"
 }
@@ -316,7 +327,7 @@ Allowed topics: ${TOPICS.join(", ")}${langLevels ? `\nAllowed levels: ${langLeve
       let generatedWords: Word[] = [];
       if (isChinese) {
         try {
-          generatedWords = await generateMissingWordsFromSegments(language, word, fastify.log);
+          generatedWords = await generateMissingWordsFromSegments(language, word, fastify.log, body.definitionLanguages);
         } catch (err) {
           fastify.log.warn({ err, term }, "Missing word generation from segments failed");
         }
@@ -385,11 +396,12 @@ Allowed topics: ${TOPICS.join(", ")}${langLevels ? `\nAllowed levels: ${langLeve
 async function generateMissingWordsFromSegments(
   language: string,
   sourceWord: Word,
-  logger: { info: (...a: unknown[]) => void; warn: (...a: unknown[]) => void }
+  logger: { info: (...a: unknown[]) => void; warn: (...a: unknown[]) => void },
+  definitionLanguages?: string[],
 ): Promise<Word[]> {
   // Collect unique segment terms (exclude punctuation and the source term)
   const punctuation = /^[\s\p{P}\p{S}\p{N}]+$/u;
-  const segmentTerms = new Map<string, { pinyin?: string; sentence: string; translation: string }>();
+  const segmentTerms = new Map<string, { pinyin?: string; sentence: string; translation: string | Record<string, string> }>();
 
   for (const ex of sourceWord.examples) {
     if (!ex.segments) continue;
@@ -425,6 +437,9 @@ async function generateMissingWordsFromSegments(
     example: { sentence: info.sentence, translation: info.translation },
   }));
 
+  const batchDefLangs = definitionLanguages ?? ["ja", "en", "ko"];
+  const batchDefLangStr = batchDefLangs.map((l) => `"${l}": "..."`).join(", ");
+
   const systemPrompt = `You are a Chinese vocabulary expert. Generate vocabulary entries for Chinese words.
 Each word already has a term, transliteration (pinyin), and one example sentence provided.
 You need to fill: definitions, topics, notes.
@@ -433,7 +448,7 @@ Return a JSON object with a "words" array:
 [{
   "term": "the word (keep as provided)",
   "transliteration": "keep as provided",
-  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase", "text": { "ja": "...", "en": "...", "ko": "..." } }],
+  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|phrase", "text": { ${batchDefLangStr} } }],
   "topics": ["..."],
   "notes": "brief usage notes or empty string"
 }]
@@ -441,7 +456,12 @@ Return a JSON object with a "words" array:
 Allowed topics: ${TOPICS.join(", ")}`;
 
   const userPrompt = wordEntries
-    .map((w) => `- ${w.term} (${w.transliteration}), example: "${w.example.sentence}" → "${w.example.translation}"`)
+    .map((w) => {
+      const tr = typeof w.example.translation === "string"
+        ? w.example.translation
+        : Object.values(w.example.translation).join(" / ");
+      return `- ${w.term} (${w.transliteration}), example: "${w.example.sentence}" → "${tr}"`;
+    })
     .join("\n");
 
   const addedWords: Word[] = [];

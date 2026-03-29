@@ -13,6 +13,7 @@ const translations = {
     resumeQuiz: "Resume Quiz",
     startNewQuiz: "Start New",
     existingQuizFound: "You have an in-progress word quiz for this language. Resume or start a new one?",
+    definitions: "Definitions",
     examples: "Examples",
     selectQuizLanguage: "Select Quiz Language",
     cancel: "Cancel",
@@ -138,6 +139,14 @@ const translations = {
     // Speaking & Writing
     sectionSpeakingWriting: "Speaking & Writing",
     comingSoon: "Coming Soon",
+    // Settings
+    settings: "Settings",
+    settingsLanguageOrder: "Language Display Order",
+    settingsActiveUiLanguages: "UI Languages",
+    settingsDefaultDefLangs: "Default Definition Languages",
+    settingsDefaultExLangs: "Default Example Translation Languages",
+    settingsReset: "Reset to Default",
+    settingsAtLeastOne: "At least one language must be selected",
   },
   ja: {
     appTitle: "単語トレーナー",
@@ -153,6 +162,7 @@ const translations = {
     resumeQuiz: "クイズを再開",
     startNewQuiz: "新規開始",
     existingQuizFound: "この言語の進行中の単語クイズがあります。再開しますか、それとも新しく始めますか？",
+    definitions: "意味",
     examples: "例文",
     selectQuizLanguage: "クイズ言語を選択",
     cancel: "キャンセル",
@@ -278,6 +288,14 @@ const translations = {
     // Speaking & Writing
     sectionSpeakingWriting: "スピーキング＆ライティング",
     comingSoon: "近日公開",
+    // Settings
+    settings: "設定",
+    settingsLanguageOrder: "言語表示順序",
+    settingsActiveUiLanguages: "UI言語",
+    settingsDefaultDefLangs: "デフォルト定義言語",
+    settingsDefaultExLangs: "デフォルト例文翻訳言語",
+    settingsReset: "デフォルトに戻す",
+    settingsAtLeastOne: "少なくとも1つの言語を選択してください",
   },
   ko: {
     appTitle: "단어 트레이너",
@@ -293,6 +311,7 @@ const translations = {
     resumeQuiz: "퀴즈 재개",
     startNewQuiz: "새로 시작",
     existingQuizFound: "이 언어의 진행 중인 단어 퀴즈가 있습니다. 재개하시겠습니까, 아니면 새로 시작하시겠습니까?",
+    definitions: "뜻",
     examples: "예문",
     selectQuizLanguage: "퀴즈 언어 선택",
     cancel: "취소",
@@ -418,6 +437,14 @@ const translations = {
     // Speaking & Writing
     sectionSpeakingWriting: "스피킹 & 라이팅",
     comingSoon: "곧 출시",
+    // Settings
+    settings: "설정",
+    settingsLanguageOrder: "언어 표시 순서",
+    settingsActiveUiLanguages: "UI 언어",
+    settingsDefaultDefLangs: "기본 정의 언어",
+    settingsDefaultExLangs: "기본 예문 번역 언어",
+    settingsReset: "기본값으로 재설정",
+    settingsAtLeastOne: "최소 1개의 언어를 선택해야 합니다",
   },
 } as const;
 

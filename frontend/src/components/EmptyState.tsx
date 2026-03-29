@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
+import { useSettings } from "../settings/context";
 import { fetchJson } from "../api/client";
 import { getCurrentSession } from "../api/quiz";
 import { getCurrentGrammarSession } from "../api/grammar";
-import { sortByLanguageOrder } from "../constants/languageOrder";
 import type { QuizSession, GrammarQuizSession } from "../types";
 
 interface LanguageInfo {
@@ -29,6 +29,7 @@ interface Props {
 
 export default function EmptyState({ onResume, onResumeGrammar, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory }: Props) {
   const { t } = useI18n();
+  const { sortByLanguageOrder } = useSettings();
   const [vocabSessions, setVocabSessions] = useState<
     { session: QuizSession; displayName: string }[]
   >([]);

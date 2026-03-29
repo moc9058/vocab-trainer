@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useI18n } from "../i18n/context";
+import { useSettings } from "../settings/context";
+import { ALL_KNOWN_LANGUAGES } from "../settings/defaults";
 import { translateStream, getTranslationHistory, deleteTranslationHistory } from "../api/translation";
 import type { TranslationEntry, TranslationResult, SentenceAnalysis, SentenceAnalysisResult, AnalysisChunk } from "../types";
 
@@ -7,15 +9,16 @@ interface Props {
   mode: "new" | "resume";
 }
 
-const KNOWN_LANGUAGES = [
-  { code: "en", label: "English" },
-  { code: "ja", label: "日本語" },
-  { code: "ko", label: "한국어" },
-  { code: "zh", label: "中文" },
-];
-
 export default function TranslationView({ mode }: Props) {
   const { t } = useI18n();
+  const { settings } = useSettings();
+  const KNOWN_LANGUAGES = useMemo(
+    () => settings.languageOrder
+      .map((code) => ALL_KNOWN_LANGUAGES.find((l) => l.code === code))
+      .filter(Boolean)
+      .map((l) => ({ code: l!.code, label: l!.nativeLabel })),
+    [settings.languageOrder],
+  );
   const [history, setHistory] = useState<TranslationEntry[]>([]);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [phase, setPhase] = useState<"input" | "loading" | "results">("input");

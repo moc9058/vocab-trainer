@@ -1,6 +1,6 @@
 export interface Example {
   sentence: string;
-  translation: string;
+  translation: string | Record<string, string>;
   segments?: { text: string; transliteration?: string; id?: string }[];
 }
 

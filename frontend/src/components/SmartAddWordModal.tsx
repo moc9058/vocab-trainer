@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useI18n } from "../i18n/context";
+import { useSettings } from "../settings/context";
+import { LANG_LABEL_MAP } from "../settings/defaults";
 import { smartAddWord } from "../api/vocab";
 import { displayTranslation, type Word } from "../types";
 
@@ -14,12 +16,7 @@ const WORD_LANG_OPTIONS = [
   { value: "__other__", label: "Other" },
 ] as const;
 
-const LANG_OPTIONS = [
-  { value: "en", label: "English" },
-  { value: "ja", label: "Japanese" },
-  { value: "ko", label: "Korean" },
-  { value: "__other__", label: "Other" },
-] as const;
+// LANG_OPTIONS is now derived from settings in the component
 
 const CATEGORIES = [
   "noun", "verb", "adjective", "adverb", "preposition", "conjunction",
@@ -46,6 +43,14 @@ const ALL_TOPICS = [
 
 export default function SmartAddWordModal({ onSave, onClose }: Props) {
   const { t } = useI18n();
+  const { settings } = useSettings();
+  const LANG_OPTIONS = useMemo(
+    () => [
+      ...settings.languageOrder.map((c) => ({ value: c, label: LANG_LABEL_MAP[c] ?? c })),
+      { value: "__other__", label: "Other" },
+    ],
+    [settings.languageOrder],
+  );
   const [langSelect, setLangSelect] = useState("english");
   const [customLang, setCustomLang] = useState("");
   const [term, setTerm] = useState("");
@@ -100,6 +105,8 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
         topics: topics.length > 0 ? topics : undefined,
         examples: validExamples.length > 0 ? validExamples : undefined,
         level: level || undefined,
+        definitionLanguages: settings.defaultDefinitionLanguages,
+        exampleTranslationLanguages: settings.defaultExampleTranslationLanguages,
       });
       const { generatedWords: gw, ...word } = result;
       setSuccess(true);
