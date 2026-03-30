@@ -2,12 +2,14 @@
 set -euo pipefail
 
 # Deploy vocab-trainer to Google Cloud Run
-# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--word] [--grammer] [--llm]
+# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--word] [--grammer] [--llm] [--prompts] [--archives]
 #
 # Options:
 #   --word      Run Firestore word data migration after deploying backend
 #   --grammer   Run Firestore grammar data migration after deploying backend
 #   --llm       Upload LLM config (Azure OpenAI keys) from .env to Firestore
+#   --prompts   Upload speaking/writing + translation config to Firestore
+#   --archives  Upload backup + original archive data to Firestore
 #
 # Flags can be used together.
 #
@@ -18,12 +20,16 @@ set -euo pipefail
 MIGRATE_WORD=false
 MIGRATE_GRAMMER=false
 MIGRATE_LLM=false
+MIGRATE_PROMPTS=false
+MIGRATE_ARCHIVES=false
 POSITIONAL=()
 for arg in "$@"; do
   case "$arg" in
     --word) MIGRATE_WORD=true ;;
     --grammer) MIGRATE_GRAMMER=true ;;
     --llm) MIGRATE_LLM=true ;;
+    --prompts) MIGRATE_PROMPTS=true ;;
+    --archives) MIGRATE_ARCHIVES=true ;;
     *) POSITIONAL+=("$arg") ;;
   esac
 done
@@ -66,7 +72,7 @@ BACKEND_URL=$(gcloud run services describe vocab-trainer-backend \
 echo "==> Backend deployed at: ${BACKEND_URL}"
 
 # Optionally seed Firestore with data from local files
-if [ "$MIGRATE_WORD" = true ] || [ "$MIGRATE_GRAMMER" = true ] || [ "$MIGRATE_LLM" = true ]; then
+if [ "$MIGRATE_WORD" = true ] || [ "$MIGRATE_GRAMMER" = true ] || [ "$MIGRATE_LLM" = true ] || [ "$MIGRATE_PROMPTS" = true ] || [ "$MIGRATE_ARCHIVES" = true ]; then
   echo "==> Installing backend dependencies for migration..."
   (cd backend && npm install --silent)
 fi
@@ -85,8 +91,18 @@ if [ "$MIGRATE_LLM" = true ]; then
   (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
     npx tsx scripts/migrate-llm-config-to-firestore.ts)
 fi
-if [ "$MIGRATE_WORD" = false ] && [ "$MIGRATE_GRAMMER" = false ] && [ "$MIGRATE_LLM" = false ]; then
-  echo "==> Skipping Firestore migration (use --word, --grammer, and/or --llm to run)"
+if [ "$MIGRATE_PROMPTS" = true ]; then
+  echo "==> Uploading speaking/writing + translation config to Firestore..."
+  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
+    npx tsx scripts/migrate-db-config-to-firestore.ts --prompts)
+fi
+if [ "$MIGRATE_ARCHIVES" = true ]; then
+  echo "==> Uploading backup + original archives to Firestore..."
+  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
+    npx tsx scripts/migrate-db-config-to-firestore.ts --archives)
+fi
+if [ "$MIGRATE_WORD" = false ] && [ "$MIGRATE_GRAMMER" = false ] && [ "$MIGRATE_LLM" = false ] && [ "$MIGRATE_PROMPTS" = false ] && [ "$MIGRATE_ARCHIVES" = false ]; then
+  echo "==> Skipping Firestore migration (use --word, --grammer, --llm, --prompts, and/or --archives to run)"
 fi
 
 # Build and push frontend

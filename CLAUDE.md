@@ -13,6 +13,9 @@ cd backend && npm run migrate           # One-time word migration from JSON file
 cd backend && npm run export            # Export Firestore data back to local JSON files
 cd backend && npx tsx scripts/migrate-grammar-to-firestore.ts  # Grammar migration to Firestore
 cd backend && npx tsx scripts/migrate-llm-config-to-firestore.ts  # Upload LLM config (.env) to Firestore
+cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --prompts   # Upload speaking/writing + translation config to Firestore
+cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --archives  # Upload backup + original archives to Firestore
+cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts             # Upload both prompts + archives
 ```
 
 ### Frontend
@@ -34,6 +37,8 @@ docker compose up --build      # Run full stack (backend :3000, frontend :5173)
 ./deploy.sh PROJECT_ID REGION --llm              # Deploy + upload LLM config to Firestore
 ./deploy.sh PROJECT_ID REGION --word --grammer   # Deploy + both migrations
 ./deploy.sh PROJECT_ID REGION --word --grammer --llm  # Deploy + all migrations
+./deploy.sh PROJECT_ID REGION --prompts              # Deploy + upload speaking/writing & translation config
+./deploy.sh PROJECT_ID REGION --archives             # Deploy + upload backup & original archives
 ```
 
 ### No test or lint commands are configured.
@@ -53,8 +58,8 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `routes/grammar.ts` — CRUD for grammar items, chapters, subchapters
   - `routes/grammar-quiz.ts` — grammar quiz with self-grading, two modes (existing examples / LLM-generated)
   - `routes/grammar-progress.ts` — per-component grammar progress
-  - `routes/translation.ts` — schema-based translation/analysis with parallel LLM calls (only `en`/`ja`/`ko`/`zh` targets supported), SSE streaming, history persistence
-  - `routes/speaking-writing.ts` — text correction for speaking/writing practice; SSE streaming LLM call with language-specific system prompts + use-case context (professional/casual/presentation/interview for speaking; academic/social/email/creative for writing), per-sentence corrections, session persistence
+  - `routes/translation.ts` — schema-based translation/analysis with parallel LLM calls (only `en`/`ja`/`ko`/`zh` targets supported), SSE streaming, history persistence; config (schemas, prompts) loaded from Firestore `config/translation`
+  - `routes/speaking-writing.ts` — text correction for speaking/writing practice; SSE streaming LLM call with language-specific system prompts + use-case context (professional/casual/presentation/interview for speaking; academic/social/email/creative for writing), per-sentence corrections, session persistence; config (schemas, prompts, use cases) loaded from Firestore `config/speaking_writing`
   - `routes/metrics.ts` — LLM token usage tracking and cost estimation; paginated usage logs, daily aggregates, cost-per-token configuration per model
 - **Database**: `firestore.ts` — Google Cloud Firestore abstraction layer
 - **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, validateWord, segmentBatch); `callLLM` uses MINI deployment, `callLLMFull` uses FULL deployment (for translation, speaking & writing correction); config loaded from `.env` (local) or Firestore `config/llm` (deployed); `validateWord` accepts any word with at least one definition language (not limited to ja/en/ko); all LLM functions accept a `route` parameter for token usage tracking and automatically log token counts to Firestore
@@ -67,6 +72,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
 - `export-from-firestore.ts` — export words, grammar, and progress from Firestore back to JSON files in `DB/` (inverse of migrate); normalizes legacy language keys to ISO 639-1
 - `migrate-grammar-to-firestore.ts` — grammar migration from `backend/DB/grammer/` JSON to Firestore; backs up current Firestore grammar to `DB/backup/{language}/` first
 - `migrate-llm-config-to-firestore.ts` — uploads Azure OpenAI config from `.env` to Firestore `config/llm` document
+- `migrate-db-config-to-firestore.ts` — uploads speaking/writing + translation config (`--prompts`) and backup/original archives (`--archives`) to Firestore
 
 ### Data Storage
 - **Primary**: Google Cloud Firestore (database ID: `vocab-database`)
@@ -83,13 +89,16 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `grammar_quiz_sessions` — one grammar quiz session per language
   - `translation_history` — translation/analysis entries with structured LLM results
   - `speaking_writing_sessions` — one speaking/writing correction session per language (keyed by language code)
-  - `config` — app configuration (e.g., `config/llm` stores Azure OpenAI keys, `config/token_costs` stores cost-per-token rates)
+  - `config` — app configuration (e.g., `config/llm` stores Azure OpenAI keys, `config/token_costs` stores cost-per-token rates, `config/speaking_writing` stores prompts/schemas/use-cases, `config/translation` stores prompts/schemas)
+  - `archive_backups` — backup word data and grammar backups (chunked subcollections for large files)
+  - `archive_originals` — original HSK files by date folder (chunked subcollections for large files)
   - `token_usage` — individual LLM call logs with token counts per call
   - `token_usage_daily` — daily aggregates by model (doc ID: `{model}_{YYYY-MM-DD}`)
 - **Local files** (for migration/export):
   - Vocabulary: `backend/DB/word/{language}.json` — one file per language (e.g. `chinese.json`)
   - Grammar: `backend/DB/grammer/chinese/*.json` — per-chapter grammar files
-  - Speaking & Writing: `backend/DB/speaking&writing/` — system prompts per language + output schema
+  - Speaking & Writing: `backend/DB/speaking&writing/` — system prompts per language + output schema (source files for Firestore migration)
+  - Translation: `backend/DB/translation/` — system prompts + schemas (source files for Firestore migration)
   - Progress: `backend/data/progress/{language}.json`
   - Backups: `backend/DB/backup/` — date-stamped word backups + grammar backups per language
   - Logs: `backend/logs/app-{timestamp}.log`

@@ -1,32 +1,15 @@
 import type { FastifyPluginAsync } from "fastify";
-import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { callLLMFullWithSchema, streamLLMFullWithSchema, stripMarkdownFences } from "../llm.js";
 import {
   getSpeakingWritingSession,
   saveSpeakingWritingSession,
   deleteSpeakingWritingSession,
+  getSpeakingWritingConfig,
 } from "../firestore.js";
 import type { CorrectionResult, SpeakingWritingSession } from "../types.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_SW_DIR = resolve(__dirname, "../../DB/speaking&writing");
-
-const outputSchema = JSON.parse(readFileSync(resolve(DB_SW_DIR, "output_schema.json"), "utf-8"));
-
-const basePrompts: Record<string, string> = {};
-for (const [code, file] of [
-  ["en", "english"],
-  ["ja", "japanese"],
-  ["ko", "korean"],
-  ["zh", "chinese"],
-] as const) {
-  basePrompts[code] = readFileSync(resolve(DB_SW_DIR, `system_prompt_${file}.md`), "utf-8");
-}
-
-// Use case instructions keyed by mode → useCase → language
-const useCasesData = JSON.parse(readFileSync(resolve(DB_SW_DIR, "use_cases.json"), "utf-8")) as Record<string, Record<string, Record<string, string>>>;
+const SPEAKING_USE_CASES = ["professional", "casual", "presentation", "interview"];
+const WRITING_USE_CASES = ["academic", "social", "email", "creative"];
 
 const CONTEXT_HEADERS: Record<string, string> = {
   en: "## Context",
@@ -35,21 +18,22 @@ const CONTEXT_HEADERS: Record<string, string> = {
   zh: "## 语境",
 };
 
-function buildSystemPrompt(language: string, mode: string, useCase: string): string | null {
-  const base = basePrompts[language];
-  if (!base) return null;
-
-  const useCaseInstructions = useCasesData[mode]?.[useCase]?.[language];
-  if (!useCaseInstructions) return base;
-
-  const header = CONTEXT_HEADERS[language] ?? "## Context";
-  return [base, header, useCaseInstructions].join("\n\n");
-}
-
-const SPEAKING_USE_CASES = ["professional", "casual", "presentation", "interview"];
-const WRITING_USE_CASES = ["academic", "social", "email", "creative"];
-
 const speakingWritingRoutes: FastifyPluginAsync = async (fastify) => {
+  // Load config from Firestore once during plugin registration
+  const { outputSchema, prompts: basePrompts, useCases: useCasesData } =
+    await getSpeakingWritingConfig();
+
+  function buildSystemPrompt(language: string, mode: string, useCase: string): string | null {
+    const base = basePrompts[language];
+    if (!base) return null;
+
+    const useCaseInstructions = useCasesData[mode]?.[useCase]?.[language];
+    if (!useCaseInstructions) return base;
+
+    const header = CONTEXT_HEADERS[language] ?? "## Context";
+    return [base, header, useCaseInstructions].join("\n\n");
+  }
+
   // POST /correct — submit text for correction
   fastify.post<{
     Body: { language: string; mode: "speaking" | "writing"; useCase: string; inputText: string };

@@ -1097,4 +1097,40 @@ export async function clearTokenUsage(): Promise<void> {
   }
 }
 
+// ========== Config: Speaking & Writing ==========
+
+export async function getSpeakingWritingConfig(): Promise<{
+  outputSchema: Record<string, unknown>;
+  prompts: Record<string, string>;
+  useCases: Record<string, Record<string, Record<string, string>>>;
+}> {
+  const doc = await db.collection("config").doc("speaking_writing").get();
+  if (!doc.exists) throw new Error("Missing config/speaking_writing in Firestore");
+  const d = doc.data()!;
+  return {
+    outputSchema: d.outputSchema,
+    prompts: d.prompts,
+    useCases: d.useCases,
+  };
+}
+
+// ========== Config: Translation ==========
+
+export async function getTranslationConfig(): Promise<{
+  decomposeSchema: Record<string, unknown>;
+  decomposePrompt: string;
+  translateSchema: Record<string, unknown>;
+  translatePrompts: Record<string, string>;
+}> {
+  const doc = await db.collection("config").doc("translation").get();
+  if (!doc.exists) throw new Error("Missing config/translation in Firestore");
+  const d = doc.data()!;
+  return {
+    decomposeSchema: d.decomposeSchema,
+    decomposePrompt: d.decomposePrompt,
+    translateSchema: d.translateSchema,
+    translatePrompts: d.translatePrompts,
+  };
+}
+
 export { db };

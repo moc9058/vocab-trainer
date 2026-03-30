@@ -1,29 +1,13 @@
 import type { FastifyPluginAsync } from "fastify";
-import { readFileSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { callLLMFullWithSchema, streamLLMFullWithSchema, stripMarkdownFences } from "../llm.js";
 import {
   saveTranslationEntry,
   getTranslationHistory,
   deleteTranslationEntry,
   clearTranslationHistory,
+  getTranslationConfig,
 } from "../firestore.js";
 import type { TranslationResult, SentenceAnalysisResult } from "../types.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DB_TRANSLATION_DIR = resolve(__dirname, "../../DB/translation");
-
-// Step 1: decomposition (language-agnostic)
-const decomposeSchema = JSON.parse(readFileSync(resolve(DB_TRANSLATION_DIR, "decompose_scheme.json"), "utf-8"));
-const decomposePrompt = readFileSync(resolve(DB_TRANSLATION_DIR, "system_prompt_decompose.md"), "utf-8");
-
-// Step 2: translation (per-language) — uses the full output schema
-const translateSchema = JSON.parse(readFileSync(resolve(DB_TRANSLATION_DIR, "output_scheme.json"), "utf-8"));
-const translatePrompts: Record<string, string> = {};
-for (const [code, file] of [["en", "english"], ["ja", "japanese"], ["ko", "korean"], ["zh", "chinese"]] as const) {
-  translatePrompts[code] = readFileSync(resolve(DB_TRANSLATION_DIR, `system_prompt_${file}.md`), "utf-8");
-}
 
 function parseSchemaResult(raw: string, language: string): TranslationResult {
   try {
@@ -51,6 +35,10 @@ function parseSchemaResult(raw: string, language: string): TranslationResult {
 }
 
 const translationRoutes: FastifyPluginAsync = async (fastify) => {
+  // Load config from Firestore once during plugin registration
+  const { decomposeSchema, decomposePrompt, translateSchema, translatePrompts } =
+    await getTranslationConfig();
+
   // POST /translate — run two-step translation (non-streaming)
   fastify.post<{
     Body: { sourceText: string; targetLanguages: string[] };

@@ -43,6 +43,8 @@ To also run Firestore data migrations during deploy:
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --llm               # upload LLM config to Firestore
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --word --grammer    # both migrations
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --word --grammer --llm  # all migrations
+./deploy.sh vocab-trainer-490014 asia-northeast1 --prompts           # speaking/writing + translation config
+./deploy.sh vocab-trainer-490014 asia-northeast1 --archives          # backup + original archives
 ```
 
 ### Migrate Data Only
@@ -68,10 +70,26 @@ cd backend && FIRESTORE_PROJECT=vocab-trainer-490014 npx tsx scripts/migrate-llm
 
 Reads Azure OpenAI keys from `.env` and writes them to Firestore `config/llm`. The backend will automatically fetch LLM config from Firestore when `.env` is not available (e.g., in deployed environments).
 
+### Upload Speaking/Writing + Translation Config
+
+```bash
+cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --prompts
+```
+
+Reads system prompts, output schemas, and use-case instructions from `backend/DB/speaking&writing/` and `backend/DB/translation/`, and writes them to Firestore `config/speaking_writing` and `config/translation`. Required before the backend can start — these configs are loaded from Firestore at startup.
+
+### Upload Backup + Original Archives
+
+```bash
+cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --archives
+```
+
+Uploads `backend/DB/backup/` and `backend/DB/original/` archive data to Firestore collections `archive_backups` and `archive_originals`. Large files (>1MB) are automatically chunked into 500-item subcollection documents.
+
 This will:
 1. Build and push backend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-backend/backend`
 2. Deploy backend to Cloud Run
-3. Run Firestore migration (only with `--word`, `--grammer`, and/or `--llm`)
+3. Run Firestore migration (only with `--word`, `--grammer`, `--llm`, `--prompts`, and/or `--archives`)
 4. Build and push frontend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-frontend/frontend`
 5. Deploy frontend to Cloud Run with `BACKEND_URL` pointing to the backend service
 
@@ -197,6 +215,7 @@ vocab-trainer/
 │   │   ├── migrate-to-firestore.ts        # JSON → Firestore word migration (backs up to DB/backup/ first)
 │   │   ├── migrate-grammar-to-firestore.ts # Grammar data → Firestore (backs up to DB/backup/ first)
 │   │   ├── migrate-llm-config-to-firestore.ts # Upload LLM config (.env) → Firestore
+│   │   ├── migrate-db-config-to-firestore.ts  # Upload speaking/writing, translation config & archives → Firestore
 │   │   └── export-from-firestore.ts       # Export words, grammar & progress from Firestore to JSON
 │   ├── src/
 │   │   ├── index.ts             # Fastify server entry point
@@ -738,7 +757,7 @@ Runs parallel LLM calls (one per target language, using the FULL model) and retu
 
 ### Speaking & Writing
 
-LLM-powered text correction for speaking and writing practice. One session per language, with a history of corrections within each session. Uses language-specific system prompts from `backend/DB/speaking&writing/` and the FULL model deployment.
+LLM-powered text correction for speaking and writing practice. One session per language, with a history of corrections within each session. Uses language-specific system prompts and use-case instructions from Firestore `config/speaking_writing` (migrated from `backend/DB/speaking&writing/`) and the FULL model deployment.
 
 #### `POST /api/speaking-writing/correct` — Submit text for correction
 
@@ -885,7 +904,11 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `grammar_quiz_sessions` | One grammar quiz session per language              |
 | `translation_history`  | Translation/analysis entries with structured LLM results |
 | `speaking_writing_sessions` | One speaking/writing correction session per language |
-| `config`               | App configuration (e.g., `config/llm` stores Azure OpenAI keys) |
+| `config`               | App configuration (`config/llm` for Azure OpenAI keys, `config/speaking_writing` for prompts/schemas/use-cases, `config/translation` for prompts/schemas) |
+| `token_usage`          | Individual LLM call logs with token counts                |
+| `token_usage_daily`    | Daily aggregates by model                                 |
+| `archive_backups`      | Backup word data and grammar backups (chunked subcollections for large files) |
+| `archive_originals`    | Original HSK files by date folder (chunked subcollections for large files) |
 
 Local JSON files under `backend/DB/` serve as the source for the initial Firestore migration (run with `./migrate.sh` or `./deploy.sh ... --migrate`).
 
