@@ -148,7 +148,9 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
     }, 15_000);
 
     function sendEvent(event: string, data: unknown) {
-      reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      if (!reply.raw.destroyed) {
+        reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      }
     }
 
     try {

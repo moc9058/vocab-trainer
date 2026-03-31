@@ -23,13 +23,11 @@ Return exactly one JSON object that matches the provided schema.
 - Follow the schema exactly
 - Do not omit required fields
 - Do not add extra fields
-- Preserve the original input text exactly in `inputText`
 - Analyze each sentence separately
 - Preserve original order at every level
 - Do not invent tokens that are not supported by exact substrings of the original input
 - Do not create components for punctuation
 - If uncertain about `baseForm` or `reading`, use null
-- If uncertain about language, use `und`
 
 ## Core Objective
 Produce a learner-friendly structural decomposition of the input text.
@@ -37,9 +35,7 @@ Prefer natural, reusable units over overly theoretical parsing.
 
 ## Sentence Level
 - `sentenceId`: s1, s2, ...
-- `text`: exact substring from `start` to `end`
-- `language`: `en`
-- Offsets must be exact
+- `text`: the exact sentence text
 
 ## Chunk Level
 Split into meaningful units such as:

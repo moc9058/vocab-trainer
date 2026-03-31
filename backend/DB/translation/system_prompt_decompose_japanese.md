@@ -21,7 +21,8 @@
 - 句読点はcomponentにしない
 
 ## 文
-- language: ja
+- sentenceId: s1, s2, ...
+- text: 原文の文
 
 ## チャンク
 - 節・句・修飾単位など自然単位で分割

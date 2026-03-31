@@ -122,6 +122,7 @@ gcloud run deploy vocab-trainer-frontend \
   --allow-unauthenticated \
   --min-instances=1 \
   --cpu-boost \
+  --timeout=3600 \
   --set-env-vars="BACKEND_URL=${BACKEND_URL}"
 
 FRONTEND_URL=$(gcloud run services describe vocab-trainer-frontend \
