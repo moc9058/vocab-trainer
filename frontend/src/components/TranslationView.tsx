@@ -24,7 +24,7 @@ export default function TranslationView({ mode }: Props) {
   const [phase, setPhase] = useState<"input" | "loading" | "results">("input");
   const [inputText, setInputText] = useState("");
   const [sourceLanguage, setSourceLanguage] = useState<string>(KNOWN_LANGUAGES[0]?.code ?? "en");
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(["ja"]);
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([settings.languageOrder[0] ?? "ja"]);
   const [activeTab, setActiveTab] = useState(0);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [decomposeChunks, setDecomposeChunks] = useState<string>("");

@@ -131,28 +131,6 @@ export default function EmptyState({ onResume, onResumeGrammar, onStartNew, onBr
 
         <section className="rounded-xl bg-gray-800/60 p-4 sm:p-5">
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">
-            {t("sectionTranslation")}
-          </h3>
-          {!loading && hasTranslationHistory && (
-            <div className="mb-3">
-              <button
-                onClick={onResumeTranslation}
-                className="w-full rounded-lg border border-violet-700 bg-violet-900/30 px-4 py-3 text-left hover:border-violet-500 hover:bg-violet-800/40 transition-colors"
-              >
-                <p className="font-semibold text-sm text-violet-300">{t("resumeTranslation")}</p>
-              </button>
-            </div>
-          )}
-          <button
-            onClick={onStartTranslation}
-            className="w-full rounded-lg bg-violet-600 px-5 py-3 text-center font-medium text-white hover:bg-violet-500 transition-colors"
-          >
-            {t("startTranslation")}
-          </button>
-        </section>
-
-        <section className="rounded-xl bg-gray-800/60 p-4 sm:p-5">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">
             {t("sectionSpeakingWriting")}
           </h3>
           {!loading && hasSWSession && (
@@ -170,6 +148,28 @@ export default function EmptyState({ onResume, onResumeGrammar, onStartNew, onBr
             className="w-full rounded-lg bg-teal-600 px-5 py-3 text-center font-medium text-white hover:bg-teal-500 transition-colors"
           >
             {t("startSpeakingWriting")}
+          </button>
+        </section>
+
+        <section className="rounded-xl bg-gray-800/60 p-4 sm:p-5">
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">
+            {t("sectionTranslation")}
+          </h3>
+          {!loading && hasTranslationHistory && (
+            <div className="mb-3">
+              <button
+                onClick={onResumeTranslation}
+                className="w-full rounded-lg border border-violet-700 bg-violet-900/30 px-4 py-3 text-left hover:border-violet-500 hover:bg-violet-800/40 transition-colors"
+              >
+                <p className="font-semibold text-sm text-violet-300">{t("resumeTranslation")}</p>
+              </button>
+            </div>
+          )}
+          <button
+            onClick={onStartTranslation}
+            className="w-full rounded-lg bg-violet-600 px-5 py-3 text-center font-medium text-white hover:bg-violet-500 transition-colors"
+          >
+            {t("startTranslation")}
           </button>
         </section>
 

@@ -497,10 +497,10 @@ export default function Dashboard() {
             onBack={() => setBrowsingLanguage(null)}
             transliterationMap={transliterationMap}
           />
-        ) : translationMode ? (
-          <TranslationView mode={translationMode} />
         ) : speakingWritingMode ? (
           <SpeakingWritingView mode={speakingWritingMode} />
+        ) : translationMode ? (
+          <TranslationView mode={translationMode} />
         ) : showMetrics ? (
           <MetricsView />
         ) : (

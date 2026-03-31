@@ -10,6 +10,7 @@ export interface TokenUsageRecord {
   completionTokens: number;
   totalTokens: number;
   cachedTokens?: number;
+  thoughtsTokens?: number;
 }
 
 export interface TokenUsageDailySummary {
@@ -20,6 +21,7 @@ export interface TokenUsageDailySummary {
   completionTokens: number;
   totalTokens: number;
   cachedTokens: number;
+  thoughtsTokens: number;
   byRoute: Record<string, {
     calls: number;
     promptTokens: number;
@@ -32,6 +34,7 @@ export interface TokenCostRate {
   input: number;
   cachedInput: number;
   output: number;
+  thoughtsInput: number;
 }
 
 export interface TokenCostConfig {
@@ -47,6 +50,7 @@ export interface UsageMetricsSummary {
     completionTokens: number;
     totalTokens: number;
     cachedTokens: number;
+    thoughtsTokens: number;
     estimatedCost: number;
   }>;
   totalEstimatedCost: number;

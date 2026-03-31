@@ -34,7 +34,7 @@ export default function SpeakingWritingView({ mode }: Props) {
   ];
 
   const [phase, setPhase] = useState<"input" | "loading" | "results">("input");
-  const [selectedLanguage, setSelectedLanguage] = useState<string | null>("en");
+  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(settings.languageOrder[0] ?? "en");
   const [selectedMode, setSelectedMode] = useState<"speaking" | "writing">("speaking");
   const [selectedUseCase, setSelectedUseCase] = useState("professional");
   const [inputText, setInputText] = useState("");
@@ -412,9 +412,11 @@ function SentenceCorrectionCard({ sentence, index }: { sentence: SentenceCorrect
   return (
     <div className="space-y-3">
       {/* Original + corrected sentence — clickable to expand corrections */}
-      <button
-        type="button"
-        onClick={() => hasCorrections && setOpen((v) => !v)}
+      <div
+        onClick={() => {
+          if (window.getSelection()?.toString()) return;
+          hasCorrections && setOpen((v) => !v);
+        }}
         className={`w-full rounded-lg bg-gray-800/60 p-4 text-left transition-colors ${hasCorrections ? "cursor-pointer hover:bg-gray-800/80" : "cursor-default"}`}
       >
         <div className="flex items-start justify-between gap-2">
@@ -434,7 +436,7 @@ function SentenceCorrectionCard({ sentence, index }: { sentence: SentenceCorrect
             </span>
           )}
         </div>
-      </button>
+      </div>
 
       {/* Individual corrections — shown when expanded */}
       {open && hasCorrections && (

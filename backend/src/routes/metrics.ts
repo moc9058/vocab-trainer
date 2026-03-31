@@ -51,6 +51,7 @@ const metricsRoutes: FastifyPluginAsync = async (fastify) => {
           completionTokens: 0,
           totalTokens: 0,
           cachedTokens: 0,
+          thoughtsTokens: 0,
           estimatedCost: 0,
         };
       }
@@ -60,6 +61,7 @@ const metricsRoutes: FastifyPluginAsync = async (fastify) => {
       m.completionTokens += day.completionTokens;
       m.totalTokens += day.totalTokens;
       m.cachedTokens += day.cachedTokens;
+      m.thoughtsTokens += day.thoughtsTokens ?? 0;
     }
 
     // Compute estimated costs
@@ -73,8 +75,9 @@ const metricsRoutes: FastifyPluginAsync = async (fastify) => {
         const inputCost = rates.input * nonCachedInput;
         const cachedCost = rates.cachedInput * agg.cachedTokens;
         const outputCost = rates.output * agg.completionTokens;
+        const thoughtsCost = (rates.thoughtsInput ?? 0) * agg.thoughtsTokens;
 
-        agg.estimatedCost = inputCost + cachedCost + outputCost;
+        agg.estimatedCost = inputCost + cachedCost + outputCost + thoughtsCost;
         totalEstimatedCost += agg.estimatedCost;
       }
     }

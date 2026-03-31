@@ -29,7 +29,7 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
   const [selectedChapters, setSelectedChapters] = useState<Set<number>>(new Set());
   const [subchapterData, setSubchapterData] = useState<SubchapterInfo[]>([]);
   const [selectedSubchapters, setSelectedSubchapters] = useState<Set<string>>(new Set());
-  const [displayLanguage, setDisplayLanguage] = useState("ja");
+  const [displayLanguage, setDisplayLanguage] = useState(settings.languageOrder[0] ?? "en");
   const [quizMode, setQuizMode] = useState("existing");
   const [loading, setLoading] = useState(true);
 

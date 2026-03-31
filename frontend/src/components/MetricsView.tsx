@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   getUsageSummary,
   getCostConfig,
@@ -25,6 +25,21 @@ function formatNumber(n: number | null | undefined): string {
   return String(v);
 }
 
+/** YYYY-MM-DD → YYYY/MM/DD */
+function formatDate(d: string): string {
+  return d.replace(/-/g, "/");
+}
+
+function toDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function getDefaultDateRange(): { from: string; to: string } {
+  const now = new Date();
+  const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  return { from, to: toDateStr(now) };
+}
+
 export default function MetricsView() {
   const [summary, setSummary] = useState<UsageMetricsSummary | null>(null);
   const [costConfig, setCostConfig] = useState<TokenCostConfig | null>(null);
@@ -33,10 +48,7 @@ export default function MetricsView() {
   const [logsPage, setLogsPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"summary" | "logs" | "costs">("summary");
-  const [dateRange, setDateRange] = useState<{ from: string; to: string }>({
-    from: "",
-    to: "",
-  });
+  const [dateRange, setDateRange] = useState<{ from: string; to: string }>(getDefaultDateRange);
 
   // Cost editing state
   const [editingCosts, setEditingCosts] = useState<Record<string, TokenCostRate>>({});
@@ -46,7 +58,7 @@ export default function MetricsView() {
     setLoading(true);
     try {
       const [s, c] = await Promise.all([
-        getUsageSummary(dateRange.from || dateRange.to ? dateRange : undefined),
+        getUsageSummary(dateRange.from || dateRange.to ? { from: dateRange.from, to: dateRange.to } : undefined),
         getCostConfig(),
       ]);
       setSummary(s);
@@ -160,14 +172,12 @@ export default function MetricsView() {
               className="ml-2 rounded bg-gray-800 border border-gray-600 px-2 py-1 text-sm text-gray-200"
             />
           </label>
-          {(dateRange.from || dateRange.to) && (
-            <button
-              onClick={() => setDateRange({ from: "", to: "" })}
-              className="text-xs text-gray-500 hover:text-gray-300"
-            >
-              Clear dates
-            </button>
-          )}
+          <button
+            onClick={() => setDateRange(getDefaultDateRange())}
+            className="text-xs text-gray-500 hover:text-gray-300"
+          >
+            This month
+          </button>
         </div>
       )}
 
@@ -182,10 +192,15 @@ export default function MetricsView() {
             </p>
             {summary.period.from && (
               <p className="text-xs text-indigo-400 mt-2">
-                {summary.period.from} to {summary.period.to}
+                {formatDate(summary.period.from)} to {formatDate(summary.period.to)}
               </p>
             )}
           </div>
+
+          {/* Daily cost bar chart */}
+          {summary.daily.length > 0 && costConfig && (
+            <DailyCostChart daily={summary.daily} costConfig={costConfig} />
+          )}
 
           {/* Per-model breakdown */}
           {Object.keys(summary.byModel).length > 0 ? (
@@ -208,6 +223,7 @@ export default function MetricsView() {
                     <Stat label="Total Calls" value={formatNumber(data.totalCalls)} />
                     <Stat label="Prompt Tokens" value={formatNumber(data.promptTokens)} />
                     <Stat label="Cached Tokens" value={formatNumber(data.cachedTokens)} />
+                    <Stat label="Thoughts Tokens" value={formatNumber(data.thoughtsTokens)} />
                     <Stat label="Completion Tokens" value={formatNumber(data.completionTokens)} />
                     <Stat label="Total Tokens" value={formatNumber(data.totalTokens)} />
                   </div>
@@ -233,6 +249,7 @@ export default function MetricsView() {
                       <th className="pb-2 pr-4 text-right">Calls</th>
                       <th className="pb-2 pr-4 text-right">Prompt</th>
                       <th className="pb-2 pr-4 text-right">Cached</th>
+                      <th className="pb-2 pr-4 text-right">Thoughts</th>
                       <th className="pb-2 pr-4 text-right">Completion</th>
                       <th className="pb-2 text-right">Total</th>
                     </tr>
@@ -240,11 +257,12 @@ export default function MetricsView() {
                   <tbody>
                     {summary.daily.map((day, i) => (
                       <tr key={i} className="border-b border-gray-800 text-gray-300">
-                        <td className="py-2 pr-4">{day.date}</td>
+                        <td className="py-2 pr-4">{formatDate(day.date)}</td>
                         <td className="py-2 pr-4 text-gray-400">{day.model}</td>
                         <td className="py-2 pr-4 text-right">{day.totalCalls}</td>
                         <td className="py-2 pr-4 text-right">{formatNumber(day.promptTokens)}</td>
                         <td className="py-2 pr-4 text-right">{formatNumber(day.cachedTokens)}</td>
+                        <td className="py-2 pr-4 text-right">{formatNumber(day.thoughtsTokens)}</td>
                         <td className="py-2 pr-4 text-right">{formatNumber(day.completionTokens)}</td>
                         <td className="py-2 text-right">{formatNumber(day.totalTokens)}</td>
                       </tr>
@@ -281,6 +299,7 @@ export default function MetricsView() {
                       <th className="pb-2 pr-3">Route</th>
                       <th className="pb-2 pr-3 text-right">Prompt</th>
                       <th className="pb-2 pr-3 text-right">Cached</th>
+                      <th className="pb-2 pr-3 text-right">Thoughts</th>
                       <th className="pb-2 pr-3 text-right">Completion</th>
                       <th className="pb-2 text-right">Total</th>
                     </tr>
@@ -295,6 +314,7 @@ export default function MetricsView() {
                         <td className="py-2 pr-3 text-xs text-gray-400">{log.route}</td>
                         <td className="py-2 pr-3 text-right">{log.promptTokens}</td>
                         <td className="py-2 pr-3 text-right">{log.cachedTokens ?? 0}</td>
+                        <td className="py-2 pr-3 text-right">{log.thoughtsTokens ?? 0}</td>
                         <td className="py-2 pr-3 text-right">{log.completionTokens}</td>
                         <td className="py-2 text-right">{log.totalTokens}</td>
                       </tr>
@@ -347,7 +367,7 @@ export default function MetricsView() {
                 className="rounded-lg bg-gray-800/60 border border-gray-700 p-4 space-y-3"
               >
                 <h4 className="font-medium text-gray-200">{model}</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <CostInput
                     label="Input ($/token)"
                     value={rates.input}
@@ -362,6 +382,11 @@ export default function MetricsView() {
                     label="Output ($/token)"
                     value={rates.output}
                     onChange={(v) => handleCostChange(model, "output", v)}
+                  />
+                  <CostInput
+                    label="Thoughts Input ($/token)"
+                    value={rates.thoughtsInput}
+                    onChange={(v) => handleCostChange(model, "thoughtsInput", v)}
                   />
                 </div>
               </div>
@@ -396,6 +421,91 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-xs text-gray-500">{label}</p>
       <p className="text-sm font-medium text-gray-300">{value}</p>
+    </div>
+  );
+}
+
+function DailyCostChart({
+  daily,
+  costConfig,
+}: {
+  daily: UsageMetricsSummary["daily"];
+  costConfig: TokenCostConfig;
+}) {
+  const dailyCosts = useMemo(() => {
+    // Aggregate cost per day across all models
+    const byDate = new Map<string, number>();
+    for (const day of daily) {
+      const rates = costConfig.models[day.model];
+      let cost = 0;
+      if (rates) {
+        const nonCachedInput = day.promptTokens - day.cachedTokens;
+        cost =
+          rates.input * nonCachedInput +
+          rates.cachedInput * day.cachedTokens +
+          rates.output * day.completionTokens +
+          (rates.thoughtsInput ?? 0) * (day.thoughtsTokens ?? 0);
+      }
+      byDate.set(day.date, (byDate.get(day.date) ?? 0) + cost);
+    }
+    // Sort by date ascending
+    return [...byDate.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, cost]) => ({ date, cost }));
+  }, [daily, costConfig]);
+
+  if (dailyCosts.length === 0) return null;
+
+  const maxCost = Math.max(...dailyCosts.map((d) => d.cost));
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">
+        Daily Cost
+      </h3>
+      <div className="rounded-lg bg-gray-800/60 border border-gray-700 p-4">
+        <div className="flex items-end gap-1 h-40">
+          {dailyCosts.map(({ date, cost }) => {
+            const pct = maxCost > 0 ? (cost / maxCost) * 100 : 0;
+            return (
+              <div
+                key={date}
+                className="flex-1 flex flex-col items-center justify-end h-full min-w-0 group"
+              >
+                {/* Tooltip */}
+                <div className="hidden group-hover:block mb-1 text-center">
+                  <p className="text-xs text-gray-300 font-medium whitespace-nowrap">
+                    {formatCost(cost)}
+                  </p>
+                </div>
+                {/* Bar */}
+                <div
+                  className="w-full rounded-t bg-indigo-500 transition-all min-h-[2px]"
+                  style={{ height: `${Math.max(pct, 1)}%` }}
+                />
+              </div>
+            );
+          })}
+        </div>
+        {/* X-axis labels — show first, last, and a middle label */}
+        <div className="flex justify-between mt-2">
+          <span className="text-xs text-gray-500">{formatDate(dailyCosts[0].date).slice(5)}</span>
+          {dailyCosts.length > 2 && (
+            <span className="text-xs text-gray-500">
+              {formatDate(dailyCosts[Math.floor(dailyCosts.length / 2)].date).slice(5)}
+            </span>
+          )}
+          {dailyCosts.length > 1 && (
+            <span className="text-xs text-gray-500">
+              {formatDate(dailyCosts[dailyCosts.length - 1].date).slice(5)}
+            </span>
+          )}
+        </div>
+        {/* Max cost label */}
+        <div className="flex justify-end mt-1">
+          <span className="text-xs text-gray-500">max: {formatCost(maxCost)}</span>
+        </div>
+      </div>
     </div>
   );
 }
