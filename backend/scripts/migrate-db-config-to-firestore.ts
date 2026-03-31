@@ -56,23 +56,30 @@ async function migrateTranslation(): Promise<void> {
   const dir = resolve(DB_DIR, "translation");
 
   const decomposeSchema = JSON.parse(await readFile(resolve(dir, "decompose_scheme.json"), "utf-8"));
-  const decomposePrompt = await readFile(resolve(dir, "system_prompt_decompose.md"), "utf-8");
   const translateSchema = JSON.parse(await readFile(resolve(dir, "output_scheme.json"), "utf-8"));
 
+  const langPairs: [string, string][] = [["en", "english"], ["ja", "japanese"], ["ko", "korean"], ["zh", "chinese"]];
+
+  const decomposePrompts: Record<string, string> = {};
+  for (const [code, file] of langPairs) {
+    decomposePrompts[code] = await readFile(resolve(dir, `system_prompt_decompose_${file}.md`), "utf-8");
+  }
+
   const translatePrompts: Record<string, string> = {};
-  for (const [code, file] of [["en", "english"], ["ja", "japanese"], ["ko", "korean"], ["zh", "chinese"]]) {
-    translatePrompts[code] = await readFile(resolve(dir, `system_prompt_${file}.md`), "utf-8");
+  for (const [code, file] of langPairs) {
+    translatePrompts[code] = await readFile(resolve(dir, `system_prompt_translation_${file}.md`), "utf-8");
   }
 
   await db.collection("config").doc("translation").set({
     decomposeSchema,
-    decomposePrompt,
+    decomposePrompts,
     translateSchema,
     translatePrompts,
   });
 
   console.log("  Written to config/translation");
-  console.log(`  Prompts: decompose, ${Object.keys(translatePrompts).join(", ")}`);
+  console.log(`  Decompose prompts: ${Object.keys(decomposePrompts).join(", ")}`);
+  console.log(`  Translate prompts: ${Object.keys(translatePrompts).join(", ")}`);
 }
 
 // ========== Vocabulary Config ==========

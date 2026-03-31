@@ -133,7 +133,13 @@
                             "prepositional verb",
                             "collocation",
                             "proverb",
-                            "greeting"
+                            "greeting",
+                            "auxiliary",
+                            "copula",
+                            "suffix",
+                            "prefix",
+                            "bound noun",
+                            "ending"
                           ]
                         }
                       }

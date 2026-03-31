@@ -1,5 +1,5 @@
 {
-  "name": "sentence_decomposition",
+  "name": "sentence_translation",
   "strict": true,
   "schema": {
     "type": "object",
@@ -106,10 +106,16 @@
                           "minimum": 0
                         },
                         "baseForm": {
-                          "type": ["string", "null"]
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "reading": {
-                          "type": ["string", "null"]
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "partOfSpeech": {
                           "type": "string",
@@ -133,7 +139,13 @@
                             "prepositional verb",
                             "collocation",
                             "proverb",
-                            "greeting"
+                            "greeting",
+                            "auxiliary",
+                            "copula",
+                            "suffix",
+                            "prefix",
+                            "bound noun",
+                            "ending"
                           ]
                         },
                         "meaning": {

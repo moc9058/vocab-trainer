@@ -36,27 +36,30 @@ function parseSchemaResult(raw: string, language: string): TranslationResult {
 
 const translationRoutes: FastifyPluginAsync = async (fastify) => {
   // Load config from Firestore once during plugin registration
-  const { decomposeSchema, decomposePrompt, translateSchema, translatePrompts } =
+  const { decomposeSchema, decomposePrompts, translateSchema, translatePrompts } =
     await getTranslationConfig();
 
   // POST /translate — run two-step translation (non-streaming)
   fastify.post<{
-    Body: { sourceText: string; targetLanguages: string[] };
+    Body: { sourceLanguage: string; sourceText: string; targetLanguages: string[] };
   }>("/translate", {
     schema: {
       body: {
         type: "object",
-        required: ["sourceText", "targetLanguages"],
+        required: ["sourceLanguage", "sourceText", "targetLanguages"],
         properties: {
+          sourceLanguage: { type: "string", minLength: 1 },
           sourceText: { type: "string", minLength: 1 },
           targetLanguages: { type: "array", items: { type: "string" }, minItems: 1 },
         },
       },
     },
   }, async (request) => {
-    const { sourceText, targetLanguages } = request.body;
+    const { sourceLanguage, sourceText, targetLanguages } = request.body;
 
-    // Step 1: decompose
+    // Step 1: decompose using source-language-specific prompt
+    const decomposePrompt = decomposePrompts[sourceLanguage];
+    if (!decomposePrompt) throw new Error(`Unsupported source language: ${sourceLanguage}`);
     const decomposeRaw = await callLLMFullWithSchema(decomposePrompt, sourceText, decomposeSchema, "translation/decompose");
     const decomposition = stripMarkdownFences(decomposeRaw);
 
@@ -86,6 +89,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     const entry = await saveTranslationEntry({
+      sourceLanguage,
       sourceText,
       targetLanguages,
       results: translationResults,
@@ -97,20 +101,21 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
 
   // POST /translate-stream — SSE streaming two-step translation
   fastify.post<{
-    Body: { sourceText: string; targetLanguages: string[] };
+    Body: { sourceLanguage: string; sourceText: string; targetLanguages: string[] };
   }>("/translate-stream", {
     schema: {
       body: {
         type: "object",
-        required: ["sourceText", "targetLanguages"],
+        required: ["sourceLanguage", "sourceText", "targetLanguages"],
         properties: {
+          sourceLanguage: { type: "string", minLength: 1 },
           sourceText: { type: "string", minLength: 1 },
           targetLanguages: { type: "array", items: { type: "string" }, minItems: 1 },
         },
       },
     },
   }, async (request, reply) => {
-    const { sourceText, targetLanguages } = request.body;
+    const { sourceLanguage, sourceText, targetLanguages } = request.body;
 
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -124,7 +129,13 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      // Step 1: decompose with streaming
+      // Step 1: decompose with streaming using source-language-specific prompt
+      const decomposePrompt = decomposePrompts[sourceLanguage];
+      if (!decomposePrompt) {
+        sendEvent("error", { message: `Unsupported source language: ${sourceLanguage}` });
+        reply.raw.end();
+        return;
+      }
       sendEvent("decompose-start", {});
       const decomposeRaw = await streamLLMFullWithSchema(
         decomposePrompt,
@@ -175,6 +186,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Save to Firestore and send final entry
       const entry = await saveTranslationEntry({
+        sourceLanguage,
         sourceText,
         targetLanguages,
         results: translationResults,

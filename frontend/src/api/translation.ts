@@ -2,10 +2,12 @@ import { postJson, fetchJson, deleteRequest } from "./client";
 import type { TranslationEntry, TranslationResult } from "../types";
 
 export async function translate(
+  sourceLanguage: string,
   sourceText: string,
   targetLanguages: string[]
 ): Promise<TranslationEntry> {
   return postJson<TranslationEntry>("/api/translation/translate", {
+    sourceLanguage,
     sourceText,
     targetLanguages,
   });
@@ -23,6 +25,7 @@ export interface TranslateStreamCallbacks {
 }
 
 export async function translateStream(
+  sourceLanguage: string,
   sourceText: string,
   targetLanguages: string[],
   callbacks: TranslateStreamCallbacks,
@@ -31,7 +34,7 @@ export async function translateStream(
   const res = await fetch("/api/translation/translate-stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sourceText, targetLanguages }),
+    body: JSON.stringify({ sourceLanguage, sourceText, targetLanguages }),
     signal,
   });
 

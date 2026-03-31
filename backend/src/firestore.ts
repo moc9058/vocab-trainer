@@ -1118,7 +1118,7 @@ export async function getSpeakingWritingConfig(): Promise<{
 
 export async function getTranslationConfig(): Promise<{
   decomposeSchema: Record<string, unknown>;
-  decomposePrompt: string;
+  decomposePrompts: Record<string, string>;
   translateSchema: Record<string, unknown>;
   translatePrompts: Record<string, string>;
 }> {
@@ -1127,7 +1127,7 @@ export async function getTranslationConfig(): Promise<{
   const d = doc.data()!;
   return {
     decomposeSchema: d.decomposeSchema,
-    decomposePrompt: d.decomposePrompt,
+    decomposePrompts: d.decomposePrompts,
     translateSchema: d.translateSchema,
     translatePrompts: d.translatePrompts,
   };

@@ -23,6 +23,7 @@ export default function TranslationView({ mode }: Props) {
   const [historyIndex, setHistoryIndex] = useState(0);
   const [phase, setPhase] = useState<"input" | "loading" | "results">("input");
   const [inputText, setInputText] = useState("");
+  const [sourceLanguage, setSourceLanguage] = useState<string>(KNOWN_LANGUAGES[0]?.code ?? "en");
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(["ja"]);
   const [activeTab, setActiveTab] = useState(0);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -33,6 +34,7 @@ export default function TranslationView({ mode }: Props) {
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastInputRef = useRef("");
+  const lastSourceLangRef = useRef<string>(KNOWN_LANGUAGES[0]?.code ?? "en");
   const lastLangsRef = useRef<string[]>([]);
   const doneRef = useRef(false);
   const needsCleanupRef = useRef(mode === "new");
@@ -81,6 +83,7 @@ export default function TranslationView({ mode }: Props) {
     const controller = new AbortController();
     abortRef.current = controller;
     lastInputRef.current = inputText.trim();
+    lastSourceLangRef.current = sourceLanguage;
     lastLangsRef.current = getTargetLanguages();
     doneRef.current = false;
     setError(null);
@@ -91,7 +94,7 @@ export default function TranslationView({ mode }: Props) {
     setStreamResults(new Map());
 
     try {
-      await translateStream(inputText.trim(), getTargetLanguages(), {
+      await translateStream(sourceLanguage, inputText.trim(), getTargetLanguages(), {
         onDecomposeChunk(chunk) {
           setDecomposeChunks((prev) => prev + chunk);
         },
@@ -166,6 +169,7 @@ export default function TranslationView({ mode }: Props) {
     const results = langs.map((l) => streamResults.get(l)!);
     const entry: TranslationEntry = {
       id: `local-${Date.now()}`,
+      sourceLanguage: lastSourceLangRef.current,
       sourceText: lastInputRef.current,
       targetLanguages: langs,
       results,
@@ -200,7 +204,7 @@ export default function TranslationView({ mode }: Props) {
     });
 
     try {
-      await translateStream(lastInputRef.current, [lang], {
+      await translateStream(lastSourceLangRef.current, lastInputRef.current, [lang], {
         onChunk(_language, chunk) {
           setStreamingChunks((prev) => {
             const next = new Map(prev);
@@ -240,6 +244,7 @@ export default function TranslationView({ mode }: Props) {
 
   function handleRegenerateTranslation() {
     if (!currentEntry) return;
+    setSourceLanguage(currentEntry.sourceLanguage ?? sourceLanguage);
     setInputText(currentEntry.sourceText);
     setSelectedLanguages(currentEntry.targetLanguages);
     setPhase("input");
@@ -302,6 +307,25 @@ export default function TranslationView({ mode }: Props) {
           className="w-full rounded-lg border border-gray-600 bg-gray-800 px-4 py-3 text-gray-100 placeholder-gray-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-y"
           rows={4}
         />
+
+        <div>
+          <p className="mb-2 text-sm font-medium text-gray-400">{t("sourceLanguageLabel")}</p>
+          <div className="flex flex-wrap gap-2">
+            {KNOWN_LANGUAGES.map((lang) => (
+              <button
+                key={lang.code}
+                onClick={() => setSourceLanguage(lang.code)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  sourceLanguage === lang.code
+                    ? "bg-cyan-600 text-white"
+                    : "border border-gray-600 text-gray-400 hover:bg-gray-700"
+                }`}
+              >
+                {lang.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         <div>
           <p className="mb-2 text-sm font-medium text-gray-400">{t("targetLanguagesLabel")}</p>

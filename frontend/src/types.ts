@@ -167,6 +167,7 @@ export interface TranslationResult {
 
 export interface TranslationEntry {
   id: string;
+  sourceLanguage: string;
   sourceText: string;
   targetLanguages: string[];
   results: TranslationResult[];
