@@ -6,7 +6,7 @@
 
 각 chunk와 component에 대해 target language로 의미와 설명을 추가하세요.
 
-target language는 외부에서 제공됩니다.
+source language와 target language는 사용자 메시지 시작 부분에 명시됩니다. 반드시 target language로 의미와 설명을 생성하세요.
 
 ## 규칙
 - JSON만 출력

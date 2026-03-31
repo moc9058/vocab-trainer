@@ -9,6 +9,21 @@ import {
 } from "../firestore.js";
 import type { TranslationResult, SentenceAnalysisResult } from "../types.js";
 
+const LANGUAGE_NAMES: Record<string, string> = {
+  en: "English",
+  ja: "Japanese",
+  ko: "Korean",
+  zh: "Chinese",
+};
+
+function langName(code: string): string {
+  return LANGUAGE_NAMES[code] ?? code;
+}
+
+function buildTranslateUserMessage(sourceLang: string, targetLang: string, decomposition: string): string {
+  return `Source language: ${langName(sourceLang)}\nTarget language: ${langName(targetLang)}\n\n${decomposition}`;
+}
+
 function parseSchemaResult(raw: string, language: string): TranslationResult {
   try {
     const parsed = JSON.parse(stripMarkdownFences(raw)) as SentenceAnalysisResult;
@@ -69,7 +84,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
         const prompt = translatePrompts[lang];
         if (!prompt) throw new Error(`Unsupported language: ${lang}`);
         return parseSchemaResult(
-          await callLLMFullWithSchema(prompt, decomposition, translateSchema, "translation/translate"),
+          await callLLMFullWithSchema(prompt, buildTranslateUserMessage(lang, decomposition), translateSchema, "translation/translate"),
           lang
         );
       })
@@ -158,7 +173,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
           if (!prompt) throw new Error(`Unsupported language: ${lang}`);
           const raw = await streamLLMFullWithSchema(
             prompt,
-            decomposition,
+            buildTranslateUserMessage(lang, decomposition),
             translateSchema,
             (chunk) => sendEvent("chunk", { language: lang, chunk }),
             "translation/translate-stream"

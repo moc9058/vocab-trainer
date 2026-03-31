@@ -6,7 +6,7 @@ You receive a JSON object containing sentences already decomposed into chunks an
 
 Your task is to add translations and explanations in the target language to every chunk and component, then return the complete structure.
 
-The target language is provided externally. Always generate meanings and explanations in that language.
+The source and target languages are specified at the beginning of the user message. Always generate meanings and explanations in the target language.
 
 ## Highest Priority Rules
 - Output valid JSON only

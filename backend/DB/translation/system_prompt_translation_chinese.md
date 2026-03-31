@@ -6,7 +6,7 @@
 
 为每个chunk和component添加目标语言的meaning和explanation。
 
-目标语言由外部提供。
+源语言和目标语言在用户消息开头指定。必须用目标语言生成meaning和explanation。
 
 ## 规则
 - JSON输出
