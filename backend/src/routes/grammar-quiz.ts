@@ -12,6 +12,7 @@ import {
   getNextWordId,
   flagWord,
   type GrammarItemDoc,
+  getVocabularyConfig,
 } from "../firestore.js";
 import type { GrammarQuizSession, GrammarQuizQuestion, GrammarProgress, Word, Meaning } from "../types.js";
 import { TOPICS } from "../types.js";
@@ -24,6 +25,15 @@ const LANG_NAMES: Record<string, string> = {
 };
 
 const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
+  // Load vocabulary config for segment/pinyin prompts
+  let segmentConfig: { prompt: string; schema: Record<string, unknown> } | undefined;
+  try {
+    const vocabConfig = await getVocabularyConfig();
+    segmentConfig = { prompt: vocabConfig.segmentPrompt, schema: vocabConfig.segmentSchema };
+  } catch {
+    // Config not yet migrated — fall back to hardcoded prompts
+  }
+
   // Start grammar quiz
   fastify.post<{
     Body: {
@@ -78,7 +88,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       const questions: GrammarQuizQuestion[] = [];
       for (const item of selected) {
         try {
-          const prepared = await prepareQuestion(item, dispLang, mode);
+          const prepared = await prepareQuestion(item, dispLang, mode, segmentConfig);
           questions.push({
             componentId: item.id,
             displaySentence: prepared.displaySentence,
@@ -327,7 +337,8 @@ interface PreparedQuestion {
 async function prepareQuestion(
   item: GrammarItemDoc,
   displayLanguage: string,
-  mode: string
+  mode: string,
+  segmentConfig?: { prompt: string; schema: Record<string, unknown> }
 ): Promise<PreparedQuestion> {
   const langName = LANG_NAMES[displayLanguage] || "Japanese";
 
@@ -358,18 +369,19 @@ Sentence: ${ex.translation}`,
     }
 
     // Segment the Chinese sentence for pinyin display
-    const segMap = await segmentBatch([chineseSentence]);
+    const segMap = await segmentBatch([chineseSentence], segmentConfig);
     const segments = segMap.get(0)?.map((s) => ({ text: s.text, pinyin: s.transliteration }));
     return { displaySentence, chineseSentence, segments };
   }
 
   // LLM mode or no examples available — generate fresh
-  return await generateSentencePair(item, langName);
+  return await generateSentencePair(item, langName, segmentConfig);
 }
 
 async function generateSentencePair(
   item: GrammarItemDoc,
-  langName: string
+  langName: string,
+  segmentConfig?: { prompt: string; schema: Record<string, unknown> }
 ): Promise<PreparedQuestion> {
   const parts: string[] = [
     `Given this Chinese grammar point:`,
@@ -423,7 +435,7 @@ async function generateSentencePair(
   if (!segments || segments.length === 0) {
     const sentence = parsed.chineseSentence ?? "";
     if (sentence) {
-      const segMap = await segmentBatch([sentence]);
+      const segMap = await segmentBatch([sentence], segmentConfig);
       segments = segMap.get(0)?.map((s) => ({ text: s.text, pinyin: s.transliteration }));
     }
   }

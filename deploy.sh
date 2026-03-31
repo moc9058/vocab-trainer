@@ -51,27 +51,7 @@ echo "==> Building and pushing backend..."
 docker build --platform linux/amd64 -t "${BACKEND_IMAGE}" ./backend
 docker push "${BACKEND_IMAGE}"
 
-# Deploy backend to Cloud Run
-echo "==> Deploying backend to Cloud Run..."
-gcloud run deploy vocab-trainer-backend \
-  --project="${PROJECT_ID}" \
-  --region="${REGION}" \
-  --image="${BACKEND_IMAGE}" \
-  --platform=managed \
-  --port=3000 \
-  --allow-unauthenticated \
-  --min-instances=1 \
-  --cpu-boost \
-  --set-env-vars="FIRESTORE_DATABASE_ID=vocab-database"
-
-# Get backend URL
-BACKEND_URL=$(gcloud run services describe vocab-trainer-backend \
-  --project="${PROJECT_ID}" \
-  --region="${REGION}" \
-  --format="value(status.url)")
-echo "==> Backend deployed at: ${BACKEND_URL}"
-
-# Optionally seed Firestore with data from local files
+# Optionally seed Firestore with data from local files (before deploy so configs are available on startup)
 if [ "$MIGRATE_WORD" = true ] || [ "$MIGRATE_GRAMMER" = true ] || [ "$MIGRATE_LLM" = true ] || [ "$MIGRATE_PROMPTS" = true ] || [ "$MIGRATE_ARCHIVES" = true ]; then
   echo "==> Installing backend dependencies for migration..."
   (cd backend && npm install --silent)
@@ -104,6 +84,26 @@ fi
 if [ "$MIGRATE_WORD" = false ] && [ "$MIGRATE_GRAMMER" = false ] && [ "$MIGRATE_LLM" = false ] && [ "$MIGRATE_PROMPTS" = false ] && [ "$MIGRATE_ARCHIVES" = false ]; then
   echo "==> Skipping Firestore migration (use --word, --grammer, --llm, --prompts, and/or --archives to run)"
 fi
+
+# Deploy backend to Cloud Run
+echo "==> Deploying backend to Cloud Run..."
+gcloud run deploy vocab-trainer-backend \
+  --project="${PROJECT_ID}" \
+  --region="${REGION}" \
+  --image="${BACKEND_IMAGE}" \
+  --platform=managed \
+  --port=3000 \
+  --allow-unauthenticated \
+  --min-instances=1 \
+  --cpu-boost \
+  --set-env-vars="FIRESTORE_DATABASE_ID=vocab-database"
+
+# Get backend URL
+BACKEND_URL=$(gcloud run services describe vocab-trainer-backend \
+  --project="${PROJECT_ID}" \
+  --region="${REGION}" \
+  --format="value(status.url)")
+echo "==> Backend deployed at: ${BACKEND_URL}"
 
 # Build and push frontend
 echo "==> Building and pushing frontend..."

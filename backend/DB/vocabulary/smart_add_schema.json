@@ -1,0 +1,79 @@
+{
+  "name": "vocabulary_entry",
+  "strict": false,
+  "schema": {
+    "type": "object",
+    "required": ["term", "definitions", "examples", "topics", "notes"],
+    "properties": {
+      "term": {
+        "type": "string",
+        "description": "The vocabulary word or phrase"
+      },
+      "transliteration": {
+        "type": "string",
+        "description": "Romanized pronunciation (e.g. pinyin with tone marks for Chinese)"
+      },
+      "definitions": {
+        "type": "array",
+        "description": "Array of meanings for this word",
+        "items": {
+          "type": "object",
+          "required": ["partOfSpeech", "text"],
+          "properties": {
+            "partOfSpeech": {
+              "type": "string",
+              "description": "Part of speech: noun, verb, adjective, adverb, preposition, conjunction, particle, measure word, pronoun, interjection, idiom, set phrase, phrasal verb, collocation, proverb, greeting"
+            },
+            "text": {
+              "type": "object",
+              "description": "Definitions keyed by language code (e.g. { \"ja\": \"...\", \"en\": \"...\", \"ko\": \"...\" })",
+              "additionalProperties": { "type": "string" }
+            }
+          }
+        }
+      },
+      "examples": {
+        "type": "array",
+        "description": "Example sentences using the word",
+        "items": {
+          "type": "object",
+          "required": ["sentence"],
+          "properties": {
+            "sentence": {
+              "type": "string",
+              "description": "Example sentence in the target language"
+            },
+            "translation": {
+              "description": "Translation as a string or object keyed by language code"
+            },
+            "segments": {
+              "type": "array",
+              "description": "Word-level segments with transliteration (for Chinese)",
+              "items": {
+                "type": "object",
+                "required": ["text"],
+                "properties": {
+                  "text": { "type": "string" },
+                  "pinyin": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "topics": {
+        "type": "array",
+        "description": "Topic categories for this word",
+        "items": { "type": "string" }
+      },
+      "level": {
+        "type": "string",
+        "description": "Proficiency level (e.g. HSK1, JLPT5)"
+      },
+      "notes": {
+        "type": "string",
+        "description": "Brief usage notes"
+      }
+    }
+  }
+}

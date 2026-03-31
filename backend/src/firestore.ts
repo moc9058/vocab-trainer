@@ -1133,4 +1133,23 @@ export async function getTranslationConfig(): Promise<{
   };
 }
 
+// ========== Config: Vocabulary ==========
+
+export async function getVocabularyConfig(): Promise<{
+  smartAddSchema: Record<string, unknown>;
+  smartAddPrompts: Record<string, string>;
+  segmentSchema: Record<string, unknown>;
+  segmentPrompt: string;
+}> {
+  const doc = await db.collection("config").doc("vocabulary").get();
+  if (!doc.exists) throw new Error("Missing config/vocabulary in Firestore");
+  const d = doc.data()!;
+  return {
+    smartAddSchema: d.smartAddSchema,
+    smartAddPrompts: d.smartAddPrompts,
+    segmentSchema: d.segmentSchema,
+    segmentPrompt: d.segmentPrompt,
+  };
+}
+
 export { db };

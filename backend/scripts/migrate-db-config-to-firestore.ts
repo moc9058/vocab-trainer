@@ -75,6 +75,38 @@ async function migrateTranslation(): Promise<void> {
   console.log(`  Prompts: decompose, ${Object.keys(translatePrompts).join(", ")}`);
 }
 
+// ========== Vocabulary Config ==========
+
+async function migrateVocabulary(): Promise<void> {
+  console.log("\n--- Migrating vocabulary config ---");
+  const dir = resolve(DB_DIR, "vocabulary");
+
+  const smartAddSchema = JSON.parse(await readFile(resolve(dir, "smart_add_schema.json"), "utf-8"));
+  const segmentSchema = JSON.parse(await readFile(resolve(dir, "segment_schema.json"), "utf-8"));
+
+  const smartAddPrompts: Record<string, string> = {};
+  const files = await readdir(dir);
+  for (const file of files) {
+    const match = file.match(/^smart_add_prompt_(.+)\.md$/);
+    if (match) {
+      smartAddPrompts[match[1]] = await readFile(resolve(dir, file), "utf-8");
+    }
+  }
+
+  const segmentPrompt = await readFile(resolve(dir, "segment_prompt.md"), "utf-8");
+
+  await db.collection("config").doc("vocabulary").set({
+    smartAddSchema,
+    smartAddPrompts,
+    segmentSchema,
+    segmentPrompt,
+  });
+
+  console.log("  Written to config/vocabulary");
+  console.log(`  Smart-add prompts: ${Object.keys(smartAddPrompts).join(", ")}`);
+  console.log(`  Schemas: smart_add, segment`);
+}
+
 // ========== Archive Helpers ==========
 
 function stripEmptyKeys(obj: unknown): unknown {
@@ -253,6 +285,7 @@ async function main(): Promise<void> {
   if (runPrompts) {
     await migrateSpeakingWriting();
     await migrateTranslation();
+    await migrateVocabulary();
   }
   if (runArchives) {
     await migrateBackups();

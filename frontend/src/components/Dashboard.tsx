@@ -99,17 +99,6 @@ export default function Dashboard() {
     })();
   }, [speakingWritingMode]);
 
-  // Re-fetch pinyin map every 30s to pick up newly generated words
-  useEffect(() => {
-    if (!activeLang) return;
-    const id = setInterval(() => {
-      getTransliterationMap(activeLang)
-        .then(setPinyinMap)
-        .catch(() => {});
-    }, 30_000);
-    return () => clearInterval(id);
-  }, [activeLang]);
-
   async function handleLanguageSelected(language: string) {
     setShowLanguageModal(false);
     setSelectedLanguage(language);

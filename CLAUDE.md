@@ -51,7 +51,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
 - **Entry**: `index.ts` — Fastify server with pino logging (stdout + file), CORS, route registration
 - **Routes** (each is a `FastifyPluginAsync` registered under `/api`):
   - `routes/languages.ts` — lists available languages from Firestore
-  - `routes/vocab.ts` — CRUD for vocabulary words + smart-add with LLM (filtering, pagination, word lookup)
+  - `routes/vocab.ts` — CRUD for vocabulary words + smart-add with LLM (filtering, pagination, word lookup); config (schemas, prompts) loaded from Firestore `config/vocabulary`
   - `routes/quiz.ts` — word quiz sessions with weighted random sampling
   - `routes/progress.ts` — per-word progress tracking (timesSeen, correctRate, streak)
   - `routes/flagged.ts` — flagged words for review
@@ -62,7 +62,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `routes/speaking-writing.ts` — text correction for speaking/writing practice; SSE streaming LLM call with language-specific system prompts + use-case context (professional/casual/presentation/interview for speaking; academic/social/email/creative for writing), per-sentence corrections, session persistence; config (schemas, prompts, use cases) loaded from Firestore `config/speaking_writing`
   - `routes/metrics.ts` — LLM token usage tracking and cost estimation; paginated usage logs, daily aggregates, cost-per-token configuration per model
 - **Database**: `firestore.ts` — Google Cloud Firestore abstraction layer
-- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, validateWord, segmentBatch); `callLLM` uses MINI deployment, `callLLMFull` uses FULL deployment (for translation, speaking & writing correction); config loaded from `.env` (local) or Firestore `config/llm` (deployed); `validateWord` accepts any word with at least one definition language (not limited to ja/en/ko); all LLM functions accept a `route` parameter for token usage tracking and automatically log token counts to Firestore
+- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, callLLMWithSchema/callLLMFullWithSchema with JSON schema enforcement, validateWord, segmentBatch); `callLLM`/`callLLMWithSchema` use MINI deployment, `callLLMFull`/`callLLMFullWithSchema` use FULL deployment (for translation, speaking & writing correction); config loaded from `.env` (local) or Firestore `config/llm` (deployed); `validateWord` accepts any word with at least one definition language (not limited to ja/en/ko); all LLM functions accept a `route` parameter for token usage tracking and automatically log token counts to Firestore; `segmentBatch` accepts optional config (prompt + schema) from Firestore
 - **Types**: `types.ts` — shared interfaces (Word, VocabFile, QuizSession, WordProgress, TranslationEntry, SpeakingWritingSession, etc.)
 - Route handlers use Fastify generics for type-safe Params/Querystring/Body and JSON schema validation
 - Errors via `@fastify/sensible`: `reply.notFound()`, `reply.badRequest()`, `reply.conflict()`
@@ -72,7 +72,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
 - `export-from-firestore.ts` — export words, grammar, and progress from Firestore back to JSON files in `DB/` (inverse of migrate); normalizes legacy language keys to ISO 639-1
 - `migrate-grammar-to-firestore.ts` — grammar migration from `backend/DB/grammer/` JSON to Firestore; backs up current Firestore grammar to `DB/backup/{language}/` first
 - `migrate-llm-config-to-firestore.ts` — uploads Azure OpenAI config from `.env` to Firestore `config/llm` document
-- `migrate-db-config-to-firestore.ts` — uploads speaking/writing + translation config (`--prompts`) and backup/original archives (`--archives`) to Firestore
+- `migrate-db-config-to-firestore.ts` — uploads speaking/writing + translation + vocabulary config (`--prompts`) and backup/original archives (`--archives`) to Firestore
 
 ### Data Storage
 - **Primary**: Google Cloud Firestore (database ID: `vocab-database`)
@@ -89,7 +89,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `grammar_quiz_sessions` — one grammar quiz session per language
   - `translation_history` — translation/analysis entries with structured LLM results
   - `speaking_writing_sessions` — one speaking/writing correction session per language (keyed by language code)
-  - `config` — app configuration (e.g., `config/llm` stores Azure OpenAI keys, `config/token_costs` stores cost-per-token rates, `config/speaking_writing` stores prompts/schemas/use-cases, `config/translation` stores prompts/schemas)
+  - `config` — app configuration (e.g., `config/llm` stores Azure OpenAI keys, `config/token_costs` stores cost-per-token rates, `config/speaking_writing` stores prompts/schemas/use-cases, `config/translation` stores prompts/schemas, `config/vocabulary` stores prompts/schemas for smart-add and segmentation)
   - `archive_backups` — backup word data and grammar backups (chunked subcollections for large files)
   - `archive_originals` — original HSK files by date folder (chunked subcollections for large files)
   - `token_usage` — individual LLM call logs with token counts per call
@@ -99,6 +99,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - Grammar: `backend/DB/grammer/chinese/*.json` — per-chapter grammar files
   - Speaking & Writing: `backend/DB/speaking&writing/` — system prompts per language + output schema (source files for Firestore migration)
   - Translation: `backend/DB/translation/` — system prompts + schemas (source files for Firestore migration)
+  - Vocabulary: `backend/DB/vocabulary/` — system prompts (with `{{PLACEHOLDER}}` syntax) + JSON schemas for all vocab LLM operations (source files for Firestore migration)
   - Progress: `backend/data/progress/{language}.json`
   - Backups: `backend/DB/backup/` — date-stamped word backups + grammar backups per language
   - Logs: `backend/logs/app-{timestamp}.log`
@@ -116,7 +117,7 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 - `GET /api/vocab/:language` — list words (query: search, topic, category, level, page, limit)
 - `GET /api/vocab/:language/filters` — available filter options (topics, categories, levels)
 - `GET /api/vocab/:language/lookup?term=X` — word lookup via word_index
-- `POST /api/vocab/:language/smart-add` — smart add word with LLM filling missing fields, auto-flag; accepts optional `definitionLanguages` and `exampleTranslationLanguages` arrays to configure which languages the LLM generates
+- `POST /api/vocab/:language/smart-add` — smart add word with LLM filling missing fields, auto-flag; for Chinese, also generates word segments with pinyin on examples; accepts optional `definitionLanguages` and `exampleTranslationLanguages` arrays to configure which languages the LLM generates
 - `PUT /api/vocab/:language/:wordId` — update word
 - `DELETE /api/vocab/:language/:wordId` — delete word
 - `POST /api/quiz/start` — start word quiz session

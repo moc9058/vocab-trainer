@@ -76,7 +76,7 @@ Reads Azure OpenAI keys from `.env` and writes them to Firestore `config/llm`. T
 cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --prompts
 ```
 
-Reads system prompts, output schemas, and use-case instructions from `backend/DB/speaking&writing/` and `backend/DB/translation/`, and writes them to Firestore `config/speaking_writing` and `config/translation`. Required before the backend can start — these configs are loaded from Firestore at startup.
+Reads system prompts, output schemas, and use-case instructions from `backend/DB/speaking&writing/`, `backend/DB/translation/`, and `backend/DB/vocabulary/`, and writes them to Firestore `config/speaking_writing`, `config/translation`, and `config/vocabulary`. Required before the backend can start — these configs are loaded from Firestore at startup.
 
 ### Upload Backup + Original Archives
 
@@ -221,7 +221,6 @@ vocab-trainer/
 │   │   ├── index.ts             # Fastify server entry point
 │   │   ├── types.ts             # Shared TypeScript interfaces
 │   │   ├── firestore.ts         # Google Cloud Firestore persistence layer
-│   │   ├── word-generator.ts    # Background word generation logic
 │   │   ├── llm.ts               # Azure OpenAI LLM integration
 │   │   └── routes/
 │   │       ├── languages.ts     # /api/languages
@@ -374,7 +373,7 @@ Looks up a word by its term using the word_index for fast retrieval.
 
 #### `POST /api/vocab/:language/smart-add` — Smart add word with LLM
 
-Adds a word using the LLM to fill in missing fields. The word is auto-flagged for review. For Chinese, the LLM also generates word segments with pinyin for each example sentence, and any unknown words discovered in segments are auto-generated and returned.
+Adds a word using the LLM to fill in missing fields. The word is auto-flagged for review. For Chinese, the LLM also generates word segments with pinyin for each example sentence.
 
 **Body:**
 ```json
@@ -391,11 +390,11 @@ Adds a word using the LLM to fill in missing fields. The word is auto-flagged fo
 
 Only `term` is required. All other fields are optional and will be filled by the LLM if omitted or empty. `definitionLanguages` controls which languages the LLM generates definitions in (defaults to `["ja", "en", "ko"]`). `exampleTranslationLanguages` controls which languages the LLM generates example translations in (defaults to `["en"]`); when multiple languages are specified, `translation` is stored as a `Record<string, string>`.
 
-**Response:** `201` with the created `Word`, plus an optional `generatedWords` array of auto-discovered words from example segments.
+**Response:** `201` with the created `Word`.
 
 #### `GET /api/vocab/:language/transliteration-map` — Get transliteration map
 
-Returns a mapping of terms to their transliteration (e.g., pinyin for Chinese). Triggers background word generation if configured.
+Returns a mapping of terms to their transliteration (e.g., pinyin for Chinese). Built from word_index entries and example sentence segments.
 
 **Response:**
 ```json

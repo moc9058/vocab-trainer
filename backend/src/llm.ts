@@ -147,6 +147,29 @@ export async function callLLMFull(systemPrompt: string, userPrompt: string, rout
   return response.choices[0]?.message?.content ?? "";
 }
 
+export async function callLLMWithSchema(
+  systemPrompt: string,
+  userPrompt: string,
+  jsonSchema: Record<string, unknown>,
+  route = "unknown"
+): Promise<string> {
+  const cl = await createAzureClient();
+  const model = await getDeploymentMini();
+  const response = await cl.chat.completions.create({
+    model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: jsonSchema,
+    } as unknown as { type: "json_object" },
+  });
+  recordUsage(response.usage, model, "callLLMWithSchema", route);
+  return response.choices[0]?.message?.content ?? "";
+}
+
 export async function callLLMFullWithSchema(
   systemPrompt: string,
   userPrompt: string,
@@ -246,45 +269,6 @@ export function stripMarkdownFences(text: string): string {
   return text.replace(/^```(?:json)?\s*\n?/gm, "").replace(/\n?```\s*$/gm, "").trim();
 }
 
-export const PARTICLES = new Set([
-  "的", "了", "着", "过", "吗", "呢", "吧", "啊", "呀",
-  "哦", "哇", "嘛", "啦", "嘞", "喽", "罢了", "而已", "来着",
-]);
-
-export const PARTICLE_PINYIN: Record<string, string> = {
-  "的": "de", "了": "le", "着": "zhe", "过": "guò",
-  "吗": "ma", "呢": "ne", "吧": "ba", "啊": "ā",
-  "呀": "ya", "哦": "ó", "哇": "wa", "嘛": "ma",
-  "啦": "la", "嘞": "lei", "喽": "lou",
-  "罢了": "bàle", "而已": "éryǐ", "来着": "láizhe",
-};
-
-export async function generatePinyinForChars(
-  chars: string[]
-): Promise<{ char: string; pinyin: string }[]> {
-  if (chars.length === 0) return [];
-
-  const systemPrompt = `You are a Chinese pronunciation expert. Given a list of individual Chinese characters, return their most common pinyin with tone marks. Return a JSON object with a "results" key containing an array of {"char": "...", "pinyin": "..."} objects.`;
-  const userPrompt = `Provide pinyin for these characters: ${chars.join(", ")}`;
-
-  const raw = await callLLM(systemPrompt, userPrompt, "llm/generate-pinyin");
-  const parsed = JSON.parse(stripMarkdownFences(raw));
-  const results: { char: string; pinyin: string }[] = [];
-
-  for (const entry of parsed.results ?? []) {
-    if (
-      typeof entry?.char === "string" &&
-      typeof entry?.pinyin === "string" &&
-      entry.char.length === 1 &&
-      entry.pinyin.length > 0
-    ) {
-      results.push({ char: entry.char, pinyin: entry.pinyin });
-    }
-  }
-
-  return results;
-}
-
 const topicsSet = new Set<string>(TOPICS);
 
 export function validateWord(w: unknown): w is Omit<Word, "id" | "level"> {
@@ -320,9 +304,11 @@ export interface Segment {
 
 /** Call LLM to segment a batch of sentences into words with pinyin */
 export async function segmentBatch(
-  sentences: string[]
+  sentences: string[],
+  config?: { prompt: string; schema: Record<string, unknown> }
 ): Promise<Map<number, Segment[]>> {
-  const systemPrompt = `You are a Chinese language expert. Segment Chinese sentences into individual words, providing pinyin with tone marks for each Chinese word. Non-Chinese tokens (punctuation, numbers, English text) should have no pinyin.
+  const systemPrompt = config?.prompt
+    ?? `You are a Chinese language expert. Segment Chinese sentences into individual words, providing pinyin with tone marks for each Chinese word. Non-Chinese tokens (punctuation, numbers, English text) should have no pinyin.
 
 Return a JSON object with a "results" key containing an array. Each entry has:
 - "index": the sentence number (0-based)
@@ -339,7 +325,9 @@ Rules:
     .join("\n");
   const userPrompt = `Segment these Chinese sentences:\n\n${numbered}`;
 
-  const raw = await callLLM(systemPrompt, userPrompt, "llm/segment-batch");
+  const raw = config?.schema
+    ? await callLLMWithSchema(systemPrompt, userPrompt, config.schema, "llm/segment-batch")
+    : await callLLM(systemPrompt, userPrompt, "llm/segment-batch");
   const parsed = JSON.parse(stripMarkdownFences(raw));
   const results = new Map<number, Segment[]>();
 
@@ -362,14 +350,3 @@ Rules:
   return results;
 }
 
-export function chunk<T>(arr: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
-  }
-  return chunks;
-}
-
-export function delay(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}

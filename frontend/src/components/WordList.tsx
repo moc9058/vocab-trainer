@@ -68,7 +68,6 @@ export default function WordList({ language, onBack, transliterationMap: externa
     const { id, ...updates } = data as Word;
     await updateWord(language, id, updates);
     await fetchData();
-    getTransliterationMap(language).then(setTransliterationMap).catch(() => {});
   }
 
   async function handleDeleteWord(wordId: string) {
@@ -76,7 +75,6 @@ export default function WordList({ language, onBack, transliterationMap: externa
     setDeletingId(null);
     setExpandedId(null);
     await fetchData();
-    getTransliterationMap(language).then(setTransliterationMap).catch(() => {});
   }
 
   useEffect(() => {
