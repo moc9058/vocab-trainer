@@ -12,6 +12,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Load .env from project root (takes priority over Firestore)
 config({ path: resolve(__dirname, "../../.env") });
 
+// Abort a streaming LLM call if no chunks arrive within this window
+const STREAM_IDLE_MS = 30_000;
+
 let client: AzureOpenAI | null = null;
 let deploymentMini = "";
 let deploymentFull = "";
@@ -201,6 +204,7 @@ export async function streamLLMFull(
 ): Promise<string> {
   const cl = await createAzureClient();
   const model = await getDeploymentFull();
+  const abortController = new AbortController();
   const stream = await cl.chat.completions.create({
     model,
     messages: [
@@ -210,18 +214,28 @@ export async function streamLLMFull(
     response_format: { type: "json_object" },
     stream: true,
     stream_options: { include_usage: true },
-  });
+  }, { signal: abortController.signal });
   let full = "";
   let usage: CompletionUsage | undefined;
-  for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta?.content ?? "";
-    if (delta) {
-      full += delta;
-      onChunk(delta);
+  let idledOut = false;
+  let idleTimer = setTimeout(() => { idledOut = true; abortController.abort(); }, STREAM_IDLE_MS);
+  try {
+    for await (const chunk of stream) {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => { idledOut = true; abortController.abort(); }, STREAM_IDLE_MS);
+      const delta = chunk.choices[0]?.delta?.content ?? "";
+      if (delta) {
+        full += delta;
+        onChunk(delta);
+      }
+      if (chunk.usage) {
+        usage = chunk.usage;
+      }
     }
-    if (chunk.usage) {
-      usage = chunk.usage;
-    }
+  } catch (err) {
+    if (!idledOut) throw err;
+  } finally {
+    clearTimeout(idleTimer);
   }
   recordUsage(usage, model, "streamLLMFull", route);
   return full;
@@ -236,6 +250,7 @@ export async function streamLLMFullWithSchema(
 ): Promise<string> {
   const cl = await createAzureClient();
   const model = await getDeploymentFull();
+  const abortController = new AbortController();
   const stream = await cl.chat.completions.create({
     model,
     messages: [
@@ -248,18 +263,28 @@ export async function streamLLMFullWithSchema(
     } as unknown as { type: "json_object" },
     stream: true,
     stream_options: { include_usage: true },
-  });
+  }, { signal: abortController.signal });
   let full = "";
   let usage: CompletionUsage | undefined;
-  for await (const chunk of stream) {
-    const delta = chunk.choices[0]?.delta?.content ?? "";
-    if (delta) {
-      full += delta;
-      onChunk(delta);
+  let idledOut = false;
+  let idleTimer = setTimeout(() => { idledOut = true; abortController.abort(); }, STREAM_IDLE_MS);
+  try {
+    for await (const chunk of stream) {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => { idledOut = true; abortController.abort(); }, STREAM_IDLE_MS);
+      const delta = chunk.choices[0]?.delta?.content ?? "";
+      if (delta) {
+        full += delta;
+        onChunk(delta);
+      }
+      if (chunk.usage) {
+        usage = chunk.usage;
+      }
     }
-    if (chunk.usage) {
-      usage = chunk.usage;
-    }
+  } catch (err) {
+    if (!idledOut) throw err;
+  } finally {
+    clearTimeout(idleTimer);
   }
   recordUsage(usage, model, "streamLLMFullWithSchema", route);
   return full;

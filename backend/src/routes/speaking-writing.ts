@@ -127,12 +127,20 @@ const speakingWritingRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.badRequest(`Unsupported language: ${language}`);
     }
 
+    // Disable socket timeout for long-running SSE streams
+    request.raw.socket.setTimeout(0);
+
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       "Connection": "keep-alive",
       "X-Accel-Buffering": "no",
     });
+
+    // Send periodic keep-alive comments to prevent proxy/infrastructure idle timeouts
+    const keepAlive = setInterval(() => {
+      if (!reply.raw.destroyed) reply.raw.write(":keep-alive\n\n");
+    }, 15_000);
 
     function sendEvent(event: string, data: unknown) {
       reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -179,6 +187,7 @@ const speakingWritingRoutes: FastifyPluginAsync = async (fastify) => {
         sendEvent("error", { message });
       }
     } finally {
+      clearInterval(keepAlive);
       if (!reply.raw.destroyed) {
         reply.raw.end();
       }

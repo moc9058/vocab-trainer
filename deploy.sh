@@ -96,6 +96,7 @@ gcloud run deploy vocab-trainer-backend \
   --allow-unauthenticated \
   --min-instances=1 \
   --cpu-boost \
+  --timeout=3600 \
   --set-env-vars="FIRESTORE_DATABASE_ID=vocab-database"
 
 # Get backend URL

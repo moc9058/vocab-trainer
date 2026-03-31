@@ -20,8 +20,8 @@ function langName(code: string): string {
   return LANGUAGE_NAMES[code] ?? code;
 }
 
-function buildTranslateUserMessage(sourceLang: string, targetLang: string, decomposition: string): string {
-  return `Source language: ${langName(sourceLang)}\nTarget language: ${langName(targetLang)}\n\n${decomposition}`;
+function buildTranslateSystemPrompt(basePrompt: string, sourceLang: string, targetLang: string): string {
+  return `${basePrompt}\n\nSource language: ${langName(sourceLang)}\nTarget language: ${langName(targetLang)}`;
 }
 
 function parseSchemaResult(raw: string, language: string): TranslationResult {
@@ -84,7 +84,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
         const prompt = translatePrompts[lang];
         if (!prompt) throw new Error(`Unsupported language: ${lang}`);
         return parseSchemaResult(
-          await callLLMFullWithSchema(prompt, buildTranslateUserMessage(lang, decomposition), translateSchema, "translation/translate"),
+          await callLLMFullWithSchema(buildTranslateSystemPrompt(prompt, sourceLanguage, lang), decomposition, translateSchema, "translation/translate"),
           lang
         );
       })
@@ -132,12 +132,20 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { sourceLanguage, sourceText, targetLanguages } = request.body;
 
+    // Disable socket timeout for long-running SSE streams
+    request.raw.socket.setTimeout(0);
+
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       "Connection": "keep-alive",
       "X-Accel-Buffering": "no",
     });
+
+    // Send periodic keep-alive comments to prevent proxy/infrastructure idle timeouts
+    const keepAlive = setInterval(() => {
+      if (!reply.raw.destroyed) reply.raw.write(":keep-alive\n\n");
+    }, 15_000);
 
     function sendEvent(event: string, data: unknown) {
       reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -172,8 +180,8 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
           const prompt = translatePrompts[lang];
           if (!prompt) throw new Error(`Unsupported language: ${lang}`);
           const raw = await streamLLMFullWithSchema(
-            prompt,
-            buildTranslateUserMessage(lang, decomposition),
+            buildTranslateSystemPrompt(prompt, sourceLanguage, lang),
+            decomposition,
             translateSchema,
             (chunk) => sendEvent("chunk", { language: lang, chunk }),
             "translation/translate-stream"
@@ -216,6 +224,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
         sendEvent("error", { message });
       }
     } finally {
+      clearInterval(keepAlive);
       if (!reply.raw.destroyed) {
         reply.raw.end();
       }
