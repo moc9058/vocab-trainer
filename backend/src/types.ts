@@ -215,11 +215,6 @@ export interface SentenceAnalysisResult {
 
 export interface TranslationResult {
   language: string;
-  translation: string;
-  grammarBreakdown: string;
-  keyVocabulary: { term: string; meaning: string }[];
-  alternativeExpressions: string[];
-  culturalNotes: string;
   error?: string;
   analysis?: SentenceAnalysisResult;
 }

@@ -65,6 +65,11 @@ export default function TranslationView({ mode }: Props) {
     return () => { cancelled = true; };
   }, [mode]);
 
+  function handleSourceLanguageChange(code: string) {
+    setSourceLanguage(code);
+    setSelectedLanguages((prev) => prev.filter((l) => l !== code));
+  }
+
   function toggleLanguage(code: string) {
     setSelectedLanguages((prev) =>
       prev.includes(code) ? prev.filter((l) => l !== code) : [...prev, code]
@@ -72,7 +77,7 @@ export default function TranslationView({ mode }: Props) {
   }
 
   function getTargetLanguages(): string[] {
-    return [...selectedLanguages];
+    return selectedLanguages.filter((l) => l !== sourceLanguage);
   }
 
   const canSubmit = inputText.trim().length > 0 && getTargetLanguages().length > 0;
@@ -314,7 +319,7 @@ export default function TranslationView({ mode }: Props) {
             {KNOWN_LANGUAGES.map((lang) => (
               <button
                 key={lang.code}
-                onClick={() => setSourceLanguage(lang.code)}
+                onClick={() => handleSourceLanguageChange(lang.code)}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   sourceLanguage === lang.code
                     ? "bg-cyan-600 text-white"
@@ -330,7 +335,7 @@ export default function TranslationView({ mode }: Props) {
         <div>
           <p className="mb-2 text-sm font-medium text-gray-400">{t("targetLanguagesLabel")}</p>
           <div className="flex flex-wrap gap-2">
-            {KNOWN_LANGUAGES.map((lang) => (
+            {KNOWN_LANGUAGES.filter((lang) => lang.code !== sourceLanguage).map((lang) => (
               <button
                 key={lang.code}
                 onClick={() => toggleLanguage(lang.code)}
@@ -425,12 +430,10 @@ export default function TranslationView({ mode }: Props) {
                   <span className="text-green-400 text-xs">&#10003;</span>
                   <p className="text-xs text-violet-400 font-semibold">{label}</p>
                 </div>
-                {completed.analysis ? (
+                {completed.analysis && (
                   <p className="text-sm text-gray-300">
                     {completed.analysis.sentences.map((s) => s.text).join(" ")}
                   </p>
-                ) : (
-                  <p className="text-sm text-gray-300">{completed.translation}</p>
                 )}
               </div>
             );
@@ -562,9 +565,7 @@ export default function TranslationView({ mode }: Props) {
             </div>
           ) : result.analysis ? (
             <AnalysisView analysis={result.analysis} />
-          ) : (
-            <LegacyResultView result={result} />
-          )}
+          ) : null}
         </div>
       )}
 
@@ -575,53 +576,6 @@ export default function TranslationView({ mode }: Props) {
         </p>
       )}
     </div>
-  );
-}
-
-function LegacyResultView({ result }: { result: TranslationResult }) {
-  const { t } = useI18n();
-  return (
-    <>
-      <div className="rounded-lg bg-gray-800/60 p-4">
-        <p className="text-lg text-gray-100 leading-relaxed">{result.translation}</p>
-      </div>
-      {result.grammarBreakdown && (
-        <div className="rounded-lg bg-gray-800/60 p-4">
-          <h4 className="mb-2 text-sm font-semibold text-violet-400">{t("translationGrammarBreakdown")}</h4>
-          <p className="text-sm text-gray-300 whitespace-pre-wrap">{result.grammarBreakdown}</p>
-        </div>
-      )}
-      {result.keyVocabulary.length > 0 && (
-        <div className="rounded-lg bg-gray-800/60 p-4">
-          <h4 className="mb-2 text-sm font-semibold text-violet-400">{t("translationKeyVocabulary")}</h4>
-          <div className="space-y-1">
-            {result.keyVocabulary.map((v, i) => (
-              <div key={i} className="flex gap-2 text-sm">
-                <span className="font-medium text-gray-200">{v.term}</span>
-                <span className="text-gray-400">—</span>
-                <span className="text-gray-400">{v.meaning}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {result.alternativeExpressions.length > 0 && (
-        <div className="rounded-lg bg-gray-800/60 p-4">
-          <h4 className="mb-2 text-sm font-semibold text-violet-400">{t("translationAlternatives")}</h4>
-          <ul className="space-y-1">
-            {result.alternativeExpressions.map((expr, i) => (
-              <li key={i} className="text-sm text-gray-300">• {expr}</li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {result.culturalNotes && (
-        <div className="rounded-lg bg-gray-800/60 p-4">
-          <h4 className="mb-2 text-sm font-semibold text-violet-400">{t("translationCulturalNotes")}</h4>
-          <p className="text-sm text-gray-300 whitespace-pre-wrap">{result.culturalNotes}</p>
-        </div>
-      )}
-    </>
   );
 }
 

@@ -24,28 +24,55 @@ function buildTranslateSystemPrompt(basePrompt: string, sourceLang: string, targ
   return `${basePrompt}\n\nSource language: ${langName(sourceLang)}\nTarget language: ${langName(targetLang)}`;
 }
 
-function parseSchemaResult(raw: string, language: string): TranslationResult {
+interface SlimTranslationResponse {
+  chunks: { chunkId: string; meaning: string }[];
+  components: { componentId: string; meaning: string; explanation: string }[];
+}
+
+function buildSlimInput(decomposition: string): string {
+  const parsed = JSON.parse(decomposition) as SentenceAnalysisResult;
+  for (const sentence of parsed.sentences) {
+    for (const chunk of sentence.chunks) {
+      for (const comp of chunk.components) {
+        delete (comp as unknown as Record<string, unknown>).reading;
+      }
+    }
+  }
+  return JSON.stringify(parsed);
+}
+
+function mergeTranslation(decomposition: string, slimRaw: string, language: string): TranslationResult {
   try {
-    const parsed = JSON.parse(stripMarkdownFences(raw)) as SentenceAnalysisResult;
-    return {
-      language,
-      translation: "",
-      grammarBreakdown: "",
-      keyVocabulary: [],
-      alternativeExpressions: [],
-      culturalNotes: "",
-      analysis: parsed,
+    const decomp = JSON.parse(decomposition) as SentenceAnalysisResult;
+    const slim = JSON.parse(stripMarkdownFences(slimRaw)) as SlimTranslationResponse;
+
+    const chunkMap = new Map(slim.chunks.map((c) => [c.chunkId, c.meaning]));
+    const compMap = new Map(slim.components.map((c) => [c.componentId, { meaning: c.meaning, explanation: c.explanation }]));
+
+    const merged: SentenceAnalysisResult = {
+      sentences: decomp.sentences.map((sentence) => ({
+        sentenceId: sentence.sentenceId,
+        text: sentence.text,
+        chunks: sentence.chunks.map((chunk) => ({
+          chunkId: chunk.chunkId,
+          surface: chunk.surface,
+          meaning: chunkMap.get(chunk.chunkId) ?? "",
+          components: chunk.components.map((comp) => ({
+            componentId: comp.componentId,
+            surface: comp.surface,
+            baseForm: comp.baseForm,
+            reading: comp.reading,
+            partOfSpeech: comp.partOfSpeech,
+            meaning: compMap.get(comp.componentId)?.meaning ?? "",
+            explanation: compMap.get(comp.componentId)?.explanation ?? "",
+          })),
+        })),
+      })),
     };
+
+    return { language, analysis: merged };
   } catch {
-    return {
-      language,
-      translation: "",
-      grammarBreakdown: "",
-      keyVocabulary: [],
-      alternativeExpressions: [],
-      culturalNotes: "",
-      error: "Failed to parse schema-based LLM response",
-    };
+    return { language, error: "Failed to parse or merge translation response" };
   }
 }
 
@@ -79,14 +106,18 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
     const decomposition = stripMarkdownFences(decomposeRaw);
 
     // Step 2: translate in parallel
+    const slimInput = buildSlimInput(decomposition);
     const results = await Promise.allSettled(
       targetLanguages.map(async (lang) => {
         const prompt = translatePrompts[lang];
         if (!prompt) throw new Error(`Unsupported language: ${lang}`);
-        return parseSchemaResult(
-          await callLLMFullWithSchema(buildTranslateSystemPrompt(prompt, sourceLanguage, lang), decomposition, translateSchema, "translation/translate"),
-          lang
+        const slimRaw = await callLLMFullWithSchema(
+          buildTranslateSystemPrompt(prompt, sourceLanguage, lang),
+          slimInput,
+          translateSchema,
+          "translation/translate"
         );
+        return mergeTranslation(decomposition, slimRaw, lang);
       })
     );
 
@@ -94,11 +125,6 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
       if (r.status === "fulfilled") return r.value;
       return {
         language: targetLanguages[i],
-        translation: "",
-        grammarBreakdown: "",
-        keyVocabulary: [],
-        alternativeExpressions: [],
-        culturalNotes: "",
         error: r.reason?.message ?? "Translation failed",
       };
     });
@@ -173,6 +199,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
       sendEvent("decompose-result", { decomposition });
 
       // Step 2: translate each language in parallel with streaming
+      const slimInput = buildSlimInput(decomposition);
       for (const lang of targetLanguages) {
         sendEvent("start", { language: lang });
       }
@@ -183,12 +210,12 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
           if (!prompt) throw new Error(`Unsupported language: ${lang}`);
           const raw = await streamLLMFullWithSchema(
             buildTranslateSystemPrompt(prompt, sourceLanguage, lang),
-            decomposition,
+            slimInput,
             translateSchema,
             (chunk) => sendEvent("chunk", { language: lang, chunk }),
             "translation/translate-stream"
           );
-          const result = parseSchemaResult(raw, lang);
+          const result = mergeTranslation(decomposition, raw, lang);
           sendEvent("result", { language: lang, result });
           return result;
         })
@@ -198,11 +225,6 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
         if (r.status === "fulfilled") return r.value;
         const errorResult: TranslationResult = {
           language: targetLanguages[i],
-          translation: "",
-          grammarBreakdown: "",
-          keyVocabulary: [],
-          alternativeExpressions: [],
-          culturalNotes: "",
           error: r.reason?.message ?? "Translation failed",
         };
         sendEvent("result", { language: targetLanguages[i], result: errorResult });

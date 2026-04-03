@@ -1,126 +1,52 @@
 {
-  "name": "sentence_translation",
+  "name": "sentence_translation_slim",
   "strict": true,
   "schema": {
     "type": "object",
     "additionalProperties": false,
     "required": [
-      "sentences"
+      "chunks",
+      "components"
     ],
     "properties": {
-      "sentences": {
+      "chunks": {
         "type": "array",
         "items": {
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "sentenceId",
-            "text",
-            "chunks"
+            "chunkId",
+            "meaning"
           ],
           "properties": {
-            "sentenceId": {
+            "chunkId": {
               "type": "string"
             },
-            "text": {
+            "meaning": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "components": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "componentId",
+            "meaning",
+            "explanation"
+          ],
+          "properties": {
+            "componentId": {
               "type": "string"
             },
-            "chunks": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "chunkId",
-                  "surface",
-                  "meaning",
-                  "components"
-                ],
-                "properties": {
-                  "chunkId": {
-                    "type": "string"
-                  },
-                  "surface": {
-                    "type": "string"
-                  },
-                  "meaning": {
-                    "type": "string"
-                  },
-                  "components": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "additionalProperties": false,
-                      "required": [
-                        "componentId",
-                        "surface",
-                        "baseForm",
-                        "reading",
-                        "partOfSpeech",
-                        "meaning",
-                        "explanation"
-                      ],
-                      "properties": {
-                        "componentId": {
-                          "type": "string"
-                        },
-                        "surface": {
-                          "type": "string"
-                        },
-                        "baseForm": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "reading": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
-                        },
-                        "partOfSpeech": {
-                          "type": "string",
-                          "enum": [
-                            "noun",
-                            "verb",
-                            "adjective",
-                            "adverb",
-                            "pronoun",
-                            "preposition",
-                            "conjunction",
-                            "interjection",
-                            "determiner",
-                            "particle",
-                            "classifier",
-                            "numeral",
-                            "onomatopoeia",
-                            "idiom",
-                            "set phrase",
-                            "phrasal verb",
-                            "prepositional verb",
-                            "collocation",
-                            "proverb",
-                            "greeting",
-                            "auxiliary",
-                            "copula",
-                            "suffix",
-                            "prefix",
-                            "bound noun",
-                            "ending"
-                          ]
-                        },
-                        "meaning": {
-                          "type": "string"
-                        },
-                        "explanation": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
+            "meaning": {
+              "type": "string"
+            },
+            "explanation": {
+              "type": "string"
             }
           }
         }

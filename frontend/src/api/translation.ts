@@ -48,6 +48,7 @@ export async function translateStream(
   const decoder = new TextDecoder();
   let buffer = "";
   let terminated = false;
+  let currentEvent = "";
 
   while (true) {
     const { done, value } = await reader.read();
@@ -57,7 +58,6 @@ export async function translateStream(
     const lines = buffer.split("\n");
     buffer = lines.pop() ?? "";
 
-    let currentEvent = "";
     for (const line of lines) {
       if (line.startsWith("event: ")) {
         currentEvent = line.slice(7);
