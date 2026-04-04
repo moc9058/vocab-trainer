@@ -356,16 +356,22 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
             </div>
             {examples.map((ex, i) => (
               <div key={i} className="mb-2 rounded-lg border border-gray-600 bg-gray-700 p-2 space-y-1">
-                <input
-                  type="text"
+                <textarea
+                  ref={(el) => {
+                    if (el) {
+                      el.style.height = "auto";
+                      el.style.height = el.scrollHeight + "px";
+                    }
+                  }}
                   value={ex.sentence}
                   onChange={(e) => {
                     const next = [...examples];
                     next[i] = { ...next[i], sentence: e.target.value };
                     setExamples(next);
                   }}
+                  rows={1}
                   placeholder={t("sentence")}
-                  className="w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                  className="w-full resize-none overflow-hidden rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
                 />
                 <div className="flex gap-2">
                   {langSelect !== "english" && (

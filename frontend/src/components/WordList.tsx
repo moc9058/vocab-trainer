@@ -427,9 +427,9 @@ function WordCard({
                 {word.examples.map((ex, i) => (
                   <li key={i} className="text-base text-gray-300">
                     <span><RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} /></span>
-                    {typeof ex.translation === "string" ? (
+                    {typeof ex.translation === "string" && ex.translation ? (
                       <span className="ml-2 text-gray-400">— {ex.translation}</span>
-                    ) : ex.translation ? (
+                    ) : typeof ex.translation === "object" && ex.translation ? (
                       <span className="ml-2 text-gray-400">— {sortedEntries(ex.translation).map(([l, t]) => `${l.toUpperCase()}: ${t}`).join(" / ")}</span>
                     ) : null}
                   </li>
@@ -554,7 +554,7 @@ function WordRow({
                   {word.examples.map((ex, i) => (
                     <li key={i} className="text-base text-gray-300">
                       <span><RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} /></span>
-                      {typeof ex.translation === "string" ? (
+                      {typeof ex.translation === "string" && ex.translation ? (
                         <span className="ml-2 text-gray-400">— {ex.translation}</span>
                       ) : ex.translation ? (
                         <span className="ml-2 text-gray-400">— {sortedEntries(ex.translation).map(([l, t]) => `${l.toUpperCase()}: ${t}`).join(" / ")}</span>

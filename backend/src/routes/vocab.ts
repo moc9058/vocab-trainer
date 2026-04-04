@@ -191,27 +191,21 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         ? `"translation": "${exLangs[0] === "en" ? "English" : exLangs[0]} translation"`
         : `"translation": { ${exLangs.map((l) => `"${l}": "..."`).join(", ")} }`;
 
-      const fields: string[] = [`Term: ${term}`];
-      if (isChinese) {
-        if (body.transliteration) fields.push(`PROVIDED transliteration: ${body.transliteration}`);
-        else fields.push("MISSING transliteration (generate pinyin with tone marks)");
-      }
-      if (body.definitions && body.definitions.length > 0) {
-        fields.push(`PROVIDED definitions: ${JSON.stringify(body.definitions)}`);
-      } else {
-        fields.push(`MISSING definitions (generate meanings with partOfSpeech and text in ${defLangs.join(", ")})`);
-      }
-      if (body.topics && body.topics.length > 0) fields.push(`PROVIDED topics: ${JSON.stringify(body.topics)}`);
-      else fields.push("MISSING topics");
-      if (body.examples && body.examples.length > 0) fields.push(`PROVIDED examples: ${JSON.stringify(body.examples)}`);
-      else fields.push("MISSING examples (generate 2-3 example sentences with translations)");
       const langLevels = LEVEL_OPTIONS[language];
-      if (langLevels) {
-        if (body.level) fields.push(`PROVIDED level: ${body.level}`);
-        else fields.push(`MISSING level (assign one of: ${langLevels.join(", ")})`);
+      const userInput: Record<string, unknown> = { term };
+      if (isChinese) {
+        userInput.transliteration = body.transliteration || null;
       }
-      if (body.notes) fields.push(`PROVIDED notes: ${body.notes}`);
-      else fields.push("MISSING notes");
+      userInput.definitions = (body.definitions && body.definitions.length > 0)
+        ? body.definitions : null;
+      userInput.topics = (body.topics && body.topics.length > 0)
+        ? body.topics : null;
+      userInput.examples = (body.examples && body.examples.length > 0)
+        ? body.examples : null;
+      if (langLevels) {
+        userInput.level = body.level || null;
+      }
+      userInput.notes = body.notes || null;
 
       const promptTemplate = vocabConfig.smartAddPrompts[language]
         ?? vocabConfig.smartAddPrompts["default"];
@@ -228,7 +222,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         LEVELS_LINE: langLevels ? `\nAllowed levels: ${langLevels.join(", ")}` : "",
       });
 
-      const userPrompt = fields.join("\n");
+      const userPrompt = JSON.stringify(userInput, null, 2);
 
       let llmResult: Record<string, unknown>;
       try {
@@ -239,16 +233,21 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.internalServerError("Failed to generate word data");
       }
 
-      // Merge: user-provided fields take priority
+      // Merge: user-provided fields take priority; definitions & examples get supplemented
+      const userDefCount = body.definitions?.length ?? 0;
+      const llmDefs = (llmResult.definitions as { partOfSpeech: string; text: Record<string, string> }[]) || [];
+      const userExCount = body.examples?.length ?? 0;
+      const llmExamples = (llmResult.examples as { sentence: string; translation: string }[]) || [];
+
       const merged = {
         term,
         transliteration: isChinese ? (body.transliteration || (llmResult.transliteration as string) || "") : undefined,
-        definitions: (body.definitions && body.definitions.length > 0)
-          ? body.definitions
-          : (llmResult.definitions as { partOfSpeech: string; text: Record<string, string> }[]) || [{ partOfSpeech: "", text: { en: "" } }],
-        examples: (body.examples && body.examples.length > 0)
-          ? body.examples
-          : (llmResult.examples as { sentence: string; translation: string }[]) || [],
+        definitions: userDefCount > 0
+          ? [...body.definitions!, ...llmDefs.slice(userDefCount)]
+          : llmDefs.length > 0 ? llmDefs : [{ partOfSpeech: "", text: { en: "" } }],
+        examples: userExCount > 0
+          ? [...body.examples!, ...llmExamples.slice(userExCount)]
+          : llmExamples,
         topics: (body.topics && body.topics.length > 0)
           ? body.topics
           : ((llmResult.topics as string[]) || []).filter((t) => (TOPICS as readonly string[]).includes(t)),
