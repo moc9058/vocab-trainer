@@ -98,6 +98,12 @@ export default function TranslationView({ mode }: Props) {
     setStreamingChunks(new Map());
     setStreamResults(new Map());
 
+    const didCleanup = needsCleanupRef.current;
+    if (needsCleanupRef.current) {
+      needsCleanupRef.current = false;
+      await deleteTranslationHistory().catch(() => {});
+    }
+
     try {
       await translateStream(sourceLanguage, inputText.trim(), getTargetLanguages(), {
         onDecomposeChunk(chunk) {
@@ -134,9 +140,7 @@ export default function TranslationView({ mode }: Props) {
         },
         onDone(entry) {
           doneRef.current = true;
-          if (needsCleanupRef.current) {
-            needsCleanupRef.current = false;
-            deleteTranslationHistory().catch(() => {});
+          if (didCleanup) {
             setHistory([entry]);
           } else {
             setHistory((prev) => [entry, ...prev]);
