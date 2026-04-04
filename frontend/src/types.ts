@@ -170,14 +170,10 @@ export interface CorrectionItem {
   severity: "error" | "improvement" | "style";
 }
 
-export interface SentenceCorrection {
-  original: string;
-  corrected: string;
-  corrections: CorrectionItem[];
-}
-
 export interface CorrectionResult {
-  sentences: SentenceCorrection[];
+  originalText: string;
+  correctedText: string;
+  corrections: CorrectionItem[];
   overallFeedback: string;
 }
 

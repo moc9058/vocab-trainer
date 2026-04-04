@@ -3,7 +3,7 @@ import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { ALL_KNOWN_LANGUAGES } from "../settings/defaults";
 import { submitCorrectionStream, getSpeakingWritingSession, deleteSpeakingWritingSession } from "../api/speaking-writing";
-import type { SpeakingWritingSession, SentenceCorrection, CorrectionItem } from "../types";
+import type { SpeakingWritingSession, CorrectionItem } from "../types";
 
 interface Props {
   mode: "new" | "resume";
@@ -383,10 +383,31 @@ export default function SpeakingWritingView({ mode }: Props) {
         )}
       </div>
 
-      {/* Per-sentence corrections */}
-      {result.sentences.map((sentence, i) => (
-        <SentenceCorrectionCard key={i} sentence={sentence} index={i} />
-      ))}
+      {/* Original text */}
+      <div className="rounded-lg bg-gray-800/60 p-4">
+        <p className="text-xs text-gray-500 mb-1">{t("originalText")}</p>
+        <p className="text-gray-100 whitespace-pre-wrap">{result.originalText}</p>
+      </div>
+
+      {/* Corrected text */}
+      <div className="rounded-lg bg-teal-900/30 border border-teal-700 p-4">
+        <p className="text-xs text-teal-400 mb-1 font-semibold">{t("overallCorrectedText")}</p>
+        <p className="text-gray-100 whitespace-pre-wrap">{result.correctedText}</p>
+      </div>
+
+      {/* Corrections */}
+      {result.corrections.length > 0 ? (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-gray-400">{t("corrections")} ({result.corrections.length})</p>
+          {result.corrections.map((correction, i) => (
+            <CorrectionCard key={i} correction={correction} />
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-lg bg-green-900/30 border border-green-700 p-3">
+          <p className="text-sm text-green-300">No corrections needed!</p>
+        </div>
+      )}
 
       {/* Overall feedback */}
       <div className="rounded-lg bg-gray-800/60 p-4">
@@ -399,52 +420,6 @@ export default function SpeakingWritingView({ mode }: Props) {
         <p className="text-center text-xs text-gray-500">
           {correctionIndex + 1} / {session.corrections.length}
         </p>
-      )}
-    </div>
-  );
-}
-
-function SentenceCorrectionCard({ sentence, index }: { sentence: SentenceCorrection; index: number }) {
-  const { t } = useI18n();
-  const [open, setOpen] = useState(false);
-  const hasCorrections = sentence.corrections.length > 0;
-
-  return (
-    <div className="space-y-3">
-      {/* Original + corrected sentence — clickable to expand corrections */}
-      <div
-        onClick={() => {
-          if (window.getSelection()?.toString()) return;
-          hasCorrections && setOpen((v) => !v);
-        }}
-        className={`w-full rounded-lg bg-gray-800/60 p-4 text-left transition-colors ${hasCorrections ? "cursor-pointer hover:bg-gray-800/80" : "cursor-default"}`}
-      >
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1 space-y-2">
-            <div>
-              <p className="text-xs text-gray-500 mb-1">{t("originalText")} #{index + 1}</p>
-              <p className="text-gray-100 whitespace-pre-wrap">{sentence.original}</p>
-            </div>
-            <div className="rounded-md bg-teal-900/30 border border-teal-700 p-3">
-              <p className="text-xs text-teal-400 mb-1 font-semibold">{t("overallCorrectedText")}</p>
-              <p className="text-gray-100 whitespace-pre-wrap">{sentence.corrected}</p>
-            </div>
-          </div>
-          {hasCorrections && (
-            <span className={`mt-1 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}>
-              &#9662;
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Individual corrections — shown when expanded */}
-      {open && hasCorrections && (
-        <div className="space-y-2 pl-2 border-l-2 border-gray-700">
-          {sentence.corrections.map((correction, i) => (
-            <CorrectionCard key={i} correction={correction} />
-          ))}
-        </div>
       )}
     </div>
   );

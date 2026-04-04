@@ -4,51 +4,40 @@
   "schema": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["sentences", "overallFeedback"],
+    "required": ["originalText", "correctedText", "corrections", "overallFeedback"],
     "properties": {
-      "sentences": {
+      "originalText": {
+        "type": "string",
+        "description": "The full original text from the user's input"
+      },
+      "correctedText": {
+        "type": "string",
+        "description": "The full corrected version of the entire text"
+      },
+      "corrections": {
         "type": "array",
-        "description": "Per-sentence corrections, in the same order as the original input",
+        "description": "Individual corrections, each referencing a fragment of the original text. May span multiple sentences.",
         "items": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["original", "corrected", "corrections"],
+          "required": ["original", "corrected", "explanation", "severity"],
           "properties": {
             "original": {
               "type": "string",
-              "description": "The original sentence from the user's input"
+              "description": "The problematic fragment from the original text (may span multiple sentences)"
             },
             "corrected": {
               "type": "string",
-              "description": "The corrected version of this sentence"
+              "description": "The corrected fragment"
             },
-            "corrections": {
-              "type": "array",
-              "description": "Individual corrections within this sentence, ordered by their position in the original text",
-              "items": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["original", "corrected", "explanation", "severity"],
-                "properties": {
-                  "original": {
-                    "type": "string",
-                    "description": "The problematic fragment from the sentence"
-                  },
-                  "corrected": {
-                    "type": "string",
-                    "description": "The corrected fragment"
-                  },
-                  "explanation": {
-                    "type": "string",
-                    "description": "Why this change was made"
-                  },
-                  "severity": {
-                    "type": "string",
-                    "enum": ["error", "improvement", "style"],
-                    "description": "error = grammatical mistake, improvement = awkward but not wrong, style = stylistic suggestion"
-                  }
-                }
-              }
+            "explanation": {
+              "type": "string",
+              "description": "Why this change was made"
+            },
+            "severity": {
+              "type": "string",
+              "enum": ["error", "improvement", "style"],
+              "description": "error = grammatical mistake, improvement = awkward but not wrong, style = stylistic suggestion"
             }
           }
         }
