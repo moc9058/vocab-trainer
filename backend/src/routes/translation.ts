@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from "fastify";
-import { callLLMFullWithSchema, streamLLMFullWithSchema, stripMarkdownFences } from "../llm.js";
+import { callLLMWithSchema, callLLMFullWithSchema, streamLLMWithSchema, streamLLMFullWithSchema, stripMarkdownFences } from "../llm.js";
 import {
   saveTranslationEntry,
   getTranslationHistory,
@@ -99,10 +99,10 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
   }, async (request) => {
     const { sourceLanguage, sourceText, targetLanguages } = request.body;
 
-    // Step 1: decompose using source-language-specific prompt
+    // Step 1: decompose using source-language-specific prompt (MINI model — structural only)
     const decomposePrompt = decomposePrompts[sourceLanguage];
     if (!decomposePrompt) throw new Error(`Unsupported source language: ${sourceLanguage}`);
-    const decomposeRaw = await callLLMFullWithSchema(decomposePrompt, sourceText, decomposeSchema, "translation/decompose");
+    const decomposeRaw = await callLLMWithSchema(decomposePrompt, sourceText, decomposeSchema, "translation/decompose");
     const decomposition = stripMarkdownFences(decomposeRaw);
 
     // Step 2: translate in parallel
@@ -188,7 +188,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
         return;
       }
       sendEvent("decompose-start", {});
-      const decomposeRaw = await streamLLMFullWithSchema(
+      const decomposeRaw = await streamLLMWithSchema(
         decomposePrompt,
         sourceText,
         decomposeSchema,
@@ -231,16 +231,18 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
         return errorResult;
       });
 
-      // Save to Firestore and send final entry
-      const entry = await saveTranslationEntry({
+      // Send done immediately, save to Firestore in background
+      const entryData = {
         sourceLanguage,
         sourceText,
         targetLanguages,
         results: translationResults,
         createdAt: new Date().toISOString(),
-      });
-
-      sendEvent("done", entry);
+      };
+      sendEvent("done", { id: `pending-${Date.now()}`, ...entryData });
+      saveTranslationEntry(entryData).catch((err) =>
+        fastify.log.error({ err }, "Failed to save translation entry")
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error processing translation";
       fastify.log.error({ err }, "Streaming translation failed");

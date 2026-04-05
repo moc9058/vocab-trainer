@@ -101,7 +101,7 @@ export default function TranslationView({ mode }: Props) {
     const didCleanup = needsCleanupRef.current;
     if (needsCleanupRef.current) {
       needsCleanupRef.current = false;
-      await deleteTranslationHistory().catch(() => {});
+      deleteTranslationHistory().catch(() => {});
     }
 
     try {

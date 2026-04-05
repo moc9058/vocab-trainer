@@ -290,6 +290,55 @@ export async function streamLLMFullWithSchema(
   return full;
 }
 
+export async function streamLLMWithSchema(
+  systemPrompt: string,
+  userPrompt: string,
+  jsonSchema: Record<string, unknown>,
+  onChunk: (chunk: string) => void,
+  route = "unknown"
+): Promise<string> {
+  const cl = await createAzureClient();
+  const model = await getDeploymentMini();
+  const abortController = new AbortController();
+  const stream = await cl.chat.completions.create({
+    model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: jsonSchema,
+    } as unknown as { type: "json_object" },
+    stream: true,
+    stream_options: { include_usage: true },
+  }, { signal: abortController.signal });
+  let full = "";
+  let usage: CompletionUsage | undefined;
+  let idledOut = false;
+  let idleTimer = setTimeout(() => { idledOut = true; abortController.abort(); }, STREAM_IDLE_MS);
+  try {
+    for await (const chunk of stream) {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => { idledOut = true; abortController.abort(); }, STREAM_IDLE_MS);
+      const delta = chunk.choices[0]?.delta?.content ?? "";
+      if (delta) {
+        full += delta;
+        onChunk(delta);
+      }
+      if (chunk.usage) {
+        usage = chunk.usage;
+      }
+    }
+  } catch (err) {
+    if (!idledOut) throw err;
+  } finally {
+    clearTimeout(idleTimer);
+  }
+  recordUsage(usage, model, "streamLLMWithSchema", route);
+  return full;
+}
+
 export function stripMarkdownFences(text: string): string {
   return text.replace(/^```(?:json)?\s*\n?/gm, "").replace(/\n?```\s*$/gm, "").trim();
 }
