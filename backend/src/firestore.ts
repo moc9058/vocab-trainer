@@ -218,23 +218,19 @@ export async function getFilteredWords(
   const snap = await words.where("language", "==", language).get();
   let results = snap.docs.map(docToWord);
 
-  // Expand base levels to include their -extended variants
-  const expandedLevels = filters?.levels?.flatMap((l) => [l, `${l}-extended`]);
-  const f = filters ? { ...filters, levels: expandedLevels } : filters;
-
-  const hasTopicFilter = f?.topics && f.topics.length > 0;
-  const hasCategoryFilter = f?.categories && f.categories.length > 0;
-  const hasLevelFilter = expandedLevels && expandedLevels.length > 0;
+  const hasTopicFilter = filters?.topics && filters.topics.length > 0;
+  const hasCategoryFilter = filters?.categories && filters.categories.length > 0;
+  const hasLevelFilter = filters?.levels && filters.levels.length > 0;
 
   if (hasTopicFilter || hasCategoryFilter || hasLevelFilter) {
     results = results.filter((w) => {
       // Level acts as a scope limiter (AND with other filters)
-      const matchesLevel = !hasLevelFilter || (!!w.level && expandedLevels!.includes(w.level));
+      const matchesLevel = !hasLevelFilter || (!!w.level && filters!.levels!.includes(w.level));
       // Topics and categories are additive (OR with each other)
       const matchesContent = !hasTopicFilter && !hasCategoryFilter
         ? true
-        : (hasTopicFilter && w.topics.some((t) => f!.topics!.includes(t))) ||
-          (hasCategoryFilter && w.definitions.some((m) => f!.categories!.includes(m.partOfSpeech)));
+        : (hasTopicFilter && w.topics.some((t) => filters!.topics!.includes(t))) ||
+          (hasCategoryFilter && w.definitions.some((m) => filters!.categories!.includes(m.partOfSpeech)));
       return matchesLevel && matchesContent;
     });
   }
@@ -262,7 +258,7 @@ export async function getWordFilters(language: string): Promise<{
   const allWords = snap.docs.map(docToWord);
   const topics = [...new Set(allWords.flatMap((w) => w.topics))] as Topic[];
   const categories = [...new Set(allWords.flatMap((w) => w.definitions.map((m) => m.partOfSpeech)).filter(Boolean))].sort();
-  const levels = [...new Set(allWords.map((w) => w.level?.replace(/-extended$/, "")).filter((l): l is string => !!l))].sort();
+  const levels = [...new Set(allWords.map((w) => w.level).filter((l): l is string => !!l))].sort();
   const data = { topics, categories, levels };
   wordFiltersCache.set(language, { data, ts: Date.now() });
   return data;

@@ -163,6 +163,8 @@ const translations = {
     useCaseCreative: "Creative",
     // Settings
     settings: "Settings",
+    settingsSectionGeneral: "General",
+    settingsSectionVocabulary: "Vocabulary",
     settingsLanguageOrder: "Language Display Order",
     settingsActiveUiLanguages: "UI Languages",
     settingsDefaultDefLangs: "Default Definition Languages",
@@ -337,6 +339,8 @@ const translations = {
     useCaseCreative: "クリエイティブ",
     // Settings
     settings: "設定",
+    settingsSectionGeneral: "一般",
+    settingsSectionVocabulary: "単語",
     settingsLanguageOrder: "言語表示順序",
     settingsActiveUiLanguages: "UI言語",
     settingsDefaultDefLangs: "デフォルト定義言語",
@@ -510,6 +514,8 @@ const translations = {
     useCaseCreative: "크리에이티브",
     // Settings
     settings: "설정",
+    settingsSectionGeneral: "일반",
+    settingsSectionVocabulary: "단어",
     settingsLanguageOrder: "언어 표시 순서",
     settingsActiveUiLanguages: "UI 언어",
     settingsDefaultDefLangs: "기본 정의 언어",

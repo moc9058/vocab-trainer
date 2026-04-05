@@ -105,73 +105,83 @@ export default function SettingsModal({ onClose }: Props) {
       >
         <h2 className="mb-5 text-lg font-semibold text-gray-100">{t("settings")}</h2>
 
-        {/* 1. Language Display Order */}
-        <section className="mb-5">
-          <h3 className="mb-2 text-sm font-medium text-gray-300">{t("settingsLanguageOrder")}</h3>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={order} strategy={verticalListSortingStrategy}>
-              <div className="space-y-1.5">
-                {order.map((code) => (
-                  <SortableItem key={code} id={code} />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        </section>
+        {/* General Section */}
+        <div className="mb-6">
+          <h3 className="mb-3 border-b border-gray-700 pb-2 text-base font-semibold text-gray-200">{t("settingsSectionGeneral")}</h3>
 
-        {/* 2. Active UI Languages */}
-        <section className="mb-5">
-          <h3 className="mb-2 text-sm font-medium text-gray-300">{t("settingsActiveUiLanguages")}</h3>
-          <div className="flex flex-wrap gap-2">
-            {order.filter((c) => supportedUiLanguages.has(c)).map((code) => (
-              <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={activeUi.has(code)}
-                  onChange={() => toggleSet(activeUi, code, setActiveUi)}
-                  className="accent-blue-600"
-                />
-                {LANG_LABEL_MAP[code] ?? code}
-              </label>
-            ))}
-          </div>
-        </section>
+          {/* Language Display Order */}
+          <section className="mb-4">
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsLanguageOrder")}</h4>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={order} strategy={verticalListSortingStrategy}>
+                <div className="space-y-1.5">
+                  {order.map((code) => (
+                    <SortableItem key={code} id={code} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </section>
 
-        {/* 3. Default Definition Languages */}
-        <section className="mb-5">
-          <h3 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDefaultDefLangs")}</h3>
-          <div className="flex flex-wrap gap-2">
-            {order.map((code) => (
-              <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={defLangs.has(code)}
-                  onChange={() => toggleSet(defLangs, code, setDefLangs)}
-                  className="accent-blue-600"
-                />
-                {LANG_LABEL_MAP[code] ?? code}
-              </label>
-            ))}
-          </div>
-        </section>
+          {/* Active UI Languages */}
+          <section>
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsActiveUiLanguages")}</h4>
+            <div className="flex flex-wrap gap-2">
+              {order.filter((c) => supportedUiLanguages.has(c)).map((code) => (
+                <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={activeUi.has(code)}
+                    onChange={() => toggleSet(activeUi, code, setActiveUi)}
+                    className="accent-blue-600"
+                  />
+                  {LANG_LABEL_MAP[code] ?? code}
+                </label>
+              ))}
+            </div>
+          </section>
+        </div>
 
-        {/* 4. Default Example Translation Languages */}
-        <section className="mb-5">
-          <h3 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDefaultExLangs")}</h3>
-          <div className="flex flex-wrap gap-2">
-            {order.map((code) => (
-              <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={exLangs.has(code)}
-                  onChange={() => toggleSet(exLangs, code, setExLangs)}
-                  className="accent-blue-600"
-                />
-                {LANG_LABEL_MAP[code] ?? code}
-              </label>
-            ))}
-          </div>
-        </section>
+        {/* Vocabulary Section */}
+        <div className="mb-6">
+          <h3 className="mb-3 border-b border-gray-700 pb-2 text-base font-semibold text-gray-200">{t("settingsSectionVocabulary")}</h3>
+
+          {/* Default Definition Languages */}
+          <section className="mb-4">
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDefaultDefLangs")}</h4>
+            <div className="flex flex-wrap gap-2">
+              {order.map((code) => (
+                <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={defLangs.has(code)}
+                    onChange={() => toggleSet(defLangs, code, setDefLangs)}
+                    className="accent-blue-600"
+                  />
+                  {LANG_LABEL_MAP[code] ?? code}
+                </label>
+              ))}
+            </div>
+          </section>
+
+          {/* Default Example Translation Languages */}
+          <section>
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDefaultExLangs")}</h4>
+            <div className="flex flex-wrap gap-2">
+              {order.map((code) => (
+                <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={exLangs.has(code)}
+                    onChange={() => toggleSet(exLangs, code, setExLangs)}
+                    className="accent-blue-600"
+                  />
+                  {LANG_LABEL_MAP[code] ?? code}
+                </label>
+              ))}
+            </div>
+          </section>
+        </div>
 
         {/* Actions */}
         <div className="flex items-center justify-between pt-2">
