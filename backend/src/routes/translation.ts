@@ -31,14 +31,24 @@ interface SlimTranslationResponse {
 
 function buildSlimInput(decomposition: string): string {
   const parsed = JSON.parse(decomposition) as SentenceAnalysisResult;
+  const sourceText = parsed.sentences.map((s) => s.text).join(" ");
+  const chunks: { chunkId: string; surface: string }[] = [];
+  const components: { componentId: string; chunkId: string; surface: string; baseForm: string | null; partOfSpeech: string }[] = [];
   for (const sentence of parsed.sentences) {
     for (const chunk of sentence.chunks) {
+      chunks.push({ chunkId: chunk.chunkId, surface: chunk.surface });
       for (const comp of chunk.components) {
-        delete (comp as unknown as Record<string, unknown>).reading;
+        components.push({
+          componentId: comp.componentId,
+          chunkId: chunk.chunkId,
+          surface: comp.surface,
+          baseForm: comp.baseForm,
+          partOfSpeech: comp.partOfSpeech,
+        });
       }
     }
   }
-  return JSON.stringify(parsed);
+  return JSON.stringify({ sourceText, chunks, components });
 }
 
 function mergeTranslation(decomposition: string, slimRaw: string, language: string): TranslationResult {

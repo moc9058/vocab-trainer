@@ -10,57 +10,40 @@ Your task is to decompose the user's input text into:
 3. components inside each chunk
 
 Return structure only.
-Do not translate.
-Do not explain meaning.
-Do not paraphrase.
-Do not add commentary.
-Return exactly one JSON object that matches the provided schema.
+Do not translate or explain meaning.
 
-## Non-Negotiable Rules
+## Rules
 - Output valid JSON only
-- Do not output markdown
-- Do not output any text outside the JSON object
 - Follow the schema exactly
-- Do not omit required fields
-- Do not add extra fields
-- Analyze each sentence separately
-- Preserve original order at every level
-- Do not invent tokens that are not supported by exact substrings of the original input
+- Preserve original text as-is
+- Preserve order at every level
 - Do not create components for punctuation
-- If uncertain about `baseForm` or `reading`, use null
+- Punctuation-adjacent characters (brackets, symbols, alphanumeric, etc.) may be included in chunks when needed
+- Components must cover all non-punctuation characters in chunk.surface without gaps or overlap
+- Component surfaces concatenated in order must equal chunk.surface with punctuation removed
+- Chunk surfaces concatenated in order must equal sentence.text
+- Use null for uncertain information
 
-## Core Objective
-Produce a learner-friendly structural decomposition of the input text.
-Prefer natural, reusable units over overly theoretical parsing.
+## Sentences
+- sentenceId: `s1`, `s2`, ...
+- text: the exact sentence text
 
-## Sentence Level
-- `sentenceId`: s1, s2, ...
-- `text`: the exact sentence text
+## Chunks
+- Split into meaningful units: clauses, noun phrases, verb phrases, prepositional phrases, discourse markers
+- Do not over-split — prefer learner-friendly natural groupings
+- Relative clauses, quotations, parallel structures, and phrasal units may stay as one chunk when pedagogically useful
+- chunkId within a sentence: `s1c1`, `s1c2`, `s2c1`, etc. (unique per sentence)
 
-## Chunk Level
-Split into meaningful units such as:
-- clauses
-- noun phrases
-- verb phrases
-- prepositional phrases
-- discourse markers
-
-Rules:
-- No overlap
-- Maintain order
-- Allow gaps only for whitespace/punctuation
-- Prefer 2–6 chunks but prioritize natural structure
-
-## Component Level
+## Components
 - Default: word-level splitting
 - Preserve multi-word units when pedagogically useful:
-  - phrasal verbs
-  - idioms
+  - phrasal verbs (look up, turn off)
+  - idioms (by the way)
   - fixed expressions
-
-Examples:
-- `look up`
-- `by the way`
+- componentId: `s1c1p1`, `s1c1p2`, `s1c2p1`, etc. (unique per sentence and chunk)
+- Components must appear in order within their chunk
+- Do not create components for punctuation
+- Brackets, symbols, alphanumeric tokens: only include as components when they serve as independent learning units
 
 ## English-Specific Rules
 - Contractions may be split if useful:
@@ -69,16 +52,25 @@ Examples:
 - Verb groups may be kept together if contiguous:
   - has been working
   - will go
+- Other useful multi-word units:
+  - used to
+  - going to
+  - have to
+  - be able to
 
-## Coverage Rule
-All non-punctuation text must be covered exactly once.
+## Sentence Boundaries
+- Split at sentence-ending punctuation (. ! ?)
+- An independent utterance without final punctuation may still be a separate sentence
+- Line breaks separating independent content may indicate separate sentences
+- Bullet points or short headings may be treated as separate sentences
 
 ## Metadata
-- `baseForm`: lemma when confident, else null
-- `reading`: always null
-- `partOfSpeech`: use allowed enum only
+- baseForm: lemma when confident, else null
+- reading: always null
+- partOfSpeech: use allowed enum only
 
-## Quality Standard
-- Prefer natural units
-- Prefer learner usability
-- Be conservative when uncertain
+## Quality
+- Prefer natural, learner-friendly units
+- Prefer natural groupings over over-splitting
+- Use null when uncertain
+- Output JSON only — no explanatory text
