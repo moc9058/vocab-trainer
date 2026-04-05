@@ -152,7 +152,7 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
         }
       ],
       "topics": ["Greetings & Introductions"],
-      "level": "HSK1",
+      "level": "HSK1-4",
       "notes": ""
     }
   ]
@@ -196,7 +196,7 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
   - **Academic / Professional:** `Economics & Finance`, `Politics & Government`, `Science & Technology`, `Law & Justice`, `Medicine`, `Education`, `Business & Commerce`, `Work & Career`
   - **Culture & Society:** `Nature & Environment`, `Arts & Entertainment`, `Sports & Fitness`, `Religion & Philosophy`, `History`, `Media & News`
   - **Language Fundamentals:** `Language Fundamentals`
-- **`level`** — Optional. Proficiency level tag for the word (e.g. `"HSK1"`, `"HSK2"`, …, `"HSK7~9"` for Chinese). Can be any string value.
+- **`level`** — Optional. Proficiency level tag for the word (e.g. `"HSK1-4"`, `"HSK5"`, `"HSK6"`, `"HSK7-9"`, `"Advanced"` for Chinese). Can be any string value.
 - **`notes`** — Optional. Free-form field for irregularities, mnemonics, etc.
 
 ## Project Structure
@@ -340,7 +340,7 @@ vocab-trainer/
 {
   "topics": ["Greetings & Introductions"],
   "categories": ["interjection", "noun", "verb"],
-  "levels": ["HSK1", "HSK2"]
+  "levels": ["HSK1-4", "HSK5"]
 }
 ```
 
@@ -452,7 +452,7 @@ Overwrites any existing session for the given language.
   "questionCount": 10,
   "topics": ["Greetings & Introductions"],
   "categories": ["noun", "verb"],
-  "levels": ["HSK1"],
+  "levels": ["HSK1-4"],
   "questionType": "definition"
 }
 ```
@@ -847,7 +847,7 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 | **SmartAddWordModal**   | Modal to add a word with LLM auto-filling missing fields. Only `term` is required; the LLM generates transliteration, definitions (in configured languages), examples (with translations in configured languages), etc. Definition and example translation languages come from app settings. |
 | **FlaggedReview**       | Review interface for flagged words. Allows browsing and unflagging words marked for review. |
 | **LanguageSelectModal** | Modal to pick the target language when starting a new quiz. Lists languages fetched from the API.                  |
-| **LevelSelectModal**    | Modal to select proficiency levels (e.g., HSK1–HSK7~9) for filtering. |
+| **LevelSelectModal**    | Modal to select proficiency levels (e.g., HSK1-4–HSK7-9) for filtering. |
 | **QuizFilterModal**     | Modal to select topic, category, and level filters before starting a quiz. Supports "Select All" / "Clear All" actions. Level column only appears when words have levels set. Starting with no filters includes all words. |
 | **WordFormModal**       | Modal for adding or editing a word manually with all fields. |
 | **GrammarList**         | Browse grammar items organized by chapter and subchapter with search, filters, and inline edit/delete. |

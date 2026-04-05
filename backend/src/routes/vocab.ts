@@ -21,7 +21,7 @@ import { TOPICS } from "../types.js";
 import { callLLMWithSchema, stripMarkdownFences, validateWord, type Segment } from "../llm.js";
 
 const LEVEL_OPTIONS: Record<string, string[]> = {
-  chinese: ["HSK1", "HSK2", "HSK3", "HSK4", "HSK5", "HSK6", "HSK7~9", "Advanced"],
+  chinese: ["HSK1-4", "HSK5", "HSK6", "HSK7-9", "Advanced"],
   japanese: ["JLPT5", "JLPT4", "JLPT3", "JLPT2", "JLPT1", "Advanced"],
 };
 
@@ -246,7 +246,17 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
           ? [...body.definitions!, ...llmDefs.slice(userDefCount)]
           : llmDefs.length > 0 ? llmDefs : [{ partOfSpeech: "", text: { en: "" } }],
         examples: userExCount > 0
-          ? [...body.examples!, ...llmExamples.slice(userExCount)]
+          ? [
+              ...body.examples!.map((ex, i) => {
+                const hasTranslation = typeof ex.translation === "string"
+                  ? ex.translation.trim() !== ""
+                  : ex.translation != null && Object.keys(ex.translation).length > 0;
+                if (hasTranslation) return ex;
+                const llmEx = llmExamples[i];
+                return llmEx?.translation ? { ...ex, translation: llmEx.translation } : ex;
+              }),
+              ...llmExamples.slice(userExCount),
+            ]
           : llmExamples,
         topics: (body.topics && body.topics.length > 0)
           ? body.topics
