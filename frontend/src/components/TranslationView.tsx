@@ -649,6 +649,9 @@ function SentenceCard({ sentence }: { sentence: SentenceAnalysis }) {
     <div className="space-y-3">
       <div className="rounded-lg bg-gray-800/60 p-4">
         <p className="text-gray-100 font-medium">{sentence.text}</p>
+        {sentence.meaning && (
+          <p className="text-gray-400 text-sm mt-1">{sentence.meaning}</p>
+        )}
       </div>
 
       {sentence.chunks?.length ? (

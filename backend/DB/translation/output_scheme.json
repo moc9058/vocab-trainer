@@ -5,10 +5,30 @@
     "type": "object",
     "additionalProperties": false,
     "required": [
+      "sentences",
       "chunks",
       "components"
     ],
     "properties": {
+      "sentences": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sentenceId",
+            "meaning"
+          ],
+          "properties": {
+            "sentenceId": {
+              "type": "string"
+            },
+            "meaning": {
+              "type": "string"
+            }
+          }
+        }
+      },
       "chunks": {
         "type": "array",
         "items": {

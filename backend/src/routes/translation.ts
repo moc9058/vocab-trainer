@@ -25,13 +25,14 @@ function buildTranslateSystemPrompt(basePrompt: string, sourceLang: string, targ
 }
 
 interface SlimTranslationResponse {
+  sentences: { sentenceId: string; meaning: string }[];
   chunks: { chunkId: string; meaning: string }[];
   components: { componentId: string; meaning: string; explanation: string }[];
 }
 
 function buildSlimInput(decomposition: string): string {
   const parsed = JSON.parse(decomposition) as SentenceAnalysisResult;
-  const sourceText = parsed.sentences.map((s) => s.text).join(" ");
+  const sentences = parsed.sentences.map((s) => ({ sentenceId: s.sentenceId, text: s.text }));
   const chunks: { chunkId: string; surface: string }[] = [];
   const components: { componentId: string; chunkId: string; surface: string; baseForm: string | null; partOfSpeech: string }[] = [];
   for (const sentence of parsed.sentences) {
@@ -48,7 +49,7 @@ function buildSlimInput(decomposition: string): string {
       }
     }
   }
-  return JSON.stringify({ sourceText, chunks, components });
+  return JSON.stringify({ sentences, chunks, components });
 }
 
 function mergeTranslation(decomposition: string, slimRaw: string, language: string): TranslationResult {
@@ -56,6 +57,7 @@ function mergeTranslation(decomposition: string, slimRaw: string, language: stri
     const decomp = JSON.parse(decomposition) as SentenceAnalysisResult;
     const slim = JSON.parse(stripMarkdownFences(slimRaw)) as SlimTranslationResponse;
 
+    const sentMap = new Map(slim.sentences.map((s) => [s.sentenceId, s.meaning]));
     const chunkMap = new Map(slim.chunks.map((c) => [c.chunkId, c.meaning]));
     const compMap = new Map(slim.components.map((c) => [c.componentId, { meaning: c.meaning, explanation: c.explanation }]));
 
@@ -63,6 +65,7 @@ function mergeTranslation(decomposition: string, slimRaw: string, language: stri
       sentences: decomp.sentences.map((sentence) => ({
         sentenceId: sentence.sentenceId,
         text: sentence.text,
+        meaning: sentMap.get(sentence.sentenceId) ?? "",
         chunks: sentence.chunks.map((chunk) => ({
           chunkId: chunk.chunkId,
           surface: chunk.surface,

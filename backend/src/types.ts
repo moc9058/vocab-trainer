@@ -205,6 +205,7 @@ export interface AnalysisChunk {
 export interface SentenceAnalysis {
   sentenceId: string;
   text: string;
+  meaning?: string;
   chunks: AnalysisChunk[];
   components?: AnalysisComponent[];
 }
