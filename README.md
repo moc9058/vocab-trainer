@@ -41,6 +41,7 @@ To also run Firestore data migrations during deploy:
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --word              # word data only
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --grammer           # grammar data only
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --llm               # upload LLM config to Firestore
+./deploy.sh vocab-trainer-490014 asia-northeast1 --llm --prompts              # upload LLM config to Firestore
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --word --grammer    # both migrations
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --word --grammer --llm  # all migrations
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --prompts           # speaking/writing + translation config

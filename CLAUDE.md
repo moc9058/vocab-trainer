@@ -58,11 +58,11 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `routes/grammar.ts` — CRUD for grammar items, chapters, subchapters
   - `routes/grammar-quiz.ts` — grammar quiz with self-grading, two modes (existing examples / LLM-generated)
   - `routes/grammar-progress.ts` — per-component grammar progress
-  - `routes/translation.ts` — schema-based translation/analysis with parallel LLM calls (only `en`/`ja`/`ko`/`zh` targets supported), SSE streaming, history persistence; config (schemas, prompts) loaded from Firestore `config/translation`
+  - `routes/translation.ts` — two-step translation/analysis: decomposition (MINI model, structural parsing into sentences/chunks/components) then parallel translation per target language (FULL model, meanings/explanations); only `en`/`ja`/`ko`/`zh` supported; SSE streaming; translate input is a flat representation (sourceText + flat chunks/components arrays) built by `buildSlimInput`; history persistence; config (schemas, prompts) loaded from Firestore `config/translation`
   - `routes/speaking-writing.ts` — text correction for speaking/writing practice; SSE streaming LLM call with language-specific system prompts + use-case context (professional/casual/presentation/interview for speaking; academic/social/email/creative for writing), per-sentence corrections, session persistence; config (schemas, prompts, use cases) loaded from Firestore `config/speaking_writing`
   - `routes/metrics.ts` — LLM token usage tracking and cost estimation; paginated usage logs, daily aggregates, cost-per-token configuration per model
 - **Database**: `firestore.ts` — Google Cloud Firestore abstraction layer
-- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, callLLMWithSchema/callLLMFullWithSchema with JSON schema enforcement, validateWord, segmentBatch); `callLLM`/`callLLMWithSchema` use MINI deployment, `callLLMFull`/`callLLMFullWithSchema` use FULL deployment (for translation, speaking & writing correction); config loaded from `.env` (local) or Firestore `config/llm` (deployed); `validateWord` accepts any word with at least one definition language (not limited to ja/en/ko); all LLM functions accept a `route` parameter for token usage tracking and automatically log token counts to Firestore; `segmentBatch` accepts optional config (prompt + schema) from Firestore
+- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, callLLMWithSchema/callLLMFullWithSchema with JSON schema enforcement, streamLLMWithSchema/streamLLMFullWithSchema for streaming with schema, validateWord, segmentBatch); `callLLM`/`callLLMWithSchema`/`streamLLMWithSchema` use MINI deployment, `callLLMFull`/`callLLMFullWithSchema`/`streamLLMFullWithSchema` use FULL deployment; config loaded from `.env` (local) or Firestore `config/llm` (deployed); `validateWord` accepts any word with at least one definition language (not limited to ja/en/ko); all LLM functions accept a `route` parameter for token usage tracking and automatically log token counts to Firestore; `segmentBatch` accepts optional config (prompt + schema) from Firestore
 - **Types**: `types.ts` — shared interfaces (Word, VocabFile, QuizSession, WordProgress, TranslationEntry, SpeakingWritingSession, etc.)
 - Route handlers use Fastify generics for type-safe Params/Querystring/Body and JSON schema validation
 - Errors via `@fastify/sensible`: `reply.notFound()`, `reply.badRequest()`, `reply.conflict()`
@@ -136,7 +136,7 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 - `GET /api/grammar-quiz/session/language/:language` — get current grammar quiz session
 - `GET /api/grammar-progress/:language` — all grammar progress
 - `DELETE /api/grammar-progress/:language` — reset grammar progress
-- `POST /api/translation/translate` — parallel LLM translation/analysis (uses FULL model)
+- `POST /api/translation/translate` — two-step LLM translation/analysis (decompose with MINI model, translate with FULL model)
 - `GET /api/translation/history` — paginated translation history
 - `DELETE /api/translation/history` — clear all translation history
 - `DELETE /api/translation/history/:id` — delete single translation entry
