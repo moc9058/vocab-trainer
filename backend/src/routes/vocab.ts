@@ -17,7 +17,7 @@ import {
 } from "../firestore.js";
 import type { Word, Example } from "../types.js";
 import { TOPICS } from "../types.js";
-import { callLLMWithSchema, stripMarkdownFences, validateWord, type Segment } from "../llm.js";
+import { callLLMFullWithSchema, stripMarkdownFences, validateWord, type Segment } from "../llm.js";
 
 const LEVEL_OPTIONS: Record<string, string[]> = {
   chinese: ["HSK1-4", "HSK5", "HSK6", "HSK7-9", "Advanced"],
@@ -213,7 +213,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
 
       let llmResult: Record<string, unknown>;
       try {
-        const raw = await callLLMWithSchema(systemPrompt, userPrompt, vocabConfig.smartAddSchema, "vocab/smart-add");
+        const raw = await callLLMFullWithSchema(systemPrompt, userPrompt, vocabConfig.smartAddSchema, "vocab/smart-add");
         llmResult = JSON.parse(stripMarkdownFences(raw));
       } catch (err) {
         fastify.log.error({ err, term }, "LLM call failed for smart-add");
