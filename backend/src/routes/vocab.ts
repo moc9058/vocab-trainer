@@ -12,7 +12,6 @@ import {
   createLanguage,
   deleteLanguage,
   lookupWordByTerm,
-  getTransliterationMap,
   flagWord,
   getVocabularyConfig,
 } from "../firestore.js";
@@ -84,18 +83,6 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       const entry = await lookupWordByTerm(language, term);
       if (!entry) return reply.notFound(`Term '${term}' not found in index`);
       return entry;
-    }
-  );
-
-  // Get transliteration map (term → transliteration) for all words in a language
-  fastify.get<{ Params: { language: string } }>(
-    "/:language/transliteration-map",
-    async (request, reply) => {
-      const { language } = request.params;
-      if (!(await languageExists(language))) {
-        return reply.notFound(`Language '${language}' not found`);
-      }
-      return await getTransliterationMap(language);
     }
   );
 
@@ -248,12 +235,19 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         examples: userExCount > 0
           ? [
               ...body.examples!.map((ex, i) => {
+                const llmEx = llmExamples[i];
                 const hasTranslation = typeof ex.translation === "string"
                   ? ex.translation.trim() !== ""
                   : ex.translation != null && Object.keys(ex.translation).length > 0;
-                if (hasTranslation) return ex;
-                const llmEx = llmExamples[i];
-                return llmEx?.translation ? { ...ex, translation: llmEx.translation } : ex;
+                const merged = hasTranslation
+                  ? ex
+                  : llmEx?.translation ? { ...ex, translation: llmEx.translation } : ex;
+                // Carry over LLM-generated segments for user-provided examples
+                const llmSegs = (llmEx as any)?.segments;
+                if (llmSegs && !(merged as any).segments) {
+                  return { ...merged, segments: llmSegs };
+                }
+                return merged;
               }),
               ...llmExamples.slice(userExCount),
             ]

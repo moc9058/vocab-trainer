@@ -4,7 +4,7 @@ import { uiLanguages } from "../i18n/translations";
 import { useSettings } from "../settings/context";
 import SettingsModal from "./SettingsModal";
 import { getCurrentSession, startQuiz } from "../api/quiz";
-import { getFilters, getTransliterationMap } from "../api/vocab";
+import { getFilters } from "../api/vocab";
 import { startGrammarQuiz, getCurrentGrammarSession } from "../api/grammar";
 import { fetchJson } from "../api/client";
 import EmptyState from "./EmptyState";
@@ -44,7 +44,6 @@ export default function Dashboard() {
   const [showBrowseLanguageModal, setShowBrowseLanguageModal] = useState(false);
   const [flaggedReviewLanguage, setFlaggedReviewLanguage] = useState<string | null>(null);
   const [showFlaggedLanguageModal, setShowFlaggedLanguageModal] = useState(false);
-  const [transliterationMap, setPinyinMap] = useState<Record<string, string>>({});
   // Grammar state
   const [activeGrammarQuiz, setActiveGrammarQuiz] = useState<GrammarQuizSession | null>(null);
   const [browsingGrammarLanguage, setBrowsingGrammarLanguage] = useState<string | null>(null);
@@ -61,18 +60,6 @@ export default function Dashboard() {
   const [speakingWritingMode, setSpeakingWritingMode] = useState<"new" | "resume" | null>(null);
   const [hasSWSession, setHasSWSession] = useState(false);
   const [showMetrics, setShowMetrics] = useState(false);
-
-  // Fetch pinyin map when a quiz starts or browsing begins
-  const activeLang = activeQuiz?.language ?? browsingLanguage ?? flaggedReviewLanguage;
-  useEffect(() => {
-    if (activeLang) {
-      getTransliterationMap(activeLang)
-        .then(setPinyinMap)
-        .catch(() => setPinyinMap({}));
-    } else {
-      setPinyinMap({});
-    }
-  }, [activeLang]);
 
   // Check for translation history on mount
   useEffect(() => {
@@ -483,19 +470,16 @@ export default function Dashboard() {
             onComplete={handleQuizComplete}
             onBrowse={handleBrowse}
             onStartNew={handleStartQuiz}
-            transliterationMap={transliterationMap}
           />
         ) : flaggedReviewLanguage ? (
           <FlaggedReview
             language={flaggedReviewLanguage}
             onBack={() => setFlaggedReviewLanguage(null)}
-            transliterationMap={transliterationMap}
           />
         ) : browsingLanguage ? (
           <WordList
             language={browsingLanguage}
             onBack={() => setBrowsingLanguage(null)}
-            transliterationMap={transliterationMap}
           />
         ) : speakingWritingMode ? (
           <SpeakingWritingView mode={speakingWritingMode} />

@@ -9,7 +9,6 @@ import { displayTranslation, type Word } from "../types";
 interface Props {
   language: string;
   onBack: () => void;
-  transliterationMap?: Record<string, string>;
 }
 
 function pickRandom(words: Word[], excludeId?: string): Word | null {
@@ -33,7 +32,7 @@ function TranslationDisplay({ translation }: { translation: string | Record<stri
   );
 }
 
-export default function FlaggedReview({ language, onBack, transliterationMap = {} }: Props) {
+export default function FlaggedReview({ language, onBack }: Props) {
   const { t } = useI18n();
   const { sortedEntries } = useSettings();
   const [words, setWords] = useState<Word[]>([]);
@@ -132,7 +131,7 @@ export default function FlaggedReview({ language, onBack, transliterationMap = {
               {currentWord!.examples.map((ex, i) => (
                 <div key={i} className="mb-2 last:mb-0">
                   <p className="text-lg text-gray-100">
-                    <RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} />
+                    <RubyText text={ex.sentence} segments={ex.segments} />
                   </p>
                   <TranslationDisplay translation={ex.translation} />
                 </div>

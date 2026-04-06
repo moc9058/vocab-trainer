@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { getWords, getFilters, getTransliterationMap, updateWord, deleteWord } from "../api/vocab";
+import { getWords, getFilters, updateWord, deleteWord } from "../api/vocab";
 import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
@@ -11,10 +11,9 @@ import { displayTranslation, type Word, type PaginatedResult } from "../types";
 interface Props {
   language: string;
   onBack: () => void;
-  transliterationMap?: Record<string, string>;
 }
 
-export default function WordList({ language, onBack, transliterationMap: externalMap }: Props) {
+export default function WordList({ language, onBack }: Props) {
   const { t } = useI18n();
   const [result, setResult] = useState<PaginatedResult<Word> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,7 +30,6 @@ export default function WordList({ language, onBack, transliterationMap: externa
     categories: string[];
     levels: string[];
   } | null>(null);
-  const [transliterationMap, setTransliterationMap] = useState<Record<string, string>>(externalMap ?? {});
   const [showSmartAdd, setShowSmartAdd] = useState(false);
   const [editingWord, setEditingWord] = useState<Word | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -78,19 +76,10 @@ export default function WordList({ language, onBack, transliterationMap: externa
   }
 
   useEffect(() => {
-    if (externalMap) setTransliterationMap(externalMap);
-  }, [externalMap]);
-
-  useEffect(() => {
     getFilters(language)
       .then(setFilterOptions)
       .catch(() => setFilterOptions(null));
-    if (!externalMap) {
-      getTransliterationMap(language)
-        .then(setTransliterationMap)
-        .catch(() => setTransliterationMap({}));
-    }
-  }, [language, externalMap]);
+  }, [language]);
 
   const fetchData = useCallback(async () => {
     const currentRequestId = ++requestIdRef.current;
@@ -236,7 +225,7 @@ export default function WordList({ language, onBack, transliterationMap: externa
                   onToggle={() =>
                     setExpandedId(expandedId === word.id ? null : word.id)
                   }
-                  transliterationMap={transliterationMap}
+
                   isFlagged={flaggedIds.has(word.id)}
                   onToggleFlag={() => handleToggleFlag(word.id)}
                   onEdit={() => setEditingWord(word)}
@@ -263,7 +252,7 @@ export default function WordList({ language, onBack, transliterationMap: externa
                     onToggle={() =>
                       setExpandedId(expandedId === word.id ? null : word.id)
                     }
-                    transliterationMap={transliterationMap}
+  
                     isFlagged={flaggedIds.has(word.id)}
                     onToggleFlag={() => handleToggleFlag(word.id)}
                     onEdit={() => setEditingWord(word)}
@@ -343,7 +332,6 @@ function WordCard({
   word,
   expanded,
   onToggle,
-  transliterationMap,
   isFlagged,
   onToggleFlag,
   onEdit,
@@ -352,7 +340,6 @@ function WordCard({
   word: Word;
   expanded: boolean;
   onToggle: () => void;
-  transliterationMap: Record<string, string>;
   isFlagged: boolean;
   onToggleFlag: () => void;
   onEdit: () => void;
@@ -426,7 +413,7 @@ function WordCard({
               <ul className="space-y-1">
                 {word.examples.map((ex, i) => (
                   <li key={i} className="text-base text-gray-300">
-                    <span><RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} /></span>
+                    <span><RubyText text={ex.sentence} segments={ex.segments} /></span>
                     {typeof ex.translation === "string" && ex.translation ? (
                       <span className="ml-2 text-gray-400">— {ex.translation}</span>
                     ) : typeof ex.translation === "object" && ex.translation ? (
@@ -479,7 +466,6 @@ function WordRow({
   word,
   expanded,
   onToggle,
-  transliterationMap,
   isFlagged,
   onToggleFlag,
   onEdit,
@@ -488,7 +474,6 @@ function WordRow({
   word: Word;
   expanded: boolean;
   onToggle: () => void;
-  transliterationMap: Record<string, string>;
   isFlagged: boolean;
   onToggleFlag: () => void;
   onEdit: () => void;
@@ -553,7 +538,7 @@ function WordRow({
                 <ul className="space-y-1">
                   {word.examples.map((ex, i) => (
                     <li key={i} className="text-base text-gray-300">
-                      <span><RubyText text={ex.sentence} transliterationMap={transliterationMap} segments={ex.segments} /></span>
+                      <span><RubyText text={ex.sentence} segments={ex.segments} /></span>
                       {typeof ex.translation === "string" && ex.translation ? (
                         <span className="ml-2 text-gray-400">— {ex.translation}</span>
                       ) : ex.translation ? (
