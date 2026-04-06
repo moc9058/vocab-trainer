@@ -295,28 +295,6 @@ export async function addWord(language: string, word: Word): Promise<void> {
   });
 }
 
-export async function batchAddTransliterationEntries(
-  language: string,
-  entries: { term: string; transliteration: string }[]
-): Promise<void> {
-  const BATCH_LIMIT = 500;
-  for (let i = 0; i < entries.length; i += BATCH_LIMIT) {
-    const chunk = entries.slice(i, i + BATCH_LIMIT);
-    const batch = db.batch();
-    for (const { term, transliteration } of chunk) {
-      const docId = `${language}_${term}`;
-      batch.set(wordIndex.doc(docId), {
-        language,
-        term,
-        id: "",
-        level: "",
-        transliteration,
-      });
-    }
-    await batch.commit();
-  }
-}
-
 export async function updateWord(language: string, wordId: string, updates: Partial<Word>): Promise<Word | null> {
   const doc = await words.doc(wordId).get();
   if (!doc.exists) return null;

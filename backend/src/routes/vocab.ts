@@ -12,6 +12,7 @@ import {
   createLanguage,
   deleteLanguage,
   lookupWordByTerm,
+  lookupWordsByTerms,
   flagWord,
   getVocabularyConfig,
 } from "../firestore.js";
@@ -278,6 +279,24 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         }
         return { sentence: ex.sentence, translation: ex.translation, segments } as Example;
       });
+
+      // Link segments to existing words in DB
+      const allSegmentTexts = [
+        ...new Set(
+          examplesWithSegments.flatMap(ex => ex.segments?.map(s => s.text) ?? [])
+        ),
+      ];
+      if (allSegmentTexts.length > 0) {
+        const matches = await lookupWordsByTerms(language, allSegmentTexts);
+        const termToId = new Map(matches.map(m => [m.term, m.id]));
+        for (const ex of examplesWithSegments) {
+          if (!ex.segments) continue;
+          for (const seg of ex.segments) {
+            const wordId = termToId.get(seg.text);
+            if (wordId) seg.id = wordId;
+          }
+        }
+      }
 
       const id = await getNextWordId(language);
       const word: Word = {
