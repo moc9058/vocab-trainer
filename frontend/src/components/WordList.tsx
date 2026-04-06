@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { getWords, getFilters, updateWord, deleteWord } from "../api/vocab";
+import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord } from "../api/vocab";
 import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
@@ -15,6 +15,7 @@ interface Props {
 
 export default function WordList({ language, onBack }: Props) {
   const { t } = useI18n();
+  const { settings } = useSettings();
   const [result, setResult] = useState<PaginatedResult<Word> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +26,8 @@ export default function WordList({ language, onBack }: Props) {
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [existingTerms, setExistingTerms] = useState<Map<string, string>>(new Map());
+  const [busySegments, setBusySegments] = useState<Set<string>>(new Set());
   const [filterOptions, setFilterOptions] = useState<{
     topics: string[];
     categories: string[];
@@ -73,6 +76,58 @@ export default function WordList({ language, onBack }: Props) {
     setDeletingId(null);
     setExpandedId(null);
     await fetchData();
+  }
+
+  function handleToggleExpand(word: Word) {
+    if (expandedId === word.id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(word.id);
+    setBusySegments(new Set());
+    // Collect all segment texts across examples
+    const allTexts = [
+      ...new Set(
+        word.examples.flatMap((ex) => ex.segments?.map((s) => s.text).filter((t) => t.trim().length > 0 && !/^\p{P}+$/u.test(t)) ?? [])
+      ),
+    ];
+    if (allTexts.length > 0) {
+      checkTerms(language, allTexts)
+        .then(({ existing }) => setExistingTerms(new Map(Object.entries(existing))))
+        .catch(() => setExistingTerms(new Map()));
+    } else {
+      setExistingTerms(new Map());
+    }
+  }
+
+  async function handleToggleSegment(term: string, sentence: string, translation: string) {
+    const wordId = existingTerms.get(term);
+    if (wordId) {
+      // Delete existing word
+      setBusySegments((prev) => new Set(prev).add(term));
+      try {
+        await deleteWord(language, wordId);
+        setExistingTerms((prev) => { const next = new Map(prev); next.delete(term); return next; });
+        fetchData();
+      } finally {
+        setBusySegments((prev) => { const next = new Set(prev); next.delete(term); return next; });
+      }
+    } else {
+      // Auto-add word via smart-add
+      setBusySegments((prev) => new Set(prev).add(term));
+      try {
+        const result = await smartAddWord(language, {
+          term,
+          examples: [{ sentence, translation }],
+          definitionLanguages: settings.defaultDefinitionLanguages,
+          exampleTranslationLanguages: settings.defaultExampleTranslationLanguages,
+        });
+        setExistingTerms((prev) => new Map(prev).set(term, result.id));
+        fetchData();
+      } finally {
+        setBusySegments((prev) => { const next = new Set(prev); next.delete(term); return next; });
+      }
+    }
   }
 
   useEffect(() => {
@@ -222,14 +277,14 @@ export default function WordList({ language, onBack }: Props) {
                   key={word.id}
                   word={word}
                   expanded={expandedId === word.id}
-                  onToggle={() =>
-                    setExpandedId(expandedId === word.id ? null : word.id)
-                  }
-
+                  onToggle={() => handleToggleExpand(word)}
                   isFlagged={flaggedIds.has(word.id)}
                   onToggleFlag={() => handleToggleFlag(word.id)}
                   onEdit={() => setEditingWord(word)}
                   onDelete={() => setDeletingId(word.id)}
+                  onToggleSegment={handleToggleSegment}
+                  existingTerms={expandedId === word.id ? existingTerms : new Map()}
+                  busySegments={expandedId === word.id ? busySegments : new Set()}
                 />
               ))}
             </div>
@@ -249,14 +304,14 @@ export default function WordList({ language, onBack }: Props) {
                     key={word.id}
                     word={word}
                     expanded={expandedId === word.id}
-                    onToggle={() =>
-                      setExpandedId(expandedId === word.id ? null : word.id)
-                    }
-  
+                    onToggle={() => handleToggleExpand(word)}
                     isFlagged={flaggedIds.has(word.id)}
                     onToggleFlag={() => handleToggleFlag(word.id)}
                     onEdit={() => setEditingWord(word)}
                     onDelete={() => setDeletingId(word.id)}
+                    onToggleSegment={handleToggleSegment}
+                    existingTerms={expandedId === word.id ? existingTerms : new Map()}
+                    busySegments={expandedId === word.id ? busySegments : new Set()}
                   />
                 ))}
               </tbody>
@@ -336,6 +391,9 @@ function WordCard({
   onToggleFlag,
   onEdit,
   onDelete,
+  onToggleSegment,
+  existingTerms,
+  busySegments,
 }: {
   word: Word;
   expanded: boolean;
@@ -344,6 +402,9 @@ function WordCard({
   onToggleFlag: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onToggleSegment?: (term: string, sentence: string, translation: string) => void;
+  existingTerms: Map<string, string>;
+  busySegments: Set<string>;
 }) {
   const { t } = useI18n();
   const { sortedEntries } = useSettings();
@@ -410,17 +471,46 @@ function WordCard({
               <p className="mb-1 text-xs font-medium text-gray-400">
                 {t("examples")}
               </p>
-              <ul className="space-y-1">
-                {word.examples.map((ex, i) => (
-                  <li key={i} className="text-base text-gray-300">
-                    <span><RubyText text={ex.sentence} segments={ex.segments} /></span>
-                    {typeof ex.translation === "string" && ex.translation ? (
-                      <span className="ml-2 text-gray-400">— {ex.translation}</span>
-                    ) : typeof ex.translation === "object" && ex.translation ? (
-                      <span className="ml-2 text-gray-400">— {sortedEntries(ex.translation).map(([l, t]) => `${l.toUpperCase()}: ${t}`).join(" / ")}</span>
-                    ) : null}
-                  </li>
-                ))}
+              <ul className="space-y-2">
+                {word.examples.map((ex, i) => {
+                  const trans = typeof ex.translation === "string" ? ex.translation : displayTranslation(ex.translation);
+                  const segs = (ex.segments ?? []).filter((s) => s.text.trim().length > 0 && !/^\p{P}+$/u.test(s.text));
+                  return (
+                    <li key={i} className="text-base text-gray-300">
+                      <span><RubyText text={ex.sentence} segments={ex.segments} /></span>
+                      {typeof ex.translation === "string" && ex.translation ? (
+                        <span className="ml-2 text-gray-400">— {ex.translation}</span>
+                      ) : typeof ex.translation === "object" && ex.translation ? (
+                        <span className="ml-2 text-gray-400">— {sortedEntries(ex.translation).map(([l, t]) => `${l.toUpperCase()}: ${t}`).join(" / ")}</span>
+                      ) : null}
+                      {onToggleSegment && segs.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {segs.map((seg, j) => {
+                            const isSelf = seg.text === word.term;
+                            const exists = isSelf || existingTerms.has(seg.text);
+                            const busy = busySegments.has(seg.text);
+                            return (
+                              <button
+                                key={j}
+                                disabled={busy || isSelf}
+                                onClick={(e) => { e.stopPropagation(); onToggleSegment(seg.text, ex.sentence, trans); }}
+                                className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
+                                  isSelf
+                                    ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
+                                    : exists
+                                      ? "border border-green-500/40 bg-green-900/20 text-green-300 hover:bg-red-900/30 hover:text-red-300 hover:border-red-500/40"
+                                      : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
+                                }`}
+                              >
+                                {exists ? "" : "+"} {seg.text}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
@@ -470,6 +560,9 @@ function WordRow({
   onToggleFlag,
   onEdit,
   onDelete,
+  onToggleSegment,
+  existingTerms,
+  busySegments,
 }: {
   word: Word;
   expanded: boolean;
@@ -478,6 +571,9 @@ function WordRow({
   onToggleFlag: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onToggleSegment?: (term: string, sentence: string, translation: string) => void;
+  existingTerms: Map<string, string>;
+  busySegments: Set<string>;
 }) {
   const { t } = useI18n();
   const { sortedEntries } = useSettings();
@@ -535,17 +631,46 @@ function WordRow({
                 <p className="mb-1 text-xs font-medium text-gray-400">
                   {t("examples")}
                 </p>
-                <ul className="space-y-1">
-                  {word.examples.map((ex, i) => (
-                    <li key={i} className="text-base text-gray-300">
-                      <span><RubyText text={ex.sentence} segments={ex.segments} /></span>
-                      {typeof ex.translation === "string" && ex.translation ? (
-                        <span className="ml-2 text-gray-400">— {ex.translation}</span>
-                      ) : ex.translation ? (
-                        <span className="ml-2 text-gray-400">— {sortedEntries(ex.translation).map(([l, t]) => `${l.toUpperCase()}: ${t}`).join(" / ")}</span>
-                      ) : null}
-                    </li>
-                  ))}
+                <ul className="space-y-2">
+                  {word.examples.map((ex, i) => {
+                    const trans = typeof ex.translation === "string" ? ex.translation : displayTranslation(ex.translation);
+                    const segs = (ex.segments ?? []).filter((s) => s.text.trim().length > 0 && !/^\p{P}+$/u.test(s.text));
+                    return (
+                      <li key={i} className="text-base text-gray-300">
+                        <span><RubyText text={ex.sentence} segments={ex.segments} /></span>
+                        {typeof ex.translation === "string" && ex.translation ? (
+                          <span className="ml-2 text-gray-400">— {ex.translation}</span>
+                        ) : ex.translation ? (
+                          <span className="ml-2 text-gray-400">— {sortedEntries(ex.translation).map(([l, t]) => `${l.toUpperCase()}: ${t}`).join(" / ")}</span>
+                        ) : null}
+                        {onToggleSegment && segs.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {segs.map((seg, j) => {
+                              const isSelf = seg.text === word.term;
+                              const exists = isSelf || existingTerms.has(seg.text);
+                              const busy = busySegments.has(seg.text);
+                              return (
+                                <button
+                                  key={j}
+                                  disabled={busy || isSelf}
+                                  onClick={(e) => { e.stopPropagation(); onToggleSegment(seg.text, ex.sentence, trans); }}
+                                  className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
+                                    isSelf
+                                      ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
+                                      : exists
+                                        ? "border border-green-500/40 bg-green-900/20 text-green-300 hover:bg-red-900/30 hover:text-red-300 hover:border-red-500/40"
+                                        : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
+                                  }`}
+                                >
+                                  {exists ? "" : "+"} {seg.text}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}

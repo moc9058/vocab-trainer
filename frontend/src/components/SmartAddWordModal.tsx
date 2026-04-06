@@ -5,9 +5,16 @@ import { LANG_LABEL_MAP } from "../settings/defaults";
 import { smartAddWord } from "../api/vocab";
 import { displayTranslation, type Word } from "../types";
 
+interface Prefill {
+  term: string;
+  language: string;
+  example?: { sentence: string; translation: string };
+}
+
 interface Props {
   onSave: (word: Word) => void;
   onClose: () => void;
+  prefill?: Prefill;
 }
 
 const WORD_LANG_OPTIONS = [
@@ -41,7 +48,7 @@ const ALL_TOPICS = [
   "History", "Media & News", "Language Fundamentals",
 ] as const;
 
-export default function SmartAddWordModal({ onSave, onClose }: Props) {
+export default function SmartAddWordModal({ onSave, onClose, prefill }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const LANG_OPTIONS = useMemo(
@@ -51,9 +58,11 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
     ],
     [settings.languageOrder],
   );
-  const [langSelect, setLangSelect] = useState("english");
-  const [customLang, setCustomLang] = useState("");
-  const [term, setTerm] = useState("");
+  const prefillLang = prefill?.language ?? "";
+  const isKnownLang = WORD_LANG_OPTIONS.some((o) => o.value === prefillLang);
+  const [langSelect, setLangSelect] = useState(prefill ? (isKnownLang ? prefillLang : "__other__") : "english");
+  const [customLang, setCustomLang] = useState(prefill && !isKnownLang ? prefillLang : "");
+  const [term, setTerm] = useState(prefill?.term ?? "");
   const [transliteration, setTransliteration] = useState("");
   const [definitions, setDefinitions] = useState<{ langSelect: string; customLang: string; text: string }[]>([
     { langSelect: "en", customLang: "", text: "" },
@@ -61,9 +70,9 @@ export default function SmartAddWordModal({ onSave, onClose }: Props) {
   const [grammaticalCategory, setGrammaticalCategory] = useState("");
   const [level, setLevel] = useState("");
   const [topics, setTopics] = useState<string[]>([]);
-  const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>([
-    { sentence: "", translation: "" },
-  ]);
+  const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>(
+    prefill?.example ? [prefill.example] : [{ sentence: "", translation: "" }],
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);

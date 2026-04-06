@@ -38,6 +38,10 @@ export function deleteWord(language: string, wordId: string): Promise<void> {
   return deleteRequest(`/api/vocab/${encodeURIComponent(language)}/${encodeURIComponent(wordId)}`);
 }
 
+export function checkTerms(language: string, terms: string[]): Promise<{ existing: Record<string, string> }> {
+  return postJson(`/api/vocab/${encodeURIComponent(language)}/check-terms`, { terms });
+}
+
 export function smartAddWord(
   language: string,
   data: {

@@ -18,7 +18,7 @@ import {
 } from "../firestore.js";
 import type { Word, Example } from "../types.js";
 import { TOPICS } from "../types.js";
-import { callLLMFullWithSchema, stripMarkdownFences, validateWord, type Segment } from "../llm.js";
+import { callLLMWithSchema, stripMarkdownFences, validateWord, type Segment } from "../llm.js";
 
 const LEVEL_OPTIONS: Record<string, string[]> = {
   chinese: ["HSK1-4", "HSK5", "HSK6", "HSK7-9", "Advanced"],
@@ -214,7 +214,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
 
       let llmResult: Record<string, unknown>;
       try {
-        const raw = await callLLMFullWithSchema(systemPrompt, userPrompt, vocabConfig.smartAddSchema, "vocab/smart-add");
+        const raw = await callLLMWithSchema(systemPrompt, userPrompt, vocabConfig.smartAddSchema, "vocab/smart-add");
         llmResult = JSON.parse(stripMarkdownFences(raw));
       } catch (err) {
         fastify.log.error({ err, term }, "LLM call failed for smart-add");
@@ -368,6 +368,31 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       const deleted = await deleteLanguage(language);
       if (!deleted) return reply.notFound(`Language '${language}' not found`);
       return reply.status(204).send();
+    }
+  );
+
+  // Check which terms exist in the word index
+  fastify.post<{ Params: { language: string }; Body: { terms: string[] } }>(
+    "/:language/check-terms",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["terms"],
+          properties: {
+            terms: { type: "array", items: { type: "string" } },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { language } = request.params;
+      const { terms } = request.body;
+      if (terms.length === 0) return { existing: [] };
+      const matches = await lookupWordsByTerms(language, terms);
+      const existing: Record<string, string> = {};
+      for (const m of matches) existing[m.term] = m.id;
+      return { existing };
     }
   );
 };
