@@ -23,8 +23,14 @@ export default function TranslationView({ mode }: Props) {
   const [historyIndex, setHistoryIndex] = useState(0);
   const [phase, setPhase] = useState<"input" | "loading" | "results">("input");
   const [inputText, setInputText] = useState("");
-  const [sourceLanguage, setSourceLanguage] = useState<string>(KNOWN_LANGUAGES[0]?.code ?? "en");
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([settings.languageOrder[0] ?? "ja"]);
+  const [sourceLanguage, setSourceLanguage] = useState<string>(
+    settings.defaultTranslationSourceLanguage || KNOWN_LANGUAGES[0]?.code || "en",
+  );
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
+    settings.defaultTranslationTargetLanguages.length > 0
+      ? settings.defaultTranslationTargetLanguages.filter((c) => c !== settings.defaultTranslationSourceLanguage)
+      : [settings.languageOrder[0] ?? "ja"],
+  );
   const [activeTab, setActiveTab] = useState(0);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [decomposeChunks, setDecomposeChunks] = useState<string>("");
@@ -34,7 +40,9 @@ export default function TranslationView({ mode }: Props) {
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastInputRef = useRef("");
-  const lastSourceLangRef = useRef<string>(KNOWN_LANGUAGES[0]?.code ?? "en");
+  const lastSourceLangRef = useRef<string>(
+    settings.defaultTranslationSourceLanguage || KNOWN_LANGUAGES[0]?.code || "en",
+  );
   const lastLangsRef = useRef<string[]>([]);
   const doneRef = useRef(false);
   const needsCleanupRef = useRef(mode === "new");

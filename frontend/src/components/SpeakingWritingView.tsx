@@ -35,8 +35,12 @@ export default function SpeakingWritingView({ mode }: Props) {
 
   const [phase, setPhase] = useState<"input" | "loading" | "results">("input");
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(settings.languageOrder[0] ?? "en");
-  const [selectedMode, setSelectedMode] = useState<"speaking" | "writing">("speaking");
-  const [selectedUseCase, setSelectedUseCase] = useState("professional");
+  const [selectedMode, setSelectedMode] = useState<"speaking" | "writing">(settings.defaultCorrectionMode);
+  const [selectedUseCase, setSelectedUseCase] = useState(
+    settings.defaultCorrectionMode === "speaking"
+      ? settings.defaultSpeakingUseCase
+      : settings.defaultWritingUseCase,
+  );
   const [inputText, setInputText] = useState("");
   const [session, setSession] = useState<SpeakingWritingSession | null>(null);
   const [correctionIndex, setCorrectionIndex] = useState(0);
@@ -61,7 +65,7 @@ export default function SpeakingWritingView({ mode }: Props) {
               setSession(sess);
               setSelectedLanguage(sess.language);
               setSelectedMode(sess.mode);
-              setSelectedUseCase(sess.useCase || (sess.mode === "speaking" ? "professional" : "academic"));
+              setSelectedUseCase(sess.useCase || (sess.mode === "speaking" ? settings.defaultSpeakingUseCase : settings.defaultWritingUseCase));
               setCorrectionIndex(sess.currentIndex);
               setPhase("results");
             }
@@ -223,7 +227,7 @@ export default function SpeakingWritingView({ mode }: Props) {
         <div>
           <div className="flex gap-2">
             <button
-              onClick={() => { setSelectedMode("speaking"); setSelectedUseCase("professional"); }}
+              onClick={() => { setSelectedMode("speaking"); setSelectedUseCase(settings.defaultSpeakingUseCase); }}
               className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                 selectedMode === "speaking"
                   ? "bg-teal-600 text-white"
@@ -233,7 +237,7 @@ export default function SpeakingWritingView({ mode }: Props) {
               {t("modeSpeaking")}
             </button>
             <button
-              onClick={() => { setSelectedMode("writing"); setSelectedUseCase("academic"); }}
+              onClick={() => { setSelectedMode("writing"); setSelectedUseCase(settings.defaultWritingUseCase); }}
               className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
                 selectedMode === "writing"
                   ? "bg-teal-600 text-white"

@@ -19,11 +19,31 @@ import { CSS } from "@dnd-kit/utilities";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { ALL_KNOWN_LANGUAGES, DEFAULT_SETTINGS, LANG_LABEL_MAP } from "../settings/defaults";
-import { uiLanguages } from "../i18n/translations";
+import { uiLanguages, type TranslationKey } from "../i18n/translations";
 
 interface Props {
   onClose: () => void;
 }
+
+const KNOWN_WORD_LANG_OPTIONS = ["english", "chinese"] as const;
+const WORD_LANG_LABELS: Record<string, string> = {
+  english: "English",
+  chinese: "Chinese",
+};
+
+const SPEAKING_USE_CASE_KEYS = ["professional", "casual", "presentation", "interview"] as const;
+const WRITING_USE_CASE_KEYS = ["academic", "social", "email", "creative"] as const;
+
+const USE_CASE_LABEL_KEYS: Record<string, string> = {
+  professional: "useCaseProfessional",
+  casual: "useCaseCasual",
+  presentation: "useCasePresentation",
+  interview: "useCaseInterview",
+  academic: "useCaseAcademic",
+  social: "useCaseSocial",
+  email: "useCaseEmail",
+  creative: "useCaseCreative",
+};
 
 function SortableItem({ id }: { id: string }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
@@ -55,12 +75,36 @@ export default function SettingsModal({ onClose }: Props) {
   const [displayExLangs, setDisplayExLangs] = useState<Set<string>>(
     new Set(settings.displayExampleTranslationLanguages),
   );
+  const initialAddWordLangIsKnown = (KNOWN_WORD_LANG_OPTIONS as readonly string[]).includes(
+    settings.defaultAddWordLanguage,
+  );
+  const [defaultAddWordLang, setDefaultAddWordLang] = useState<string>(
+    initialAddWordLangIsKnown ? settings.defaultAddWordLanguage : "__other__",
+  );
+  const [defaultAddWordLangCustom, setDefaultAddWordLangCustom] = useState<string>(
+    initialAddWordLangIsKnown ? "" : settings.defaultAddWordLanguage,
+  );
   const initialDefLangIsKnown = settings.languageOrder.includes(settings.defaultDefinitionLanguage);
   const [defaultDefLang, setDefaultDefLang] = useState<string>(
     initialDefLangIsKnown ? settings.defaultDefinitionLanguage : "__other__",
   );
   const [defaultDefLangCustom, setDefaultDefLangCustom] = useState<string>(
     initialDefLangIsKnown ? "" : settings.defaultDefinitionLanguage,
+  );
+  const [defaultCorrectionMode, setDefaultCorrectionMode] = useState<"speaking" | "writing">(
+    settings.defaultCorrectionMode,
+  );
+  const [defaultSpeakingUseCase, setDefaultSpeakingUseCase] = useState<string>(
+    settings.defaultSpeakingUseCase,
+  );
+  const [defaultWritingUseCase, setDefaultWritingUseCase] = useState<string>(
+    settings.defaultWritingUseCase,
+  );
+  const [defaultTranslationSource, setDefaultTranslationSource] = useState<string>(
+    settings.defaultTranslationSourceLanguage,
+  );
+  const [defaultTranslationTargets, setDefaultTranslationTargets] = useState<Set<string>>(
+    new Set(settings.defaultTranslationTargetLanguages),
   );
 
   const sensors = useSensors(
@@ -90,15 +134,28 @@ export default function SettingsModal({ onClose }: Props) {
   }
 
   function handleSave() {
+    const targetLangs = order.filter((c) => defaultTranslationTargets.has(c) && c !== defaultTranslationSource);
     updateSettings({
       languageOrder: order,
       activeUiLanguages: order.filter((c) => activeUi.has(c)),
       displayDefinitionLanguages: order.filter((c) => displayDefLangs.has(c)),
       displayExampleTranslationLanguages: order.filter((c) => displayExLangs.has(c)),
+      defaultAddWordLanguage:
+        defaultAddWordLang === "__other__"
+          ? (defaultAddWordLangCustom.trim().toLowerCase() || "english")
+          : defaultAddWordLang,
       defaultDefinitionLanguage:
         defaultDefLang === "__other__"
           ? (defaultDefLangCustom.trim() || "en")
           : defaultDefLang,
+      defaultCorrectionMode,
+      defaultSpeakingUseCase,
+      defaultWritingUseCase,
+      defaultTranslationSourceLanguage: defaultTranslationSource,
+      defaultTranslationTargetLanguages:
+        targetLangs.length > 0
+          ? targetLangs
+          : [order.find((c) => c !== defaultTranslationSource) ?? defaultTranslationSource],
     });
     onClose();
   }
@@ -108,8 +165,15 @@ export default function SettingsModal({ onClose }: Props) {
     setActiveUi(new Set(DEFAULT_SETTINGS.activeUiLanguages));
     setDisplayDefLangs(new Set(DEFAULT_SETTINGS.displayDefinitionLanguages));
     setDisplayExLangs(new Set(DEFAULT_SETTINGS.displayExampleTranslationLanguages));
+    setDefaultAddWordLang(DEFAULT_SETTINGS.defaultAddWordLanguage);
+    setDefaultAddWordLangCustom("");
     setDefaultDefLang(DEFAULT_SETTINGS.defaultDefinitionLanguage);
     setDefaultDefLangCustom("");
+    setDefaultCorrectionMode(DEFAULT_SETTINGS.defaultCorrectionMode);
+    setDefaultSpeakingUseCase(DEFAULT_SETTINGS.defaultSpeakingUseCase);
+    setDefaultWritingUseCase(DEFAULT_SETTINGS.defaultWritingUseCase);
+    setDefaultTranslationSource(DEFAULT_SETTINGS.defaultTranslationSourceLanguage);
+    setDefaultTranslationTargets(new Set(DEFAULT_SETTINGS.defaultTranslationTargetLanguages));
   }
 
   const supportedUiLanguages = new Set(uiLanguages as readonly string[]);
@@ -201,6 +265,36 @@ export default function SettingsModal({ onClose }: Props) {
             </div>
           </section>
 
+          {/* Default Word Language for Smart Add */}
+          <section className="mb-4">
+            <h4 className="mb-1 text-sm font-medium text-gray-300">{t("settingsDefaultAddWordLang")}</h4>
+            <p className="mb-2 text-xs text-gray-500">{t("settingsDefaultAddWordLangHelp")}</p>
+            <div className="flex items-center gap-2">
+              <select
+                value={defaultAddWordLang}
+                onChange={(e) => {
+                  setDefaultAddWordLang(e.target.value);
+                  if (e.target.value !== "__other__") setDefaultAddWordLangCustom("");
+                }}
+                className="w-32 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+              >
+                {KNOWN_WORD_LANG_OPTIONS.map((value) => (
+                  <option key={value} value={value}>{WORD_LANG_LABELS[value]}</option>
+                ))}
+                <option value="__other__">{t("settingsLangOther")}</option>
+              </select>
+              {defaultAddWordLang === "__other__" && (
+                <input
+                  type="text"
+                  value={defaultAddWordLangCustom}
+                  onChange={(e) => setDefaultAddWordLangCustom(e.target.value)}
+                  placeholder="Language"
+                  className="w-32 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                />
+              )}
+            </div>
+          </section>
+
           {/* Default Definition Language for Smart Add */}
           <section>
             <h4 className="mb-1 text-sm font-medium text-gray-300">{t("settingsDefaultDefLang")}</h4>
@@ -228,6 +322,106 @@ export default function SettingsModal({ onClose }: Props) {
                   className="w-32 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
                 />
               )}
+            </div>
+          </section>
+        </div>
+
+        {/* Correction Mode Section */}
+        <div className="mb-6">
+          <h3 className="mb-3 border-b border-gray-700 pb-2 text-base font-semibold text-gray-200">{t("settingsSectionCorrection")}</h3>
+
+          {/* Default Correction Mode */}
+          <section className="mb-4">
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDefaultCorrectionMode")}</h4>
+            <div className="flex gap-3">
+              {(["speaking", "writing"] as const).map((m) => (
+                <label key={m} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="defaultCorrectionMode"
+                    value={m}
+                    checked={defaultCorrectionMode === m}
+                    onChange={() => setDefaultCorrectionMode(m)}
+                    className="accent-blue-600"
+                  />
+                  {m === "speaking" ? t("modeSpeaking") : t("modeWriting")}
+                </label>
+              ))}
+            </div>
+          </section>
+
+          {/* Default Speaking Use Case */}
+          <section className="mb-4">
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDefaultSpeakingUseCase")}</h4>
+            <select
+              value={defaultSpeakingUseCase}
+              onChange={(e) => setDefaultSpeakingUseCase(e.target.value)}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+            >
+              {SPEAKING_USE_CASE_KEYS.map((key) => (
+                <option key={key} value={key}>{t(USE_CASE_LABEL_KEYS[key] as TranslationKey)}</option>
+              ))}
+            </select>
+          </section>
+
+          {/* Default Writing Use Case */}
+          <section>
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDefaultWritingUseCase")}</h4>
+            <select
+              value={defaultWritingUseCase}
+              onChange={(e) => setDefaultWritingUseCase(e.target.value)}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+            >
+              {WRITING_USE_CASE_KEYS.map((key) => (
+                <option key={key} value={key}>{t(USE_CASE_LABEL_KEYS[key] as TranslationKey)}</option>
+              ))}
+            </select>
+          </section>
+        </div>
+
+        {/* Translation Mode Section */}
+        <div className="mb-6">
+          <h3 className="mb-3 border-b border-gray-700 pb-2 text-base font-semibold text-gray-200">{t("settingsSectionTranslation")}</h3>
+
+          {/* Default Source Language */}
+          <section className="mb-4">
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDefaultTranslationSource")}</h4>
+            <select
+              value={defaultTranslationSource}
+              onChange={(e) => {
+                const next = e.target.value;
+                setDefaultTranslationSource(next);
+                // Make sure source isn't also a target.
+                setDefaultTranslationTargets((prev) => {
+                  if (!prev.has(next)) return prev;
+                  const updated = new Set(prev);
+                  updated.delete(next);
+                  return updated;
+                });
+              }}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+            >
+              {order.map((code) => (
+                <option key={code} value={code}>{LANG_LABEL_MAP[code] ?? code}</option>
+              ))}
+            </select>
+          </section>
+
+          {/* Default Target Languages */}
+          <section>
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDefaultTranslationTargets")}</h4>
+            <div className="flex flex-wrap gap-2">
+              {order.filter((code) => code !== defaultTranslationSource).map((code) => (
+                <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={defaultTranslationTargets.has(code)}
+                    onChange={() => toggleSet(defaultTranslationTargets, code, setDefaultTranslationTargets)}
+                    className="accent-blue-600"
+                  />
+                  {LANG_LABEL_MAP[code] ?? code}
+                </label>
+              ))}
             </div>
           </section>
         </div>
