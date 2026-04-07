@@ -302,6 +302,22 @@ export async function updateWord(language: string, wordId: string, updates: Part
   const oldData = doc.data()!;
   const data: Record<string, unknown> = { ...updates };
   delete data.id;
+
+  // Preserve per-example segments when the sentence text is unchanged.
+  // WordFormModal does not carry segments through its form state, so without
+  // this merge every word edit would wipe the LLM-generated pinyin segments.
+  if (Array.isArray(updates.examples) && Array.isArray(oldData.examples)) {
+    const oldBySentence = new Map<string, unknown>();
+    for (const oldEx of oldData.examples as { sentence: string; segments?: unknown }[]) {
+      if (oldEx?.segments) oldBySentence.set(oldEx.sentence, oldEx.segments);
+    }
+    data.examples = (updates.examples as { sentence: string; segments?: unknown }[]).map((ex) => {
+      if (ex.segments) return ex;
+      const oldSegs = oldBySentence.get(ex.sentence);
+      return oldSegs ? { ...ex, segments: oldSegs } : ex;
+    });
+  }
+
   await words.doc(wordId).update(data);
 
   const updated = await words.doc(wordId).get();
