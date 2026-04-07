@@ -35,6 +35,9 @@ export default function WordList({ language, onBack }: Props) {
   const [showSmartAdd, setShowSmartAdd] = useState(false);
   const [editingWord, setEditingWord] = useState<Word | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const isInitialMount = useRef(true);
@@ -74,7 +77,55 @@ export default function WordList({ language, onBack }: Props) {
     await deleteWord(language, wordId);
     setDeletingId(null);
     setExpandedId(null);
+    setSelectedIds((prev) => {
+      if (!prev.has(wordId)) return prev;
+      const next = new Set(prev);
+      next.delete(wordId);
+      return next;
+    });
     await fetchData();
+  }
+
+  function toggleSelected(wordId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(wordId)) next.delete(wordId);
+      else next.add(wordId);
+      return next;
+    });
+  }
+
+  function toggleSelectAllOnPage() {
+    const pageIds = result?.items.map((w) => w.id) ?? [];
+    if (pageIds.length === 0) return;
+    const allSelected = pageIds.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        for (const id of pageIds) next.delete(id);
+      } else {
+        for (const id of pageIds) next.add(id);
+      }
+      return next;
+    });
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return;
+    setBulkDeleting(true);
+    try {
+      const ids = Array.from(selectedIds);
+      // Delete sequentially to keep load on the backend predictable.
+      for (const id of ids) {
+        await deleteWord(language, id);
+      }
+      setSelectedIds(new Set());
+      setExpandedId(null);
+      setShowBulkDeleteConfirm(false);
+      await fetchData();
+    } finally {
+      setBulkDeleting(false);
+    }
   }
 
   function handleToggleExpand(word: Word) {
@@ -172,6 +223,12 @@ export default function WordList({ language, onBack }: Props) {
     setPage(1);
   }, [debouncedSearch, topic, category, level, flaggedOnly]);
 
+  // Clear selection whenever the visible word set changes — selection is
+  // scoped to the current view, not persisted across navigation.
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [language, debouncedSearch, topic, category, level, flaggedOnly, page]);
+
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
@@ -249,6 +306,29 @@ export default function WordList({ language, onBack }: Props) {
         </div>
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between gap-3 border-b border-gray-700 bg-gray-800/80 px-3 sm:px-6 py-2">
+          <span className="text-sm text-gray-300">
+            {selectedIds.size} {t("selectedCount")}
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              className="rounded-lg border border-gray-600 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
+            >
+              {t("clearSelection")}
+            </button>
+            <button
+              onClick={() => setShowBulkDeleteConfirm(true)}
+              className="rounded-lg bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-500"
+            >
+              {t("deleteSelected")}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Word List */}
       <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4">
         {loading ? (
@@ -267,52 +347,77 @@ export default function WordList({ language, onBack }: Props) {
           <p className="text-gray-400">{t("noWordsFound")}</p>
         ) : (
           <>
-            {/* Mobile card layout */}
-            <div className="space-y-3 md:hidden">
-              {result.items.map((word) => (
-                <WordCard
-                  key={word.id}
-                  word={word}
-                  expanded={expandedId === word.id}
-                  onToggle={() => handleToggleExpand(word)}
-                  isFlagged={flaggedIds.has(word.id)}
-                  onToggleFlag={() => handleToggleFlag(word.id)}
-                  onEdit={() => setEditingWord(word)}
-                  onDelete={() => setDeletingId(word.id)}
-                  onToggleSegment={handleToggleSegment}
-                  existingTerms={expandedId === word.id ? existingTerms : new Map()}
-                  busySegments={expandedId === word.id ? busySegments : new Set()}
-                />
-              ))}
-            </div>
-            {/* Desktop table layout */}
-            <table className="hidden md:table w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-gray-700 text-gray-400">
-                  <th className="pb-2 pr-4 font-medium">{t("term")}</th>
-                  <th className="pb-2 pr-4 font-medium">{t("definition")}</th>
-                  <th className="pb-2 pr-4 font-medium">{t("category")}</th>
-                  <th className="pb-2 font-medium">{t("level")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {result.items.map((word) => (
-                  <WordRow
-                    key={word.id}
-                    word={word}
-                    expanded={expandedId === word.id}
-                    onToggle={() => handleToggleExpand(word)}
-                    isFlagged={flaggedIds.has(word.id)}
-                    onToggleFlag={() => handleToggleFlag(word.id)}
-                    onEdit={() => setEditingWord(word)}
-                    onDelete={() => setDeletingId(word.id)}
-                    onToggleSegment={handleToggleSegment}
-                    existingTerms={expandedId === word.id ? existingTerms : new Map()}
-                    busySegments={expandedId === word.id ? busySegments : new Set()}
-                  />
-                ))}
-              </tbody>
-            </table>
+            {(() => {
+              const pageIds = result.items.map((w) => w.id);
+              const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedIds.has(id));
+              const somePageSelected = pageIds.some((id) => selectedIds.has(id));
+              return (
+                <>
+                  {/* Mobile card layout */}
+                  <div className="space-y-3 md:hidden">
+                    {result.items.map((word) => (
+                      <WordCard
+                        key={word.id}
+                        word={word}
+                        expanded={expandedId === word.id}
+                        onToggle={() => handleToggleExpand(word)}
+                        isFlagged={flaggedIds.has(word.id)}
+                        onToggleFlag={() => handleToggleFlag(word.id)}
+                        onEdit={() => setEditingWord(word)}
+                        onDelete={() => setDeletingId(word.id)}
+                        onToggleSegment={handleToggleSegment}
+                        existingTerms={expandedId === word.id ? existingTerms : new Map()}
+                        busySegments={expandedId === word.id ? busySegments : new Set()}
+                        selected={selectedIds.has(word.id)}
+                        onToggleSelect={() => toggleSelected(word.id)}
+                      />
+                    ))}
+                  </div>
+                  {/* Desktop table layout */}
+                  <table className="hidden md:table w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-700 text-gray-400">
+                        <th className="pb-2 pr-3 font-medium w-8">
+                          <input
+                            type="checkbox"
+                            aria-label="Select all on page"
+                            checked={allPageSelected}
+                            ref={(el) => {
+                              if (el) el.indeterminate = !allPageSelected && somePageSelected;
+                            }}
+                            onChange={toggleSelectAllOnPage}
+                            className="accent-red-500"
+                          />
+                        </th>
+                        <th className="pb-2 pr-4 font-medium">{t("term")}</th>
+                        <th className="pb-2 pr-4 font-medium">{t("definition")}</th>
+                        <th className="pb-2 pr-4 font-medium">{t("category")}</th>
+                        <th className="pb-2 font-medium">{t("level")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.items.map((word) => (
+                        <WordRow
+                          key={word.id}
+                          word={word}
+                          expanded={expandedId === word.id}
+                          onToggle={() => handleToggleExpand(word)}
+                          isFlagged={flaggedIds.has(word.id)}
+                          onToggleFlag={() => handleToggleFlag(word.id)}
+                          onEdit={() => setEditingWord(word)}
+                          onDelete={() => setDeletingId(word.id)}
+                          onToggleSegment={handleToggleSegment}
+                          existingTerms={expandedId === word.id ? existingTerms : new Map()}
+                          busySegments={expandedId === word.id ? busySegments : new Set()}
+                          selected={selectedIds.has(word.id)}
+                          onToggleSelect={() => toggleSelected(word.id)}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </>
+              );
+            })()}
           </>
         )}
       </div>
@@ -348,6 +453,31 @@ export default function WordList({ language, onBack }: Props) {
                 className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700"
               >
                 {t("deleteWord")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm rounded-xl bg-gray-800 p-6 shadow-lg">
+            <p className="mb-4 text-gray-300">
+              {t("deleteSelectedConfirm")} ({selectedIds.size})
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowBulkDeleteConfirm(false)}
+                disabled={bulkDeleting}
+                className="rounded-lg border border-gray-600 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-50"
+              >
+                {t("cancel")}
+              </button>
+              <button
+                onClick={handleBulkDelete}
+                disabled={bulkDeleting}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {t("deleteSelected")}
               </button>
             </div>
           </div>
@@ -391,6 +521,8 @@ function WordCard({
   onToggleSegment,
   existingTerms,
   busySegments,
+  selected,
+  onToggleSelect,
 }: {
   word: Word;
   expanded: boolean;
@@ -402,6 +534,8 @@ function WordCard({
   onToggleSegment?: (term: string, sentence: string, translation: string) => void;
   existingTerms: Map<string, string>;
   busySegments: Set<string>;
+  selected: boolean;
+  onToggleSelect: () => void;
 }) {
   const { t } = useI18n();
   const { displayDefEntries, displayExEntries } = useSettings();
@@ -410,16 +544,26 @@ function WordCard({
   return (
     <div
       onClick={onToggle}
-      className="cursor-pointer rounded-lg border border-gray-700 bg-gray-800 p-3"
+      className={`cursor-pointer rounded-lg border bg-gray-800 p-3 ${selected ? "border-red-500/60 ring-1 ring-red-500/40" : "border-gray-700"}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <span className="font-medium text-gray-100">{word.term}</span>
-          {word.transliteration && (
-            <span className="ml-1 text-sm text-gray-400">
-              ({word.transliteration})
-            </span>
-          )}
+        <div className="flex items-start gap-2">
+          <input
+            type="checkbox"
+            checked={selected}
+            onClick={(e) => e.stopPropagation()}
+            onChange={onToggleSelect}
+            aria-label="Select word"
+            className="mt-1 accent-red-500"
+          />
+          <div>
+            <span className="font-medium text-gray-100">{word.term}</span>
+            {word.transliteration && (
+              <span className="ml-1 text-sm text-gray-400">
+                ({word.transliteration})
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex gap-2 shrink-0">
           {word.definitions.map((m, i) => m.partOfSpeech && (
@@ -570,6 +714,8 @@ function WordRow({
   onToggleSegment,
   existingTerms,
   busySegments,
+  selected,
+  onToggleSelect,
 }: {
   word: Word;
   expanded: boolean;
@@ -581,6 +727,8 @@ function WordRow({
   onToggleSegment?: (term: string, sentence: string, translation: string) => void;
   existingTerms: Map<string, string>;
   busySegments: Set<string>;
+  selected: boolean;
+  onToggleSelect: () => void;
 }) {
   const { t } = useI18n();
   const { displayDefEntries, displayExEntries } = useSettings();
@@ -590,8 +738,17 @@ function WordRow({
     <>
       <tr
         onClick={onToggle}
-        className="cursor-pointer border-b border-gray-700 hover:bg-gray-700"
+        className={`cursor-pointer border-b border-gray-700 hover:bg-gray-700 ${selected ? "bg-red-900/20" : ""}`}
       >
+        <td className="py-2 pr-3 w-8" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            aria-label="Select word"
+            className="accent-red-500"
+          />
+        </td>
         <td className="py-2 pr-4">
           <span className="font-medium text-gray-100">{word.term}</span>
           {word.transliteration && (
@@ -606,7 +763,7 @@ function WordRow({
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={4} className="bg-gray-700 px-4 py-3">
+          <td colSpan={5} className="bg-gray-700 px-4 py-3">
             {word.definitions.length > 0 && (
               <>
                 <p className="mb-1 text-xs font-medium text-gray-400">

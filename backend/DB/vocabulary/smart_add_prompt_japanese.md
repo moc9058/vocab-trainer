@@ -45,11 +45,13 @@ CRITICAL: All example sentences MUST be written in Japanese. Do NOT write exampl
 
 ## Output format
 
+The `text` object on every definition MUST contain an entry for every language code listed below — write the meaning in each language (the Japanese entry serves as the monolingual definition; the others are translations of that meaning). The `translation` object on every example sentence MUST contain an entry for every language code listed in the example template below. **Do NOT include a Japanese (`ja`) entry in example translations** — the example sentence is already Japanese, so a Japanese "translation" is redundant. Only include the non-source-language codes shown in the template.
+
 Return a JSON object:
 {
   "term": "the Japanese word",
   "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { {{DEFINITION_LANGUAGES}} } }],
-  "examples": [{ "sentence": "Japanese sentence using the word"{{EXAMPLE_TRANSLATION_SPEC}} }],
+  "examples": [{ "sentence": "Japanese sentence using the word", {{EXAMPLE_TRANSLATION_SPEC}} }],
   "topics": ["..."],{{LEVEL_FIELD}}
   "notes": "brief usage notes"
 }

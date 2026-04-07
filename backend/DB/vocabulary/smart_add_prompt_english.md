@@ -45,7 +45,7 @@ CRITICAL: All example sentences MUST be written in English. Do NOT write example
 
 ## Output format
 
-The `text` object on every definition MUST contain an entry for every language code listed below — write the meaning in each language (the English entry serves as the monolingual definition; the others are translations of that meaning). Likewise, every example sentence's `translation` object MUST contain an entry for each language code (the English entry should be the original sentence verbatim).
+The `text` object on every definition MUST contain an entry for every language code listed below — write the meaning in each language (the English entry serves as the monolingual definition; the others are translations of that meaning). The `translation` object on every example sentence MUST contain an entry for every language code listed in the example template below. **Do NOT include an English (`en`) entry in example translations** — the example sentence is already English, so an English "translation" is redundant. Only include the non-source-language codes shown in the template.
 
 Return a JSON object:
 {

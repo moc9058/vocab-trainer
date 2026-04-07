@@ -61,6 +61,16 @@ function normalizeLevel(language: string, level: string): string {
 // which subset the user sees.
 const ALL_DEFINITION_LANGUAGES = ["en", "ja", "ko", "zh"] as const;
 
+// Map our internal full language names to the ISO codes used in
+// definition / example-translation Records. Languages outside this map
+// (custom user languages) have no source-language entry to strip.
+const LANGUAGE_TO_ISO: Record<string, string> = {
+  chinese: "zh",
+  english: "en",
+  japanese: "ja",
+  korean: "ko",
+};
+
 function fillPlaceholders(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
 }
@@ -202,11 +212,17 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.conflict(`Word '${term}' already exists in the database`);
       }
 
-      // Build LLM prompt — always request all four supported languages.
-      // Display filtering happens client-side via the user's settings.
+      // Build LLM prompt — definitions are always requested in all four
+      // supported languages, but example translations exclude the source
+      // language (a same-language "translation" of an example sentence is
+      // redundant). Display filtering happens client-side via settings.
       const isChinese = language === "chinese";
+      const sourceLangCode = LANGUAGE_TO_ISO[language]; // undefined for custom languages
+      const exampleTranslationLanguages = ALL_DEFINITION_LANGUAGES.filter(
+        (l) => l !== sourceLangCode
+      );
       const defLangStr = ALL_DEFINITION_LANGUAGES.map((l) => `"${l}": "..."`).join(", ");
-      const exTranslationSpec = `"translation": { ${ALL_DEFINITION_LANGUAGES
+      const exTranslationSpec = `"translation": { ${exampleTranslationLanguages
         .map((l) => `"${l}": "..."`)
         .join(", ")} }`;
 
@@ -326,6 +342,19 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         }
         return { sentence: ex.sentence, translation: ex.translation, segments } as Example;
       });
+
+      // Strip the source language from example translations: a same-language
+      // "translation" is meaningless and the LLM has a tendency to emit one
+      // even when prompted not to. The prompt is the polite ask; this is the
+      // guarantee. Definitions are NOT touched (a same-language definition is
+      // a useful monolingual gloss).
+      if (sourceLangCode) {
+        for (const ex of examplesWithSegments) {
+          if (ex.translation && typeof ex.translation === "object") {
+            delete (ex.translation as Record<string, string>)[sourceLangCode];
+          }
+        }
+      }
 
       // Link segments to existing words in DB
       const allSegmentTexts = [

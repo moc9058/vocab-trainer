@@ -43,7 +43,7 @@ Even when definitions or examples are provided, the user's input may not fully c
 
 ## Output format
 
-The `text` object on every definition MUST contain an entry for every language code listed in the template below — write the meaning in each language (the Chinese entry serves as the monolingual definition; the others are translations of that meaning). Likewise, every example sentence's `translation` object MUST contain an entry for each language code (the Chinese entry should be the original sentence verbatim).
+The `text` object on every definition MUST contain an entry for every language code listed in the template below — write the meaning in each language (the Chinese entry serves as the monolingual definition; the others are translations of that meaning). The `translation` object on every example sentence MUST contain an entry for every language code listed in the example template below. **Do NOT include a Chinese (`zh`) entry in example translations** — the example sentence is already Chinese, so a Chinese "translation" is redundant. Only include the non-source-language codes shown in the template.
 
 For each example sentence, also provide "segments": an array of word-level segments with pinyin.
 
