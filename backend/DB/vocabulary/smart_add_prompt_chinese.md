@@ -39,6 +39,8 @@ Even when definitions or examples are provided, the user's input may not fully c
 
 ## Output format
 
+The `text` object on every definition MUST contain an entry for every language code listed in the template below — write the meaning in each language (the Chinese entry serves as the monolingual definition; the others are translations of that meaning). Likewise, every example sentence's `translation` object MUST contain an entry for each language code (the Chinese entry should be the original sentence verbatim).
+
 For each example sentence, also provide "segments": an array of word-level segments with pinyin.
 
 Return a JSON object:

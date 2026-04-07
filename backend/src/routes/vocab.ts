@@ -25,6 +25,11 @@ const LEVEL_OPTIONS: Record<string, string[]> = {
   japanese: ["JLPT5", "JLPT4", "JLPT3", "JLPT2", "JLPT1", "Advanced"],
 };
 
+// All supported definition / example-translation languages. The LLM is asked to
+// generate every entry in all four; the frontend display settings then control
+// which subset the user sees.
+const ALL_DEFINITION_LANGUAGES = ["en", "ja", "ko", "zh"] as const;
+
 function fillPlaceholders(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
 }
@@ -112,8 +117,6 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       examples?: { sentence: string; translation: string }[];
       level?: string;
       notes?: string;
-      definitionLanguages?: string[];
-      exampleTranslationLanguages?: string[];
     };
   }>(
     "/:language/smart-add",
@@ -148,8 +151,6 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             },
             level: { type: "string" },
             notes: { type: "string" },
-            definitionLanguages: { type: "array", items: { type: "string" } },
-            exampleTranslationLanguages: { type: "array", items: { type: "string" } },
           },
         },
       },
@@ -170,14 +171,13 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.conflict(`Word '${term}' already exists in the database`);
       }
 
-      // Build LLM prompt
+      // Build LLM prompt — always request all four supported languages.
+      // Display filtering happens client-side via the user's settings.
       const isChinese = language === "chinese";
-      const defLangs = body.definitionLanguages ?? ["ja", "en", "ko"];
-      const exLangs = body.exampleTranslationLanguages ?? ["en"];
-      const defLangStr = defLangs.map((l) => `"${l}": "..."`).join(", ");
-      const exTranslationSpec = exLangs.length === 1
-        ? `"translation": "${exLangs[0] === "en" ? "English" : exLangs[0]} translation"`
-        : `"translation": { ${exLangs.map((l) => `"${l}": "..."`).join(", ")} }`;
+      const defLangStr = ALL_DEFINITION_LANGUAGES.map((l) => `"${l}": "..."`).join(", ");
+      const exTranslationSpec = `"translation": { ${ALL_DEFINITION_LANGUAGES
+        .map((l) => `"${l}": "..."`)
+        .join(", ")} }`;
 
       const langLevels = LEVEL_OPTIONS[language];
       const userInput: Record<string, unknown> = { term };
@@ -197,13 +197,10 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
 
       const promptTemplate = vocabConfig.smartAddPrompts[language]
         ?? vocabConfig.smartAddPrompts["default"];
-      const exTranslationSpecForPrompt = language === "english" && exLangs.length === 1 && exLangs[0] === "en"
-        ? ""
-        : `, ${exTranslationSpec}`;
       const systemPrompt = fillPlaceholders(promptTemplate, {
         LANGUAGE: language,
         DEFINITION_LANGUAGES: defLangStr,
-        EXAMPLE_TRANSLATION_SPEC: isChinese ? exTranslationSpec : exTranslationSpecForPrompt,
+        EXAMPLE_TRANSLATION_SPEC: exTranslationSpec,
         TOPICS: TOPICS.join(", "),
         LEVELS: langLevels?.join(", ") ?? "",
         LEVEL_FIELD: langLevels ? `\n  "level": "one of the allowed levels",` : "",

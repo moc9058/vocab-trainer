@@ -16,6 +16,7 @@ cd backend && npx tsx scripts/migrate-llm-config-to-firestore.ts  # Upload LLM c
 cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --prompts   # Upload speaking/writing + translation config to Firestore
 cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --archives  # Upload backup + original archives to Firestore
 cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts             # Upload both prompts + archives
+cd backend && npx tsx scripts/backfill-word-languages.ts [--dry-run] [--language=<code>] [--limit=<n>]  # One-off: re-run LLM on existing words to fill missing en/ja/ko/zh definition + example translations
 ```
 
 ### Frontend
@@ -117,7 +118,7 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 - `GET /api/vocab/:language` — list words (query: search, topic, category, level, page, limit)
 - `GET /api/vocab/:language/filters` — available filter options (topics, categories, levels)
 - `GET /api/vocab/:language/lookup?term=X` — word lookup via word_index
-- `POST /api/vocab/:language/smart-add` — smart add word with LLM filling missing fields, auto-flag; for Chinese, also generates word segments with pinyin on examples; accepts optional `definitionLanguages` and `exampleTranslationLanguages` arrays to configure which languages the LLM generates
+- `POST /api/vocab/:language/smart-add` — smart add word with LLM filling missing fields, auto-flag; for Chinese, also generates word segments with pinyin on examples; the LLM always generates definitions and example translations in all four supported languages (en/ja/ko/zh) — display filtering happens client-side via the user's settings
 - `PUT /api/vocab/:language/:wordId` — update word
 - `DELETE /api/vocab/:language/:wordId` — delete word
 - `POST /api/quiz/start` — start word quiz session
@@ -156,9 +157,9 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 - **Settings**: `settings/context.tsx` — `SettingsProvider` + `useSettings()` hook; persisted to `localStorage("appSettings")`. Controls:
   - Language display order (affects definition ordering, language selector ordering, UI language button ordering)
   - Active UI languages (subset of supported languages shown in header toggle)
-  - Default definition languages (which languages the LLM generates definitions in during smart-add)
-  - Default example translation languages (which languages the LLM generates example translations in during smart-add)
-  - Centralized helpers: `sortByLanguageOrder()` and `sortedEntries()` used by all components
+  - Display definition languages (which languages of definitions the user sees in word displays — generation always covers all four)
+  - Display example translation languages (which languages of example translations the user sees — generation always covers all four)
+  - Centralized helpers: `sortByLanguageOrder()`, `sortedEntries()`, `displayDefEntries()` (filters by display definition languages), and `displayExEntries()` (filters by display example translation languages)
 - **Settings defaults**: `settings/defaults.ts` — `ALL_KNOWN_LANGUAGES` (en/ja/ko/zh with labels), `LANG_LABEL_MAP`, `DEFAULT_SETTINGS`
 - **API layer**: `api/client.ts` (generic fetchJson/postJson), `api/quiz.ts`, `api/vocab.ts`, `api/grammar.ts`, `api/translation.ts`, `api/speaking-writing.ts`
 - **Components**:
@@ -168,7 +169,7 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
   - `QuizFilterModal.tsx` — multi-select filters (topic, category, level) before starting word quiz
   - `QuizTaking.tsx` — word quiz UI with question display, answer input, progress bar
   - `WordList.tsx` — paginated word browsing with filters, progress badges, expandable details
-  - `SmartAddWordModal.tsx` — add word with LLM filling missing fields; passes configured definition/example languages to backend
+  - `SmartAddWordModal.tsx` — add word with LLM filling missing fields; the LLM always generates definitions and example translations in all four supported languages (display filtering is client-side via settings)
   - `GrammarList.tsx` — browse grammar by chapter/subchapter with inline edit/delete
   - `GrammarFilterModal.tsx` — grammar quiz filters (chapter, subchapter, display language, quiz mode); display language options follow settings order
   - `GrammarQuizTaking.tsx` — grammar quiz flashcard UI (display sentence → show answer → self-grade)

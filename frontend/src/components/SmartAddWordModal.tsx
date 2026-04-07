@@ -114,8 +114,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill }: Props) {
         topics: topics.length > 0 ? topics : undefined,
         examples: validExamples.length > 0 ? validExamples : undefined,
         level: level || undefined,
-        definitionLanguages: settings.defaultDefinitionLanguages,
-        exampleTranslationLanguages: settings.defaultExampleTranslationLanguages,
       });
       const { generatedWords: gw, ...word } = result;
       setSuccess(true);

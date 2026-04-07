@@ -49,8 +49,12 @@ export default function SettingsModal({ onClose }: Props) {
 
   const [order, setOrder] = useState<string[]>([...settings.languageOrder]);
   const [activeUi, setActiveUi] = useState<Set<string>>(new Set(settings.activeUiLanguages));
-  const [defLangs, setDefLangs] = useState<Set<string>>(new Set(settings.defaultDefinitionLanguages));
-  const [exLangs, setExLangs] = useState<Set<string>>(new Set(settings.defaultExampleTranslationLanguages));
+  const [displayDefLangs, setDisplayDefLangs] = useState<Set<string>>(
+    new Set(settings.displayDefinitionLanguages),
+  );
+  const [displayExLangs, setDisplayExLangs] = useState<Set<string>>(
+    new Set(settings.displayExampleTranslationLanguages),
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -82,8 +86,8 @@ export default function SettingsModal({ onClose }: Props) {
     updateSettings({
       languageOrder: order,
       activeUiLanguages: order.filter((c) => activeUi.has(c)),
-      defaultDefinitionLanguages: order.filter((c) => defLangs.has(c)),
-      defaultExampleTranslationLanguages: order.filter((c) => exLangs.has(c)),
+      displayDefinitionLanguages: order.filter((c) => displayDefLangs.has(c)),
+      displayExampleTranslationLanguages: order.filter((c) => displayExLangs.has(c)),
     });
     onClose();
   }
@@ -91,8 +95,8 @@ export default function SettingsModal({ onClose }: Props) {
   function handleReset() {
     setOrder([...DEFAULT_SETTINGS.languageOrder]);
     setActiveUi(new Set(DEFAULT_SETTINGS.activeUiLanguages));
-    setDefLangs(new Set(DEFAULT_SETTINGS.defaultDefinitionLanguages));
-    setExLangs(new Set(DEFAULT_SETTINGS.defaultExampleTranslationLanguages));
+    setDisplayDefLangs(new Set(DEFAULT_SETTINGS.displayDefinitionLanguages));
+    setDisplayExLangs(new Set(DEFAULT_SETTINGS.displayExampleTranslationLanguages));
   }
 
   const supportedUiLanguages = new Set(uiLanguages as readonly string[]);
@@ -146,16 +150,18 @@ export default function SettingsModal({ onClose }: Props) {
         <div className="mb-6">
           <h3 className="mb-3 border-b border-gray-700 pb-2 text-base font-semibold text-gray-200">{t("settingsSectionVocabulary")}</h3>
 
-          {/* Default Definition Languages */}
+          <p className="mb-3 text-xs text-gray-400">{t("settingsDisplayLangsHelp")}</p>
+
+          {/* Display Definition Languages */}
           <section className="mb-4">
-            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDefaultDefLangs")}</h4>
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDisplayDefLangs")}</h4>
             <div className="flex flex-wrap gap-2">
               {order.map((code) => (
                 <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={defLangs.has(code)}
-                    onChange={() => toggleSet(defLangs, code, setDefLangs)}
+                    checked={displayDefLangs.has(code)}
+                    onChange={() => toggleSet(displayDefLangs, code, setDisplayDefLangs)}
                     className="accent-blue-600"
                   />
                   {LANG_LABEL_MAP[code] ?? code}
@@ -164,16 +170,16 @@ export default function SettingsModal({ onClose }: Props) {
             </div>
           </section>
 
-          {/* Default Example Translation Languages */}
+          {/* Display Example Translation Languages */}
           <section>
-            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDefaultExLangs")}</h4>
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDisplayExLangs")}</h4>
             <div className="flex flex-wrap gap-2">
               {order.map((code) => (
                 <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={exLangs.has(code)}
-                    onChange={() => toggleSet(exLangs, code, setExLangs)}
+                    checked={displayExLangs.has(code)}
+                    onChange={() => toggleSet(displayExLangs, code, setDisplayExLangs)}
                     className="accent-blue-600"
                   />
                   {LANG_LABEL_MAP[code] ?? code}

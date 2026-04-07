@@ -16,12 +16,12 @@ interface Props {
 }
 
 function TranslationDisplay({ translation }: { translation: string | Record<string, string> }) {
-  const { sortedEntries } = useSettings();
+  const { displayExEntries } = useSettings();
   if (!translation) return null;
   if (typeof translation === "string") return <p className="text-sm text-gray-400">{translation}</p>;
   return (
     <>
-      {sortedEntries(translation).map(([lang, text]) => (
+      {displayExEntries(translation).map(([lang, text]) => (
         <p key={lang} className="text-sm text-gray-400">
           <span className="text-xs font-medium uppercase text-gray-500 mr-1">{lang}</span>{text}
         </p>
@@ -32,7 +32,7 @@ function TranslationDisplay({ translation }: { translation: string | Record<stri
 
 export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }: Props) {
   const { t } = useI18n();
-  const { sortedEntries } = useSettings();
+  const { displayDefEntries } = useSettings();
   const [currentSession, setCurrentSession] = useState(session);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -229,7 +229,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
             {(question!.definitions ?? []).map((m, mi) => (
               <div key={mi}>
                 {m.partOfSpeech && <p className="text-xs text-gray-500 italic">{m.partOfSpeech}</p>}
-                {sortedEntries(m.text || {}).map(([lang, text]) => (
+                {displayDefEntries(m.text || {}).map(([lang, text]) => (
                   <p key={lang} className="text-xl text-green-400">
                     <span className="text-sm text-gray-400">{LANG_LABEL_MAP[lang] || lang}: </span>{text}
                   </p>

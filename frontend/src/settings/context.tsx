@@ -8,6 +8,10 @@ interface SettingsContextValue {
   updateSettings: (patch: Partial<AppSettings>) => void;
   sortByLanguageOrder: <T>(items: T[], getKey: (item: T) => string) => T[];
   sortedEntries: (record: Record<string, string>) => [string, string][];
+  /** Sorted entries filtered to languages selected for definition display. */
+  displayDefEntries: (record: Record<string, string>) => [string, string][];
+  /** Sorted entries filtered to languages selected for example translation display. */
+  displayExEntries: (record: Record<string, string>) => [string, string][];
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -23,8 +27,23 @@ function loadSettings(): AppSettings {
   try {
     const stored = localStorage.getItem("appSettings");
     if (stored) {
-      const parsed = JSON.parse(stored);
-      return { ...DEFAULT_SETTINGS, ...parsed };
+      const parsed = JSON.parse(stored) as Record<string, unknown>;
+      // Legacy field migration: defaultDefinitionLanguages → displayDefinitionLanguages
+      // and defaultExampleTranslationLanguages → displayExampleTranslationLanguages.
+      // The old "default*" naming reflected an LLM-generation setting that no longer
+      // exists; the same lists now control display only.
+      if ("defaultDefinitionLanguages" in parsed && !("displayDefinitionLanguages" in parsed)) {
+        parsed.displayDefinitionLanguages = parsed.defaultDefinitionLanguages;
+      }
+      if (
+        "defaultExampleTranslationLanguages" in parsed &&
+        !("displayExampleTranslationLanguages" in parsed)
+      ) {
+        parsed.displayExampleTranslationLanguages = parsed.defaultExampleTranslationLanguages;
+      }
+      delete parsed.defaultDefinitionLanguages;
+      delete parsed.defaultExampleTranslationLanguages;
+      return { ...DEFAULT_SETTINGS, ...parsed } as AppSettings;
     }
   } catch { /* ignore */ }
   return DEFAULT_SETTINGS;
@@ -70,9 +89,32 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [settings.languageOrder],
   );
 
+  const displayDefEntries = useCallback(
+    (record: Record<string, string>): [string, string][] => {
+      const allowed = new Set(settings.displayDefinitionLanguages);
+      return sortedEntries(record).filter(([lang]) => allowed.has(lang));
+    },
+    [sortedEntries, settings.displayDefinitionLanguages],
+  );
+
+  const displayExEntries = useCallback(
+    (record: Record<string, string>): [string, string][] => {
+      const allowed = new Set(settings.displayExampleTranslationLanguages);
+      return sortedEntries(record).filter(([lang]) => allowed.has(lang));
+    },
+    [sortedEntries, settings.displayExampleTranslationLanguages],
+  );
+
   const value = useMemo(
-    () => ({ settings, updateSettings, sortByLanguageOrder, sortedEntries }),
-    [settings, updateSettings, sortByLanguageOrder, sortedEntries],
+    () => ({
+      settings,
+      updateSettings,
+      sortByLanguageOrder,
+      sortedEntries,
+      displayDefEntries,
+      displayExEntries,
+    }),
+    [settings, updateSettings, sortByLanguageOrder, sortedEntries, displayDefEntries, displayExEntries],
   );
 
   return (

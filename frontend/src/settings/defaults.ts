@@ -17,6 +17,6 @@ export const LANG_LABEL_MAP: Record<string, string> = {
 export const DEFAULT_SETTINGS: AppSettings = {
   languageOrder: ["en", "ja", "ko", "zh"],
   activeUiLanguages: ["en", "ja", "ko"],
-  defaultDefinitionLanguages: ["en", "ja", "ko"],
-  defaultExampleTranslationLanguages: ["en"],
+  displayDefinitionLanguages: ["en", "ja", "ko", "zh"],
+  displayExampleTranslationLanguages: ["en", "ja", "ko", "zh"],
 };

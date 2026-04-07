@@ -41,11 +41,13 @@ CRITICAL: All example sentences MUST be written in English. Do NOT write example
 
 ## Output format
 
+The `text` object on every definition MUST contain an entry for every language code listed below — write the meaning in each language (the English entry serves as the monolingual definition; the others are translations of that meaning). Likewise, every example sentence's `translation` object MUST contain an entry for each language code (the English entry should be the original sentence verbatim).
+
 Return a JSON object:
 {
   "term": "the English word",
   "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { {{DEFINITION_LANGUAGES}} } }],
-  "examples": [{ "sentence": "English sentence using the word"{{EXAMPLE_TRANSLATION_SPEC}} }],
+  "examples": [{ "sentence": "English sentence using the word", {{EXAMPLE_TRANSLATION_SPEC}} }],
   "topics": ["..."],{{LEVEL_FIELD}}
   "notes": "brief usage notes"
 }

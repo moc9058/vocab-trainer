@@ -39,11 +39,13 @@ Even when definitions or examples are provided, the user's input may not fully c
 
 ## Output format
 
+The `text` object on every definition MUST contain an entry for every language code listed below — write the meaning in each language. Likewise, every example sentence's `translation` object MUST contain an entry for each language code (when the example sentence is itself in one of those languages, the entry for that language is the original sentence).
+
 Return a JSON object:
 {
   "term": "the {{LANGUAGE}} word",
   "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { {{DEFINITION_LANGUAGES}} } }],
-  "examples": [{ "sentence": "{{LANGUAGE}} sentence using the word"{{EXAMPLE_TRANSLATION_SPEC}} }],
+  "examples": [{ "sentence": "{{LANGUAGE}} sentence using the word", {{EXAMPLE_TRANSLATION_SPEC}} }],
   "topics": ["..."],{{LEVEL_FIELD}}
   "notes": "brief usage notes"
 }

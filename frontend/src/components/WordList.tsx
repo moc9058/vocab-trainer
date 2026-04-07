@@ -15,7 +15,6 @@ interface Props {
 
 export default function WordList({ language, onBack }: Props) {
   const { t } = useI18n();
-  const { settings } = useSettings();
   const [result, setResult] = useState<PaginatedResult<Word> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -119,8 +118,6 @@ export default function WordList({ language, onBack }: Props) {
         const result = await smartAddWord(language, {
           term,
           examples: [{ sentence, translation }],
-          definitionLanguages: settings.defaultDefinitionLanguages,
-          exampleTranslationLanguages: settings.defaultExampleTranslationLanguages,
         });
         setExistingTerms((prev) => new Map(prev).set(term, result.id));
         fetchData();
@@ -407,8 +404,8 @@ function WordCard({
   busySegments: Set<string>;
 }) {
   const { t } = useI18n();
-  const { sortedEntries } = useSettings();
-  const defText = word.definitions.map((m) => sortedEntries(m.text || {}).map(([, v]) => v).join("; ")).join(" | ");
+  const { displayDefEntries, displayExEntries } = useSettings();
+  const defText = word.definitions.map((m) => displayDefEntries(m.text || {}).map(([, v]) => v).join("; ")).join(" | ");
 
   return (
     <div
@@ -454,7 +451,7 @@ function WordCard({
                       </span>
                     )}
                     <div className="mt-1 space-y-0.5">
-                      {sortedEntries(m.text || {}).map(([lang, def]) => (
+                      {displayDefEntries(m.text || {}).map(([lang, def]) => (
                         <p key={lang} className="text-sm text-gray-300">
                           <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>
                           {def}
@@ -475,13 +472,23 @@ function WordCard({
                 {word.examples.map((ex, i) => {
                   const trans = typeof ex.translation === "string" ? ex.translation : displayTranslation(ex.translation);
                   const segs = (ex.segments ?? []).filter((s) => s.text.trim().length > 0 && !/^\p{P}+$/u.test(s.text));
+                  const exEntries = typeof ex.translation === "object" && ex.translation
+                    ? displayExEntries(ex.translation)
+                    : [];
                   return (
                     <li key={i} className="text-base text-gray-300">
                       <span><RubyText text={ex.sentence} segments={ex.segments} /></span>
                       {typeof ex.translation === "string" && ex.translation ? (
                         <span className="ml-2 text-gray-400">— {ex.translation}</span>
-                      ) : typeof ex.translation === "object" && ex.translation ? (
-                        <span className="ml-2 text-gray-400">— {sortedEntries(ex.translation).map(([l, t]) => `${l.toUpperCase()}: ${t}`).join(" / ")}</span>
+                      ) : exEntries.length > 0 ? (
+                        <div className="ml-2 mt-0.5 space-y-0.5">
+                          {exEntries.map(([lang, text]) => (
+                            <p key={lang} className="text-sm text-gray-400">
+                              <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>
+                              {text}
+                            </p>
+                          ))}
+                        </div>
                       ) : null}
                       {onToggleSegment && segs.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
@@ -576,8 +583,8 @@ function WordRow({
   busySegments: Set<string>;
 }) {
   const { t } = useI18n();
-  const { sortedEntries } = useSettings();
-  const defText = word.definitions.map((m) => sortedEntries(m.text || {}).map(([, v]) => v).join("; ")).join(" | ");
+  const { displayDefEntries, displayExEntries } = useSettings();
+  const defText = word.definitions.map((m) => displayDefEntries(m.text || {}).map(([, v]) => v).join("; ")).join(" | ");
 
   return (
     <>
@@ -614,7 +621,7 @@ function WordRow({
                         </span>
                       )}
                       <div className="mt-1 space-y-0.5">
-                        {sortedEntries(m.text || {}).map(([lang, def]) => (
+                        {displayDefEntries(m.text || {}).map(([lang, def]) => (
                           <p key={lang} className="text-sm text-gray-300">
                             <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>
                             {def}
@@ -635,13 +642,23 @@ function WordRow({
                   {word.examples.map((ex, i) => {
                     const trans = typeof ex.translation === "string" ? ex.translation : displayTranslation(ex.translation);
                     const segs = (ex.segments ?? []).filter((s) => s.text.trim().length > 0 && !/^\p{P}+$/u.test(s.text));
+                    const exEntries = typeof ex.translation === "object" && ex.translation
+                      ? displayExEntries(ex.translation)
+                      : [];
                     return (
                       <li key={i} className="text-base text-gray-300">
                         <span><RubyText text={ex.sentence} segments={ex.segments} /></span>
                         {typeof ex.translation === "string" && ex.translation ? (
                           <span className="ml-2 text-gray-400">— {ex.translation}</span>
-                        ) : ex.translation ? (
-                          <span className="ml-2 text-gray-400">— {sortedEntries(ex.translation).map(([l, t]) => `${l.toUpperCase()}: ${t}`).join(" / ")}</span>
+                        ) : exEntries.length > 0 ? (
+                          <div className="ml-2 mt-0.5 space-y-0.5">
+                            {exEntries.map(([lang, text]) => (
+                              <p key={lang} className="text-sm text-gray-400">
+                                <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>
+                                {text}
+                              </p>
+                            ))}
+                          </div>
                         ) : null}
                         {onToggleSegment && segs.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1">
