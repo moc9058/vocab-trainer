@@ -64,9 +64,15 @@ export default function SmartAddWordModal({ onSave, onClose, prefill }: Props) {
   const [customLang, setCustomLang] = useState(prefill && !isKnownLang ? prefillLang : "");
   const [term, setTerm] = useState(prefill?.term ?? "");
   const [transliteration, setTransliteration] = useState("");
-  const [definitions, setDefinitions] = useState<{ langSelect: string; customLang: string; text: string }[]>([
-    { langSelect: "en", customLang: "", text: "" },
-  ]);
+  const [definitions, setDefinitions] = useState<{ langSelect: string; customLang: string; text: string }[]>(() => {
+    const def = settings.defaultDefinitionLanguage || "en";
+    const isKnown = settings.languageOrder.includes(def);
+    return [
+      isKnown
+        ? { langSelect: def, customLang: "", text: "" }
+        : { langSelect: "__other__", customLang: def, text: "" },
+    ];
+  });
   const [grammaticalCategory, setGrammaticalCategory] = useState("");
   const [level, setLevel] = useState("");
   const [topics, setTopics] = useState<string[]>([]);

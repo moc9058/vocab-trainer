@@ -19,4 +19,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   activeUiLanguages: ["en", "ja", "ko"],
   displayDefinitionLanguages: ["en", "ja", "ko", "zh"],
   displayExampleTranslationLanguages: ["en", "ja", "ko", "zh"],
+  defaultDefinitionLanguage: "en",
 };

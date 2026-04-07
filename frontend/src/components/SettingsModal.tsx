@@ -55,6 +55,13 @@ export default function SettingsModal({ onClose }: Props) {
   const [displayExLangs, setDisplayExLangs] = useState<Set<string>>(
     new Set(settings.displayExampleTranslationLanguages),
   );
+  const initialDefLangIsKnown = settings.languageOrder.includes(settings.defaultDefinitionLanguage);
+  const [defaultDefLang, setDefaultDefLang] = useState<string>(
+    initialDefLangIsKnown ? settings.defaultDefinitionLanguage : "__other__",
+  );
+  const [defaultDefLangCustom, setDefaultDefLangCustom] = useState<string>(
+    initialDefLangIsKnown ? "" : settings.defaultDefinitionLanguage,
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -88,6 +95,10 @@ export default function SettingsModal({ onClose }: Props) {
       activeUiLanguages: order.filter((c) => activeUi.has(c)),
       displayDefinitionLanguages: order.filter((c) => displayDefLangs.has(c)),
       displayExampleTranslationLanguages: order.filter((c) => displayExLangs.has(c)),
+      defaultDefinitionLanguage:
+        defaultDefLang === "__other__"
+          ? (defaultDefLangCustom.trim() || "en")
+          : defaultDefLang,
     });
     onClose();
   }
@@ -97,6 +108,8 @@ export default function SettingsModal({ onClose }: Props) {
     setActiveUi(new Set(DEFAULT_SETTINGS.activeUiLanguages));
     setDisplayDefLangs(new Set(DEFAULT_SETTINGS.displayDefinitionLanguages));
     setDisplayExLangs(new Set(DEFAULT_SETTINGS.displayExampleTranslationLanguages));
+    setDefaultDefLang(DEFAULT_SETTINGS.defaultDefinitionLanguage);
+    setDefaultDefLangCustom("");
   }
 
   const supportedUiLanguages = new Set(uiLanguages as readonly string[]);
@@ -171,7 +184,7 @@ export default function SettingsModal({ onClose }: Props) {
           </section>
 
           {/* Display Example Translation Languages */}
-          <section>
+          <section className="mb-4">
             <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDisplayExLangs")}</h4>
             <div className="flex flex-wrap gap-2">
               {order.map((code) => (
@@ -185,6 +198,36 @@ export default function SettingsModal({ onClose }: Props) {
                   {LANG_LABEL_MAP[code] ?? code}
                 </label>
               ))}
+            </div>
+          </section>
+
+          {/* Default Definition Language for Smart Add */}
+          <section>
+            <h4 className="mb-1 text-sm font-medium text-gray-300">{t("settingsDefaultDefLang")}</h4>
+            <p className="mb-2 text-xs text-gray-500">{t("settingsDefaultDefLangHelp")}</p>
+            <div className="flex items-center gap-2">
+              <select
+                value={defaultDefLang}
+                onChange={(e) => {
+                  setDefaultDefLang(e.target.value);
+                  if (e.target.value !== "__other__") setDefaultDefLangCustom("");
+                }}
+                className="w-32 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+              >
+                {order.map((code) => (
+                  <option key={code} value={code}>{LANG_LABEL_MAP[code] ?? code}</option>
+                ))}
+                <option value="__other__">{t("settingsLangOther")}</option>
+              </select>
+              {defaultDefLang === "__other__" && (
+                <input
+                  type="text"
+                  value={defaultDefLangCustom}
+                  onChange={(e) => setDefaultDefLangCustom(e.target.value)}
+                  placeholder="Language"
+                  className="w-32 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                />
+              )}
             </div>
           </section>
         </div>
