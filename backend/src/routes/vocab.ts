@@ -25,6 +25,37 @@ const LEVEL_OPTIONS: Record<string, string[]> = {
   japanese: ["JLPT5", "JLPT4", "JLPT3", "JLPT2", "JLPT1", "Advanced"],
 };
 
+// Map any granular HSK label the LLM (or a user) might emit onto the unified
+// buckets above. The LLM is instructed to use the buckets directly in the
+// prompt, but it sometimes slips back to "HSK2" etc. — this is the guarantee.
+const CHINESE_LEVEL_NORMALIZE: Record<string, string> = {
+  HSK1: "HSK1-4",
+  HSK2: "HSK1-4",
+  HSK3: "HSK1-4",
+  HSK4: "HSK1-4",
+  "HSK1-extended": "HSK1-4",
+  "HSK2-extended": "HSK1-4",
+  "HSK3-extended": "HSK1-4",
+  "HSK4-extended": "HSK1-4",
+  "HSK1-4": "HSK1-4",
+  HSK5: "HSK5",
+  "HSK5-extended": "HSK5",
+  HSK6: "HSK6",
+  "HSK6-extended": "HSK6",
+  HSK7: "HSK7-9",
+  HSK8: "HSK7-9",
+  HSK9: "HSK7-9",
+  "HSK7-9": "HSK7-9",
+  "HSK7-9-extended": "HSK7-9",
+  Advanced: "Advanced",
+};
+
+function normalizeLevel(language: string, level: string): string {
+  if (!level) return "";
+  if (language === "chinese") return CHINESE_LEVEL_NORMALIZE[level] ?? level;
+  return level;
+}
+
 // All supported definition / example-translation languages. The LLM is asked to
 // generate every entry in all four; the frontend display settings then control
 // which subset the user sees.
@@ -219,16 +250,33 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Merge: user-provided fields take priority; definitions & examples get supplemented
-      const userDefCount = body.definitions?.length ?? 0;
+      const userDefs = body.definitions ?? [];
+      const userDefCount = userDefs.length;
       const llmDefs = (llmResult.definitions as { partOfSpeech: string; text: Record<string, string> }[]) || [];
       const userExCount = body.examples?.length ?? 0;
       const llmExamples = (llmResult.examples as { sentence: string; translation: string }[]) || [];
+
+      // For each user-provided definition, keep the user's text in whatever
+      // languages they supplied, and fill in the missing-language entries from
+      // the LLM's same-index definition (the LLM is instructed to translate the
+      // user's meaning into every required language code).
+      const mergedUserDefs = userDefs.map((userDef, i) => {
+        const llmDef = llmDefs[i];
+        const mergedText: Record<string, string> = { ...(llmDef?.text ?? {}) };
+        for (const [lang, text] of Object.entries(userDef.text ?? {})) {
+          if (text && text.trim()) mergedText[lang] = text;
+        }
+        return {
+          partOfSpeech: userDef.partOfSpeech || llmDef?.partOfSpeech || "",
+          text: mergedText,
+        };
+      });
 
       const merged = {
         term,
         transliteration: isChinese ? (body.transliteration || (llmResult.transliteration as string) || "") : undefined,
         definitions: userDefCount > 0
-          ? [...body.definitions!, ...llmDefs.slice(userDefCount)]
+          ? [...mergedUserDefs, ...llmDefs.slice(userDefCount)]
           : llmDefs.length > 0 ? llmDefs : [{ partOfSpeech: "", text: { en: "" } }],
         examples: userExCount > 0
           ? [
@@ -253,7 +301,9 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         topics: (body.topics && body.topics.length > 0)
           ? body.topics
           : ((llmResult.topics as string[]) || []).filter((t) => (TOPICS as readonly string[]).includes(t)),
-        level: langLevels ? (body.level || (llmResult.level as string) || "") : "",
+        level: langLevels
+          ? normalizeLevel(language, body.level || (llmResult.level as string) || "")
+          : "",
         notes: body.notes || (llmResult.notes as string) || "",
       };
 
