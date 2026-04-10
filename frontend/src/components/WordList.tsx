@@ -27,6 +27,10 @@ export default function WordList({ language, onBack }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [existingTerms, setExistingTerms] = useState<Map<string, string>>(new Map());
   const [busySegments, setBusySegments] = useState<Set<string>>(new Set());
+  const [editingExample, setEditingExample] = useState<string | null>(null);
+  const [editSegments, setEditSegments] = useState<Array<{ text: string; transliteration?: string; id?: string }>>([]);
+  const [editActivated, setEditActivated] = useState<Map<string, string>>(new Map());
+  const [editPinyinIndex, setEditPinyinIndex] = useState<number | null>(null);
   const [filterOptions, setFilterOptions] = useState<{
     topics: string[];
     categories: string[];
@@ -133,9 +137,9 @@ export default function WordList({ language, onBack }: Props) {
       setExpandedId(null);
       return;
     }
+    if (editingExample) handleCancelEdit();
     setExpandedId(word.id);
     setBusySegments(new Set());
-    // Collect all segment texts across examples
     const allTexts = [
       ...new Set(
         word.examples.flatMap((ex) => ex.segments?.map((s) => s.text).filter((t) => t.trim().length > 0 && !/^\p{P}+$/u.test(t)) ?? [])
@@ -153,7 +157,6 @@ export default function WordList({ language, onBack }: Props) {
   async function handleToggleSegment(term: string, sentence: string, translation: string) {
     const wordId = existingTerms.get(term);
     if (wordId) {
-      // Delete existing word
       setBusySegments((prev) => new Set(prev).add(term));
       try {
         await deleteWord(language, wordId);
@@ -163,7 +166,6 @@ export default function WordList({ language, onBack }: Props) {
         setBusySegments((prev) => { const next = new Set(prev); next.delete(term); return next; });
       }
     } else {
-      // Auto-add word via smart-add
       setBusySegments((prev) => new Set(prev).add(term));
       try {
         const result = await smartAddWord(language, {
@@ -176,6 +178,110 @@ export default function WordList({ language, onBack }: Props) {
         setBusySegments((prev) => { const next = new Set(prev); next.delete(term); return next; });
       }
     }
+  }
+
+  // --- Segment edit mode ---
+
+  function handleStartEdit(word: Word, exampleIndex: number) {
+    const segs = (word.examples[exampleIndex].segments ?? []).map((s) => ({ ...s }));
+    setEditingExample(`${word.id}:${exampleIndex}`);
+    setEditSegments(segs);
+    setEditPinyinIndex(null);
+    const activated = new Map<string, string>();
+    for (const seg of segs) {
+      const wId = existingTerms.get(seg.text);
+      if (wId) activated.set(seg.text, wId);
+      else if (seg.text === word.term) activated.set(seg.text, word.id);
+    }
+    setEditActivated(activated);
+  }
+
+  function handleCancelEdit() {
+    setEditingExample(null);
+    setEditSegments([]);
+    setEditActivated(new Map());
+    setEditPinyinIndex(null);
+  }
+
+  async function refreshEditActivated(segs: Array<{ text: string }>) {
+    const texts = [...new Set(segs.map((s) => s.text).filter((t) => t.trim().length > 0 && !/^\p{P}+$/u.test(t)))];
+    if (texts.length === 0) { setEditActivated(new Map()); return; }
+    try {
+      const { existing } = await checkTerms(language, texts);
+      setEditActivated(new Map(Object.entries(existing)));
+    } catch { /* keep current */ }
+  }
+
+  async function handleSplitSegment(segIndex: number) {
+    const seg = editSegments[segIndex];
+    const chars = Array.from(seg.text);
+    if (chars.length <= 1) return;
+    const syllables = seg.transliteration?.split(/\s+/) ?? [];
+    const newSegs = chars.map((char, ci) => ({
+      text: char,
+      transliteration: ci < syllables.length ? syllables[ci] : undefined,
+    }));
+    const updated = [...editSegments.slice(0, segIndex), ...newSegs, ...editSegments.slice(segIndex + 1)];
+    setEditSegments(updated);
+    setEditPinyinIndex(null);
+    await refreshEditActivated(updated);
+  }
+
+  async function handleMergeSegments(segIndex: number) {
+    const s1 = editSegments[segIndex];
+    const s2 = editSegments[segIndex + 1];
+    const merged = {
+      text: s1.text + s2.text,
+      transliteration: [s1.transliteration, s2.transliteration].filter(Boolean).join(" ") || undefined,
+    };
+    const updated = [...editSegments.slice(0, segIndex), merged, ...editSegments.slice(segIndex + 2)];
+    setEditSegments(updated);
+    setEditPinyinIndex(null);
+    await refreshEditActivated(updated);
+  }
+
+  function handleEditPinyinChange(segIndex: number, value: string) {
+    setEditSegments((prev) => prev.map((s, i) => (i === segIndex ? { ...s, transliteration: value || undefined } : s)));
+  }
+
+  function handleInsertToneChar(char: string) {
+    if (editPinyinIndex === null) return;
+    const input = document.getElementById("pinyin-edit-input") as HTMLInputElement | null;
+    const cur = editSegments[editPinyinIndex]?.transliteration ?? "";
+    const start = input?.selectionStart ?? cur.length;
+    const end = input?.selectionEnd ?? cur.length;
+    const newValue = cur.slice(0, start) + char + cur.slice(end);
+    const newPos = start + char.length;
+    handleEditPinyinChange(editPinyinIndex, newValue);
+    requestAnimationFrame(() => {
+      const inp = document.getElementById("pinyin-edit-input") as HTMLInputElement | null;
+      if (inp) { inp.focus(); inp.selectionStart = inp.selectionEnd = newPos; }
+    });
+  }
+
+  async function handleSaveEdit() {
+    if (!editingExample) return;
+    const [wordId, exIndexStr] = editingExample.split(":");
+    const exampleIndex = parseInt(exIndexStr, 10);
+    const word = result?.items.find((w) => w.id === wordId);
+    if (!word) return;
+    const finalSegments = editSegments.map((seg) => {
+      const wId = editActivated.get(seg.text);
+      return wId ? { ...seg, id: wId } : { text: seg.text, transliteration: seg.transliteration };
+    });
+    const updatedExamples = word.examples.map((ex, i) =>
+      i === exampleIndex ? { ...ex, segments: finalSegments } : ex
+    );
+    await updateWord(language, wordId, { examples: updatedExamples });
+    fetchData();
+    const allTexts = [...new Set(
+      updatedExamples.flatMap((ex) => ex.segments?.map((s) => s.text).filter((t) => t.trim().length > 0 && !/^\p{P}+$/u.test(t)) ?? [])
+    )];
+    if (allTexts.length > 0) {
+      const { existing } = await checkTerms(language, allTexts);
+      setExistingTerms(new Map(Object.entries(existing)));
+    }
+    handleCancelEdit();
   }
 
   useEffect(() => {
@@ -368,6 +474,20 @@ export default function WordList({ language, onBack }: Props) {
                         onToggleSegment={handleToggleSegment}
                         existingTerms={expandedId === word.id ? existingTerms : new Map()}
                         busySegments={expandedId === word.id ? busySegments : new Set()}
+                        editMode={{
+                          key: editingExample,
+                          segments: editSegments,
+                          activated: editActivated,
+                          pinyinIndex: editPinyinIndex,
+                          onStart: handleStartEdit,
+                          onCancel: handleCancelEdit,
+                          onSplit: handleSplitSegment,
+                          onMerge: handleMergeSegments,
+                          onPinyinChange: handleEditPinyinChange,
+                          onTogglePinyin: (idx) => setEditPinyinIndex(editPinyinIndex === idx ? null : idx),
+                          onInsertToneChar: handleInsertToneChar,
+                          onSave: handleSaveEdit,
+                        }}
                         selected={selectedIds.has(word.id)}
                         onToggleSelect={() => toggleSelected(word.id)}
                       />
@@ -409,6 +529,20 @@ export default function WordList({ language, onBack }: Props) {
                           onToggleSegment={handleToggleSegment}
                           existingTerms={expandedId === word.id ? existingTerms : new Map()}
                           busySegments={expandedId === word.id ? busySegments : new Set()}
+                          editMode={{
+                            key: editingExample,
+                            segments: editSegments,
+                            activated: editActivated,
+                            pinyinIndex: editPinyinIndex,
+                            onStart: handleStartEdit,
+                            onCancel: handleCancelEdit,
+                            onSplit: handleSplitSegment,
+                            onMerge: handleMergeSegments,
+                            onPinyinChange: handleEditPinyinChange,
+                            onTogglePinyin: (idx) => setEditPinyinIndex(editPinyinIndex === idx ? null : idx),
+                            onInsertToneChar: handleInsertToneChar,
+                            onSave: handleSaveEdit,
+                          }}
                           selected={selectedIds.has(word.id)}
                           onToggleSelect={() => toggleSelected(word.id)}
                         />
@@ -521,6 +655,7 @@ function WordCard({
   onToggleSegment,
   existingTerms,
   busySegments,
+  editMode,
   selected,
   onToggleSelect,
 }: {
@@ -534,6 +669,20 @@ function WordCard({
   onToggleSegment?: (term: string, sentence: string, translation: string) => void;
   existingTerms: Map<string, string>;
   busySegments: Set<string>;
+  editMode: {
+    key: string | null;
+    segments: Array<{ text: string; transliteration?: string; id?: string }>;
+    activated: Map<string, string>;
+    pinyinIndex: number | null;
+    onStart: (word: Word, exampleIndex: number) => void;
+    onCancel: () => void;
+    onSplit: (segIndex: number) => void;
+    onMerge: (segIndex: number) => void;
+    onPinyinChange: (segIndex: number, value: string) => void;
+    onTogglePinyin: (segIndex: number) => void;
+    onInsertToneChar: (char: string) => void;
+    onSave: () => void;
+  };
   selected: boolean;
   onToggleSelect: () => void;
 }) {
@@ -634,8 +783,81 @@ function WordCard({
                           ))}
                         </div>
                       ) : null}
-                      {onToggleSegment && segs.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
+                      {editMode.key === `${word.id}:${i}` ? (
+                        <div className="mt-1 space-y-2">
+                          <div className="flex flex-wrap gap-0.5 items-end">
+                            {editMode.segments.flatMap((seg, j) => {
+                              const isActivated = editMode.activated.has(seg.text) || seg.text === word.term;
+                              const isPunct = /^\p{P}+$/u.test(seg.text) || seg.text.trim().length === 0;
+                              const canSplit = !isActivated && !isPunct && Array.from(seg.text).length > 1;
+                              const prev = j > 0 ? editMode.segments[j - 1] : null;
+                              const prevEditable = prev && !editMode.activated.has(prev.text) && prev.text !== word.term && !/^\p{P}+$/u.test(prev.text) && prev.text.trim().length > 0;
+                              const thisEditable = !isActivated && !isPunct;
+                              const els: React.ReactNode[] = [];
+                              if (prevEditable && thisEditable) {
+                                els.push(
+                                  <button key={`m${j}`} onClick={(e) => { e.stopPropagation(); editMode.onMerge(j - 1); }} className="rounded bg-yellow-800/30 border border-yellow-500/40 text-yellow-400 hover:bg-yellow-700/40 hover:text-yellow-300 text-[10px] px-1 py-0 leading-4 self-center" title="Merge">+</button>
+                                );
+                              }
+                              els.push(
+                                <div key={`s${j}`} className="flex flex-col items-center">
+                                  <button
+                                    disabled={!canSplit}
+                                    onClick={(e) => { e.stopPropagation(); if (canSplit) editMode.onSplit(j); }}
+                                    className={`rounded px-1.5 py-0.5 text-xs transition-colors ${
+                                      isPunct ? "text-gray-600 cursor-default"
+                                      : isActivated ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
+                                      : canSplit ? "border border-yellow-500/40 bg-yellow-900/20 text-yellow-300 hover:bg-yellow-800/30 cursor-pointer"
+                                      : "border border-gray-500/40 bg-gray-800/30 text-gray-300"
+                                    }`}
+                                    title={canSplit ? "Click to split" : undefined}
+                                  >
+                                    {seg.text}
+                                  </button>
+                                  {!isPunct && (
+                                    <button
+                                      disabled={isActivated}
+                                      onClick={(e) => { e.stopPropagation(); if (!isActivated) editMode.onTogglePinyin(j); }}
+                                      className={`text-[10px] mt-0.5 ${
+                                        isActivated ? "text-gray-600 cursor-default"
+                                        : editMode.pinyinIndex === j ? "text-blue-400"
+                                        : "text-gray-500 hover:text-gray-300 cursor-pointer"
+                                      }`}
+                                    >
+                                      {seg.transliteration || "—"}
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                              return els;
+                            })}
+                            <button onClick={(e) => { e.stopPropagation(); editMode.onSave(); }} className="ml-2 rounded px-2 py-0.5 text-xs border border-green-500/40 text-green-400 hover:bg-green-900/30 self-center" title="Save">✓</button>
+                            <button onClick={(e) => { e.stopPropagation(); editMode.onCancel(); }} className="rounded px-2 py-0.5 text-xs border border-gray-500/40 text-gray-400 hover:bg-gray-700/30 self-center" title="Cancel">✗</button>
+                          </div>
+                          {editMode.pinyinIndex !== null && (() => {
+                            const ps = editMode.segments[editMode.pinyinIndex];
+                            if (!ps || editMode.activated.has(ps.text)) return null;
+                            return (
+                              <div className="flex flex-col gap-1 pl-1" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  id="pinyin-edit-input"
+                                  type="text"
+                                  value={ps.transliteration ?? ""}
+                                  onChange={(e) => editMode.onPinyinChange(editMode.pinyinIndex!, e.target.value)}
+                                  className="w-40 rounded bg-gray-800 border border-gray-600 px-2 py-0.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                                  autoFocus
+                                />
+                                <div className="flex flex-wrap gap-0.5">
+                                  {"āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ".split("").map((ch) => (
+                                    <button key={ch} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); editMode.onInsertToneChar(ch); }} className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-gray-300 hover:bg-gray-600">{ch}</button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      ) : onToggleSegment && segs.length > 0 ? (
+                        <div className="mt-1 flex flex-wrap gap-1 items-center">
                           {segs.map((seg, j) => {
                             const isSelf = seg.text === word.term;
                             const exists = isSelf || existingTerms.has(seg.text);
@@ -657,8 +879,25 @@ function WordCard({
                               </button>
                             );
                           })}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); editMode.onStart(word, i); }}
+                            className="rounded-full px-2 py-0.5 text-xs border border-gray-500/40 text-gray-400 hover:bg-gray-700/40 transition-colors"
+                            title="Edit segments"
+                          >
+                            ✎
+                          </button>
                         </div>
-                      )}
+                      ) : onToggleSegment ? (
+                        <div className="mt-1">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); editMode.onStart(word, i); }}
+                            className="rounded-full px-2 py-0.5 text-xs border border-gray-500/40 text-gray-400 hover:bg-gray-700/40 transition-colors"
+                            title="Edit segments"
+                          >
+                            ✎
+                          </button>
+                        </div>
+                      ) : null}
                     </li>
                   );
                 })}
@@ -714,6 +953,7 @@ function WordRow({
   onToggleSegment,
   existingTerms,
   busySegments,
+  editMode,
   selected,
   onToggleSelect,
 }: {
@@ -727,6 +967,20 @@ function WordRow({
   onToggleSegment?: (term: string, sentence: string, translation: string) => void;
   existingTerms: Map<string, string>;
   busySegments: Set<string>;
+  editMode: {
+    key: string | null;
+    segments: Array<{ text: string; transliteration?: string; id?: string }>;
+    activated: Map<string, string>;
+    pinyinIndex: number | null;
+    onStart: (word: Word, exampleIndex: number) => void;
+    onCancel: () => void;
+    onSplit: (segIndex: number) => void;
+    onMerge: (segIndex: number) => void;
+    onPinyinChange: (segIndex: number, value: string) => void;
+    onTogglePinyin: (segIndex: number) => void;
+    onInsertToneChar: (char: string) => void;
+    onSave: () => void;
+  };
   selected: boolean;
   onToggleSelect: () => void;
 }) {
@@ -817,8 +1071,81 @@ function WordRow({
                             ))}
                           </div>
                         ) : null}
-                        {onToggleSegment && segs.length > 0 && (
-                          <div className="mt-1 flex flex-wrap gap-1">
+                        {editMode.key === `${word.id}:${i}` ? (
+                          <div className="mt-1 space-y-2">
+                            <div className="flex flex-wrap gap-0.5 items-end">
+                              {editMode.segments.flatMap((seg, j) => {
+                                const isActivated = editMode.activated.has(seg.text) || seg.text === word.term;
+                                const isPunct = /^\p{P}+$/u.test(seg.text) || seg.text.trim().length === 0;
+                                const canSplit = !isActivated && !isPunct && Array.from(seg.text).length > 1;
+                                const prev = j > 0 ? editMode.segments[j - 1] : null;
+                                const prevEditable = prev && !editMode.activated.has(prev.text) && prev.text !== word.term && !/^\p{P}+$/u.test(prev.text) && prev.text.trim().length > 0;
+                                const thisEditable = !isActivated && !isPunct;
+                                const els: React.ReactNode[] = [];
+                                if (prevEditable && thisEditable) {
+                                  els.push(
+                                    <button key={`m${j}`} onClick={(e) => { e.stopPropagation(); editMode.onMerge(j - 1); }} className="rounded bg-yellow-800/30 border border-yellow-500/40 text-yellow-400 hover:bg-yellow-700/40 hover:text-yellow-300 text-[10px] px-1 py-0 leading-4 self-center" title="Merge">+</button>
+                                  );
+                                }
+                                els.push(
+                                  <div key={`s${j}`} className="flex flex-col items-center">
+                                    <button
+                                      disabled={!canSplit}
+                                      onClick={(e) => { e.stopPropagation(); if (canSplit) editMode.onSplit(j); }}
+                                      className={`rounded px-1.5 py-0.5 text-xs transition-colors ${
+                                        isPunct ? "text-gray-600 cursor-default"
+                                        : isActivated ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
+                                        : canSplit ? "border border-yellow-500/40 bg-yellow-900/20 text-yellow-300 hover:bg-yellow-800/30 cursor-pointer"
+                                        : "border border-gray-500/40 bg-gray-800/30 text-gray-300"
+                                      }`}
+                                      title={canSplit ? "Click to split" : undefined}
+                                    >
+                                      {seg.text}
+                                    </button>
+                                    {!isPunct && (
+                                      <button
+                                        disabled={isActivated}
+                                        onClick={(e) => { e.stopPropagation(); if (!isActivated) editMode.onTogglePinyin(j); }}
+                                        className={`text-[10px] mt-0.5 ${
+                                          isActivated ? "text-gray-600 cursor-default"
+                                          : editMode.pinyinIndex === j ? "text-blue-400"
+                                          : "text-gray-500 hover:text-gray-300 cursor-pointer"
+                                        }`}
+                                      >
+                                        {seg.transliteration || "—"}
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                                return els;
+                              })}
+                              <button onClick={(e) => { e.stopPropagation(); editMode.onSave(); }} className="ml-2 rounded px-2 py-0.5 text-xs border border-green-500/40 text-green-400 hover:bg-green-900/30 self-center" title="Save">✓</button>
+                              <button onClick={(e) => { e.stopPropagation(); editMode.onCancel(); }} className="rounded px-2 py-0.5 text-xs border border-gray-500/40 text-gray-400 hover:bg-gray-700/30 self-center" title="Cancel">✗</button>
+                            </div>
+                            {editMode.pinyinIndex !== null && (() => {
+                              const ps = editMode.segments[editMode.pinyinIndex];
+                              if (!ps || editMode.activated.has(ps.text)) return null;
+                              return (
+                                <div className="flex flex-col gap-1 pl-1" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    id="pinyin-edit-input"
+                                    type="text"
+                                    value={ps.transliteration ?? ""}
+                                    onChange={(e) => editMode.onPinyinChange(editMode.pinyinIndex!, e.target.value)}
+                                    className="w-40 rounded bg-gray-800 border border-gray-600 px-2 py-0.5 text-xs text-gray-200 focus:outline-none focus:border-blue-500"
+                                    autoFocus
+                                  />
+                                  <div className="flex flex-wrap gap-0.5">
+                                    {"āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜ".split("").map((ch) => (
+                                      <button key={ch} onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); editMode.onInsertToneChar(ch); }} className="rounded bg-gray-700 px-1.5 py-0.5 text-xs text-gray-300 hover:bg-gray-600">{ch}</button>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        ) : onToggleSegment && segs.length > 0 ? (
+                          <div className="mt-1 flex flex-wrap gap-1 items-center">
                             {segs.map((seg, j) => {
                               const isSelf = seg.text === word.term;
                               const exists = isSelf || existingTerms.has(seg.text);
@@ -840,8 +1167,25 @@ function WordRow({
                                 </button>
                               );
                             })}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); editMode.onStart(word, i); }}
+                              className="rounded-full px-2 py-0.5 text-xs border border-gray-500/40 text-gray-400 hover:bg-gray-700/40 transition-colors"
+                              title="Edit segments"
+                            >
+                              ✎
+                            </button>
                           </div>
-                        )}
+                        ) : onToggleSegment ? (
+                          <div className="mt-1">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); editMode.onStart(word, i); }}
+                              className="rounded-full px-2 py-0.5 text-xs border border-gray-500/40 text-gray-400 hover:bg-gray-700/40 transition-colors"
+                              title="Edit segments"
+                            >
+                              ✎
+                            </button>
+                          </div>
+                        ) : null}
                       </li>
                     );
                   })}
