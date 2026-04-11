@@ -9,14 +9,28 @@ import {
   deleteWord,
   wordIdExists,
   getNextWordId,
+  getNextExampleId,
   createLanguage,
   deleteLanguage,
   lookupWordByTerm,
   lookupWordsByTerms,
   flagWord,
   getVocabularyConfig,
+  addExampleSentence,
+  findExampleByText,
+  updateExampleSentence,
+  getExampleSentencesByIds,
+  linkWordToExistingExamples,
+  reconcileExampleSegmentRefs,
+  unlinkWordFromExampleSentence,
+  deleteWordIfOrphaned,
+  reconcileIncomingSegments,
+  droppedSegmentWordIds,
+  deleteExampleSentences,
+  removeFromAppearsInIds,
+  isExampleIdClaimedByOtherWord,
 } from "../firestore.js";
-import type { Word, Example } from "../types.js";
+import type { Word, Example, ExampleSentence } from "../types.js";
 import { TOPICS } from "../types.js";
 import { callLLMWithSchema, stripMarkdownFences, validateWord, type Segment } from "../llm.js";
 
@@ -377,6 +391,37 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const id = await getNextWordId(language);
+
+      // Create example sentence documents
+      const exampleIds: string[] = [];
+      for (const ex of examplesWithSegments) {
+        // Check dedup: same sentence text shares one example_sentence doc
+        const existing = await findExampleByText(language, ex.sentence);
+        if (existing) {
+          // Overwrite segments with the later occurrence, then reconcile
+          // referenced words' appearsInIds (new ↔ old diff).
+          if (ex.segments) {
+            await updateExampleSentence(existing.id, { segments: ex.segments });
+            await reconcileExampleSegmentRefs(existing.id, existing.segments, ex.segments);
+          }
+          exampleIds.push(existing.id);
+        } else {
+          const exId = await getNextExampleId(language);
+          const es: ExampleSentence = {
+            id: exId,
+            sentence: ex.sentence,
+            translation: ex.translation,
+            segments: ex.segments,
+            language,
+            ownerWordId: id,
+          };
+          await addExampleSentence(es);
+          // Register newly-referenced words in their appearsInIds.
+          await reconcileExampleSegmentRefs(exId, [], ex.segments);
+          exampleIds.push(exId);
+        }
+      }
+
       const word: Word = {
         id,
         term: merged.term,
@@ -388,7 +433,12 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         notes: merged.notes,
       };
 
-      await addWord(language, word);
+      // addWord now defaults appearsInIds to include own exampleIds.
+      await addWord(language, word, { exampleIds });
+
+      // Reverse-link: find existing example sentences where this word appears as a segment
+      await linkWordToExistingExamples(language, id, merged.term);
+
       if (body.flag !== false) {
         await flagWord(language, word.id);
       }
@@ -406,7 +456,191 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.notFound(`Language '${language}' not found`);
       }
 
-      const updated = await updateWord(language, wordId, request.body);
+      const body = request.body;
+
+      // If the frontend sends examples, resolve them to example sentence docs
+      if (Array.isArray(body.examples)) {
+        // Fetch existing word to get current exampleIds
+        const existingWord = await getWord(wordId);
+        if (!existingWord) return reply.notFound(`Word '${wordId}' not found`);
+
+        // Get current example sentence docs for segment preservation
+        const currentExIds = (existingWord as any).exampleIds as string[] | undefined;
+        let oldExSentences: ExampleSentence[] = [];
+        if (currentExIds && currentExIds.length > 0) {
+          oldExSentences = await getExampleSentencesByIds(currentExIds);
+        }
+        const oldById = new Map(oldExSentences.map((es) => [es.id, es]));
+        const oldBySentence = new Map(oldExSentences.map((es) => [es.sentence, es]));
+
+        const newExampleIds: string[] = [];
+        // Track candidates that may have become orphaned across all examples
+        // touched by this PUT. We resolve them after the word update below.
+        const maybeOrphaned = new Set<string>();
+
+        for (const ex of body.examples) {
+          // Only treat segments as "being edited" if the frontend explicitly
+          // sent them. WordFormModal omits segments entirely (its form state
+          // doesn't carry them), so we must preserve old segments in that case.
+          const hasIncomingSegs = Array.isArray((ex as { segments?: unknown }).segments);
+          const incomingId = (ex as { id?: string }).id;
+
+          // --- Resolve target example sentence ---
+          // Priority:
+          //   1. Frontend sent back an explicit id AND the id belongs to this
+          //      word's own exampleIds → in-place update (sentence text,
+          //      translation, segments may all differ).
+          //   2. Frontend sent an id that is NOT in currentExIds → this is an
+          //      appears-in/shared example. Look it up directly and edit in
+          //      place. Do NOT push it into newExampleIds (don't steal
+          //      ownership just because the hydrated list passed through).
+          //   3. No id → legacy/new-entry path: match by sentence text
+          //      against own examples, then via dedup index, else create.
+          let target: ExampleSentence | null = null;
+          let claimOwnership = true; // whether to push target.id into newExampleIds
+
+          if (incomingId) {
+            const own = oldById.get(incomingId);
+            if (own) {
+              target = own;
+              // claimOwnership stays true — it was already owned
+            } else {
+              const [byId] = await getExampleSentencesByIds([incomingId]);
+              if (byId) {
+                target = byId;
+                claimOwnership = false; // hydrated pass-through, leave ownership alone
+              }
+            }
+          }
+          if (!target) {
+            const bySentence = oldBySentence.get(ex.sentence);
+            if (bySentence) {
+              target = bySentence;
+              // claimOwnership stays true — still an own example
+            }
+          }
+          if (!target) {
+            const found = await findExampleByText(language, ex.sentence);
+            if (found) {
+              target = found;
+              // No id was provided, so the user typed this text fresh — treat
+              // the dedup hit as "they intend to own this example" and push.
+              claimOwnership = true;
+            }
+          }
+
+          if (target) {
+            // In-place update: sentence, translation, segments (any subset).
+            const updates: Partial<ExampleSentence> = {};
+            if (target.sentence !== ex.sentence) {
+              updates.sentence = ex.sentence;
+            }
+            if (JSON.stringify(target.translation) !== JSON.stringify(ex.translation)) {
+              updates.translation = ex.translation;
+            }
+            if (hasIncomingSegs) {
+              await reconcileIncomingSegments(target.segments, ex.segments!);
+              updates.segments = ex.segments;
+            }
+            if (Object.keys(updates).length > 0) {
+              await updateExampleSentence(target.id, updates);
+            }
+            if (hasIncomingSegs) {
+              await reconcileExampleSegmentRefs(target.id, target.segments, ex.segments);
+              for (const dropped of droppedSegmentWordIds(target.segments, ex.segments)) {
+                maybeOrphaned.add(dropped);
+              }
+            }
+            if (claimOwnership) newExampleIds.push(target.id);
+          } else {
+            // Brand new example — create + set this word as owner
+            const newId = await getNextExampleId(language);
+            if (hasIncomingSegs) {
+              await reconcileIncomingSegments(undefined, ex.segments!);
+            }
+            const es: ExampleSentence = {
+              id: newId,
+              sentence: ex.sentence,
+              translation: ex.translation,
+              segments: ex.segments,
+              language,
+              ownerWordId: wordId,
+            };
+            await addExampleSentence(es);
+            await reconcileExampleSegmentRefs(newId, [], ex.segments);
+            newExampleIds.push(newId);
+          }
+        }
+
+        // Examples the user removed outright or renamed out from under this
+        // word. For each one, decide whether the example doc can be deleted
+        // entirely (this word owns it AND no other word still claims it) or
+        // merely released from this word's grip (dedup share — leave the doc
+        // alone, the real owner keeps managing it).
+        const droppedExampleIds = (currentExIds ?? []).filter(
+          (id) => !newExampleIds.includes(id),
+        );
+        const toDelete: string[] = [];
+        for (const exId of droppedExampleIds) {
+          const es = oldExSentences.find((x) => x.id === exId);
+          if (!es) continue;
+          if (es.ownerWordId !== wordId) continue; // dedup share — skip
+          const claimedElsewhere = await isExampleIdClaimedByOtherWord(
+            language,
+            exId,
+            wordId,
+          );
+          if (!claimedElsewhere) toDelete.push(exId);
+        }
+        // Run the delete BEFORE updateWord so that deleteExampleSentences can
+        // atomically strip the example ids from segment-referenced words'
+        // appearsInIds while this word's exampleIds still includes them.
+        if (toDelete.length > 0) {
+          await deleteExampleSentences(toDelete);
+        }
+
+        // Remove examples from the update body — stored via exampleIds now
+        const { examples: _, ...rest } = body;
+        const updated = await updateWord(language, wordId, rest, { exampleIds: newExampleIds });
+        if (!updated) return reply.notFound(`Word '${wordId}' not found`);
+
+        // updateWord only unions into appearsInIds; it never prunes. For each
+        // dropped example, strip it from this word's appearsInIds unless the
+        // word is still a segment of it (can only happen when the example
+        // doc survived the delete step above, i.e. dedup-shared or not owned
+        // here).
+        let appearsInStripped = false;
+        if (droppedExampleIds.length > 0) {
+          const stillPresent = await getExampleSentencesByIds(droppedExampleIds);
+          const keep = new Set<string>();
+          for (const es of stillPresent) {
+            if ((es.segments ?? []).some((s) => s.id === wordId)) keep.add(es.id);
+          }
+          const toStrip = droppedExampleIds.filter((id) => !keep.has(id));
+          if (toStrip.length > 0) {
+            await removeFromAppearsInIds(wordId, toStrip);
+            appearsInStripped = true;
+          }
+        }
+
+        // After all reconciliation, delete any word that became fully
+        // orphaned because a merge/split removed its last reference.
+        // Skip the word being edited — its appearsInIds was just rewritten.
+        for (const wId of maybeOrphaned) {
+          if (wId === wordId) continue;
+          await deleteWordIfOrphaned(language, wId);
+        }
+
+        // Re-fetch if the post-updateWord prune changed appearsInIds so the
+        // response reflects the final state.
+        if (appearsInStripped) {
+          const refreshed = await getWord(wordId);
+          if (refreshed) return refreshed;
+        }
+        return updated;
+      }
+
+      const updated = await updateWord(language, wordId, body);
       if (!updated) return reply.notFound(`Word '${wordId}' not found`);
       return updated;
     }
@@ -424,6 +658,36 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       const deleted = await deleteWord(language, wordId);
       if (!deleted) return reply.notFound(`Word '${wordId}' not found`);
       return reply.status(204).send();
+    }
+  );
+
+  // Unlink a word from a specific example sentence.
+  // Behavior:
+  //   - If the word has no own exampleIds → delete the word entirely.
+  //   - Otherwise → clear the segment's `id` on that example and remove the
+  //     exampleId from the word's appearsInIds.
+  fastify.post<{
+    Params: { language: string; wordId: string };
+    Body: { sentence: string };
+  }>(
+    "/:language/:wordId/unlink-segment",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["sentence"],
+          properties: { sentence: { type: "string" } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { language, wordId } = request.params;
+      const { sentence } = request.body;
+      if (!(await languageExists(language))) {
+        return reply.notFound(`Language '${language}' not found`);
+      }
+      const result = await unlinkWordFromExampleSentence(language, wordId, sentence);
+      return result;
     }
   );
 

@@ -30,8 +30,8 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
   });
   const [topics, setTopics] = useState<Set<string>>(new Set(word?.topics ?? []));
   const [level, setLevel] = useState(word?.level ?? "");
-  const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>(
-    word?.examples?.map((e) => ({ sentence: e.sentence, translation: displayTranslation(e.translation) })) ?? []
+  const [examples, setExamples] = useState<{ id?: string; sentence: string; translation: string }[]>(
+    word?.examples?.map((e) => ({ id: e.id, sentence: e.sentence, translation: displayTranslation(e.translation) })) ?? []
   );
   const [notes, setNotes] = useState(word?.notes ?? "");
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);

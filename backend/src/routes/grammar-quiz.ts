@@ -10,11 +10,15 @@ import {
   lookupWordsByTerms,
   addWord,
   getNextWordId,
+  getNextExampleId,
   flagWord,
+  addExampleSentence,
+  findExampleByText,
+  linkWordToExistingExamples,
   type GrammarItemDoc,
   getVocabularyConfig,
 } from "../firestore.js";
-import type { GrammarQuizSession, GrammarQuizQuestion, GrammarProgress, Word, Meaning } from "../types.js";
+import type { GrammarQuizSession, GrammarQuizQuestion, GrammarProgress, Word, Meaning, ExampleSentence } from "../types.js";
 import { TOPICS } from "../types.js";
 import { callLLM, stripMarkdownFences, segmentBatch } from "../llm.js";
 
@@ -306,6 +310,24 @@ Allowed topics: ${TOPICS.join(", ")}`;
         const id = await getNextWordId(language);
         const topics = ((entry.topics as string[]) ?? []).filter((t) => (TOPICS as readonly string[]).includes(t));
 
+        // Create example sentence document
+        const exampleIds: string[] = [];
+        const existingEx = await findExampleByText(language, info.sentence);
+        if (existingEx) {
+          exampleIds.push(existingEx.id);
+        } else {
+          const exId = await getNextExampleId(language);
+          const es: ExampleSentence = {
+            id: exId,
+            sentence: info.sentence,
+            translation: info.translation,
+            language,
+            ownerWordId: id,
+          };
+          await addExampleSentence(es);
+          exampleIds.push(exId);
+        }
+
         const newWord: Word = {
           id,
           term,
@@ -317,7 +339,10 @@ Allowed topics: ${TOPICS.join(", ")}`;
           notes: (entry.notes as string) || "",
         };
 
-        await addWord(language, newWord);
+        // addWord now defaults appearsInIds to include own exampleIds.
+        await addWord(language, newWord, { exampleIds });
+        // Reverse-link: find existing examples where this word's term is a segment
+        await linkWordToExistingExamples(language, id, term);
         await flagWord(language, newWord.id);
         addedTerms.add(term);
         added.push(newWord);

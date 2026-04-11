@@ -10,7 +10,7 @@
 import { Firestore } from "@google-cloud/firestore";
 import { writeFile, mkdir } from "node:fs/promises";
 import { resolve, join } from "node:path";
-import type { Word, Meaning, Example, VocabFile, WordProgress, ProgressFile, GrammarChapter, GrammarComponent } from "../src/types.js";
+import type { Word, Meaning, Example, ExampleSentence, VocabFile, WordProgress, ProgressFile, GrammarChapter, GrammarComponent } from "../src/types.js";
 
 const DB_DIR = resolve(import.meta.dirname, "..", "DB", "word");
 const GRAMMAR_DIR = resolve(import.meta.dirname, "..", "DB", "grammer");
@@ -54,19 +54,22 @@ function docToWord(doc: FirebaseFirestore.DocumentSnapshot): Word {
     id: doc.id,
     term: d.term,
     definitions,
-    examples: (d.examples ?? []).map((ex: any): Example => ({
-      sentence: ex.sentence,
-      translation: ex.translation,
-      ...(ex.segments ? {
-        segments: ex.segments.map((seg: any) => ({
-          text: seg.text,
-          ...(seg.transliteration || seg.pinyin
-            ? { transliteration: seg.transliteration ?? seg.pinyin }
-            : {}),
-          ...(seg.id ? { id: seg.id } : {}),
+    // Examples will be populated later for new format (exampleIds), or inline for old format
+    examples: Array.isArray(d.exampleIds)
+      ? [] // New format — hydrated separately in exportWords()
+      : (d.examples ?? []).map((ex: any): Example => ({
+          sentence: ex.sentence,
+          translation: ex.translation,
+          ...(ex.segments ? {
+            segments: ex.segments.map((seg: any) => ({
+              text: seg.text,
+              ...(seg.transliteration || seg.pinyin
+                ? { transliteration: seg.transliteration ?? seg.pinyin }
+                : {}),
+              ...(seg.id ? { id: seg.id } : {}),
+            })),
+          } : {}),
         })),
-      } : {}),
-    })),
     topics: d.topics ?? [],
   };
   if (d.transliteration) word.transliteration = d.transliteration;
@@ -75,10 +78,34 @@ function docToWord(doc: FirebaseFirestore.DocumentSnapshot): Word {
   return word;
 }
 
+function parseExampleSentence(doc: FirebaseFirestore.DocumentSnapshot): ExampleSentence {
+  const d = doc.data()!;
+  return {
+    id: doc.id,
+    sentence: d.sentence,
+    translation: d.translation,
+    segments: d.segments?.map((seg: any) => ({
+      text: seg.text,
+      ...(seg.transliteration || seg.pinyin ? { transliteration: seg.transliteration ?? seg.pinyin } : {}),
+      ...(seg.id ? { id: seg.id } : {}),
+    })),
+    language: d.language,
+    ownerWordId: d.ownerWordId,
+  };
+}
+
 async function exportWords(): Promise<void> {
   console.log("\n--- Exporting words ---");
   const snap = await db.collection("words").get();
   console.log(`  Found ${snap.size} words total`);
+
+  // Fetch all example sentences for hydration
+  const exSnap = await db.collection("example_sentences").get();
+  const exMap = new Map<string, ExampleSentence>();
+  for (const doc of exSnap.docs) {
+    exMap.set(doc.id, parseExampleSentence(doc));
+  }
+  console.log(`  Found ${exMap.size} example sentences`);
 
   // Group words by language
   const byLanguage = new Map<string, Word[]>();
@@ -89,7 +116,22 @@ async function exportWords(): Promise<void> {
     if (!byLanguage.has(language)) {
       byLanguage.set(language, []);
     }
-    byLanguage.get(language)!.push(docToWord(doc));
+    const word = docToWord(doc);
+
+    // Hydrate examples for new format
+    if (Array.isArray(d.exampleIds)) {
+      const allIds = [...(d.exampleIds as string[]), ...(d.appearsInIds as string[] ?? [])];
+      word.examples = allIds
+        .map((id) => exMap.get(id))
+        .filter((es): es is ExampleSentence => !!es)
+        .map((es): Example => ({
+          sentence: es.sentence,
+          translation: es.translation,
+          ...(es.segments ? { segments: es.segments } : {}),
+        }));
+    }
+
+    byLanguage.get(language)!.push(word);
   }
 
   // Write one JSON file per language

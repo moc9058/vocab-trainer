@@ -2,14 +2,15 @@
 set -euo pipefail
 
 # Deploy vocab-trainer to Google Cloud Run
-# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--word] [--grammer] [--llm] [--prompts] [--archives]
+# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--word] [--grammer] [--llm] [--prompts] [--archives] [--example-sentences]
 #
 # Options:
-#   --word      Run Firestore word data migration after deploying backend
-#   --grammer   Run Firestore grammar data migration after deploying backend
-#   --llm       Upload LLM config (Azure OpenAI keys) from .env to Firestore
-#   --prompts   Upload speaking/writing + translation config to Firestore
-#   --archives  Upload backup + original archive data to Firestore
+#   --word               Run Firestore word data migration after deploying backend
+#   --grammer            Run Firestore grammar data migration after deploying backend
+#   --llm                Upload LLM config (Azure OpenAI keys) from .env to Firestore
+#   --prompts            Upload speaking/writing + translation config to Firestore
+#   --archives           Upload backup + original archive data to Firestore
+#   --example-sentences  Migrate embedded examples to example_sentences collection
 #
 # Flags can be used together.
 #
@@ -22,6 +23,7 @@ MIGRATE_GRAMMER=false
 MIGRATE_LLM=false
 MIGRATE_PROMPTS=false
 MIGRATE_ARCHIVES=false
+MIGRATE_EXAMPLE_SENTENCES=false
 POSITIONAL=()
 for arg in "$@"; do
   case "$arg" in
@@ -30,6 +32,7 @@ for arg in "$@"; do
     --llm) MIGRATE_LLM=true ;;
     --prompts) MIGRATE_PROMPTS=true ;;
     --archives) MIGRATE_ARCHIVES=true ;;
+    --example-sentences) MIGRATE_EXAMPLE_SENTENCES=true ;;
     *) POSITIONAL+=("$arg") ;;
   esac
 done
@@ -52,7 +55,7 @@ docker build --platform linux/amd64 -t "${BACKEND_IMAGE}" ./backend
 docker push "${BACKEND_IMAGE}"
 
 # Optionally seed Firestore with data from local files (before deploy so configs are available on startup)
-if [ "$MIGRATE_WORD" = true ] || [ "$MIGRATE_GRAMMER" = true ] || [ "$MIGRATE_LLM" = true ] || [ "$MIGRATE_PROMPTS" = true ] || [ "$MIGRATE_ARCHIVES" = true ]; then
+if [ "$MIGRATE_WORD" = true ] || [ "$MIGRATE_GRAMMER" = true ] || [ "$MIGRATE_LLM" = true ] || [ "$MIGRATE_PROMPTS" = true ] || [ "$MIGRATE_ARCHIVES" = true ] || [ "$MIGRATE_EXAMPLE_SENTENCES" = true ]; then
   echo "==> Installing backend dependencies for migration..."
   (cd backend && npm install --silent)
 fi
@@ -81,8 +84,13 @@ if [ "$MIGRATE_ARCHIVES" = true ]; then
   (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
     npx tsx scripts/migrate-db-config-to-firestore.ts --archives)
 fi
-if [ "$MIGRATE_WORD" = false ] && [ "$MIGRATE_GRAMMER" = false ] && [ "$MIGRATE_LLM" = false ] && [ "$MIGRATE_PROMPTS" = false ] && [ "$MIGRATE_ARCHIVES" = false ]; then
-  echo "==> Skipping Firestore migration (use --word, --grammer, --llm, --prompts, and/or --archives to run)"
+if [ "$MIGRATE_EXAMPLE_SENTENCES" = true ]; then
+  echo "==> Migrating embedded examples to example_sentences collection..."
+  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
+    npx tsx scripts/migrate-example-sentences.ts)
+fi
+if [ "$MIGRATE_WORD" = false ] && [ "$MIGRATE_GRAMMER" = false ] && [ "$MIGRATE_LLM" = false ] && [ "$MIGRATE_PROMPTS" = false ] && [ "$MIGRATE_ARCHIVES" = false ] && [ "$MIGRATE_EXAMPLE_SENTENCES" = false ]; then
+  echo "==> Skipping Firestore migration (use --word, --grammer, --llm, --prompts, --archives, and/or --example-sentences to run)"
 fi
 
 # Deploy backend to Cloud Run

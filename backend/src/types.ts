@@ -1,7 +1,22 @@
 export interface Example {
+  /**
+   * The underlying ExampleSentence document ID. Populated by `hydrateWords`
+   * for persisted examples; absent on client-side drafts (e.g. a new example
+   * being entered in a form) and on legacy embedded-example words.
+   */
+  id?: string;
   sentence: string;
   translation: string | Record<string, string>;
   segments?: { text: string; transliteration?: string; id?: string }[];
+}
+
+export interface ExampleSentence {
+  id: string;
+  sentence: string;
+  translation: string | Record<string, string>;
+  segments?: { text: string; transliteration?: string; id?: string }[];
+  language: string;
+  ownerWordId: string;
 }
 
 export interface Meaning {

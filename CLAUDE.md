@@ -18,6 +18,7 @@ cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --archives  # Up
 cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts             # Upload both prompts + archives
 cd backend && npx tsx scripts/backfill-word-languages.ts [--dry-run] [--language=<code>] [--limit=<n>]  # One-off: re-run LLM on existing words to fill missing en/ja/ko/zh definition + example translations
 cd backend && npx tsx scripts/unify-chinese-levels.ts  # One-off: rewrite granular HSK1/2/.../9 labels in `words` and `word_index` to the merged HSK1-4 / HSK5 / HSK6 / HSK7-9 / Advanced buckets
+cd backend && npx tsx scripts/migrate-example-sentences.ts [--dry-run]  # One-off: extract embedded examples from words into example_sentences collection with dedup + bidirectional linking
 ```
 
 ### Frontend
@@ -41,6 +42,7 @@ docker compose up --build      # Run full stack (backend :3000, frontend :5173)
 ./deploy.sh PROJECT_ID REGION --word --grammer --llm  # Deploy + all migrations
 ./deploy.sh PROJECT_ID REGION --prompts              # Deploy + upload speaking/writing & translation config
 ./deploy.sh PROJECT_ID REGION --archives             # Deploy + upload backup & original archives
+./deploy.sh PROJECT_ID REGION --example-sentences    # Deploy + migrate embedded examples to example_sentences collection
 ```
 
 ### No test or lint commands are configured.
@@ -83,6 +85,8 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `words` — all vocabulary words partitioned by language field
   - `progress` — per-word progress (composite key: `{language}_{wordId}`)
   - `word_index` — fast term lookup (composite key: `{language}_{term}`)
+  - `example_sentences` — normalized example sentences (id, sentence, translation, segments, language, ownerWordId); words store `exampleIds` and `appearsInIds` arrays referencing this collection
+  - `example_sentence_index` — dedup lookup by sentence text (composite key: `{language}_{sha256(sentence).slice(0,16)}` → exampleId)
   - `id_maps` — next ID counters per language
   - `quiz_sessions` — one active word quiz session per language
   - `flagged_words` — flagged words for review

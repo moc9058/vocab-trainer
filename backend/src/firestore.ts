@@ -1,6 +1,9 @@
 import { Firestore, FieldValue, FieldPath } from "@google-cloud/firestore";
+import { createHash } from "crypto";
 import type {
   Word,
+  ExampleSentence,
+  Example,
   Meaning,
   VocabFile,
   LanguageInfo,
@@ -36,6 +39,14 @@ const wordIndex = db.collection("word_index");
 const progress = db.collection("progress");
 const quizSessions = db.collection("quiz_sessions");
 const flaggedWords = db.collection("flagged_words");
+const exampleSentences = db.collection("example_sentences");
+const exampleSentenceIndex = db.collection("example_sentence_index");
+
+/** Internal type: Word with optional Firestore-stored ID arrays (pre-hydration). */
+interface WordRaw extends Word {
+  exampleIds?: string[];
+  appearsInIds?: string[];
+}
 
 // ========== Languages ==========
 
@@ -187,7 +198,7 @@ export async function getWords(
 
   if (filters?.category) {
     const snap = await query.get();
-    let results = snap.docs.map(docToWord);
+    let results = await hydrateWords(snap.docs.map(docToWord));
     results = applyFilters(results, filters);
     return paginateResults(results, page, limit);
   }
@@ -199,14 +210,14 @@ export async function getWords(
   const totalPages = Math.ceil(total / limit) || 1;
   const offset = (page - 1) * limit;
   const snap = await query.offset(offset).limit(limit).get();
-  const items = snap.docs.map(docToWord);
+  const items = await hydrateWords(snap.docs.map(docToWord));
 
   return { items, total, page, limit, totalPages };
 }
 
 export async function getAllWords(language: string): Promise<Word[]> {
   const snap = await words.where("language", "==", language).get();
-  return snap.docs.map(docToWord);
+  return hydrateWords(snap.docs.map(docToWord));
 }
 
 export async function getFilteredWords(
@@ -216,7 +227,7 @@ export async function getFilteredWords(
   // Firestore array-contains can only filter on one topic at a time,
   // so we fetch all words and filter client-side for multi-value filters
   const snap = await words.where("language", "==", language).get();
-  let results = snap.docs.map(docToWord);
+  let results = await hydrateWords(snap.docs.map(docToWord));
 
   const hasTopicFilter = filters?.topics && filters.topics.length > 0;
   const hasCategoryFilter = filters?.categories && filters.categories.length > 0;
@@ -267,19 +278,38 @@ export async function getWordFilters(language: string): Promise<{
 export async function getWord(wordId: string): Promise<Word | null> {
   const doc = await words.doc(wordId).get();
   if (!doc.exists) return null;
-  return docToWord(doc);
+  const raw = docToWord(doc);
+  const [hydrated] = await hydrateWords([raw]);
+  return hydrated;
 }
 
 export async function getWordsByIds(wordIds: string[]): Promise<Word[]> {
   if (wordIds.length === 0) return [];
   const refs = wordIds.map((id) => words.doc(id));
   const docs = await db.getAll(...refs);
-  return docs.filter((d) => d.exists).map(docToWord);
+  const rawWords = docs.filter((d) => d.exists).map(docToWord);
+  return hydrateWords(rawWords);
 }
 
-export async function addWord(language: string, word: Word): Promise<void> {
+export async function addWord(
+  language: string,
+  word: Word,
+  opts?: { exampleIds?: string[]; appearsInIds?: string[] },
+): Promise<void> {
   const data: Record<string, unknown> = { ...word, language };
   delete data.id;
+
+  if (opts?.exampleIds) {
+    // New format: store IDs instead of embedded examples
+    delete data.examples;
+    data.exampleIds = opts.exampleIds;
+    // Invariant: appearsInIds ⊇ exampleIds. Callers don't need to include
+    // own exampleIds in opts.appearsInIds — the union is enforced here.
+    const appearsSet = new Set<string>(opts.appearsInIds ?? []);
+    for (const exId of opts.exampleIds) appearsSet.add(exId);
+    data.appearsInIds = [...appearsSet];
+  }
+
   await words.doc(word.id).set(data);
   await updateLanguageMeta(language);
   invalidateWordFiltersCache(language);
@@ -295,18 +325,46 @@ export async function addWord(language: string, word: Word): Promise<void> {
   });
 }
 
-export async function updateWord(language: string, wordId: string, updates: Partial<Word>): Promise<Word | null> {
+export async function updateWord(
+  language: string,
+  wordId: string,
+  updates: Partial<Word>,
+  opts?: { exampleIds?: string[]; appearsInIds?: string[] },
+): Promise<Word | null> {
   const doc = await words.doc(wordId).get();
   if (!doc.exists) return null;
 
   const oldData = doc.data()!;
+  const isNewFormat = Array.isArray(oldData.exampleIds);
   const data: Record<string, unknown> = { ...updates };
   delete data.id;
 
-  // Preserve per-example segments when the sentence text is unchanged.
-  // WordFormModal does not carry segments through its form state, so without
-  // this merge every word edit would wipe the LLM-generated pinyin segments.
-  if (Array.isArray(updates.examples) && Array.isArray(oldData.examples)) {
+  if (isNewFormat) {
+    // New format: don't store embedded examples on the word doc
+    delete data.examples;
+    if (opts?.exampleIds) {
+      data.exampleIds = opts.exampleIds;
+      // Invariant: appearsInIds ⊇ exampleIds. When the caller explicitly
+      // overwrites appearsInIds, union in exampleIds before writing. Otherwise
+      // use arrayUnion so concurrent writers are not clobbered.
+      if (opts.appearsInIds) {
+        const appearsSet = new Set<string>(opts.appearsInIds);
+        for (const exId of opts.exampleIds) appearsSet.add(exId);
+        data.appearsInIds = [...appearsSet];
+      } else if (opts.exampleIds.length > 0) {
+        data.appearsInIds = FieldValue.arrayUnion(...opts.exampleIds);
+      }
+    } else if (opts?.appearsInIds) {
+      // Preserve invariant even when only appearsInIds is being updated:
+      // always include the word's own exampleIds. The read of oldData is
+      // acceptable here because the caller is explicitly overwriting.
+      const existingExampleIds = (oldData.exampleIds ?? []) as string[];
+      const appearsSet = new Set<string>(opts.appearsInIds);
+      for (const exId of existingExampleIds) appearsSet.add(exId);
+      data.appearsInIds = [...appearsSet];
+    }
+  } else if (Array.isArray(updates.examples) && Array.isArray(oldData.examples)) {
+    // Legacy format: preserve per-example segments when sentence text is unchanged
     const oldBySentence = new Map<string, unknown>();
     for (const oldEx of oldData.examples as { sentence: string; segments?: unknown }[]) {
       if (oldEx?.segments) oldBySentence.set(oldEx.sentence, oldEx.segments);
@@ -324,7 +382,6 @@ export async function updateWord(language: string, wordId: string, updates: Part
   if (updates.topics || updates.level || updates.definitions) {
     await updateLanguageMeta(language);
     invalidateWordFiltersCache(language);
-
   }
 
   // Sync word_index on term/level/pinyin change
@@ -347,13 +404,46 @@ export async function updateWord(language: string, wordId: string, updates: Part
     });
   }
 
-  return docToWord(updated);
+  const raw = docToWord(updated);
+  const [hydrated] = await hydrateWords([raw]);
+  return hydrated;
 }
 
 export async function deleteWord(language: string, wordId: string): Promise<boolean> {
   const doc = await words.doc(wordId).get();
   if (!doc.exists) return false;
-  const term = doc.data()!.term as string;
+  const d = doc.data()!;
+  const term = d.term as string;
+
+  // Delete example sentences owned by this word (new format only).
+  if (Array.isArray(d.exampleIds) && (d.exampleIds as string[]).length > 0) {
+    // For simplicity, delete owned examples — other words' appearsInIds will
+    // point to non-existent docs and be silently skipped during hydration.
+    // A full cleanup would scan other words, but that's expensive.
+    await deleteExampleSentences(d.exampleIds as string[]);
+  }
+
+  // Clear this word's ID from segments in every example sentence it appears
+  // in. This is independent of whether the word had its own `exampleIds` —
+  // a word can be segment-referenced without owning any examples.
+  const appearsIn = (d.appearsInIds ?? []) as string[];
+  if (appearsIn.length > 0) {
+    const exDocs = await getExampleSentencesByIds(appearsIn);
+    for (const es of exDocs) {
+      if (!es.segments) continue;
+      let changed = false;
+      for (const seg of es.segments) {
+        if (seg.id === wordId) {
+          delete seg.id;
+          changed = true;
+        }
+      }
+      if (changed) {
+        await updateExampleSentence(es.id, { segments: es.segments });
+      }
+    }
+  }
+
   await words.doc(wordId).delete();
   await updateLanguageMeta(language);
   invalidateWordFiltersCache(language);
@@ -378,25 +468,33 @@ function normalizeDefinitions(d: Record<string, unknown>): Meaning[] {
   return [];
 }
 
-function docToWord(doc: FirebaseFirestore.DocumentSnapshot): Word {
+function parseExample(ex: any): Example {
+  return {
+    sentence: ex.sentence,
+    translation: ex.translation,
+    segments: ex.segments?.map((seg: any) => ({
+      text: seg.text,
+      transliteration: seg.transliteration ?? seg.pinyin,
+      ...(seg.id ? { id: seg.id } : {}),
+    })),
+  };
+}
+
+function docToWord(doc: FirebaseFirestore.DocumentSnapshot): WordRaw {
   const d = doc.data()!;
+  const isNewFormat = Array.isArray(d.exampleIds);
   return {
     id: doc.id,
     term: d.term,
     transliteration: d.transliteration,
     definitions: normalizeDefinitions(d),
-    examples: (d.examples ?? []).map((ex: any) => ({
-      sentence: ex.sentence,
-      translation: ex.translation,
-      segments: ex.segments?.map((seg: any) => ({
-        text: seg.text,
-        transliteration: seg.transliteration ?? seg.pinyin,
-        ...(seg.id ? { id: seg.id } : {}),
-      })),
-    })),
+    // Old format: parse embedded examples; New format: empty (filled by hydration)
+    examples: isNewFormat ? [] : (d.examples ?? []).map(parseExample),
     topics: d.topics ?? [],
     level: d.level,
     notes: d.notes,
+    // New format fields
+    ...(isNewFormat ? { exampleIds: d.exampleIds, appearsInIds: d.appearsInIds ?? [] } : {}),
   };
 }
 
@@ -427,6 +525,566 @@ export async function getNextWordId(language: string): Promise<string> {
   }
 
   return `${prefix}-${String(nextId).padStart(6, "0")}`;
+}
+
+const ISO_MAP: Record<string, string> = {
+  chinese: "zh", english: "en", french: "fr", german: "de",
+  italian: "it", japanese: "ja", korean: "ko", portuguese: "pt",
+  russian: "ru", spanish: "es",
+};
+
+export async function getNextExampleId(language: string): Promise<string> {
+  const docRef = idMaps.doc(`example_sentences_${language}`);
+  const doc = await docRef.get();
+
+  let nextId: number;
+  const prefix = `exs-${ISO_MAP[language.toLowerCase()] ?? language.slice(0, 2).toLowerCase()}`;
+
+  if (doc.exists) {
+    nextId = doc.data()!.next_id;
+    await docRef.update({ next_id: FieldValue.increment(1) });
+  } else {
+    nextId = 1;
+    await docRef.set({ next_id: 2 });
+  }
+
+  return `${prefix}-${String(nextId).padStart(6, "0")}`;
+}
+
+// ========== Example Sentences ==========
+
+function exampleSentenceIndexId(language: string, sentence: string): string {
+  const hash = createHash("sha256").update(sentence).digest("hex").slice(0, 16);
+  return `${language}_${hash}`;
+}
+
+export async function addExampleSentence(es: ExampleSentence): Promise<void> {
+  const data: Record<string, unknown> = { ...es };
+  delete data.id;
+  await exampleSentences.doc(es.id).set(data);
+  // Write dedup index
+  const indexId = exampleSentenceIndexId(es.language, es.sentence);
+  await exampleSentenceIndex.doc(indexId).set({ exampleId: es.id });
+}
+
+export async function getExampleSentencesByIds(ids: string[]): Promise<ExampleSentence[]> {
+  if (ids.length === 0) return [];
+  const CHUNK = 100;
+  const results: ExampleSentence[] = [];
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    const refs = ids.slice(i, i + CHUNK).map((id) => exampleSentences.doc(id));
+    const docs = await db.getAll(...refs);
+    for (const doc of docs) {
+      if (doc.exists) {
+        const d = doc.data()!;
+        results.push({
+          id: doc.id,
+          sentence: d.sentence,
+          translation: d.translation,
+          segments: d.segments?.map((seg: any) => ({
+            text: seg.text,
+            transliteration: seg.transliteration ?? seg.pinyin,
+            ...(seg.id ? { id: seg.id } : {}),
+          })),
+          language: d.language,
+          ownerWordId: d.ownerWordId,
+        });
+      }
+    }
+  }
+  return results;
+}
+
+export async function findExampleByText(language: string, sentence: string): Promise<ExampleSentence | null> {
+  const indexId = exampleSentenceIndexId(language, sentence);
+  const indexDoc = await exampleSentenceIndex.doc(indexId).get();
+  if (!indexDoc.exists) return null;
+  const exId = indexDoc.data()!.exampleId as string;
+  const doc = await exampleSentences.doc(exId).get();
+  if (!doc.exists) return null;
+  const d = doc.data()!;
+  return {
+    id: doc.id,
+    sentence: d.sentence,
+    translation: d.translation,
+    segments: d.segments,
+    language: d.language,
+    ownerWordId: d.ownerWordId,
+  };
+}
+
+export async function updateExampleSentence(id: string, updates: Partial<ExampleSentence>): Promise<void> {
+  const data: Record<string, unknown> = { ...updates };
+  delete data.id;
+
+  // If the sentence text is changing, the dedup index (keyed by sha(sentence))
+  // must be rekeyed. Detect by reading the existing doc's sentence + language
+  // and compare. If the new text collides with a different example in the
+  // language, the caller is attempting to "rename into" an already-dedup'd
+  // slot — refuse so the two examples aren't silently conflated.
+  if (typeof updates.sentence === "string") {
+    const existing = await exampleSentences.doc(id).get();
+    if (!existing.exists) {
+      throw new Error(`Example sentence ${id} not found`);
+    }
+    const oldData = existing.data()!;
+    const oldSentence = oldData.sentence as string;
+    const language = oldData.language as string;
+    if (oldSentence !== updates.sentence) {
+      const newIndexId = exampleSentenceIndexId(language, updates.sentence);
+      const newIndexDoc = await exampleSentenceIndex.doc(newIndexId).get();
+      if (newIndexDoc.exists) {
+        const existingId = newIndexDoc.data()!.exampleId as string;
+        if (existingId !== id) {
+          throw new Error(
+            `Cannot rename example ${id} to "${updates.sentence}": another example (${existingId}) already uses that text`,
+          );
+        }
+      }
+      const oldIndexId = exampleSentenceIndexId(language, oldSentence);
+      const batch = db.batch();
+      batch.delete(exampleSentenceIndex.doc(oldIndexId));
+      batch.set(exampleSentenceIndex.doc(newIndexId), { exampleId: id });
+      batch.update(exampleSentences.doc(id), data);
+      await batch.commit();
+      return;
+    }
+  }
+
+  await exampleSentences.doc(id).update(data);
+}
+
+export async function deleteExampleSentences(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  // Fetch docs to get sentence text for index cleanup AND segment refs for
+  // cleaning up dangling `appearsInIds` pointers on other words.
+  const docs = await db.getAll(...ids.map((id) => exampleSentences.doc(id)));
+
+  // Collect the wordId -> set<exampleId> cleanup map for appearsInIds.
+  const cleanupMap = new Map<string, Set<string>>();
+  for (const doc of docs) {
+    if (!doc.exists) continue;
+    const d = doc.data()!;
+    const segs = (d.segments ?? []) as { id?: string }[];
+    for (const seg of segs) {
+      if (!seg.id) continue;
+      if (!cleanupMap.has(seg.id)) cleanupMap.set(seg.id, new Set());
+      cleanupMap.get(seg.id)!.add(doc.id);
+    }
+  }
+
+  // Remove the about-to-be-deleted example IDs from each referenced word's
+  // appearsInIds. `arrayRemove` is atomic and idempotent, so we just try the
+  // update and swallow NOT_FOUND errors for words that were concurrently
+  // deleted (e.g., the owner being removed in the surrounding deleteWord).
+  for (const [wId, exIds] of cleanupMap) {
+    try {
+      await words.doc(wId).update({ appearsInIds: FieldValue.arrayRemove(...exIds) });
+    } catch (e: unknown) {
+      const code = (e as { code?: number | string }).code;
+      if (code !== 5 && code !== "not-found") throw e;
+    }
+  }
+
+  // Batch delete the example sentence docs and their dedup index entries.
+  const BATCH_LIMIT = 500;
+  let batch = db.batch();
+  let count = 0;
+  for (const doc of docs) {
+    if (!doc.exists) continue;
+    const d = doc.data()!;
+    batch.delete(doc.ref);
+    const indexId = exampleSentenceIndexId(d.language, d.sentence);
+    batch.delete(exampleSentenceIndex.doc(indexId));
+    count += 2;
+    if (count >= BATCH_LIMIT) {
+      await batch.commit();
+      batch = db.batch();
+      count = 0;
+    }
+  }
+  if (count > 0) await batch.commit();
+}
+
+export async function getAllExampleSentencesForLanguage(language: string): Promise<ExampleSentence[]> {
+  const snap = await exampleSentences.where("language", "==", language).get();
+  return snap.docs.map((doc) => {
+    const d = doc.data();
+    return {
+      id: doc.id,
+      sentence: d.sentence,
+      translation: d.translation,
+      segments: d.segments,
+      language: d.language,
+      ownerWordId: d.ownerWordId,
+    };
+  });
+}
+
+/**
+ * Reverse-link: find existing example sentences where a word appears as a segment,
+ * set the segment's word ID, then set `appearsInIds` to the full invariant union
+ * of (segment matches) ∪ (existing appearsInIds) ∪ (word's own exampleIds).
+ */
+export async function linkWordToExistingExamples(language: string, wordId: string, term: string): Promise<string[]> {
+  const allEx = await getAllExampleSentencesForLanguage(language);
+  const segmentMatched: string[] = [];
+  for (const es of allEx) {
+    if (!es.segments) continue;
+    let changed = false;
+    for (const seg of es.segments) {
+      if (seg.text === term && !seg.id) {
+        seg.id = wordId;
+        changed = true;
+      }
+    }
+    if (changed) {
+      await updateExampleSentence(es.id, { segments: es.segments });
+      segmentMatched.push(es.id);
+    }
+  }
+
+  // Union the segment-matched IDs into appearsInIds atomically. The word's
+  // own exampleIds are already included by `addWord` / `updateWord` at write
+  // time, so there's no need to re-read them here. `arrayUnion` is atomic
+  // and idempotent, so concurrent writes are not clobbered.
+  if (segmentMatched.length > 0) {
+    try {
+      await words.doc(wordId).update({
+        appearsInIds: FieldValue.arrayUnion(...segmentMatched),
+      });
+    } catch (e: unknown) {
+      const code = (e as { code?: number | string }).code;
+      if (code !== 5 && code !== "not-found") throw e;
+    }
+  }
+  return segmentMatched;
+}
+
+/**
+ * Reconcile `appearsInIds` on words referenced by an example sentence's segments
+ * when that example sentence's segments array changes.
+ *
+ * - Words dropped from references: `appearsInIds` loses the example ID, unless
+ *   the example is still in the word's own `exampleIds` (invariant keeps it).
+ * - Words newly referenced: `appearsInIds` gains the example ID.
+ */
+export async function reconcileExampleSegmentRefs(
+  exampleId: string,
+  oldSegments: { id?: string }[] | undefined,
+  newSegments: { id?: string }[] | undefined,
+): Promise<void> {
+  const oldIds = new Set<string>();
+  for (const seg of oldSegments ?? []) if (seg.id) oldIds.add(seg.id);
+  const newIds = new Set<string>();
+  for (const seg of newSegments ?? []) if (seg.id) newIds.add(seg.id);
+
+  // Words dropped from references. The decision to arrayRemove depends on a
+  // read of `exampleIds` — run it in a per-word transaction so a concurrent
+  // write that adds this example to the word's own exampleIds cannot sneak
+  // in between the read and the remove.
+  for (const wId of oldIds) {
+    if (newIds.has(wId)) continue;
+    await db.runTransaction(async (tx) => {
+      const doc = await tx.get(words.doc(wId));
+      if (!doc.exists) return;
+      const d = doc.data()!;
+      const ownExampleIds = (d.exampleIds ?? []) as string[];
+      if (ownExampleIds.includes(exampleId)) return; // invariant keeps it
+      tx.update(words.doc(wId), { appearsInIds: FieldValue.arrayRemove(exampleId) });
+    });
+  }
+
+  // Words newly referenced — arrayUnion is atomic and idempotent, so no
+  // read is needed. Swallow NOT_FOUND for concurrently-deleted words.
+  for (const wId of newIds) {
+    if (oldIds.has(wId)) continue;
+    try {
+      await words.doc(wId).update({ appearsInIds: FieldValue.arrayUnion(exampleId) });
+    } catch (e: unknown) {
+      const code = (e as { code?: number | string }).code;
+      if (code !== 5 && code !== "not-found") throw e;
+    }
+  }
+}
+
+/**
+ * Delete a word if, and only if, it has no remaining references anywhere
+ * (no own example IDs AND no segment references across other examples).
+ *
+ * Relies on the word↔example invariant: `appearsInIds ⊇ exampleIds`, so
+ * `appearsInIds.length === 0 && exampleIds.length === 0` is a reliable
+ * "fully orphaned" check. Uses a transactional read so a concurrent write
+ * that re-links the word cannot race with the delete decision.
+ */
+export async function deleteWordIfOrphaned(
+  language: string,
+  wordId: string,
+): Promise<boolean> {
+  const shouldDelete = await db.runTransaction<boolean>(async (tx) => {
+    const doc = await tx.get(words.doc(wordId));
+    if (!doc.exists) return false;
+    const d = doc.data()!;
+    const exampleIds = (d.exampleIds ?? []) as string[];
+    const appearsInIds = (d.appearsInIds ?? []) as string[];
+    return exampleIds.length === 0 && appearsInIds.length === 0;
+  });
+  if (!shouldDelete) return false;
+  await deleteWord(language, wordId);
+  return true;
+}
+
+/**
+ * Remove one or more example IDs from a word's `appearsInIds`. `updateWord`
+ * only `arrayUnion`s into `appearsInIds`, so callers that shrink
+ * `exampleIds` must also strip the same ids from `appearsInIds` when the
+ * word is no longer referenced via those examples (neither as own-example
+ * nor as a segment). Atomic and idempotent.
+ */
+export async function removeFromAppearsInIds(
+  wordId: string,
+  exIds: string[],
+): Promise<void> {
+  if (exIds.length === 0) return;
+  try {
+    await words.doc(wordId).update({
+      appearsInIds: FieldValue.arrayRemove(...exIds),
+    });
+  } catch (e: unknown) {
+    const code = (e as { code?: number | string }).code;
+    if (code !== 5 && code !== "not-found") throw e;
+  }
+}
+
+/**
+ * Return true if any word other than `exceptWordId` still lists `exampleId`
+ * in its own `exampleIds`. Used to decide whether a dropped example can be
+ * deleted outright (no other owner) or must be preserved as a dedup share.
+ */
+export async function isExampleIdClaimedByOtherWord(
+  language: string,
+  exampleId: string,
+  exceptWordId: string,
+): Promise<boolean> {
+  const snap = await words
+    .where("language", "==", language)
+    .where("exampleIds", "array-contains", exampleId)
+    .get();
+  return snap.docs.some((d) => d.id !== exceptWordId);
+}
+
+/**
+ * Unlink a word from a specific example sentence (by sentence text).
+ *
+ * After removing the segment link and adjusting `appearsInIds`, the word is
+ * deleted only if it is fully orphaned (no remaining `exampleIds` and no
+ * remaining `appearsInIds`). A word that is still segment-referenced from
+ * another example stays alive.
+ */
+export async function unlinkWordFromExampleSentence(
+  language: string,
+  wordId: string,
+  sentence: string,
+): Promise<{ action: "deleted" | "preserved" | "noop"; word?: Word }> {
+  const es = await findExampleByText(language, sentence);
+  if (!es) return { action: "noop" };
+
+  // Transactionally clear the segment link on this example and, unless the
+  // example is one of the word's own examples, remove it from appearsInIds.
+  // The delete decision happens afterward via deleteWordIfOrphaned so the
+  // cascading multi-doc delete doesn't run inside a transaction.
+  type TxResult = { kind: "noop" } | { kind: "applied" };
+
+  const txResult = await db.runTransaction<TxResult>(async (tx) => {
+    const wordDoc = await tx.get(words.doc(wordId));
+    if (!wordDoc.exists) return { kind: "noop" };
+    const wData = wordDoc.data()!;
+    const ownExampleIds = (wData.exampleIds ?? []) as string[];
+
+    const exDoc = await tx.get(exampleSentences.doc(es.id));
+    if (!exDoc.exists) return { kind: "noop" };
+    const exData = exDoc.data()!;
+    const segs = (exData.segments ?? []) as Record<string, unknown>[];
+    let changed = false;
+    const newSegs = segs.map((seg) => {
+      if (seg.id === wordId) {
+        changed = true;
+        const { id: _id, ...rest } = seg;
+        return rest;
+      }
+      return seg;
+    });
+    if (changed) {
+      tx.update(exampleSentences.doc(es.id), { segments: newSegs });
+    }
+    if (!ownExampleIds.includes(es.id)) {
+      tx.update(words.doc(wordId), { appearsInIds: FieldValue.arrayRemove(es.id) });
+    }
+    return { kind: "applied" };
+  });
+
+  if (txResult.kind === "noop") return { action: "noop" };
+
+  const deleted = await deleteWordIfOrphaned(language, wordId);
+  if (deleted) return { action: "deleted" };
+
+  // Return rehydrated word
+  const updated = await words.doc(wordId).get();
+  if (!updated.exists) return { action: "deleted" };
+  const raw = docToWord(updated);
+  const [hydrated] = await hydrateWords([raw]);
+  return { action: "preserved", word: hydrated };
+}
+
+/**
+ * Reconcile incoming segments against the previous persisted segments of an
+ * example sentence so that:
+ *   1. Segments whose text is unchanged auto-reactivate: if the old segment
+ *      at matching text had an `id`, copy it onto the new segment even if
+ *      the caller sent the segment without an `id`. This makes pinyin-only
+ *      edits and accidental deactivations in the edit UI harmless — only
+ *      real structural changes (merge/split → text change) drop the link.
+ *   2. For every segment that ends up with an `id` (restored or already
+ *      set), overwrite its `transliteration` with the canonical value from
+ *      the word DB so pinyin always tracks the word.
+ *
+ * Segments whose text does not match any old segment are left alone. If an
+ * id refers to a word that no longer exists, the id is cleared so we do not
+ * carry a broken reference forward.
+ *
+ * Mutates `newSegments` in place.
+ */
+export async function reconcileIncomingSegments(
+  oldSegments: { text: string; transliteration?: string; id?: string }[] | undefined,
+  newSegments: { text: string; transliteration?: string; id?: string }[],
+): Promise<void> {
+  // Build text -> id map from old segments where id is set. For duplicated
+  // texts, the first occurrence wins; the rest are left to the caller.
+  const oldTextToId = new Map<string, string>();
+  for (const seg of oldSegments ?? []) {
+    if (seg.id && !oldTextToId.has(seg.text)) {
+      oldTextToId.set(seg.text, seg.id);
+    }
+  }
+
+  // Auto-reactivate: restore id on any new segment whose text matches an
+  // old segment that had an id, but only if the new segment doesn't already
+  // specify an id (explicit caller intent wins).
+  for (const seg of newSegments) {
+    if (!seg.id) {
+      const oldId = oldTextToId.get(seg.text);
+      if (oldId) seg.id = oldId;
+    }
+  }
+
+  // Source transliteration from the word DB for every segment with an id.
+  const idSet = new Set<string>();
+  for (const seg of newSegments) if (seg.id) idSet.add(seg.id);
+  if (idSet.size === 0) return;
+
+  const wordDocs = await getWordsByIds([...idSet]);
+  const idToWord = new Map(wordDocs.map((w) => [w.id, w]));
+  for (const seg of newSegments) {
+    if (!seg.id) continue;
+    const w = idToWord.get(seg.id);
+    if (!w) {
+      // Dangling id — the referenced word no longer exists. Drop the id
+      // so we don't carry a broken reference forward.
+      delete seg.id;
+      continue;
+    }
+    if (w.transliteration) {
+      seg.transliteration = w.transliteration;
+    }
+  }
+}
+
+/** Collect wordIds present in `oldSegments` but absent from `newSegments`. */
+export function droppedSegmentWordIds(
+  oldSegments: { id?: string }[] | undefined,
+  newSegments: { id?: string }[] | undefined,
+): string[] {
+  const oldIds = new Set<string>();
+  for (const seg of oldSegments ?? []) if (seg.id) oldIds.add(seg.id);
+  const newIds = new Set<string>();
+  for (const seg of newSegments ?? []) if (seg.id) newIds.add(seg.id);
+  const dropped: string[] = [];
+  for (const id of oldIds) if (!newIds.has(id)) dropped.push(id);
+  return dropped;
+}
+
+/**
+ * For a given example sentence, look up all segment texts in word_index
+ * and set segment.id. Also update appearsInIds on matched words.
+ */
+export async function updateSegmentWordLinks(exampleId: string, language: string): Promise<void> {
+  const doc = await exampleSentences.doc(exampleId).get();
+  if (!doc.exists) return;
+  const es = doc.data()!;
+  if (!Array.isArray(es.segments) || es.segments.length === 0) return;
+
+  const segTexts = [...new Set(es.segments.map((s: any) => s.text as string).filter((t: string) => t.trim()))];
+  const matches = await lookupWordsByTerms(language, segTexts);
+  const termToId = new Map(matches.map((m) => [m.term, m.id]));
+
+  let changed = false;
+  for (const seg of es.segments) {
+    const wId = termToId.get(seg.text);
+    if (wId && seg.id !== wId) {
+      seg.id = wId;
+      changed = true;
+    }
+  }
+  if (changed) {
+    await exampleSentences.doc(exampleId).update({ segments: es.segments });
+  }
+
+  // Update appearsInIds on matched words. `arrayUnion` is atomic and
+  // idempotent; swallow NOT_FOUND for concurrently-deleted words.
+  for (const [, wId] of termToId) {
+    try {
+      await words.doc(wId).update({ appearsInIds: FieldValue.arrayUnion(exampleId) });
+    } catch (e: unknown) {
+      const code = (e as { code?: number | string }).code;
+      if (code !== 5 && code !== "not-found") throw e;
+    }
+  }
+}
+
+/** Hydrate WordRaw[] by fetching example sentences and filling the `examples` field. */
+async function hydrateWords(rawWords: WordRaw[]): Promise<Word[]> {
+  // Collect all example IDs needed
+  const allIds = new Set<string>();
+  for (const w of rawWords) {
+    if (w.exampleIds) w.exampleIds.forEach((id) => allIds.add(id));
+    if (w.appearsInIds) w.appearsInIds.forEach((id) => allIds.add(id));
+  }
+
+  if (allIds.size === 0) {
+    // All words are either old-format (already have examples) or have no examples
+    return rawWords.map(({ exampleIds, appearsInIds, ...word }) => word);
+  }
+
+  const exSentences = await getExampleSentencesByIds([...allIds]);
+  const exMap = new Map(exSentences.map((es) => [es.id, es]));
+
+  return rawWords.map(({ exampleIds, appearsInIds, ...word }) => {
+    if (!exampleIds) return word; // Old format — examples already populated
+
+    const ownExamples: Example[] = [];
+    for (const id of exampleIds) {
+      const es = exMap.get(id);
+      if (es) ownExamples.push({ id: es.id, sentence: es.sentence, translation: es.translation, segments: es.segments });
+    }
+    const appearsExamples: Example[] = [];
+    for (const id of appearsInIds ?? []) {
+      if (exampleIds.includes(id)) continue; // Already in own examples
+      const es = exMap.get(id);
+      if (es) appearsExamples.push({ id: es.id, sentence: es.sentence, translation: es.translation, segments: es.segments });
+    }
+
+    return { ...word, examples: [...ownExamples, ...appearsExamples] };
+  });
 }
 
 // ========== Word Index ==========

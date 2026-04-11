@@ -38,6 +38,17 @@ export function deleteWord(language: string, wordId: string): Promise<void> {
   return deleteRequest(`/api/vocab/${encodeURIComponent(language)}/${encodeURIComponent(wordId)}`);
 }
 
+export function unlinkSegmentFromExample(
+  language: string,
+  wordId: string,
+  sentence: string,
+): Promise<{ action: "deleted" | "preserved" | "noop"; word?: Word }> {
+  return postJson(
+    `/api/vocab/${encodeURIComponent(language)}/${encodeURIComponent(wordId)}/unlink-segment`,
+    { sentence },
+  );
+}
+
 export function checkTerms(language: string, terms: string[]): Promise<{ existing: Record<string, string> }> {
   return postJson(`/api/vocab/${encodeURIComponent(language)}/check-terms`, { terms });
 }

@@ -8,6 +8,8 @@ export function displayTranslation(t: string | Record<string, string> | null | u
 }
 
 export interface Example {
+  /** ExampleSentence doc ID when hydrated from the backend; absent on fresh drafts. */
+  id?: string;
   sentence: string;
   translation: string | Record<string, string>;
   segments?: { text: string; transliteration?: string; id?: string }[];

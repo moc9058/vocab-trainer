@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord } from "../api/vocab";
+import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, unlinkSegmentFromExample } from "../api/vocab";
 import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
@@ -161,12 +161,27 @@ export default function WordList({ language, onBack }: Props) {
     if (wordId) {
       setBusySegments((prev) => new Set(prev).add(term));
       try {
-        await deleteWord(language, wordId);
+        const res = await unlinkSegmentFromExample(language, wordId, sentence);
         setExistingTerms((prev) => { const next = new Map(prev); next.delete(term); return next; });
-        setResult((prev) => {
-          if (!prev) return prev;
-          return { ...prev, items: prev.items.filter((w) => w.id !== wordId), total: prev.total - 1 };
-        });
+        if (res.action === "deleted") {
+          // Word fully removed from DB — drop it from the list.
+          setResult((prev) => {
+            if (!prev) return prev;
+            return { ...prev, items: prev.items.filter((w) => w.id !== wordId), total: prev.total - 1 };
+          });
+        } else if (res.action === "preserved" && res.word) {
+          // Word still has references (own examples and/or other segment
+          // refs). Replace its hydrated copy so the segment's id clearing is
+          // reflected in the UI.
+          const updatedWord = res.word;
+          setResult((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              items: prev.items.map((w) => (w.id === updatedWord.id ? updatedWord : w)),
+            };
+          });
+        }
       } finally {
         setBusySegments((prev) => { const next = new Set(prev); next.delete(term); return next; });
       }
@@ -287,13 +302,31 @@ export default function WordList({ language, onBack }: Props) {
       i === exampleIndex ? { ...ex, segments: finalSegments } : ex
     );
     await updateWord(language, wordId, { examples: updatedExamples });
+    const touchedById = new Map(
+      updatedExamples.filter((ex): ex is typeof ex & { id: string } => !!ex.id).map((ex) => [ex.id, ex]),
+    );
     setResult((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
-        items: prev.items.map((w) =>
-          w.id === wordId ? { ...w, examples: updatedExamples } : w
-        ),
+        items: prev.items.map((w) => {
+          if (w.id === wordId) return { ...w, examples: updatedExamples };
+          if (!w.examples.some((ex) => ex.id && touchedById.has(ex.id))) return w;
+          return {
+            ...w,
+            examples: w.examples.map((ex) => {
+              if (!ex.id) return ex;
+              const updated = touchedById.get(ex.id);
+              if (!updated) return ex;
+              return {
+                ...ex,
+                sentence: updated.sentence,
+                translation: updated.translation,
+                segments: updated.segments,
+              };
+            }),
+          };
+        }),
       };
     });
     const allTexts = [...new Set(
