@@ -46,6 +46,7 @@ export default function WordList({ language, onBack }: Props) {
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const isInitialMount = useRef(true);
   const requestIdRef = useRef(0);
+  const scrollToExpandedRef = useRef(false);
 
   // Fetch flagged word IDs on mount
   useEffect(() => {
@@ -273,7 +274,15 @@ export default function WordList({ language, onBack }: Props) {
       i === exampleIndex ? { ...ex, segments: finalSegments } : ex
     );
     await updateWord(language, wordId, { examples: updatedExamples });
-    fetchData();
+    setResult((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        items: prev.items.map((w) =>
+          w.id === wordId ? { ...w, examples: updatedExamples } : w
+        ),
+      };
+    });
     const allTexts = [...new Set(
       updatedExamples.flatMap((ex) => ex.segments?.map((s) => s.text).filter((t) => t.trim().length > 0 && !/^\p{P}+$/u.test(t)) ?? [])
     )];
@@ -328,6 +337,16 @@ export default function WordList({ language, onBack }: Props) {
     }
     setPage(1);
   }, [debouncedSearch, topic, category, level, flaggedOnly]);
+
+  // Scroll to a newly added word after fetchData completes
+  useEffect(() => {
+    if (!expandedId || loading || !scrollToExpandedRef.current) return;
+    scrollToExpandedRef.current = false;
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`word-${expandedId}`);
+      el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    });
+  }, [expandedId, loading]);
 
   // Clear selection whenever the visible word set changes — selection is
   // scoped to the current view, not persisted across navigation.
@@ -559,7 +578,18 @@ export default function WordList({ language, onBack }: Props) {
       {/* Modals */}
       {showSmartAdd && (
         <SmartAddWordModal
-          onSave={() => { setShowSmartAdd(false); fetchData(); }}
+          onSave={(word) => {
+            setShowSmartAdd(false);
+            setSearch("");
+            setDebouncedSearch("");
+            setTopic("");
+            setCategory("");
+            setLevel("");
+            setFlaggedOnly(false);
+            setPage(1);
+            setExpandedId(word.id);
+            scrollToExpandedRef.current = true;
+          }}
           onClose={() => setShowSmartAdd(false)}
         />
       )}
@@ -692,6 +722,7 @@ function WordCard({
 
   return (
     <div
+      id={`word-${word.id}`}
       onClick={onToggle}
       className={`cursor-pointer rounded-lg border bg-gray-800 p-3 ${selected ? "border-red-500/60 ring-1 ring-red-500/40" : "border-gray-700"}`}
     >
@@ -991,6 +1022,7 @@ function WordRow({
   return (
     <>
       <tr
+        id={`word-${word.id}`}
         onClick={onToggle}
         className={`cursor-pointer border-b border-gray-700 hover:bg-gray-700 ${selected ? "bg-red-900/20" : ""}`}
       >
