@@ -158,6 +158,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       examples?: { sentence: string; translation: string }[];
       level?: string;
       notes?: string;
+      flag?: boolean;
     };
   }>(
     "/:language/smart-add",
@@ -192,6 +193,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             },
             level: { type: "string" },
             notes: { type: "string" },
+            flag: { type: "boolean" },
           },
         },
       },
@@ -387,7 +389,9 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       };
 
       await addWord(language, word);
-      await flagWord(language, word.id);
+      if (body.flag !== false) {
+        await flagWord(language, word.id);
+      }
 
       return reply.status(201).send(word);
     }

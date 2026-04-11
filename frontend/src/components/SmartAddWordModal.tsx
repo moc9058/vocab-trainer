@@ -80,6 +80,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill }: Props) {
   const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>(
     prefill?.example ? [prefill.example] : [{ sentence: "", translation: "" }],
   );
+  const [flagForReview, setFlagForReview] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -121,6 +122,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill }: Props) {
         topics: topics.length > 0 ? topics : undefined,
         examples: validExamples.length > 0 ? validExamples : undefined,
         level: level || undefined,
+        flag: flagForReview,
       });
       const { generatedWords: gw, ...word } = result;
       setSuccess(true);
@@ -415,6 +417,17 @@ export default function SmartAddWordModal({ onSave, onClose, prefill }: Props) {
             ))}
             <p className="text-xs text-gray-500">LLM will generate if empty</p>
           </div>
+
+          {/* Flag for review */}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={flagForReview}
+              onChange={(e) => setFlagForReview(e.target.checked)}
+              className="accent-amber-500"
+            />
+            <span className="text-sm text-gray-300">{t("flagForReview")}</span>
+          </label>
 
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-2">
