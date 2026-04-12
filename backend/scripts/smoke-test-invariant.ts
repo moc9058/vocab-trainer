@@ -375,10 +375,11 @@ async function testUnlinkPreservesWordWithMultipleSegmentRefs() {
 }
 
 async function testReconcileIncomingSegmentsReactivate() {
-  console.log("\n[T10] reconcileIncomingSegments auto-reactivates unchanged segment text");
+  console.log("\n[T10] reconcileIncomingSegments preserves explicit deactivation");
   // W1 already exists from T1. Build a fresh example with a segment that
   // references W1, then simulate the UI deactivating it by sending the
-  // same segment text without an id. The helper should restore the id.
+  // same segment text without an id. The helper should preserve the missing
+  // id so the route can reconcile the dropped reference.
   const w1 = "smoke_w1";
   const e10 = "smoke_e10";
   const oldSegs = [{ text: "term1", id: w1, transliteration: "stale" }];
@@ -393,12 +394,12 @@ async function testReconcileIncomingSegmentsReactivate() {
   }[];
   await reconcileIncomingSegments(oldSegs, incoming);
 
-  assert(incoming[0].id === w1, "segment id restored from unchanged text");
-  // W1's transliteration in makeWord is the term itself ("term1").
-  assert(
-    incoming[0].transliteration === "term1",
-    `transliteration sourced from word DB (got "${incoming[0].transliteration}")`,
-  );
+  assert(incoming[0].id === undefined, "segment id remains absent after explicit deactivation");
+  await updateExampleSentence(e10, { segments: incoming });
+  await reconcileExampleSegmentRefs(e10, oldSegs, incoming);
+  const w1AfterDeactivate = await readWord(w1);
+  const w1Appears = new Set<string>((w1AfterDeactivate?.appearsInIds ?? []) as string[]);
+  assert(!w1Appears.has(e10), "W1.appearsInIds drops explicitly deactivated E10");
 
   // Also verify dropped split segments are reported as dropped.
   const splitIncoming = [{ text: "term" }, { text: "1" }];

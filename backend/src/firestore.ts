@@ -942,44 +942,21 @@ export async function unlinkWordFromExampleSentence(
 /**
  * Reconcile incoming segments against the previous persisted segments of an
  * example sentence so that:
- *   1. Segments whose text is unchanged auto-reactivate: if the old segment
- *      at matching text had an `id`, copy it onto the new segment even if
- *      the caller sent the segment without an `id`. This makes pinyin-only
- *      edits and accidental deactivations in the edit UI harmless — only
- *      real structural changes (merge/split → text change) drop the link.
- *   2. For every segment that ends up with an `id` (restored or already
- *      set), overwrite its `transliteration` with the canonical value from
- *      the word DB so pinyin always tracks the word.
+ *   1. A missing `id` is preserved as an explicit deactivation from the
+ *      segment editor. The caller owns activation state.
+ *   2. For every segment that arrives with an `id`, overwrite its
+ *      `transliteration` with the canonical value from the word DB so pinyin
+ *      always tracks the word.
  *
- * Segments whose text does not match any old segment are left alone. If an
- * id refers to a word that no longer exists, the id is cleared so we do not
- * carry a broken reference forward.
+ * If an id refers to a word that no longer exists, the id is cleared so we do
+ * not carry a broken reference forward.
  *
  * Mutates `newSegments` in place.
  */
 export async function reconcileIncomingSegments(
-  oldSegments: { text: string; transliteration?: string; id?: string }[] | undefined,
+  _oldSegments: { text: string; transliteration?: string; id?: string }[] | undefined,
   newSegments: { text: string; transliteration?: string; id?: string }[],
 ): Promise<void> {
-  // Build text -> id map from old segments where id is set. For duplicated
-  // texts, the first occurrence wins; the rest are left to the caller.
-  const oldTextToId = new Map<string, string>();
-  for (const seg of oldSegments ?? []) {
-    if (seg.id && !oldTextToId.has(seg.text)) {
-      oldTextToId.set(seg.text, seg.id);
-    }
-  }
-
-  // Auto-reactivate: restore id on any new segment whose text matches an
-  // old segment that had an id, but only if the new segment doesn't already
-  // specify an id (explicit caller intent wins).
-  for (const seg of newSegments) {
-    if (!seg.id) {
-      const oldId = oldTextToId.get(seg.text);
-      if (oldId) seg.id = oldId;
-    }
-  }
-
   // Source transliteration from the word DB for every segment with an id.
   const idSet = new Set<string>();
   for (const seg of newSegments) if (seg.id) idSet.add(seg.id);

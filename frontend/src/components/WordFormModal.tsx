@@ -15,6 +15,13 @@ interface Props {
   onClose: () => void;
 }
 
+interface ExampleFormState {
+  id?: string;
+  sentence: string;
+  translation: string;
+  locked: boolean;
+}
+
 export default function WordFormModal({ language, word, onSave, onClose }: Props) {
   const { t } = useI18n();
   const [term, setTerm] = useState(word?.term ?? "");
@@ -30,8 +37,13 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
   });
   const [topics, setTopics] = useState<Set<string>>(new Set(word?.topics ?? []));
   const [level, setLevel] = useState(word?.level ?? "");
-  const [examples, setExamples] = useState<{ id?: string; sentence: string; translation: string }[]>(
-    word?.examples?.map((e) => ({ id: e.id, sentence: e.sentence, translation: displayTranslation(e.translation) })) ?? []
+  const [examples, setExamples] = useState<ExampleFormState[]>(
+    word?.examples?.map((e) => ({
+      id: e.id,
+      sentence: e.sentence,
+      translation: displayTranslation(e.translation),
+      locked: true,
+    })) ?? []
   );
   const [notes, setNotes] = useState(word?.notes ?? "");
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
@@ -67,6 +79,9 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
     setSaving(true);
     setError("");
     try {
+      const cleanExamples = examples
+        .filter((ex) => ex.sentence.trim())
+        .map(({ id, sentence, translation }) => ({ id, sentence: sentence.trim(), translation }));
       await onSave({
         ...(word ? { id: word.id } : {}),
         term: term.trim(),
@@ -74,7 +89,7 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
         definitions: defs,
         topics: [...topics],
         level: level.trim() || undefined,
-        examples: examples.filter((ex) => ex.sentence.trim()),
+        examples: cleanExamples,
         notes: notes.trim() || undefined,
       });
       onClose();
@@ -120,7 +135,12 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
               value={term}
               onChange={(e) => setTerm(e.target.value)}
               required
-              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+              readOnly={!!word}
+              className={`w-full rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-100 focus:outline-none ${
+                word
+                  ? "cursor-not-allowed bg-gray-800 text-gray-400"
+                  : "bg-gray-700 focus:border-blue-400"
+              }`}
             />
           </div>
 
@@ -254,7 +274,7 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
               <label className="text-sm text-gray-400">{t("examples")}</label>
               <button
                 type="button"
-                onClick={() => setExamples([...examples, { sentence: "", translation: "" }])}
+                onClick={() => setExamples([...examples, { sentence: "", translation: "", locked: false }])}
                 className="text-xs text-blue-400 hover:text-blue-300"
               >
                 + {t("addExample")}
@@ -266,12 +286,18 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
                   type="text"
                   value={ex.sentence}
                   onChange={(e) => {
+                    if (ex.locked) return;
                     const next = [...examples];
                     next[i] = { ...next[i], sentence: e.target.value };
                     setExamples(next);
                   }}
+                  readOnly={ex.locked}
                   placeholder={t("sentence")}
-                  className="mb-1 w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                  className={`mb-1 w-full rounded border border-gray-600 px-2 py-1 text-sm focus:outline-none ${
+                    ex.locked
+                      ? "cursor-not-allowed bg-gray-900 text-gray-400"
+                      : "bg-gray-800 text-gray-100 focus:border-blue-400"
+                  }`}
                 />
                 <div className="flex gap-2">
                   <input

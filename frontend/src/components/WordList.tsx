@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, unlinkSegmentFromExample } from "../api/vocab";
+import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord } from "../api/vocab";
 import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
@@ -30,7 +30,7 @@ export default function WordList({ language, onBack }: Props) {
   const [segmentFlags, setSegmentFlags] = useState<Map<string, boolean>>(new Map());
   const [editingExample, setEditingExample] = useState<string | null>(null);
   const [editSegments, setEditSegments] = useState<Array<{ text: string; transliteration?: string; id?: string }>>([]);
-  const [editActivated, setEditActivated] = useState<Map<string, string>>(new Map());
+  const [editKnownTerms, setEditKnownTerms] = useState<Map<string, string>>(new Map());
   const [editPinyinIndex, setEditPinyinIndex] = useState<number | null>(null);
   const [filterOptions, setFilterOptions] = useState<{
     topics: string[];
@@ -156,89 +156,65 @@ export default function WordList({ language, onBack }: Props) {
     }
   }
 
-  async function handleToggleSegment(term: string, sentence: string, translation: string) {
-    const wordId = existingTerms.get(term);
-    if (wordId) {
-      setBusySegments((prev) => new Set(prev).add(term));
-      try {
-        const res = await unlinkSegmentFromExample(language, wordId, sentence);
-        setExistingTerms((prev) => { const next = new Map(prev); next.delete(term); return next; });
-        if (res.action === "deleted") {
-          // Word fully removed from DB — drop it from the list.
-          setResult((prev) => {
-            if (!prev) return prev;
-            return { ...prev, items: prev.items.filter((w) => w.id !== wordId), total: prev.total - 1 };
-          });
-        } else if (res.action === "preserved" && res.word) {
-          // Word still has references (own examples and/or other segment
-          // refs). Replace its hydrated copy so the segment's id clearing is
-          // reflected in the UI.
-          const updatedWord = res.word;
-          setResult((prev) => {
-            if (!prev) return prev;
-            return {
-              ...prev,
-              items: prev.items.map((w) => (w.id === updatedWord.id ? updatedWord : w)),
-            };
-          });
-        }
-      } finally {
-        setBusySegments((prev) => { const next = new Set(prev); next.delete(term); return next; });
+  async function handleAddSegmentWord(term: string, sentence: string, translation: string) {
+    if (existingTerms.has(term)) return;
+    setBusySegments((prev) => new Set(prev).add(term));
+    try {
+      const flag = segmentFlags.get(term) ?? true;
+      const { generatedWords: gw, ...word } = await smartAddWord(language, {
+        term,
+        examples: [{ sentence, translation }],
+        flag,
+      });
+      setExistingTerms((prev) => new Map(prev).set(term, word.id));
+      if (flag) {
+        setFlaggedIds((prev) => new Set(prev).add(word.id));
       }
-    } else {
-      setBusySegments((prev) => new Set(prev).add(term));
-      try {
-        const flag = segmentFlags.get(term) ?? true;
-        const { generatedWords: gw, ...word } = await smartAddWord(language, {
-          term,
-          examples: [{ sentence, translation }],
-          flag,
-        });
-        setExistingTerms((prev) => new Map(prev).set(term, word.id));
-        if (flag) {
-          setFlaggedIds((prev) => new Set(prev).add(word.id));
-        }
-        setResult((prev) => {
-          if (!prev) return prev;
-          const newItems = [...prev.items, word, ...(gw ?? [])];
-          return { ...prev, items: newItems, total: prev.total + 1 + (gw?.length ?? 0) };
-        });
-      } finally {
-        setBusySegments((prev) => { const next = new Set(prev); next.delete(term); return next; });
-      }
+      setResult((prev) => {
+        if (!prev) return prev;
+        const newItems = [...prev.items, word, ...(gw ?? [])];
+        return { ...prev, items: newItems, total: prev.total + 1 + (gw?.length ?? 0) };
+      });
+    } finally {
+      setBusySegments((prev) => { const next = new Set(prev); next.delete(term); return next; });
     }
   }
 
   // --- Segment edit mode ---
 
-  function handleStartEdit(word: Word, exampleIndex: number) {
-    const segs = (word.examples[exampleIndex].segments ?? []).map((s) => ({ ...s }));
-    setEditingExample(`${word.id}:${exampleIndex}`);
-    setEditSegments(segs);
-    setEditPinyinIndex(null);
-    const activated = new Map<string, string>();
-    for (const seg of segs) {
-      const wId = existingTerms.get(seg.text);
-      if (wId) activated.set(seg.text, wId);
-      else if (seg.text === word.term) activated.set(seg.text, word.id);
+  async function lookupSegmentTerms(segs: Array<{ text: string }>) {
+    const texts = [...new Set(segs.map((s) => s.text).filter((t) => t.trim().length > 0 && !/^\p{P}+$/u.test(t)))];
+    if (texts.length === 0) return new Map<string, string>();
+    try {
+      const { existing } = await checkTerms(language, texts);
+      return new Map(Object.entries(existing));
+    } catch {
+      return new Map<string, string>();
     }
-    setEditActivated(activated);
+  }
+
+  async function handleStartEdit(word: Word, exampleIndex: number) {
+    const segs = (word.examples[exampleIndex].segments ?? []).map((s) => ({ ...s }));
+    const knownTerms = await lookupSegmentTerms(segs);
+    const activatedSegs = segs.map((seg) => {
+      const wordId = knownTerms.get(seg.text);
+      return wordId ? { ...seg, id: wordId } : seg;
+    });
+    setEditingExample(`${word.id}:${exampleIndex}`);
+    setEditSegments(activatedSegs);
+    setEditPinyinIndex(null);
+    setEditKnownTerms(knownTerms);
   }
 
   function handleCancelEdit() {
     setEditingExample(null);
     setEditSegments([]);
-    setEditActivated(new Map());
+    setEditKnownTerms(new Map());
     setEditPinyinIndex(null);
   }
 
-  async function refreshEditActivated(segs: Array<{ text: string }>) {
-    const texts = [...new Set(segs.map((s) => s.text).filter((t) => t.trim().length > 0 && !/^\p{P}+$/u.test(t)))];
-    if (texts.length === 0) { setEditActivated(new Map()); return; }
-    try {
-      const { existing } = await checkTerms(language, texts);
-      setEditActivated(new Map(Object.entries(existing)));
-    } catch { /* keep current */ }
+  async function refreshEditKnownTerms(segs: Array<{ text: string }>) {
+    setEditKnownTerms(await lookupSegmentTerms(segs));
   }
 
   async function handleSplitSegment(segIndex: number) {
@@ -253,7 +229,7 @@ export default function WordList({ language, onBack }: Props) {
     const updated = [...editSegments.slice(0, segIndex), ...newSegs, ...editSegments.slice(segIndex + 1)];
     setEditSegments(updated);
     setEditPinyinIndex(null);
-    await refreshEditActivated(updated);
+    await refreshEditKnownTerms(updated);
   }
 
   async function handleMergeSegments(segIndex: number) {
@@ -266,7 +242,22 @@ export default function WordList({ language, onBack }: Props) {
     const updated = [...editSegments.slice(0, segIndex), merged, ...editSegments.slice(segIndex + 2)];
     setEditSegments(updated);
     setEditPinyinIndex(null);
-    await refreshEditActivated(updated);
+    await refreshEditKnownTerms(updated);
+  }
+
+  function handleToggleEditSegmentActive(segIndex: number) {
+    const seg = editSegments[segIndex];
+    if (!seg || /^\p{P}+$/u.test(seg.text) || seg.text.trim().length === 0) return;
+    const wordId = editKnownTerms.get(seg.text);
+    setEditSegments((prev) => prev.map((s, i) => {
+      if (i !== segIndex) return s;
+      if (s.id) {
+        const { id: _id, ...rest } = s;
+        return rest;
+      }
+      return wordId ? { ...s, id: wordId } : s;
+    }));
+    setEditPinyinIndex(null);
   }
 
   function handleEditPinyinChange(segIndex: number, value: string) {
@@ -294,8 +285,10 @@ export default function WordList({ language, onBack }: Props) {
     const exampleIndex = parseInt(exIndexStr, 10);
     const word = result?.items.find((w) => w.id === wordId);
     if (!word) return;
+    const latestKnownTerms = await lookupSegmentTerms(editSegments);
+    setEditKnownTerms(latestKnownTerms);
     const finalSegments = editSegments.map((seg) => {
-      const wId = editActivated.get(seg.text);
+      const wId = latestKnownTerms.get(seg.text);
       return wId ? { ...seg, id: wId } : { text: seg.text, transliteration: seg.transliteration };
     });
     const updatedExamples = word.examples.map((ex, i) =>
@@ -337,6 +330,7 @@ export default function WordList({ language, onBack }: Props) {
       setExistingTerms(new Map(Object.entries(existing)));
     }
     handleCancelEdit();
+    await fetchData();
   }
 
   useEffect(() => {
@@ -536,7 +530,7 @@ export default function WordList({ language, onBack }: Props) {
                         onToggleFlag={() => handleToggleFlag(word.id)}
                         onEdit={() => setEditingWord(word)}
                         onDelete={() => setDeletingId(word.id)}
-                        onToggleSegment={handleToggleSegment}
+                        onToggleSegment={handleAddSegmentWord}
                         existingTerms={expandedId === word.id ? existingTerms : new Map()}
                         busySegments={expandedId === word.id ? busySegments : new Set()}
                         segmentFlags={segmentFlags}
@@ -544,12 +538,13 @@ export default function WordList({ language, onBack }: Props) {
                         editMode={{
                           key: editingExample,
                           segments: editSegments,
-                          activated: editActivated,
+                          knownTerms: editKnownTerms,
                           pinyinIndex: editPinyinIndex,
                           onStart: handleStartEdit,
                           onCancel: handleCancelEdit,
                           onSplit: handleSplitSegment,
                           onMerge: handleMergeSegments,
+                          onToggleActive: handleToggleEditSegmentActive,
                           onPinyinChange: handleEditPinyinChange,
                           onTogglePinyin: (idx) => setEditPinyinIndex(editPinyinIndex === idx ? null : idx),
                           onInsertToneChar: handleInsertToneChar,
@@ -593,7 +588,7 @@ export default function WordList({ language, onBack }: Props) {
                           onToggleFlag={() => handleToggleFlag(word.id)}
                           onEdit={() => setEditingWord(word)}
                           onDelete={() => setDeletingId(word.id)}
-                          onToggleSegment={handleToggleSegment}
+                          onToggleSegment={handleAddSegmentWord}
                           existingTerms={expandedId === word.id ? existingTerms : new Map()}
                           busySegments={expandedId === word.id ? busySegments : new Set()}
                           segmentFlags={segmentFlags}
@@ -601,12 +596,13 @@ export default function WordList({ language, onBack }: Props) {
                           editMode={{
                             key: editingExample,
                             segments: editSegments,
-                            activated: editActivated,
+                            knownTerms: editKnownTerms,
                             pinyinIndex: editPinyinIndex,
                             onStart: handleStartEdit,
                             onCancel: handleCancelEdit,
                             onSplit: handleSplitSegment,
                             onMerge: handleMergeSegments,
+                            onToggleActive: handleToggleEditSegmentActive,
                             onPinyinChange: handleEditPinyinChange,
                             onTogglePinyin: (idx) => setEditPinyinIndex(editPinyinIndex === idx ? null : idx),
                             onInsertToneChar: handleInsertToneChar,
@@ -756,12 +752,13 @@ function WordCard({
   editMode: {
     key: string | null;
     segments: Array<{ text: string; transliteration?: string; id?: string }>;
-    activated: Map<string, string>;
+    knownTerms: Map<string, string>;
     pinyinIndex: number | null;
     onStart: (word: Word, exampleIndex: number) => void;
     onCancel: () => void;
     onSplit: (segIndex: number) => void;
     onMerge: (segIndex: number) => void;
+    onToggleActive: (segIndex: number) => void;
     onPinyinChange: (segIndex: number, value: string) => void;
     onTogglePinyin: (segIndex: number) => void;
     onInsertToneChar: (char: string) => void;
@@ -872,11 +869,12 @@ function WordCard({
                         <div className="mt-1 space-y-2">
                           <div className="flex flex-wrap gap-0.5 items-end">
                             {editMode.segments.flatMap((seg, j) => {
-                              const isActivated = editMode.activated.has(seg.text) || seg.text === word.term;
+                              const isActivated = !!seg.id;
+                              const isKnown = editMode.knownTerms.has(seg.text);
                               const isPunct = /^\p{P}+$/u.test(seg.text) || seg.text.trim().length === 0;
                               const canSplit = !isActivated && !isPunct && Array.from(seg.text).length > 1;
                               const prev = j > 0 ? editMode.segments[j - 1] : null;
-                              const prevEditable = prev && !editMode.activated.has(prev.text) && prev.text !== word.term && !/^\p{P}+$/u.test(prev.text) && prev.text.trim().length > 0;
+                              const prevEditable = prev && !prev.id && !/^\p{P}+$/u.test(prev.text) && prev.text.trim().length > 0;
                               const thisEditable = !isActivated && !isPunct;
                               const els: React.ReactNode[] = [];
                               if (prevEditable && thisEditable) {
@@ -886,19 +884,48 @@ function WordCard({
                               }
                               els.push(
                                 <div key={`s${j}`} className="flex flex-col items-center">
-                                  <button
-                                    disabled={!canSplit}
-                                    onClick={(e) => { e.stopPropagation(); if (canSplit) editMode.onSplit(j); }}
+                                  <span
                                     className={`rounded px-1.5 py-0.5 text-xs transition-colors ${
                                       isPunct ? "text-gray-600 cursor-default"
-                                      : isActivated ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
-                                      : canSplit ? "border border-yellow-500/40 bg-yellow-900/20 text-yellow-300 hover:bg-yellow-800/30 cursor-pointer"
+                                      : isActivated ? "border border-green-500/40 bg-green-900/20 text-green-300"
+                                      : isKnown ? "border border-blue-500/40 bg-blue-900/20 text-blue-300"
+                                      : canSplit ? "border border-yellow-500/40 bg-yellow-900/20 text-yellow-300"
                                       : "border border-gray-500/40 bg-gray-800/30 text-gray-300"
                                     }`}
-                                    title={canSplit ? "Click to split" : undefined}
+                                    title={isActivated ? "Activated" : isKnown ? "Known inactive" : canSplit ? "Unknown" : undefined}
                                   >
                                     {seg.text}
-                                  </button>
+                                  </span>
+                                  {!isPunct && (
+                                    <div className="mt-0.5 flex gap-1">
+                                      {isActivated ? (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); editMode.onToggleActive(j); }}
+                                          className="text-[10px] text-red-300 hover:text-red-200"
+                                          title="Deactivate"
+                                        >
+                                          deactivate
+                                        </button>
+                                      ) : isKnown ? (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); editMode.onToggleActive(j); }}
+                                          className="text-[10px] text-green-300 hover:text-green-200"
+                                          title="Activate"
+                                        >
+                                          activate
+                                        </button>
+                                      ) : null}
+                                      {canSplit && (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); editMode.onSplit(j); }}
+                                          className="text-[10px] text-yellow-400 hover:text-yellow-300"
+                                          title="Split"
+                                        >
+                                          split
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
                                   {!isPunct && (
                                     <button
                                       disabled={isActivated}
@@ -921,7 +948,7 @@ function WordCard({
                           </div>
                           {editMode.pinyinIndex !== null && (() => {
                             const ps = editMode.segments[editMode.pinyinIndex];
-                            if (!ps || editMode.activated.has(ps.text)) return null;
+                            if (!ps || ps.id) return null;
                             return (
                               <div className="flex flex-col gap-1 pl-1" onClick={(e) => e.stopPropagation()}>
                                 <input
@@ -952,13 +979,16 @@ function WordCard({
                               return (
                                 <button
                                   key={j}
-                                  disabled={busy || isSelf}
-                                  onClick={(e) => { e.stopPropagation(); onToggleSegment(seg.text, ex.sentence, trans); }}
+                                  disabled={busy || exists}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (!exists) onToggleSegment(seg.text, ex.sentence, trans);
+                                  }}
                                   className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
                                     isSelf
                                       ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
                                       : exists
-                                        ? "border border-green-500/40 bg-green-900/20 text-green-300 hover:bg-red-900/30 hover:text-red-300 hover:border-red-500/40"
+                                        ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
                                         : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
                                   }`}
                                 >
@@ -990,8 +1020,8 @@ function WordCard({
                                           checked={flagged}
                                           onChange={() => onToggleSegmentFlag(seg.text)}
                                           className="accent-amber-500 w-3 h-3"
+                                          aria-label={`Flag ${seg.text} for review`}
                                         />
-                                        <span className="text-[10px] text-gray-500">flag</span>
                                       </label>
                                     )}
                                   </span>
@@ -1087,12 +1117,13 @@ function WordRow({
   editMode: {
     key: string | null;
     segments: Array<{ text: string; transliteration?: string; id?: string }>;
-    activated: Map<string, string>;
+    knownTerms: Map<string, string>;
     pinyinIndex: number | null;
     onStart: (word: Word, exampleIndex: number) => void;
     onCancel: () => void;
     onSplit: (segIndex: number) => void;
     onMerge: (segIndex: number) => void;
+    onToggleActive: (segIndex: number) => void;
     onPinyinChange: (segIndex: number, value: string) => void;
     onTogglePinyin: (segIndex: number) => void;
     onInsertToneChar: (char: string) => void;
@@ -1192,12 +1223,13 @@ function WordRow({
                         {editMode.key === `${word.id}:${i}` ? (
                           <div className="mt-1 space-y-2">
                             <div className="flex flex-wrap gap-0.5 items-end">
-                              {editMode.segments.flatMap((seg, j) => {
-                                const isActivated = editMode.activated.has(seg.text) || seg.text === word.term;
+                            {editMode.segments.flatMap((seg, j) => {
+                                const isActivated = !!seg.id;
+                                const isKnown = editMode.knownTerms.has(seg.text);
                                 const isPunct = /^\p{P}+$/u.test(seg.text) || seg.text.trim().length === 0;
                                 const canSplit = !isActivated && !isPunct && Array.from(seg.text).length > 1;
                                 const prev = j > 0 ? editMode.segments[j - 1] : null;
-                                const prevEditable = prev && !editMode.activated.has(prev.text) && prev.text !== word.term && !/^\p{P}+$/u.test(prev.text) && prev.text.trim().length > 0;
+                                const prevEditable = prev && !prev.id && !/^\p{P}+$/u.test(prev.text) && prev.text.trim().length > 0;
                                 const thisEditable = !isActivated && !isPunct;
                                 const els: React.ReactNode[] = [];
                                 if (prevEditable && thisEditable) {
@@ -1207,19 +1239,48 @@ function WordRow({
                                 }
                                 els.push(
                                   <div key={`s${j}`} className="flex flex-col items-center">
-                                    <button
-                                      disabled={!canSplit}
-                                      onClick={(e) => { e.stopPropagation(); if (canSplit) editMode.onSplit(j); }}
+                                    <span
                                       className={`rounded px-1.5 py-0.5 text-xs transition-colors ${
                                         isPunct ? "text-gray-600 cursor-default"
-                                        : isActivated ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
-                                        : canSplit ? "border border-yellow-500/40 bg-yellow-900/20 text-yellow-300 hover:bg-yellow-800/30 cursor-pointer"
+                                        : isActivated ? "border border-green-500/40 bg-green-900/20 text-green-300"
+                                        : isKnown ? "border border-blue-500/40 bg-blue-900/20 text-blue-300"
+                                        : canSplit ? "border border-yellow-500/40 bg-yellow-900/20 text-yellow-300"
                                         : "border border-gray-500/40 bg-gray-800/30 text-gray-300"
                                       }`}
-                                      title={canSplit ? "Click to split" : undefined}
+                                      title={isActivated ? "Activated" : isKnown ? "Known inactive" : canSplit ? "Unknown" : undefined}
                                     >
                                       {seg.text}
-                                    </button>
+                                    </span>
+                                    {!isPunct && (
+                                      <div className="mt-0.5 flex gap-1">
+                                        {isActivated ? (
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); editMode.onToggleActive(j); }}
+                                            className="text-[10px] text-red-300 hover:text-red-200"
+                                            title="Deactivate"
+                                          >
+                                            deactivate
+                                          </button>
+                                        ) : isKnown ? (
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); editMode.onToggleActive(j); }}
+                                            className="text-[10px] text-green-300 hover:text-green-200"
+                                            title="Activate"
+                                          >
+                                            activate
+                                          </button>
+                                        ) : null}
+                                        {canSplit && (
+                                          <button
+                                            onClick={(e) => { e.stopPropagation(); editMode.onSplit(j); }}
+                                            className="text-[10px] text-yellow-400 hover:text-yellow-300"
+                                            title="Split"
+                                          >
+                                            split
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
                                     {!isPunct && (
                                       <button
                                         disabled={isActivated}
@@ -1242,7 +1303,7 @@ function WordRow({
                             </div>
                             {editMode.pinyinIndex !== null && (() => {
                               const ps = editMode.segments[editMode.pinyinIndex];
-                              if (!ps || editMode.activated.has(ps.text)) return null;
+                              if (!ps || ps.id) return null;
                               return (
                                 <div className="flex flex-col gap-1 pl-1" onClick={(e) => e.stopPropagation()}>
                                   <input
@@ -1268,20 +1329,23 @@ function WordRow({
                             <div className="flex flex-wrap gap-1 items-center">
                               {segs.map((seg, j) => {
                                 const isSelf = seg.text === word.term;
-                                const exists = isSelf || existingTerms.has(seg.text);
-                                const busy = busySegments.has(seg.text);
-                                return (
-                                  <button
-                                    key={j}
-                                    disabled={busy || isSelf}
-                                    onClick={(e) => { e.stopPropagation(); onToggleSegment(seg.text, ex.sentence, trans); }}
-                                    className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
-                                      isSelf
-                                        ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
-                                        : exists
-                                          ? "border border-green-500/40 bg-green-900/20 text-green-300 hover:bg-red-900/30 hover:text-red-300 hover:border-red-500/40"
+                              const exists = isSelf || existingTerms.has(seg.text);
+                              const busy = busySegments.has(seg.text);
+                              return (
+                                <button
+                                  key={j}
+                                    disabled={busy || exists}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (!exists) onToggleSegment(seg.text, ex.sentence, trans);
+                                    }}
+                                  className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
+                                    isSelf
+                                      ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
+                                      : exists
+                                          ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
                                           : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
-                                    }`}
+                                  }`}
                                   >
                                     {exists ? "" : "+"} {seg.text}
                                   </button>
@@ -1311,8 +1375,8 @@ function WordRow({
                                             checked={flagged}
                                             onChange={() => onToggleSegmentFlag(seg.text)}
                                             className="accent-amber-500 w-3 h-3"
+                                            aria-label={`Flag ${seg.text} for review`}
                                           />
-                                          <span className="text-[10px] text-gray-500">flag</span>
                                         </label>
                                       )}
                                     </span>
