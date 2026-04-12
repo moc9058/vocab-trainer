@@ -16,7 +16,7 @@ export interface ExampleSentence {
   translation: string | Record<string, string>;
   segments?: { text: string; transliteration?: string; id?: string }[];
   language: string;
-  ownerWordId: string;
+  ownerWordId?: string;
 }
 
 export interface Meaning {

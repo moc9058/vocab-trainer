@@ -322,7 +322,6 @@ Allowed topics: ${TOPICS.join(", ")}`;
             sentence: info.sentence,
             translation: info.translation,
             language,
-            ownerWordId: id,
           };
           await addExampleSentence(es);
           exampleIds.push(exId);

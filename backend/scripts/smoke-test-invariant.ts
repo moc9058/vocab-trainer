@@ -26,7 +26,7 @@ import {
   deleteWordIfOrphaned,
   deleteExampleSentences,
   removeFromAppearsInIds,
-  isExampleIdClaimedByOtherWord,
+  isExampleReferencedByOtherWord,
   getExampleSentencesByIds,
 } from "../src/firestore.js";
 import type { Word, ExampleSentence } from "../src/types.js";
@@ -174,7 +174,6 @@ function makeWord(id: string, term: string): Word {
 async function makeExample(
   id: string,
   sentence: string,
-  ownerWordId: string,
   segments?: { text: string; id?: string }[],
 ): Promise<ExampleSentence> {
   const es: ExampleSentence = {
@@ -182,7 +181,6 @@ async function makeExample(
     sentence,
     translation: "translation",
     language: LANG,
-    ownerWordId,
     segments,
   };
   await addExampleSentence(es);
@@ -195,7 +193,7 @@ async function testAddWordInvariant() {
   console.log("\n[T1] addWord establishes appearsInIds ⊇ exampleIds");
   const w1 = "smoke_w1";
   const e1 = "smoke_e1";
-  await makeExample(e1, "sentence one", w1);
+  await makeExample(e1, "sentence one");
   await addWord(LANG, makeWord(w1, "term1"), { exampleIds: [e1] });
   const w1Data = await readWord(w1);
   assert(
@@ -212,7 +210,7 @@ async function testReconcileNewSegmentRef() {
   const w2 = "smoke_w2";
   const e2seg = "smoke_e2_owner";
   // Create an owner word W2 with its own example E2
-  await makeExample(e2, "sentence two with term1", w2, [{ text: "term1", id: w1 }]);
+  await makeExample(e2, "sentence two with term1", [{ text: "term1", id: w1 }]);
   await addWord(LANG, makeWord(w2, "term2"), { exampleIds: [e2] });
   // reconcile as if the example was just created with these segments
   await reconcileExampleSegmentRefs(e2, [], [{ text: "term1", id: w1 }]);
@@ -232,7 +230,7 @@ async function testUpdateWordExampleIds() {
   console.log("\n[T3] updateWord({exampleIds}) unions into appearsInIds via arrayUnion");
   const w1 = "smoke_w1";
   const e3 = "smoke_e3";
-  await makeExample(e3, "sentence three", w1);
+  await makeExample(e3, "sentence three");
   await updateWord(LANG, w1, {}, { exampleIds: ["smoke_e1", e3] });
   const w1Data = await readWord(w1);
   const appears = new Set<string>((w1Data?.appearsInIds ?? []) as string[]);
@@ -270,7 +268,7 @@ async function testUnlinkDeletesWordWithNoOwnExamples() {
   const e4 = "smoke_e4";
   // W3 has no own examples, but is referenced as a segment in E4 (owner W1)
   await addWord(LANG, makeWord(w3, "term3"));
-  await makeExample(e4, "sentence four with term3", "smoke_w1", [{ text: "term3", id: w3 }]);
+  await makeExample(e4, "sentence four with term3", [{ text: "term3", id: w3 }]);
   await reconcileExampleSegmentRefs(e4, [], [{ text: "term3", id: w3 }]);
   // Also need to add E4 to W1's exampleIds (it owns E4)
   await updateWord(LANG, "smoke_w1", {}, { exampleIds: ["smoke_e1", "smoke_e3", e4] });
@@ -294,9 +292,9 @@ async function testUnlinkPreservesWordWithOwnExamples() {
   const e5 = "smoke_e5";
   const e6 = "smoke_e6";
   // W4 owns E5 and is also segment-referenced in E6 (owner W1)
-  await makeExample(e5, "sentence five (w4 own)", w4);
+  await makeExample(e5, "sentence five (w4 own)");
   await addWord(LANG, makeWord(w4, "term4"), { exampleIds: [e5] });
-  await makeExample(e6, "sentence six with term4", "smoke_w1", [{ text: "term4", id: w4 }]);
+  await makeExample(e6, "sentence six with term4", [{ text: "term4", id: w4 }]);
   await reconcileExampleSegmentRefs(e6, [], [{ text: "term4", id: w4 }]);
   await updateWord(LANG, "smoke_w1", {}, { exampleIds: ["smoke_e1", "smoke_e3", "smoke_e4", e6] });
 
@@ -315,12 +313,14 @@ async function testUnlinkPreservesWordWithOwnExamples() {
   await assertInvariant("T6");
 }
 
-async function testDeleteWordCleansReferences() {
-  console.log("\n[T7] deleteWord cleans appearsInIds on referenced words");
+async function testDeleteWordPreservesSegmentRefExample() {
+  console.log("\n[T7] deleteWord preserves example referenced by another word");
   const w5 = "smoke_w5";
   const e7 = "smoke_e7";
-  // W5 owns E7, whose segments reference W1
-  await makeExample(e7, "sentence seven with term1", w5, [{ text: "term1", id: "smoke_w1" }]);
+  // W5 has E7 in exampleIds, but E7's segments reference W1 — so W1 has E7
+  // in its appearsInIds. Deleting W5 should preserve E7 because W1 still
+  // references it.
+  await makeExample(e7, "sentence seven with term1", [{ text: "term1", id: "smoke_w1" }]);
   await addWord(LANG, makeWord(w5, "term5"), { exampleIds: [e7] });
   await reconcileExampleSegmentRefs(e7, [], [{ text: "term1", id: "smoke_w1" }]);
 
@@ -333,12 +333,12 @@ async function testDeleteWordCleansReferences() {
 
   // W5 gone
   assert((await readWord(w5)) === null, "W5 deleted");
-  // E7 gone (owner deletion cascades)
-  assert((await readExample(e7)) === null, "E7 deleted");
-  // W1 no longer references E7
+  // E7 preserved (W1 still references it via segment)
+  assert((await readExample(e7)) !== null, "E7 preserved (W1 still references it)");
+  // W1 still references E7
   const w1After = await readWord("smoke_w1");
   const after = new Set<string>((w1After?.appearsInIds ?? []) as string[]);
-  assert(!after.has(e7), "W1.appearsInIds no longer contains E7");
+  assert(after.has(e7), "W1.appearsInIds still contains E7");
   await assertInvariant("T7");
 }
 
@@ -351,9 +351,9 @@ async function testUnlinkPreservesWordWithMultipleSegmentRefs() {
   // E9 (owner W1). Unlinking from E8 should leave W6 alive because E9
   // still references it.
   await addWord(LANG, makeWord(w6, "term6"));
-  await makeExample(e8, "sentence eight with term6", "smoke_w1", [{ text: "term6", id: w6 }]);
+  await makeExample(e8, "sentence eight with term6", [{ text: "term6", id: w6 }]);
   await reconcileExampleSegmentRefs(e8, [], [{ text: "term6", id: w6 }]);
-  await makeExample(e9, "sentence nine with term6", "smoke_w1", [{ text: "term6", id: w6 }]);
+  await makeExample(e9, "sentence nine with term6", [{ text: "term6", id: w6 }]);
   await reconcileExampleSegmentRefs(e9, [], [{ text: "term6", id: w6 }]);
   await updateWord(LANG, "smoke_w1", {}, {
     exampleIds: ["smoke_e1", "smoke_e3", "smoke_e4", "smoke_e6", e8, e9],
@@ -382,7 +382,7 @@ async function testReconcileIncomingSegmentsReactivate() {
   const w1 = "smoke_w1";
   const e10 = "smoke_e10";
   const oldSegs = [{ text: "term1", id: w1, transliteration: "stale" }];
-  await makeExample(e10, "sentence ten with term1", "smoke_w1", oldSegs);
+  await makeExample(e10, "sentence ten with term1", oldSegs);
   await reconcileExampleSegmentRefs(e10, [], oldSegs);
 
   // Simulate incoming edit: same text, no id, bogus transliteration.
@@ -420,7 +420,7 @@ async function testReconcileOrphanDeletion() {
   const e11 = "smoke_e11";
   await addWord(LANG, makeWord(w7, "term7"));
   const oldSegs = [{ text: "term7", id: w7 }];
-  await makeExample(e11, "sentence eleven with term7", w8, oldSegs);
+  await makeExample(e11, "sentence eleven with term7", oldSegs);
   await addWord(LANG, makeWord(w8, "term8"), { exampleIds: [e11] });
   await reconcileExampleSegmentRefs(e11, [], oldSegs);
 
@@ -474,7 +474,7 @@ async function testInPlaceRenameAndSegmentEdit() {
   // Example E belongs to W_owner and has W_seg as a segment.
   const oldSentence = "old sentence with termseg13";
   const oldSegs = [{ text: "old sentence with ", transliteration: "x" }, { text: "termseg13", id: wSeg }];
-  await makeExample(e, oldSentence, wOwner, oldSegs);
+  await makeExample(e, oldSentence, oldSegs);
   await addWord(LANG, makeWord(wOwner, "termowner13"), { exampleIds: [e] });
   await reconcileExampleSegmentRefs(e, [], oldSegs);
 
@@ -530,7 +530,7 @@ async function testInPlaceRenameAndSegmentEdit() {
   // conflating the two docs.
   const e2 = "smoke_e13_other";
   const collidingSentence = "another example sentence";
-  await makeExample(e2, collidingSentence, wOwner);
+  await makeExample(e2, collidingSentence);
   let threw = false;
   try {
     await updateExampleSentence(e, { sentence: collidingSentence });
@@ -555,8 +555,8 @@ async function testPutHandlerDropAndRename() {
   const e2 = "smoke_e_drop2";
 
   // Seed: W owns two examples, both with no segment refs to keep it simple.
-  await makeExample(e1, "drop sentence one", w);
-  await makeExample(e2, "drop sentence two", w);
+  await makeExample(e1, "drop sentence one");
+  await makeExample(e2, "drop sentence two");
   await addWord(LANG, makeWord(w, "termdrop"), { exampleIds: [e1, e2] });
 
   // --- Phase A: remove E2 outright ---
@@ -569,15 +569,12 @@ async function testPutHandlerDropAndRename() {
   // Step 2 of the route: decide which dropped examples to delete.
   const toDeleteA: string[] = [];
   for (const exId of droppedA) {
-    const es = await readExample(exId);
-    if (!es) continue;
-    if (es.ownerWordId !== w) continue;
-    const claimed = await isExampleIdClaimedByOtherWord(LANG, exId, w);
-    if (!claimed) toDeleteA.push(exId);
+    const referenced = await isExampleReferencedByOtherWord(LANG, exId, w);
+    if (!referenced) toDeleteA.push(exId);
   }
   assert(
     toDeleteA.length === 1 && toDeleteA[0] === e2,
-    "E2 marked for deletion (W is owner, no dedup share)",
+    "E2 marked for deletion (no other word references it)",
   );
   await deleteExampleSentences(toDeleteA);
   assert((await readExample(e2)) === null, "E2 example doc deleted");
@@ -612,7 +609,7 @@ async function testPutHandlerDropAndRename() {
   // that didn't exist in the oldBySentence map, so the route creates a new
   // example doc and drops the old one.
   const e3 = "smoke_e_drop3";
-  await makeExample(e3, "drop sentence one (renamed)", w);
+  await makeExample(e3, "drop sentence one (renamed)");
   const newExampleIdsB = [e3];
   const currentExIdsB = [e1];
   const droppedB = currentExIdsB.filter((id) => !newExampleIdsB.includes(id));
@@ -620,11 +617,8 @@ async function testPutHandlerDropAndRename() {
 
   const toDeleteB: string[] = [];
   for (const exId of droppedB) {
-    const es = await readExample(exId);
-    if (!es) continue;
-    if (es.ownerWordId !== w) continue;
-    const claimed = await isExampleIdClaimedByOtherWord(LANG, exId, w);
-    if (!claimed) toDeleteB.push(exId);
+    const referenced = await isExampleReferencedByOtherWord(LANG, exId, w);
+    if (!referenced) toDeleteB.push(exId);
   }
   await deleteExampleSentences(toDeleteB);
   assert((await readExample(e1)) === null, "E1 example doc deleted after rename");
@@ -664,15 +658,12 @@ async function testPutHandlerDropAndRename() {
   const droppedC = currentExIdsC.filter((id) => !newExampleIdsC.includes(id));
   const toDeleteC: string[] = [];
   for (const exId of droppedC) {
-    const es = await readExample(exId);
-    if (!es) continue;
-    if (es.ownerWordId !== w) continue;
-    const claimed = await isExampleIdClaimedByOtherWord(LANG, exId, w);
-    if (!claimed) toDeleteC.push(exId);
+    const referenced = await isExampleReferencedByOtherWord(LANG, exId, w);
+    if (!referenced) toDeleteC.push(exId);
   }
   assert(
     toDeleteC.length === 0,
-    `dedup-shared E3 NOT queued for deletion (W_other still claims it); got toDelete=[${toDeleteC.join(",")}]`,
+    `E3 NOT queued for deletion (W_other still references it); got toDelete=[${toDeleteC.join(",")}]`,
   );
   // Only perform the appearsInIds prune for W.
   await updateWord(LANG, w, {}, { exampleIds: newExampleIdsC });
@@ -695,13 +686,45 @@ async function testPutHandlerDropAndRename() {
   await assertInvariant("T12 phase C (dedup share)");
 }
 
+async function testDeleteWordPreservesReferencedExample() {
+  console.log("\n[T14] deleteWord preserves examples referenced by another word");
+  const wA = "smoke_w14_a";
+  const wB = "smoke_w14_b";
+  const eShared = "smoke_e14_shared";
+
+  // Both W_A and W_B hold E_shared in their exampleIds.
+  await makeExample(eShared, "shared sentence fourteen");
+  await addWord(LANG, makeWord(wA, "term14a"), { exampleIds: [eShared] });
+  await addWord(LANG, makeWord(wB, "term14b"), { exampleIds: [eShared] });
+
+  // Also create a segment reference: E_shared has a segment pointing to W_B
+  // so we can verify segment cleanup doesn't break the surviving word.
+  await updateExampleSentence(eShared, { segments: [{ text: "term14b", id: wB }] });
+  await reconcileExampleSegmentRefs(eShared, [], [{ text: "term14b", id: wB }]);
+
+  // Precondition
+  assert((await readExample(eShared)) !== null, "E_shared exists before delete");
+
+  // Delete W_A — E_shared must survive because W_B still references it.
+  await deleteWord(LANG, wA);
+
+  assert((await readWord(wA)) === null, "W_A deleted");
+  assert((await readExample(eShared)) !== null, "E_shared survives (W_B still references it)");
+
+  const wBData = await readWord(wB);
+  const wBExIds = new Set<string>((wBData?.exampleIds ?? []) as string[]);
+  assert(wBExIds.has(eShared), "W_B.exampleIds still contains E_shared");
+
+  await assertInvariant("T14");
+}
+
 async function testConcurrentReconciles() {
   console.log("\n[T8] concurrency stress: 20 parallel reconcile calls");
   // Build a fresh test surface: one target word W_stress + one example E_stress
   const wStress = "smoke_w_stress";
   const eStress = "smoke_e_stress";
   await addWord(LANG, makeWord(wStress, "stress"));
-  await makeExample(eStress, "stress sentence", "smoke_w1");
+  await makeExample(eStress, "stress sentence");
 
   // Kick off many parallel reconcile calls that add/remove the segment ref
   const tasks: Promise<void>[] = [];
@@ -754,12 +777,13 @@ async function main() {
     await testReconcileDropSegmentRef();
     await testUnlinkDeletesWordWithNoOwnExamples();
     await testUnlinkPreservesWordWithOwnExamples();
-    await testDeleteWordCleansReferences();
+    await testDeleteWordPreservesSegmentRefExample();
     await testUnlinkPreservesWordWithMultipleSegmentRefs();
     await testReconcileIncomingSegmentsReactivate();
     await testReconcileOrphanDeletion();
     await testPutHandlerDropAndRename();
     await testInPlaceRenameAndSegmentEdit();
+    await testDeleteWordPreservesReferencedExample();
     await testConcurrentReconciles();
   } catch (e) {
     failed++;

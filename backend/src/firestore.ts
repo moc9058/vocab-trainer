@@ -415,12 +415,17 @@ export async function deleteWord(language: string, wordId: string): Promise<bool
   const d = doc.data()!;
   const term = d.term as string;
 
-  // Delete example sentences owned by this word (new format only).
-  if (Array.isArray(d.exampleIds) && (d.exampleIds as string[]).length > 0) {
-    // For simplicity, delete owned examples — other words' appearsInIds will
-    // point to non-existent docs and be silently skipped during hydration.
-    // A full cleanup would scan other words, but that's expensive.
-    await deleteExampleSentences(d.exampleIds as string[]);
+  // Delete example sentences that are no longer referenced by any other word.
+  const exampleIds = (d.exampleIds ?? []) as string[];
+  if (exampleIds.length > 0) {
+    const toDelete: string[] = [];
+    for (const exId of exampleIds) {
+      const referenced = await isExampleReferencedByOtherWord(language, exId, wordId);
+      if (!referenced) toDelete.push(exId);
+    }
+    if (toDelete.length > 0) {
+      await deleteExampleSentences(toDelete);
+    }
   }
 
   // Clear this word's ID from segments in every example sentence it appears
@@ -587,7 +592,6 @@ export async function getExampleSentencesByIds(ids: string[]): Promise<ExampleSe
             ...(seg.id ? { id: seg.id } : {}),
           })),
           language: d.language,
-          ownerWordId: d.ownerWordId,
         });
       }
     }
@@ -609,7 +613,6 @@ export async function findExampleByText(language: string, sentence: string): Pro
     translation: d.translation,
     segments: d.segments,
     language: d.language,
-    ownerWordId: d.ownerWordId,
   };
 }
 
@@ -716,7 +719,6 @@ export async function getAllExampleSentencesForLanguage(language: string): Promi
       translation: d.translation,
       segments: d.segments,
       language: d.language,
-      ownerWordId: d.ownerWordId,
     };
   });
 }
@@ -857,18 +859,19 @@ export async function removeFromAppearsInIds(
 }
 
 /**
- * Return true if any word other than `exceptWordId` still lists `exampleId`
- * in its own `exampleIds`. Used to decide whether a dropped example can be
- * deleted outright (no other owner) or must be preserved as a dedup share.
+ * Return true if any word other than `exceptWordId` still references
+ * `exampleId` in its `appearsInIds`. Since the invariant guarantees
+ * `appearsInIds ⊇ exampleIds`, querying `appearsInIds` alone catches
+ * both owned references and segment references.
  */
-export async function isExampleIdClaimedByOtherWord(
+export async function isExampleReferencedByOtherWord(
   language: string,
   exampleId: string,
   exceptWordId: string,
 ): Promise<boolean> {
   const snap = await words
     .where("language", "==", language)
-    .where("exampleIds", "array-contains", exampleId)
+    .where("appearsInIds", "array-contains", exampleId)
     .get();
   return snap.docs.some((d) => d.id !== exceptWordId);
 }

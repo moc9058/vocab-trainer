@@ -28,11 +28,11 @@ import {
   droppedSegmentWordIds,
   deleteExampleSentences,
   removeFromAppearsInIds,
-  isExampleIdClaimedByOtherWord,
+  isExampleReferencedByOtherWord,
 } from "../firestore.js";
 import type { Word, Example, ExampleSentence } from "../types.js";
 import { TOPICS } from "../types.js";
-import { callLLMWithSchema, stripMarkdownFences, validateWord, type Segment } from "../llm.js";
+import { callLLMWithSchema, stripMarkdownFences, validateWord, segmentBatch, type Segment } from "../llm.js";
 
 const LEVEL_OPTIONS: Record<string, string[]> = {
   chinese: ["HSK1-4", "HSK5", "HSK6", "HSK7-9", "Advanced"],
@@ -92,6 +92,10 @@ function fillPlaceholders(template: string, vars: Record<string, string>): strin
 const vocabRoutes: FastifyPluginAsync = async (fastify) => {
   // Load vocabulary config from Firestore once during plugin registration
   const vocabConfig = await getVocabularyConfig();
+  let segmentConfig: { prompt: string; schema: Record<string, unknown> } | undefined;
+  try {
+    segmentConfig = { prompt: vocabConfig.segmentPrompt, schema: vocabConfig.segmentSchema };
+  } catch { /* fall back to hardcoded prompt in segmentBatch */ }
 
   // List words with filtering & pagination
   fastify.get<{
@@ -413,7 +417,6 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             translation: ex.translation,
             segments: ex.segments,
             language,
-            ownerWordId: id,
           };
           await addExampleSentence(es);
           // Register newly-referenced words in their appearsInIds.
@@ -477,6 +480,14 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         // Track candidates that may have become orphaned across all examples
         // touched by this PUT. We resolve them after the word update below.
         const maybeOrphaned = new Set<string>();
+        const isChinese = language === "chinese";
+        // Queue of examples whose text changed without incoming segments —
+        // these will be batch re-segmented after the main loop.
+        const needsResegment: Array<{
+          target: ExampleSentence;
+          exampleId: string;
+          newSentence: string;
+        }> = [];
 
         for (const ex of body.examples) {
           // Only treat segments as "being edited" if the frontend explicitly
@@ -541,6 +552,17 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             if (hasIncomingSegs) {
               await reconcileIncomingSegments(target.segments, ex.segments!);
               updates.segments = ex.segments;
+            } else if (isChinese && target.sentence !== ex.sentence) {
+              // Text changed but frontend didn't send segments (e.g. WordFormModal).
+              // Snapshot the old state and queue for batch re-segmentation after the loop.
+              needsResegment.push({
+                target: {
+                  ...target,
+                  segments: target.segments?.map((s) => ({ ...s })),
+                },
+                exampleId: target.id,
+                newSentence: ex.sentence,
+              });
             }
             if (Object.keys(updates).length > 0) {
               await updateExampleSentence(target.id, updates);
@@ -564,7 +586,6 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
               translation: ex.translation,
               segments: ex.segments,
               language,
-              ownerWordId: wordId,
             };
             await addExampleSentence(es);
             await reconcileExampleSegmentRefs(newId, [], ex.segments);
@@ -572,25 +593,55 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
+        // --- Batch re-segmentation for Chinese examples whose text changed ---
+        if (isChinese && needsResegment.length > 0) {
+          const sentences = needsResegment.map((r) => r.newSentence);
+          const segMap = await segmentBatch(sentences, segmentConfig);
+
+          // Bulk word-lookup for segment→wordId linking
+          const allSegTexts = new Set<string>();
+          for (const [, segs] of segMap) {
+            for (const s of segs) allSegTexts.add(s.text);
+          }
+          const matches = allSegTexts.size > 0
+            ? await lookupWordsByTerms(language, [...allSegTexts])
+            : [];
+          const termToId = new Map(matches.map((m) => [m.term, m.id]));
+
+          for (let i = 0; i < needsResegment.length; i++) {
+            const { target, exampleId } = needsResegment[i];
+            const rawSegs = segMap.get(i);
+            if (!rawSegs) continue;
+
+            const newSegs: { text: string; transliteration?: string; id?: string }[] = rawSegs.map((s) => ({
+              text: s.text,
+              transliteration: s.transliteration,
+              ...(termToId.get(s.text) ? { id: termToId.get(s.text) } : {}),
+            }));
+
+            await reconcileIncomingSegments(target.segments, newSegs);
+            await updateExampleSentence(exampleId, { segments: newSegs });
+            await reconcileExampleSegmentRefs(exampleId, target.segments, newSegs);
+            for (const dropped of droppedSegmentWordIds(target.segments, newSegs)) {
+              maybeOrphaned.add(dropped);
+            }
+          }
+        }
+
         // Examples the user removed outright or renamed out from under this
-        // word. For each one, decide whether the example doc can be deleted
-        // entirely (this word owns it AND no other word still claims it) or
-        // merely released from this word's grip (dedup share — leave the doc
-        // alone, the real owner keeps managing it).
+        // word. Delete an example only if no other word still references it
+        // (in either exampleIds or appearsInIds).
         const droppedExampleIds = (currentExIds ?? []).filter(
           (id) => !newExampleIds.includes(id),
         );
         const toDelete: string[] = [];
         for (const exId of droppedExampleIds) {
-          const es = oldExSentences.find((x) => x.id === exId);
-          if (!es) continue;
-          if (es.ownerWordId !== wordId) continue; // dedup share — skip
-          const claimedElsewhere = await isExampleIdClaimedByOtherWord(
+          const referenced = await isExampleReferencedByOtherWord(
             language,
             exId,
             wordId,
           );
-          if (!claimedElsewhere) toDelete.push(exId);
+          if (!referenced) toDelete.push(exId);
         }
         // Run the delete BEFORE updateWord so that deleteExampleSentences can
         // atomically strip the example ids from segment-referenced words'

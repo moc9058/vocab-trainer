@@ -1,21 +1,16 @@
 /**
  * Deep invariant + completeness validator for word ↔ example_sentence data.
  *
- * Goes beyond the `backfill-word-appears-in` script (which only reconciles
- * appearsInIds) by also checking:
- *
+ * Checks:
  *   1. Word ↔ example invariant: W.appearsInIds == W.exampleIds ∪ segRefs
- *   2. Bidirectional own-example ownership: every exId in W.exampleIds
- *      must resolve to an example doc whose language matches W's language,
- *      and every example with ownerWordId=W.id must appear in W.exampleIds.
- *   3. Dangling appearsInIds entries: every id must point at an existing
+ *   2. Dangling exampleIds entries: every id must point at an existing
  *      example sentence doc.
- *   4. Dangling exampleIds entries: same, for own examples.
- *   5. Dangling segment.id entries: every segment id must point at an
+ *   3. Dangling appearsInIds entries: same.
+ *   4. Dangling segment.id entries: every segment id must point at an
  *      existing word doc in the same language.
- *   6. Orphan example sentences: example sentence docs whose ownerWordId
- *      no longer exists.
- *   7. Orphan words: words with no references anywhere (empty exampleIds
+ *   5. Orphan example sentences: example docs not referenced by any word's
+ *      exampleIds or appearsInIds.
+ *   6. Orphan words: words with no references anywhere (empty exampleIds
  *      AND empty appearsInIds) — flagged but not deleted.
  *
  * Read-only — makes zero writes. Exit code 1 if any violation is found.
@@ -57,9 +52,8 @@ async function validateLanguage(language: string): Promise<Report> {
   const wordIds = new Set(wordSnap.docs.map((d) => d.id));
   const exIds = new Set(exSnap.docs.map((d) => d.id));
 
-  // Precompute segment refs and owner pointers from examples.
+  // Precompute segment refs from examples.
   const segRefs = new Map<string, Set<string>>(); // wordId -> example IDs
-  const ownerPointers = new Map<string, Set<string>>(); // ownerWordId -> example IDs
   for (const doc of exSnap.docs) {
     const d = doc.data();
     const segs = (d.segments ?? []) as { id?: string }[];
@@ -73,23 +67,19 @@ async function validateLanguage(language: string): Promise<Report> {
         );
       }
     }
-    const ownerId = d.ownerWordId as string | undefined;
-    if (ownerId) {
-      if (!ownerPointers.has(ownerId)) ownerPointers.set(ownerId, new Set());
-      ownerPointers.get(ownerId)!.add(doc.id);
-      if (!wordIds.has(ownerId)) {
-        report.violations.push(
-          `orphan example: ${doc.id} has ownerWordId=${ownerId} but owner word does not exist`,
-        );
-      }
-    }
   }
 
-  // Walk words; check invariant + dangling IDs + owner back-pointer.
+  // Collect all example IDs referenced by any word (for orphan-example check).
+  const allReferencedExIds = new Set<string>();
+
+  // Walk words; check invariant + dangling IDs.
   for (const doc of wordSnap.docs) {
     const d = doc.data();
     const exampleIds = (d.exampleIds ?? []) as string[];
     const appearsInIds = (d.appearsInIds ?? []) as string[];
+
+    for (const id of exampleIds) allReferencedExIds.add(id);
+    for (const id of appearsInIds) allReferencedExIds.add(id);
 
     // Dangling exampleIds / appearsInIds
     for (const id of exampleIds) {
@@ -103,32 +93,6 @@ async function validateLanguage(language: string): Promise<Report> {
       if (!exIds.has(id)) {
         report.violations.push(
           `dangling appearsInIds: word ${doc.id} (${d.term}) references non-existent example ${id}`,
-        );
-      }
-    }
-
-    // Owner back-pointer: when a word holds an exampleId whose
-    // ownerWordId points at a DIFFERENT word, that's legitimate shared
-    // ownership via dedup (two words had the same sentence). We only
-    // surface it as a warning because it means a cascading delete of the
-    // owner word would leave this word with a dangling exampleId.
-    for (const exId of exampleIds) {
-      const exDoc = exSnap.docs.find((x) => x.id === exId);
-      if (!exDoc) continue;
-      const owner = exDoc.data().ownerWordId as string | undefined;
-      if (owner && owner !== doc.id) {
-        report.warnings.push(
-          `shared example: word ${doc.id} holds ${exId} owned by ${owner} (dedup share)`,
-        );
-      }
-    }
-
-    // Example docs whose ownerWordId is W but who are not in W.exampleIds.
-    const claimed = ownerPointers.get(doc.id) ?? new Set<string>();
-    for (const exId of claimed) {
-      if (!exampleIds.includes(exId)) {
-        report.violations.push(
-          `missing back-ref: example ${exId} has ownerWordId=${doc.id} but word does not include it in exampleIds`,
         );
       }
     }
@@ -148,6 +112,15 @@ async function validateLanguage(language: string): Promise<Report> {
     // Orphan words (no references anywhere)
     if (exampleIds.length === 0 && appearsInIds.length === 0) {
       report.orphanWords.push(`${doc.id} (${d.term})`);
+    }
+  }
+
+  // Orphan examples: not referenced by any word's exampleIds or appearsInIds.
+  for (const doc of exSnap.docs) {
+    if (!allReferencedExIds.has(doc.id)) {
+      report.violations.push(
+        `orphan example: ${doc.id} is not referenced by any word`,
+      );
     }
   }
 
