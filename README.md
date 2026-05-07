@@ -46,6 +46,7 @@ To also run Firestore data migrations during deploy:
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --word --grammer --llm  # all migrations
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --prompts           # speaking/writing + translation config
 ./deploy.sh vocab-trainer-490014 asia-northeast1 --archives          # backup + original archives
+./deploy.sh vocab-trainer-490014 asia-northeast1 --example-sentences  # migrate embedded examples to example_sentences collection
 ```
 
 ### Migrate Data Only
@@ -240,6 +241,12 @@ vocab-trainer/
 │   │   ├── migrate-llm-config-to-firestore.ts # Upload LLM config (.env) → Firestore
 │   │   ├── migrate-db-config-to-firestore.ts  # Upload speaking/writing, translation config & archives → Firestore
 │   │   ├── unify-chinese-levels.ts        # One-off: rewrite granular HSK1/2/.../9 labels to merged buckets
+│   │   ├── migrate-example-sentences.ts   # One-off: extract embedded examples into example_sentences collection
+│   │   ├── backfill-segment-word-ids.ts   # One-off: assign segment.id from word_index; update appearsInIds
+│   │   ├── backfill-word-appears-in.ts    # One-off: recompute appearsInIds (exampleIds ∪ segment refs)
+│   │   ├── cleanup-dangling-example-refs.ts # One-off: remove stale exampleIds/appearsInIds entries
+│   │   ├── smoke-test-invariant.ts        # Smoke test for word↔example invariant helpers (concurrency included)
+│   │   ├── validate-invariant-all.ts      # Read-only deep validator: invariant + dangling refs + orphans
 │   │   └── export-from-firestore.ts       # Export words, grammar & progress from Firestore to JSON
 │   ├── src/
 │   │   ├── index.ts             # Fastify server entry point
@@ -343,7 +350,7 @@ vocab-trainer/
 | `level`     | string | —       | Filter by level                                |
 | `page`      | number | 1       | Page number (min 1)                            |
 | `limit`     | number | 50      | Items per page (max 100)                       |
-| `flaggedOnly` | string | —     | When `"true"`, return only flagged words       |
+| `flaggedOnly` | string | —     | When `"true"`, return only flagged words (same as `GET /api/flagged/:language` but paginated) |
 
 **Response:** `PaginatedResult<Word>`
 ```json
@@ -367,9 +374,9 @@ vocab-trainer/
 }
 ```
 
-#### `GET /api/vocab/:language/:wordId` — Get single word
+#### `GET /api/vocab/:language/:wordId` — Get single word by ID
 
-**Response:** `Word` object (see [Vocabulary Database Format](#vocabulary-database-format)).
+**Response:** `Word` object (see [Vocabulary Database Format](#vocabulary-database-format)), or `404` if not found. The returned `examples` array is hydrated from `example_sentences` and includes both examples the word owns (`exampleIds`) and examples it appears in as a segment (`appearsInIds`).
 
 #### `PUT /api/vocab/:language/:wordId` — Update word
 
@@ -382,6 +389,17 @@ For Chinese examples, `examples[].segments` are preserved from the previously st
 #### `DELETE /api/vocab/:language/:wordId` — Delete word
 
 **Response:** `204 No Content`
+
+#### `POST /api/vocab/:language/:wordId/unlink-segment` — Unlink a word from an example sentence
+
+Transactionally removes the bidirectional link between a word and one example sentence. Clears the `segment.id` for the word in that sentence and removes the sentence from the word's `appearsInIds`. If the word no longer owns any examples (empty `exampleIds`) it is deleted entirely.
+
+**Body:**
+```json
+{ "sentence": "今天天气很好。" }
+```
+
+**Response:** `200` with `{ deleted: boolean }` — `true` if the word was removed, `false` if only the segment link was cleared.
 
 #### `POST /api/vocab/:language/file` — Create new language file
 
@@ -629,6 +647,10 @@ Removes the flagged status from a word.
 
 **Response:** `GrammarItemDoc` object, or `404` if not found.
 
+#### `GET /api/grammar/:language/items/:componentId` — Get single grammar item
+
+**Response:** `GrammarItemDoc` object, or `404` if not found.
+
 #### `POST /api/grammar/:language/items` — Add grammar item
 
 **Body:** Grammar item fields (`chapterNumber`, `subchapterId`, `subchapterTitle`, `term` required; `description`, `examples`, `words` optional).
@@ -863,9 +885,10 @@ The system prompt is assembled from a base prompt (per language) + a use-case co
 #### `POST /api/speaking-writing/correct-stream` — SSE streaming correction
 
 Same body as `/correct`. Returns an SSE stream with events:
-- `start` — correction started
+- `start` — `{}` — emitted once before streaming begins
 - `chunk` — `{ chunk: string }` — raw JSON token from LLM
-- `done` — `SpeakingWritingSession` — final session with parsed result
+- `done` — `SpeakingWritingSession` — final session with parsed result appended
+- `error` — `{ message: string }` — emitted on pipeline failure
 
 #### `GET /api/speaking-writing/session/:language` — Get current session
 
@@ -940,6 +963,8 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | -------------------- | ----------------------------------------------------- |
 | `languages`          | Language metadata (word count, topics)                 |
 | `words`              | Vocabulary words (one document per word)               |
+| `example_sentences`  | Normalized example sentences shared across words (id, sentence, translation, segments, language, ownerWordId); words reference these via `exampleIds` and `appearsInIds` arrays |
+| `example_sentence_index` | Dedup lookup by sentence text (composite key: `{language}_{sha256(sentence).slice(0,16)}` → exampleId) |
 | `id_maps`            | Term → word ID mappings and next ID counter            |
 | `progress`           | Per-word progress (times seen, correct rate)            |
 | `word_index`         | Fast term → {id, level, transliteration} lookup (composite key: `{language}_{term}`) |
@@ -951,7 +976,7 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `grammar_quiz_sessions` | One grammar quiz session per language              |
 | `translation_history`  | Translation/analysis entries with structured LLM results |
 | `speaking_writing_sessions` | One speaking/writing correction session per language |
-| `config`               | App configuration (`config/llm` for Azure OpenAI keys, `config/speaking_writing` for prompts/schemas/use-cases, `config/translation` for prompts/schemas) |
+| `config`               | App configuration (`config/llm` for Azure OpenAI keys, `config/speaking_writing` for prompts/schemas/use-cases, `config/translation` for prompts/schemas, `config/vocabulary` for smart-add and segmentation prompts/schemas) |
 | `token_usage`          | Individual LLM call logs with token counts                |
 | `token_usage_daily`    | Daily aggregates by model                                 |
 | `archive_backups`      | Backup word data and grammar backups (chunked subcollections for large files) |

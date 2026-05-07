@@ -19,6 +19,11 @@ cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts             # Up
 cd backend && npx tsx scripts/backfill-word-languages.ts [--dry-run] [--language=<code>] [--limit=<n>]  # One-off: re-run LLM on existing words to fill missing en/ja/ko/zh definition + example translations
 cd backend && npx tsx scripts/unify-chinese-levels.ts  # One-off: rewrite granular HSK1/2/.../9 labels in `words` and `word_index` to the merged HSK1-4 / HSK5 / HSK6 / HSK7-9 / Advanced buckets
 cd backend && npx tsx scripts/migrate-example-sentences.ts [--dry-run]  # One-off: extract embedded examples from words into example_sentences collection with dedup + bidirectional linking
+cd backend && npx tsx scripts/backfill-segment-word-ids.ts [--language=<lang>] [--dry-run]  # One-off: scan example sentences and assign segment.id from word_index; also updates appearsInIds on matched words
+cd backend && npx tsx scripts/backfill-word-appears-in.ts [--language=<lang>] [--dry-run]   # One-off: recompute appearsInIds for all words (union of exampleIds + segment refs)
+cd backend && npx tsx scripts/cleanup-dangling-example-refs.ts [--language=<lang>] [--dry-run]  # One-off: remove stale exampleIds/appearsInIds pointing at deleted example sentences
+cd backend && npx tsx scripts/smoke-test-invariant.ts  # Run isolated smoke tests of the word↔example_sentence invariant helpers (includes concurrency stress test)
+cd backend && npx tsx scripts/validate-invariant-all.ts [--language=<lang>]  # Read-only deep validator: checks word↔example invariant, dangling refs, and orphan docs across all languages; exits 1 on violations
 ```
 
 ### Frontend
@@ -78,6 +83,11 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
 - `migrate-llm-config-to-firestore.ts` — uploads Azure OpenAI config from `.env` to Firestore `config/llm` document
 - `migrate-db-config-to-firestore.ts` — uploads speaking/writing + translation + vocabulary config (`--prompts`) and backup/original archives (`--archives`) to Firestore
 - `unify-chinese-levels.ts` — one-time backfill that scans `words` and `word_index` and rewrites granular HSK1/2/.../9 (and `*-extended`) labels into the merged `HSK1-4` / `HSK5` / `HSK6` / `HSK7-9` / `Advanced` buckets used by the rest of the app
+- `backfill-segment-word-ids.ts` — scans all example sentences for a language and, for each segment without an `id`, looks up its text in `word_index`; assigns the word ID and updates `appearsInIds` on the matched word; accepts `--language=<lang>` (default: chinese) and `--dry-run`
+- `backfill-word-appears-in.ts` — recomputes `appearsInIds` on every word for a language: union of the word's `exampleIds` and all segment refs pointing at the word; adds missing links, removes stale ones; accepts `--language=<lang>` and `--dry-run`
+- `cleanup-dangling-example-refs.ts` — removes entries from `words.exampleIds` and `words.appearsInIds` that point at example sentence docs that no longer exist; accepts `--language=<lang>` and `--dry-run`
+- `smoke-test-invariant.ts` — runs isolated smoke tests of the word↔example_sentence invariant helpers directly against Firestore (uses a test language namespace); includes a concurrency stress phase; exits non-zero on failure
+- `validate-invariant-all.ts` — read-only deep validator: checks the word↔example invariant, dangling exampleIds/appearsInIds/segment.id refs, and orphan example docs across all (or one specified) language; exits 1 on any violation
 
 ### Data Storage
 - **Primary**: Google Cloud Firestore (database ID: `vocab-database`)
@@ -121,8 +131,9 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 
 ### Key API Endpoints
 - `GET /api/languages` — list languages
-- `GET /api/vocab/:language` — list words (query: search, topic, category, level, page, limit)
+- `GET /api/vocab/:language` — list words (query: search, topic, category, level, page, limit, flaggedOnly)
 - `GET /api/vocab/:language/filters` — available filter options (topics, categories, levels)
+- `GET /api/vocab/:language/:wordId` — get single word by ID
 - `GET /api/vocab/:language/lookup?term=X` — word lookup via word_index
 - `POST /api/vocab/:language/smart-add` — smart add word with LLM filling missing fields, auto-flag; for Chinese, also generates word segments with pinyin on examples; the LLM always generates definitions and example translations in all four supported languages (en/ja/ko/zh) — display filtering happens client-side via the user's settings
 - `POST /api/vocab/:language/check-terms` — given `{ terms: string[] }`, returns `{ existing: Record<term, wordId> }` for terms already in `word_index`
@@ -130,6 +141,7 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 - `DELETE /api/vocab/:language/file` — delete an entire language
 - `PUT /api/vocab/:language/:wordId` — update word; for Chinese, `examples[].segments` are merged from the previous saved version when the sentence text is unchanged so callers (e.g. `WordFormModal`) don't need to round-trip segments
 - `DELETE /api/vocab/:language/:wordId` — delete word
+- `POST /api/vocab/:language/:wordId/unlink-segment` — transactionally unlink a word from one example sentence (body: `{ sentence: string }`); clears the segment's `id` link and removes from `appearsInIds`; if the word owns no other examples it is deleted entirely
 - `POST /api/quiz/start` — start word quiz session (returns lightweight questions; full data is fetched on demand)
 - `GET /api/quiz/questions/:language?offset=&limit=` — batch-hydrate full question details (definitions, transliteration, examples) for a slice of the current quiz session
 - `POST /api/quiz/answer` — submit answer (body: sessionId, wordId, correct)
@@ -143,6 +155,7 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 - `GET /api/grammar/:language/chapters` — list grammar chapters
 - `GET /api/grammar/:language/subchapters` — list subchapters (query: chapters)
 - `GET /api/grammar/:language/items` — list grammar items (query: chapter, subchapter, level, search)
+- `GET /api/grammar/:language/items/:componentId` — get single grammar item by ID
 - `POST /api/grammar/:language/items` — add grammar item
 - `PUT /api/grammar/:language/items/:componentId` — update grammar item
 - `DELETE /api/grammar/:language/items/:componentId` — delete grammar item
@@ -159,7 +172,7 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 - `DELETE /api/translation/history` — clear all translation history
 - `DELETE /api/translation/history/:id` — delete single translation entry
 - `POST /api/speaking-writing/correct` — submit text for LLM correction (body: language, mode, useCase, inputText; uses FULL model)
-- `POST /api/speaking-writing/correct-stream` — SSE streaming version of correction (same body; streams chunk events then done with full session)
+- `POST /api/speaking-writing/correct-stream` — SSE streaming version of correction (same body; events: `start` → `chunk` (multiple) → `done` with full session, or `error`)
 - `GET /api/speaking-writing/session/:language` — get current speaking/writing session (returns null if none, not 404)
 - `DELETE /api/speaking-writing/session/:language` — delete speaking/writing session
 - `GET /api/metrics/usage` — paginated raw token usage logs (query: model, route, from, to, page, limit)
