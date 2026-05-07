@@ -45,6 +45,8 @@ export const TOPICS = [
   "Family & Relationships",
   "Health & Body",
   "Home & Housing",
+  "Numbers, Time & Dates",
+  "Social Interaction",
   // Academic / Professional
   "Economics & Finance",
   "Politics & Government",
@@ -54,6 +56,7 @@ export const TOPICS = [
   "Education",
   "Business & Commerce",
   "Work & Career",
+  "Military & War",
   // Culture & Society
   "Nature & Environment",
   "Arts & Entertainment",
@@ -61,6 +64,7 @@ export const TOPICS = [
   "Religion & Philosophy",
   "History",
   "Media & News",
+  "Emotions & Psychology",
   // Language Fundamentals
   "Language Fundamentals",
   // Other
