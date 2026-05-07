@@ -108,7 +108,7 @@ The script prints both service URLs on completion.
    docker compose up --build
    ```
 
-2. **Open the app** at http://localhost:5173. The backend API is available at http://localhost:3000.
+2. **Open the app** at http://localhost:5173. A language selection page appears — click **Chinese** or **English** to enter the corresponding language dashboard. You can also navigate directly to a language via URL (e.g. http://localhost:5173/chinese). The backend API is available at http://localhost:3000.
 
 To build images individually:
 ```bash

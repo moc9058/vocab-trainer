@@ -182,7 +182,7 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 - `DELETE /api/metrics/usage` — clear all usage logs and daily summaries
 
 ### Frontend (`frontend/src/`)
-- **Entry**: `main.tsx` → `App.tsx` → `Dashboard.tsx`
+- **Entry**: `main.tsx` (wraps tree in `BrowserRouter`) → `App.tsx` (routes: `/` → `LanguageSelectPage`, `/:language` → `Dashboard`, `*` → redirect to `/`) → `Dashboard.tsx`
 - **State**: React hooks + Context API (`i18n/context.tsx` for UI language, `settings/context.tsx` for app settings)
 - **Settings**: `settings/context.tsx` — `SettingsProvider` + `useSettings()` hook; persisted to `localStorage("appSettings")`. The full `AppSettings` shape lives in `settings/types.ts`; defaults in `settings/defaults.ts`. Fields, grouped by purpose:
   - **Display preferences** (affect what the user sees, never what the LLM produces):
@@ -204,16 +204,17 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
 - **Settings defaults**: `settings/defaults.ts` — `ALL_KNOWN_LANGUAGES` (en/ja/ko/zh with labels), `LANG_LABEL_MAP`, `DEFAULT_SETTINGS`
 - **API layer**: `api/client.ts` (generic fetchJson/postJson), `api/quiz.ts`, `api/vocab.ts`, `api/grammar.ts`, `api/translation.ts`, `api/speaking-writing.ts`
 - **Components**:
-  - `Dashboard.tsx` — main layout with header (settings gear button, dynamic UI language buttons ordered by settings), modals, quiz/word list/grammar orchestration
+  - `LanguageSelectPage.tsx` — landing page at `/`; fetches available languages from `/api/languages/`, renders clickable cards, navigates to `/:language` on selection
+  - `Dashboard.tsx` — per-language page at `/:language`; reads the content language from `useParams()` (no in-page language-select modals); header has "← Languages" button that returns to `/`; all vocab/quiz/grammar operations are automatically scoped to the URL language
   - `SettingsModal.tsx` — settings modal with drag-and-drop language reordering (@dnd-kit) plus controls for every `AppSettings` field: active UI languages, display definition / example translation languages, smart-add defaults (`defaultAddWordLanguage`, `defaultDefinitionLanguage`), speaking/writing defaults (`defaultCorrectionMode`, `defaultSpeakingUseCase`, `defaultWritingUseCase`), and translation defaults (`defaultTranslationSourceLanguage`, `defaultTranslationTargetLanguages`)
-  - `LanguageSelectModal.tsx` — language picker modal
+  - `LanguageSelectModal.tsx` — language picker modal (used only by grammar-related flows that may still need a language choice within a session)
   - `LevelSelectModal.tsx` — proficiency level picker (Chinese HSK buckets, Japanese JLPT)
   - `QuizFilterModal.tsx` — multi-select filters (topic, category, level) before starting word quiz
   - `QuizTaking.tsx` — word quiz UI with question display, answer input, progress bar
   - `WordList.tsx` — paginated word browsing with filters, progress badges, expandable details
   - `WordFormModal.tsx` — manual add/edit word form (no LLM); does not carry `examples[].segments` through its form state, which is why `firestore.ts:updateWord` preserves segments by sentence
   - `RubyText.tsx` — ruby annotation component used to render Chinese pinyin (and Japanese furigana) above their base characters in word displays and quiz views
-  - `SmartAddWordModal.tsx` — add word with LLM filling missing fields. **Two language fields**: an outer "word language" (backend full-name format: `"english"`, `"chinese"`, or custom — pre-filled from `defaultAddWordLanguage`) sent as the `:language` route parameter, and a per-definition-row "definition language" (ISO code or custom — first row pre-filled from `defaultDefinitionLanguage`) used as the key in `definitions[].text`. These are independent — easy to confuse. The LLM always generates definitions and example translations in all four supported languages regardless of either setting; display filtering is client-side via `displayDefinitionLanguages` / `displayExampleTranslationLanguages`
+  - `SmartAddWordModal.tsx` — add word with LLM filling missing fields. **Two language fields**: an outer "word language" (backend full-name format: `"english"`, `"chinese"`, or custom — pre-filled from optional `defaultLanguage` prop, then `defaultAddWordLanguage` setting) sent as the `:language` route parameter, and a per-definition-row "definition language" (ISO code or custom — first row pre-filled from `defaultDefinitionLanguage`) used as the key in `definitions[].text`. These are independent — easy to confuse. The LLM always generates definitions and example translations in all four supported languages regardless of either setting; display filtering is client-side via `displayDefinitionLanguages` / `displayExampleTranslationLanguages`
   - `GrammarList.tsx` — browse grammar by chapter/subchapter with inline edit/delete
   - `GrammarFilterModal.tsx` — grammar quiz filters (chapter, subchapter, display language, quiz mode); display language options follow settings order
   - `GrammarQuizTaking.tsx` — grammar quiz flashcard UI (display sentence → show answer → self-grade)
@@ -222,7 +223,7 @@ All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean)
   - `TranslationView.tsx` — translation/analysis UI with language selection ordered by settings, schema-based sentence decomposition results, per-language regenerate buttons during streaming, reading column conditional on CJK input, and history navigation
   - `SpeakingWritingView.tsx` — text correction UI with language selection (ordered by settings), speaking/writing mode toggle, use-case selector (professional/casual/presentation/interview or academic/social/email/creative), SSE streaming with live JSON preview, per-sentence corrections with severity-coded feedback (error/improvement/style), previous/next navigation between corrections, session persistence
   - `MetricsView.tsx` — LLM token usage dashboard with summary (per-model breakdown, daily table, cost estimates), paginated usage logs, and cost-per-token configuration editor
-  - `EmptyState.tsx` — home screen with vocabulary, translation, speaking & writing, grammar, and system sections
+  - `EmptyState.tsx` — home screen shown inside a language page; accepts a `language: string` prop and only checks that one language for in-progress sessions; shows vocabulary, translation, speaking & writing, grammar, and system sections
 - **i18n**: `i18n/translations.ts` — English, Japanese, and Korean, keyed by `TranslationKey` type
 - **Styling**: Tailwind CSS 4 utility classes only
 - **Proxy**: Vite proxies `/api` requests to `localhost:3000` in dev

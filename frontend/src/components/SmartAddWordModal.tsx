@@ -15,6 +15,7 @@ interface Props {
   onSave: (word: Word) => void;
   onClose: () => void;
   prefill?: Prefill;
+  defaultLanguage?: string;
 }
 
 const WORD_LANG_OPTIONS = [
@@ -48,7 +49,7 @@ const ALL_TOPICS = [
   "History", "Media & News", "Language Fundamentals",
 ] as const;
 
-export default function SmartAddWordModal({ onSave, onClose, prefill }: Props) {
+export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const LANG_OPTIONS = useMemo(
@@ -59,7 +60,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill }: Props) {
     [settings.languageOrder],
   );
   const prefillLang = prefill?.language ?? "";
-  const initialLang = prefill ? prefillLang : (settings.defaultAddWordLanguage || "english");
+  const initialLang = prefill ? prefillLang : (defaultLanguage || settings.defaultAddWordLanguage || "english");
   const isKnownLang = WORD_LANG_OPTIONS.some((o) => o.value === initialLang);
   const [langSelect, setLangSelect] = useState(isKnownLang ? initialLang : "__other__");
   const [customLang, setCustomLang] = useState(isKnownLang ? "" : initialLang);

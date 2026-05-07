@@ -1,18 +1,11 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
-import { useSettings } from "../settings/context";
-import { fetchJson } from "../api/client";
 import { getCurrentSession } from "../api/quiz";
 import { getCurrentGrammarSession } from "../api/grammar";
 import type { QuizSession, GrammarQuizSession } from "../types";
 
-interface LanguageInfo {
-  filename: string;
-  language: string;
-  wordCount: number;
-}
-
 interface Props {
+  language: string;
   onResume: (session: QuizSession) => void;
   onResumeGrammar: (session: GrammarQuizSession) => void;
   onStartNew: () => void;
@@ -31,41 +24,27 @@ interface Props {
   onOpenMetrics: () => void;
 }
 
-export default function EmptyState({ onResume, onResumeGrammar, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onOpenMetrics }: Props) {
+export default function EmptyState({ language, onResume, onResumeGrammar, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onOpenMetrics }: Props) {
   const { t } = useI18n();
-  const { sortByLanguageOrder } = useSettings();
-  const [vocabSessions, setVocabSessions] = useState<
-    { session: QuizSession; displayName: string }[]
-  >([]);
-  const [grammarSessions, setGrammarSessions] = useState<
-    { session: GrammarQuizSession; displayName: string }[]
-  >([]);
+  const [vocabSession, setVocabSession] = useState<QuizSession | null>(null);
+  const [grammarSession, setGrammarSession] = useState<GrammarQuizSession | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!language) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
-        const languages = await fetchJson<LanguageInfo[]>("/api/languages/");
-        const sorted = sortByLanguageOrder(languages, (l) => l.filename.replace(/\.json$/, ""));
-        const vocabResults: { session: QuizSession; displayName: string }[] = [];
-        const grammarResults: { session: GrammarQuizSession; displayName: string }[] = [];
-        for (const lang of sorted) {
-          const key = lang.filename.replace(/\.json$/, "");
-          const [vocabSession, grammarSession] = await Promise.all([
-            getCurrentSession(key),
-            getCurrentGrammarSession(key),
-          ]);
-          if (vocabSession && vocabSession.status === "in-progress") {
-            vocabResults.push({ session: vocabSession, displayName: lang.language });
-          }
-          if (grammarSession && grammarSession.status === "in-progress") {
-            grammarResults.push({ session: grammarSession, displayName: lang.language });
-          }
-        }
+        const [vocabResult, grammarResult] = await Promise.all([
+          getCurrentSession(language),
+          getCurrentGrammarSession(language),
+        ]);
         if (!cancelled) {
-          setVocabSessions(vocabResults);
-          setGrammarSessions(grammarResults);
+          setVocabSession(vocabResult && vocabResult.status === "in-progress" ? vocabResult : null);
+          setGrammarSession(grammarResult && grammarResult.status === "in-progress" ? grammarResult : null);
         }
       } catch {
         // ignore
@@ -74,7 +53,7 @@ export default function EmptyState({ onResume, onResumeGrammar, onStartNew, onBr
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [language]);
 
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
@@ -85,20 +64,17 @@ export default function EmptyState({ onResume, onResumeGrammar, onStartNew, onBr
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">
             {t("sectionVocabulary")}
           </h3>
-          {!loading && vocabSessions.length > 0 && (
-            <div className="mb-3 space-y-2">
-              {vocabSessions.map(({ session, displayName }) => (
-                <button
-                  key={session.sessionId}
-                  onClick={() => onResume(session)}
-                  className="w-full rounded-lg border border-blue-700 bg-blue-900/30 px-4 py-3 text-left hover:border-blue-500 hover:bg-blue-800/40 transition-colors"
-                >
-                  <p className="font-semibold text-sm text-blue-300">{t("resumePreviousQuiz")}</p>
-                  <p className="mt-0.5 text-xs text-blue-400">
-                    {displayName} — {session.score.correct} / {session.wordIds?.length ?? session.questions.length} {t("questionsAnswered")}
-                  </p>
-                </button>
-              ))}
+          {!loading && vocabSession && (
+            <div className="mb-3">
+              <button
+                onClick={() => onResume(vocabSession)}
+                className="w-full rounded-lg border border-blue-700 bg-blue-900/30 px-4 py-3 text-left hover:border-blue-500 hover:bg-blue-800/40 transition-colors"
+              >
+                <p className="font-semibold text-sm text-blue-300">{t("resumePreviousQuiz")}</p>
+                <p className="mt-0.5 text-xs text-blue-400">
+                  {vocabSession.score.correct} / {vocabSession.wordIds?.length ?? vocabSession.questions.length} {t("questionsAnswered")}
+                </p>
+              </button>
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -177,20 +153,17 @@ export default function EmptyState({ onResume, onResumeGrammar, onStartNew, onBr
           <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">
             {t("sectionGrammar")}
           </h3>
-          {!loading && grammarSessions.length > 0 && (
-            <div className="mb-3 space-y-2">
-              {grammarSessions.map(({ session, displayName }) => (
-                <button
-                  key={session.sessionId}
-                  onClick={() => onResumeGrammar(session)}
-                  className="w-full rounded-lg border border-emerald-700 bg-emerald-900/30 px-4 py-3 text-left hover:border-emerald-500 hover:bg-emerald-800/40 transition-colors"
-                >
-                  <p className="font-semibold text-sm text-emerald-300">{t("resumePreviousQuiz")}</p>
-                  <p className="mt-0.5 text-xs text-emerald-400">
-                    {displayName} — {session.score.correct} / {session.questions.length} {t("questionsAnswered")}
-                  </p>
-                </button>
-              ))}
+          {!loading && grammarSession && (
+            <div className="mb-3">
+              <button
+                onClick={() => onResumeGrammar(grammarSession)}
+                className="w-full rounded-lg border border-emerald-700 bg-emerald-900/30 px-4 py-3 text-left hover:border-emerald-500 hover:bg-emerald-800/40 transition-colors"
+              >
+                <p className="font-semibold text-sm text-emerald-300">{t("resumePreviousQuiz")}</p>
+                <p className="mt-0.5 text-xs text-emerald-400">
+                  {grammarSession.score.correct} / {grammarSession.questions.length} {t("questionsAnswered")}
+                </p>
+              </button>
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">

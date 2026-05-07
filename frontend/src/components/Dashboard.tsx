@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n/context";
 import { uiLanguages } from "../i18n/translations";
 import { useSettings } from "../settings/context";
@@ -6,7 +7,6 @@ import SettingsModal from "./SettingsModal";
 import { getCurrentSession, startQuiz } from "../api/quiz";
 import { getFilters } from "../api/vocab";
 import { startGrammarQuiz, getCurrentGrammarSession } from "../api/grammar";
-import { fetchJson } from "../api/client";
 import EmptyState from "./EmptyState";
 import QuizTaking from "./QuizTaking";
 import WordList from "./WordList";
@@ -19,7 +19,6 @@ import GrammarFormModal from "./GrammarFormModal";
 import TranslationView from "./TranslationView";
 import SpeakingWritingView from "./SpeakingWritingView";
 import MetricsView from "./MetricsView";
-import LanguageSelectModal from "./LanguageSelectModal";
 import LevelSelectModal from "./LevelSelectModal";
 import QuizFilterModal from "./QuizFilterModal";
 import { getTranslationHistory } from "../api/translation";
@@ -27,12 +26,13 @@ import { getSpeakingWritingSession } from "../api/speaking-writing";
 import type { QuizSession, GrammarQuizSession } from "../types";
 
 export default function Dashboard() {
-  const { t, language, setLanguage } = useI18n();
+  const { language } = useParams<{ language: string }>();
+  const navigate = useNavigate();
+  const { t, language: uiLang, setLanguage } = useI18n();
   const { settings } = useSettings();
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<QuizSession | null>(null);
   const [starting, setStarting] = useState(false);
-  const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
   const [selectedLevels, setSelectedLevels] = useState<string[] | null>(null);
   const [resumePrompt, setResumePrompt] = useState<QuizSession | null>(null);
@@ -41,14 +41,10 @@ export default function Dashboard() {
     categories: string[];
   } | null>(null);
   const [browsingLanguage, setBrowsingLanguage] = useState<string | null>(null);
-  const [showBrowseLanguageModal, setShowBrowseLanguageModal] = useState(false);
   const [flaggedReviewLanguage, setFlaggedReviewLanguage] = useState<string | null>(null);
-  const [showFlaggedLanguageModal, setShowFlaggedLanguageModal] = useState(false);
   // Grammar state
   const [activeGrammarQuiz, setActiveGrammarQuiz] = useState<GrammarQuizSession | null>(null);
   const [browsingGrammarLanguage, setBrowsingGrammarLanguage] = useState<string | null>(null);
-  const [showGrammarLanguageModal, setShowGrammarLanguageModal] = useState(false);
-  const [showGrammarBrowseLanguageModal, setShowGrammarBrowseLanguageModal] = useState(false);
   const [showGrammarFilterModal, setShowGrammarFilterModal] = useState<string | null>(null);
   // Smart Add Word / Grammar state
   const [showSmartAdd, setShowSmartAdd] = useState(false);
@@ -86,11 +82,10 @@ export default function Dashboard() {
     })();
   }, [speakingWritingMode]);
 
-  async function handleLanguageSelected(language: string) {
-    setShowLanguageModal(false);
-    setSelectedLanguage(language);
+  async function handleLanguageSelected(lang: string) {
+    setSelectedLanguage(lang);
     // Auto-skip level selection if language has no levels
-    const { levels } = await getFilters(language);
+    const { levels } = await getFilters(lang);
     if (levels.length === 0) {
       setSelectedLevels([]);
     }
@@ -102,7 +97,6 @@ export default function Dashboard() {
 
   function handleLevelBack() {
     setSelectedLanguage(null);
-    setShowLanguageModal(true);
   }
 
   async function handleFiltersSelected(filters: { topics: string[]; categories: string[] }) {
@@ -150,7 +144,6 @@ export default function Dashboard() {
     const lang = selectedLanguage;
     const levels = selectedLevels;
     const filters = pendingFilters;
-    // Clear all modal state immediately to prevent filter modal flash
     setResumePrompt(null);
     setSelectedLanguage(null);
     setSelectedLevels(null);
@@ -188,9 +181,6 @@ export default function Dashboard() {
     setActiveQuiz(null);
     setBrowsingLanguage(null);
     setFlaggedReviewLanguage(null);
-    setShowLanguageModal(false);
-    setShowBrowseLanguageModal(false);
-    setShowFlaggedLanguageModal(false);
     setSelectedLanguage(null);
     setSelectedLevels(null);
     setResumePrompt(null);
@@ -198,8 +188,6 @@ export default function Dashboard() {
     setStarting(false);
     setActiveGrammarQuiz(null);
     setBrowsingGrammarLanguage(null);
-    setShowGrammarLanguageModal(false);
-    setShowGrammarBrowseLanguageModal(false);
     setShowGrammarFilterModal(null);
     setShowSmartAdd(false);
     setGrammarFormLanguage(null);
@@ -217,56 +205,23 @@ export default function Dashboard() {
   }
 
   async function handleStartQuiz() {
-    try {
-      const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
-      if (languages.length === 1) {
-        handleLanguageSelected(languages[0].filename.replace(/\.json$/, ""));
-      } else {
-        setShowLanguageModal(true);
-      }
-    } catch {
-      setShowLanguageModal(true);
-    }
+    if (!language) return;
+    handleLanguageSelected(language);
   }
 
-  async function handleFlaggedReview() {
-    try {
-      const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
-      if (languages.length === 1) {
-        setFlaggedReviewLanguage(languages[0].filename.replace(/\.json$/, ""));
-      } else {
-        setShowFlaggedLanguageModal(true);
-      }
-    } catch {
-      setShowFlaggedLanguageModal(true);
-    }
+  function handleFlaggedReview() {
+    if (!language) return;
+    setFlaggedReviewLanguage(language);
   }
 
-  async function handleBrowse() {
-    try {
-      const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
-      if (languages.length === 1) {
-        setBrowsingLanguage(languages[0].filename.replace(/\.json$/, ""));
-      } else {
-        setShowBrowseLanguageModal(true);
-      }
-    } catch {
-      setShowBrowseLanguageModal(true);
-    }
+  function handleBrowse() {
+    if (!language) return;
+    setBrowsingLanguage(language);
   }
 
-  async function handleStartGrammarQuiz() {
-    try {
-      const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
-      if (languages.length === 1) {
-        const lang = languages[0].filename.replace(/\.json$/, "");
-        setShowGrammarFilterModal(lang);
-      } else {
-        setShowGrammarLanguageModal(true);
-      }
-    } catch {
-      setShowGrammarLanguageModal(true);
-    }
+  function handleStartGrammarQuiz() {
+    if (!language) return;
+    setShowGrammarFilterModal(language);
   }
 
   async function handleGrammarFiltersSelected(filters: { chapters: number[]; subchapters: string[]; displayLanguage: string; quizMode: string }) {
@@ -294,20 +249,12 @@ export default function Dashboard() {
     }
   }
 
-  async function handleBrowseGrammar() {
-    try {
-      const languages = await fetchJson<{ filename: string; language: string }[]>("/api/languages/");
-      if (languages.length === 1) {
-        setBrowsingGrammarLanguage(languages[0].filename.replace(/\.json$/, ""));
-      } else {
-        setShowGrammarBrowseLanguageModal(true);
-      }
-    } catch {
-      setShowGrammarBrowseLanguageModal(true);
-    }
+  function handleBrowseGrammar() {
+    if (!language) return;
+    setBrowsingGrammarLanguage(language);
   }
 
-  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || showLanguageModal || selectedLanguage || showBrowseLanguageModal || showFlaggedLanguageModal || activeGrammarQuiz || browsingGrammarLanguage || showGrammarLanguageModal || showGrammarBrowseLanguageModal || showGrammarFilterModal || showSmartAdd || grammarFormLanguage || translationMode || speakingWritingMode || showMetrics);
+  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || selectedLanguage || activeGrammarQuiz || browsingGrammarLanguage || showGrammarFilterModal || showSmartAdd || grammarFormLanguage || translationMode || speakingWritingMode || showMetrics);
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-900">
@@ -320,9 +267,9 @@ export default function Dashboard() {
               .map((lang) => (
               <button
                 key={lang}
-                onClick={() => setLanguage(lang as typeof language)}
+                onClick={() => setLanguage(lang as typeof uiLang)}
                 className={`px-2 py-1 text-xs font-medium ${
-                  language === lang
+                  uiLang === lang
                     ? "bg-indigo-600 text-white"
                     : "text-gray-400 hover:bg-gray-700"
                 }`}
@@ -338,36 +285,25 @@ export default function Dashboard() {
           >
             &#9881;
           </button>
-          {showBackButton && (
+          {showBackButton ? (
             <button
               onClick={goHome}
               className="rounded-lg border border-gray-600 px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
             >
               {t("back")}
             </button>
+          ) : (
+            <button
+              onClick={() => navigate("/")}
+              className="rounded-lg border border-gray-600 px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
+            >
+              ← {t("languages")}
+            </button>
           )}
         </div>
       </header>
       {showSettingsModal && (
         <SettingsModal onClose={() => setShowSettingsModal(false)} />
-      )}
-      {showGrammarLanguageModal && (
-        <LanguageSelectModal
-          onSelect={(lang) => {
-            setShowGrammarLanguageModal(false);
-            setShowGrammarFilterModal(lang);
-          }}
-          onClose={() => setShowGrammarLanguageModal(false)}
-        />
-      )}
-      {showGrammarBrowseLanguageModal && (
-        <LanguageSelectModal
-          onSelect={(lang) => {
-            setShowGrammarBrowseLanguageModal(false);
-            setBrowsingGrammarLanguage(lang);
-          }}
-          onClose={() => setShowGrammarBrowseLanguageModal(false)}
-        />
       )}
       {showGrammarFilterModal && (
         <GrammarFilterModal
@@ -380,6 +316,7 @@ export default function Dashboard() {
         <SmartAddWordModal
           onSave={() => {}}
           onClose={() => setShowSmartAdd(false)}
+          defaultLanguage={language}
         />
       )}
       {grammarFormLanguage && (
@@ -388,31 +325,7 @@ export default function Dashboard() {
           onClose={() => setGrammarFormLanguage(null)}
         />
       )}
-      {showBrowseLanguageModal && (
-        <LanguageSelectModal
-          onSelect={(lang) => {
-            setShowBrowseLanguageModal(false);
-            setBrowsingLanguage(lang);
-          }}
-          onClose={() => setShowBrowseLanguageModal(false)}
-        />
-      )}
-      {showFlaggedLanguageModal && (
-        <LanguageSelectModal
-          onSelect={(lang) => {
-            setShowFlaggedLanguageModal(false);
-            setFlaggedReviewLanguage(lang);
-          }}
-          onClose={() => setShowFlaggedLanguageModal(false)}
-        />
-      )}
-      {showLanguageModal && (
-        <LanguageSelectModal
-          onSelect={handleLanguageSelected}
-          onClose={() => setShowLanguageModal(false)}
-        />
-      )}
-      {selectedLanguage && !selectedLevels && !showLanguageModal && !resumePrompt && (
+      {selectedLanguage && !selectedLevels && !resumePrompt && (
         <LevelSelectModal
           language={selectedLanguage}
           onSelect={handleLevelsSelected}
@@ -420,7 +333,7 @@ export default function Dashboard() {
           onClose={handleFilterClose}
         />
       )}
-      {selectedLanguage && selectedLevels && !showLanguageModal && !resumePrompt && (
+      {selectedLanguage && selectedLevels && !resumePrompt && (
         <QuizFilterModal
           language={selectedLanguage}
           onStart={handleFiltersSelected}
@@ -489,6 +402,7 @@ export default function Dashboard() {
           <MetricsView />
         ) : (
           <EmptyState
+            language={language ?? ""}
             onResume={(session) => setActiveQuiz(session)}
             onResumeGrammar={(session) => setActiveGrammarQuiz(session)}
             onStartNew={handleStartQuiz}

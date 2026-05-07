@@ -37,8 +37,8 @@ for arg in "$@"; do
   esac
 done
 
-PROJECT_ID="${POSITIONAL[0]:?Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--migrate]}"
-REGION="${POSITIONAL[1]:-us-central1}"
+PROJECT_ID="${POSITIONAL[0]:-vocab-trainer-490014}"
+REGION="${POSITIONAL[1]:-asia-northeast1}"
 BACKEND_REPO="vocab-test-backend"
 FRONTEND_REPO="vocab-test-frontend"
 BACKEND_IMAGE="${REGION}-docker.pkg.dev/${PROJECT_ID}/${BACKEND_REPO}/backend"

@@ -189,6 +189,7 @@ const translations = {
     settingsReset: "Reset to Default",
     settingsAtLeastOne: "At least one language must be selected",
     // System / Metrics
+    languages: "Languages",
     sectionSystem: "System",
     viewMetrics: "LLM Usage & Costs",
   },
@@ -381,6 +382,7 @@ const translations = {
     settingsDefaultTranslationTargets: "デフォルトのターゲット言語",
     settingsReset: "デフォルトに戻す",
     settingsAtLeastOne: "少なくとも1つの言語を選択してください",
+    languages: "言語",
     sectionSystem: "システム",
     viewMetrics: "LLM使用量・コスト",
   },
@@ -573,6 +575,7 @@ const translations = {
     settingsDefaultTranslationTargets: "기본 대상 언어",
     settingsReset: "기본값으로 재설정",
     settingsAtLeastOne: "최소 1개의 언어를 선택해야 합니다",
+    languages: "언어",
     sectionSystem: "시스템",
     viewMetrics: "LLM 사용량 및 비용",
   },
