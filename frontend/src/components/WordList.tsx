@@ -624,6 +624,7 @@ export default function WordList({ language, onBack }: Props) {
       {/* Modals */}
       {showSmartAdd && (
         <SmartAddWordModal
+          defaultLanguage={language}
           onSave={(word) => {
             setShowSmartAdd(false);
             setSearch("");

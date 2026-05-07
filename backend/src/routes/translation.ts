@@ -270,18 +270,21 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // GET /history — paginated translation history
+  // GET /history — paginated translation history (optional ?language= filter)
   fastify.get<{
-    Querystring: { page?: string; limit?: string };
+    Querystring: { page?: string; limit?: string; language?: string };
   }>("/history", async (request) => {
     const page = parseInt(request.query.page ?? "1", 10);
     const limit = parseInt(request.query.limit ?? "20", 10);
-    return getTranslationHistory(page, limit);
+    const { language } = request.query;
+    return getTranslationHistory(page, limit, language);
   });
 
-  // DELETE /history — clear all translation history
-  fastify.delete("/history", async () => {
-    await clearTranslationHistory();
+  // DELETE /history — clear translation history (optional ?language= filter)
+  fastify.delete<{
+    Querystring: { language?: string };
+  }>("/history", async (request) => {
+    await clearTranslationHistory(request.query.language);
     return { ok: true };
   });
 

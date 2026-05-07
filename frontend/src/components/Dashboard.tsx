@@ -22,10 +22,12 @@ import LevelSelectModal from "./LevelSelectModal";
 import QuizFilterModal from "./QuizFilterModal";
 import { getTranslationHistory } from "../api/translation";
 import { getSpeakingWritingSession } from "../api/speaking-writing";
+import { urlLanguageToIsoCode } from "../settings/defaults";
 import type { QuizSession, GrammarQuizSession } from "../types";
 
 export default function Dashboard() {
   const { language } = useParams<{ language: string }>();
+  const isoCode = language ? (urlLanguageToIsoCode(language) ?? language) : "";
   const navigate = useNavigate();
   const { t, language: uiLang, setLanguage } = useI18n();
   const { settings } = useSettings();
@@ -54,30 +56,26 @@ export default function Dashboard() {
   // Speaking & Writing state
   const [speakingWritingMode, setSpeakingWritingMode] = useState<"new" | "resume" | null>(null);
   const [hasSWSession, setHasSWSession] = useState(false);
-  // Check for translation history on mount
+  // Check for translation history scoped to the current language
   useEffect(() => {
-    getTranslationHistory(1, 1)
+    if (!isoCode) return;
+    getTranslationHistory(1, 1, isoCode)
       .then(({ total }) => setHasTranslationHistory(total > 0))
       .catch(() => {});
-  }, [translationMode]);
+  }, [translationMode, isoCode]);
 
-  // Check for speaking/writing sessions (keyed by ISO code, not filename)
+  // Check for speaking/writing session scoped to the current language
   useEffect(() => {
+    if (!isoCode) return;
     (async () => {
       try {
-        for (const code of ["en", "ja", "ko", "zh"]) {
-          const sess = await getSpeakingWritingSession(code);
-          if (sess && sess.corrections.length > 0) {
-            setHasSWSession(true);
-            return;
-          }
-        }
-        setHasSWSession(false);
+        const sess = await getSpeakingWritingSession(isoCode);
+        setHasSWSession(sess !== null && sess.corrections.length > 0);
       } catch {
         setHasSWSession(false);
       }
     })();
-  }, [speakingWritingMode]);
+  }, [speakingWritingMode, isoCode]);
 
   async function handleLanguageSelected(lang: string) {
     setSelectedLanguage(lang);
@@ -391,9 +389,9 @@ export default function Dashboard() {
             onBack={() => setBrowsingLanguage(null)}
           />
         ) : speakingWritingMode ? (
-          <SpeakingWritingView mode={speakingWritingMode} />
+          <SpeakingWritingView mode={speakingWritingMode} language={isoCode} />
         ) : translationMode ? (
-          <TranslationView mode={translationMode} />
+          <TranslationView mode={translationMode} language={isoCode} />
         ) : (
           <EmptyState
             language={language ?? ""}

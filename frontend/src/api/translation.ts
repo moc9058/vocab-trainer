@@ -107,15 +107,21 @@ export async function translateStream(
 
 export async function getTranslationHistory(
   page = 1,
-  limit = 50
+  limit = 50,
+  language?: string
 ): Promise<{ entries: TranslationEntry[]; total: number }> {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (language) params.set("language", language);
   return fetchJson<{ entries: TranslationEntry[]; total: number }>(
-    `/api/translation/history?page=${page}&limit=${limit}`
+    `/api/translation/history?${params}`
   );
 }
 
-export async function deleteTranslationHistory(): Promise<void> {
-  return deleteRequest("/api/translation/history");
+export async function deleteTranslationHistory(language?: string): Promise<void> {
+  const path = language
+    ? `/api/translation/history?language=${encodeURIComponent(language)}`
+    : "/api/translation/history";
+  return deleteRequest(path);
 }
 
 export async function deleteTranslationEntryById(id: string): Promise<void> {

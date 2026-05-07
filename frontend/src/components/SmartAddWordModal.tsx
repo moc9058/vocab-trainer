@@ -18,12 +18,6 @@ interface Props {
   defaultLanguage?: string;
 }
 
-const WORD_LANG_OPTIONS = [
-  { value: "english", label: "English" },
-  { value: "chinese", label: "Chinese" },
-  { value: "__other__", label: "Other" },
-] as const;
-
 // LANG_OPTIONS is now derived from settings in the component
 
 const CATEGORIES = [
@@ -59,11 +53,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     ],
     [settings.languageOrder],
   );
-  const prefillLang = prefill?.language ?? "";
-  const initialLang = prefill ? prefillLang : (defaultLanguage || settings.defaultAddWordLanguage || "english");
-  const isKnownLang = WORD_LANG_OPTIONS.some((o) => o.value === initialLang);
-  const [langSelect, setLangSelect] = useState(isKnownLang ? initialLang : "__other__");
-  const [customLang, setCustomLang] = useState(isKnownLang ? "" : initialLang);
+  const wordLanguage = prefill?.language || defaultLanguage || settings.defaultAddWordLanguage || "english";
   const [term, setTerm] = useState(prefill?.term ?? "");
   const [transliteration, setTransliteration] = useState("");
   const [definitions, setDefinitions] = useState<{ langSelect: string; customLang: string; text: string }[]>(() => {
@@ -112,13 +102,13 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
       : undefined;
 
     const validExamples = examples.filter((ex) => ex.sentence.trim());
-    const language = langSelect === "__other__" ? customLang.trim().toLowerCase() : langSelect;
+    const language = wordLanguage;
     if (!language) return;
 
     try {
       const result = await smartAddWord(language, {
         term: term.trim(),
-        transliteration: langSelect === "chinese" ? (transliteration.trim() || undefined) : undefined,
+        transliteration: wordLanguage === "chinese" ? (transliteration.trim() || undefined) : undefined,
         definitions: defs,
         topics: topics.length > 0 ? topics : undefined,
         examples: validExamples.length > 0 ? validExamples : undefined,
@@ -181,35 +171,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Language */}
-          <div>
-            <label className="mb-1 block text-sm text-gray-400">Language</label>
-            <div className="flex items-center gap-3">
-              {WORD_LANG_OPTIONS.map((opt) => (
-                <label key={opt.value} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="wordLang"
-                    value={opt.value}
-                    checked={langSelect === opt.value}
-                    onChange={() => setLangSelect(opt.value)}
-                    className="accent-blue-600"
-                  />
-                  {opt.label}
-                </label>
-              ))}
-              {langSelect === "__other__" && (
-                <input
-                  type="text"
-                  value={customLang}
-                  onChange={(e) => setCustomLang(e.target.value)}
-                  placeholder="Language name"
-                  className="w-32 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                />
-              )}
-            </div>
-          </div>
-
           {/* Term (required) */}
           <div>
             <label className="mb-1 block text-sm text-gray-400">{t("term")} *</label>
@@ -224,7 +185,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           </div>
 
           {/* Transliteration (optional, Chinese only) */}
-          {langSelect === "chinese" && (
+          {wordLanguage === "chinese" && (
             <div>
               <label className="mb-1 block text-sm text-gray-400">{t("transliteration")}</label>
               <input
@@ -318,7 +279,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           </div>
 
           {/* Level (optional, non-English languages with defined levels) */}
-          {LEVEL_OPTIONS[langSelect] && (
+          {LEVEL_OPTIONS[wordLanguage] && (
             <div>
               <label className="mb-1 block text-sm text-gray-400">{t("levelsColumn")}</label>
               <select
@@ -327,7 +288,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                 className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
               >
                 <option value="">-- LLM will assign --</option>
-                {LEVEL_OPTIONS[langSelect].map((lv) => (
+                {LEVEL_OPTIONS[wordLanguage].map((lv) => (
                   <option key={lv} value={lv}>{lv}</option>
                 ))}
               </select>
@@ -391,7 +352,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                   className="w-full resize-none overflow-hidden rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
                 />
                 <div className="flex gap-2">
-                  {langSelect !== "english" && (
+                  {wordLanguage !== "english" && (
                     <input
                       type="text"
                       value={displayTranslation(ex.translation)}

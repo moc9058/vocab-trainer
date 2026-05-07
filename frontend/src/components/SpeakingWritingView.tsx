@@ -1,24 +1,17 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { ALL_KNOWN_LANGUAGES } from "../settings/defaults";
 import { submitCorrectionStream, getSpeakingWritingSession, deleteSpeakingWritingSession } from "../api/speaking-writing";
 import type { SpeakingWritingSession, CorrectionItem } from "../types";
 
 interface Props {
   mode: "new" | "resume";
+  language: string;
 }
 
-export default function SpeakingWritingView({ mode }: Props) {
+export default function SpeakingWritingView({ mode, language }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
-  const KNOWN_LANGUAGES = useMemo(
-    () => settings.languageOrder
-      .map((code) => ALL_KNOWN_LANGUAGES.find((l) => l.code === code))
-      .filter(Boolean)
-      .map((l) => ({ code: l!.code, label: l!.nativeLabel })),
-    [settings.languageOrder],
-  );
 
   const SPEAKING_USE_CASES = [
     { key: "professional", label: t("useCaseProfessional") },
@@ -34,7 +27,6 @@ export default function SpeakingWritingView({ mode }: Props) {
   ];
 
   const [phase, setPhase] = useState<"input" | "loading" | "results">("input");
-  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(settings.languageOrder[0] ?? "en");
   const [selectedMode, setSelectedMode] = useState<"speaking" | "writing">(settings.defaultCorrectionMode);
   const [selectedUseCase, setSelectedUseCase] = useState(
     settings.defaultCorrectionMode === "speaking"
@@ -50,30 +42,24 @@ export default function SpeakingWritingView({ mode }: Props) {
   const abortRef = useRef<AbortController | null>(null);
   const needsCleanupRef = useRef(mode === "new");
 
-  const LANG_CODES = ["en", "ja", "ko", "zh"];
-
-  // Resume: find existing session
+  // Resume: find existing session for the current language only
   useEffect(() => {
     if (mode !== "resume") return;
     let cancelled = false;
     (async () => {
       try {
-        for (const code of LANG_CODES) {
-          const sess = await getSpeakingWritingSession(code);
+        const sess = await getSpeakingWritingSession(language);
+        if (!cancelled) {
           if (sess && sess.corrections.length > 0) {
-            if (!cancelled) {
-              setSession(sess);
-              setSelectedLanguage(sess.language);
-              setSelectedMode(sess.mode);
-              setSelectedUseCase(sess.useCase || (sess.mode === "speaking" ? settings.defaultSpeakingUseCase : settings.defaultWritingUseCase));
-              setCorrectionIndex(sess.currentIndex);
-              setPhase("results");
-            }
-            return;
+            setSession(sess);
+            setSelectedMode(sess.mode);
+            setSelectedUseCase(sess.useCase || (sess.mode === "speaking" ? settings.defaultSpeakingUseCase : settings.defaultWritingUseCase));
+            setCorrectionIndex(sess.currentIndex);
+            setPhase("results");
+          } else {
+            setPhase("input");
           }
         }
-        // No session found, fall back to input
-        if (!cancelled) setPhase("input");
       } catch {
         if (!cancelled) setPhase("input");
       } finally {
@@ -81,12 +67,12 @@ export default function SpeakingWritingView({ mode }: Props) {
       }
     })();
     return () => { cancelled = true; };
-  }, [mode]);
+  }, [mode, language]);
 
-  const canSubmit = inputText.trim().length > 0 && selectedLanguage;
+  const canSubmit = inputText.trim().length > 0;
 
   async function handleSubmit() {
-    if (!canSubmit || !selectedLanguage) return;
+    if (!canSubmit) return;
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -96,14 +82,12 @@ export default function SpeakingWritingView({ mode }: Props) {
 
     if (needsCleanupRef.current) {
       needsCleanupRef.current = false;
-      for (const code of LANG_CODES) {
-        await deleteSpeakingWritingSession(code).catch(() => {});
-      }
+      await deleteSpeakingWritingSession(language).catch(() => {});
     }
     let settled = false;
     try {
       await submitCorrectionStream(
-        selectedLanguage,
+        language,
         selectedMode,
         selectedUseCase,
         inputText.trim(),
@@ -202,26 +186,6 @@ export default function SpeakingWritingView({ mode }: Props) {
         <h2 className="text-lg font-bold text-gray-100">{t("sectionSpeakingWriting")}</h2>
 
         <NavigationBar />
-
-        {/* Language selector */}
-        <div>
-          <p className="mb-2 text-sm font-medium text-gray-400">{t("swSelectLanguage")}</p>
-          <div className="flex flex-wrap gap-2">
-            {KNOWN_LANGUAGES.map((lang) => (
-              <button
-                key={lang.code}
-                onClick={() => setSelectedLanguage(lang.code)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  selectedLanguage === lang.code
-                    ? "bg-teal-600 text-white"
-                    : "border border-gray-600 text-gray-400 hover:bg-gray-700"
-                }`}
-              >
-                {lang.label}
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* Speaking / Writing mode toggle */}
         <div>

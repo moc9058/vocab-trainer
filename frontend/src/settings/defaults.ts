@@ -14,6 +14,11 @@ export const LANG_LABEL_MAP: Record<string, string> = {
   zh: "Chinese",
 };
 
+export function urlLanguageToIsoCode(urlLang: string): string | null {
+  const lower = urlLang.toLowerCase();
+  return ALL_KNOWN_LANGUAGES.find((l) => l.label.toLowerCase() === lower)?.code ?? null;
+}
+
 export const DEFAULT_SETTINGS: AppSettings = {
   languageOrder: ["en", "ja", "ko", "zh"],
   activeUiLanguages: ["en", "ja", "ko"],

@@ -1461,20 +1461,15 @@ export async function saveTranslationEntry(
 
 export async function getTranslationHistory(
   page = 1,
-  limit = 20
+  limit = 20,
+  language?: string
 ): Promise<{ entries: TranslationEntry[]; total: number }> {
-  const countSnap = await translationHistory.count().get();
-  const total = countSnap.data().count;
+  const snap = await translationHistory.orderBy("createdAt", "desc").get();
+  const allDocs = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as TranslationEntry[];
+  const filtered = language ? allDocs.filter((e) => e.sourceLanguage === language) : allDocs;
+  const total = filtered.length;
   const offset = (page - 1) * limit;
-  const snap = await translationHistory
-    .orderBy("createdAt", "desc")
-    .offset(offset)
-    .limit(limit)
-    .get();
-  const entries = snap.docs.map((doc) => ({
-    id: doc.id,
-    ...doc.data(),
-  })) as TranslationEntry[];
+  const entries = filtered.slice(offset, offset + limit);
   return { entries, total };
 }
 
@@ -1485,8 +1480,10 @@ export async function deleteTranslationEntry(id: string): Promise<boolean> {
   return true;
 }
 
-export async function clearTranslationHistory(): Promise<void> {
-  const snap = await translationHistory.get();
+export async function clearTranslationHistory(language?: string): Promise<void> {
+  const snap = language
+    ? await translationHistory.where("sourceLanguage", "==", language).get()
+    : await translationHistory.get();
   const BATCH_LIMIT = 500;
   for (let i = 0; i < snap.docs.length; i += BATCH_LIMIT) {
     const batch = db.batch();

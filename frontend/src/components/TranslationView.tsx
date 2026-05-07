@@ -7,9 +7,10 @@ import type { TranslationEntry, TranslationResult, SentenceAnalysis, SentenceAna
 
 interface Props {
   mode: "new" | "resume";
+  language: string;
 }
 
-export default function TranslationView({ mode }: Props) {
+export default function TranslationView({ mode, language }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const KNOWN_LANGUAGES = useMemo(
@@ -23,14 +24,12 @@ export default function TranslationView({ mode }: Props) {
   const [historyIndex, setHistoryIndex] = useState(0);
   const [phase, setPhase] = useState<"input" | "loading" | "results">("input");
   const [inputText, setInputText] = useState("");
-  const [sourceLanguage, setSourceLanguage] = useState<string>(
-    settings.defaultTranslationSourceLanguage || KNOWN_LANGUAGES[0]?.code || "en",
-  );
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
-    settings.defaultTranslationTargetLanguages.length > 0
-      ? settings.defaultTranslationTargetLanguages.filter((c) => c !== settings.defaultTranslationSourceLanguage)
-      : [settings.languageOrder[0] ?? "ja"],
-  );
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(() => {
+    const targets = settings.defaultTranslationTargetLanguages.filter((c) => c !== language);
+    if (targets.length > 0) return targets;
+    const fallback = settings.languageOrder.find((c) => c !== language);
+    return fallback ? [fallback] : ["ja"];
+  });
   const [activeTab, setActiveTab] = useState(0);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [decomposeChunks, setDecomposeChunks] = useState<string>("");
@@ -40,9 +39,7 @@ export default function TranslationView({ mode }: Props) {
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const lastInputRef = useRef("");
-  const lastSourceLangRef = useRef<string>(
-    settings.defaultTranslationSourceLanguage || KNOWN_LANGUAGES[0]?.code || "en",
-  );
+  const lastSourceLangRef = useRef<string>(language);
   const lastLangsRef = useRef<string[]>([]);
   const doneRef = useRef(false);
   const needsCleanupRef = useRef(mode === "new");
@@ -55,7 +52,7 @@ export default function TranslationView({ mode }: Props) {
           if (!cancelled) setLoadingHistory(false);
           return;
         }
-        const { entries } = await getTranslationHistory(1, 50);
+        const { entries } = await getTranslationHistory(1, 50, language);
         if (!cancelled) {
           setHistory(entries);
           if (entries.length > 0) {
@@ -73,11 +70,6 @@ export default function TranslationView({ mode }: Props) {
     return () => { cancelled = true; };
   }, [mode]);
 
-  function handleSourceLanguageChange(code: string) {
-    setSourceLanguage(code);
-    setSelectedLanguages((prev) => prev.filter((l) => l !== code));
-  }
-
   function toggleLanguage(code: string) {
     setSelectedLanguages((prev) =>
       prev.includes(code) ? prev.filter((l) => l !== code) : [...prev, code]
@@ -85,7 +77,7 @@ export default function TranslationView({ mode }: Props) {
   }
 
   function getTargetLanguages(): string[] {
-    return selectedLanguages.filter((l) => l !== sourceLanguage);
+    return selectedLanguages.filter((l) => l !== language);
   }
 
   const canSubmit = inputText.trim().length > 0 && getTargetLanguages().length > 0;
@@ -96,7 +88,7 @@ export default function TranslationView({ mode }: Props) {
     const controller = new AbortController();
     abortRef.current = controller;
     lastInputRef.current = inputText.trim();
-    lastSourceLangRef.current = sourceLanguage;
+    lastSourceLangRef.current = language;
     lastLangsRef.current = getTargetLanguages();
     doneRef.current = false;
     setError(null);
@@ -109,11 +101,11 @@ export default function TranslationView({ mode }: Props) {
     const didCleanup = needsCleanupRef.current;
     if (needsCleanupRef.current) {
       needsCleanupRef.current = false;
-      deleteTranslationHistory().catch(() => {});
+      deleteTranslationHistory(language).catch(() => {});
     }
 
     try {
-      await translateStream(sourceLanguage, inputText.trim(), getTargetLanguages(), {
+      await translateStream(language, inputText.trim(), getTargetLanguages(), {
         onDecomposeChunk(chunk) {
           setDecomposeChunks((prev) => prev + chunk);
         },
@@ -261,9 +253,8 @@ export default function TranslationView({ mode }: Props) {
 
   function handleRegenerateTranslation() {
     if (!currentEntry) return;
-    setSourceLanguage(currentEntry.sourceLanguage ?? sourceLanguage);
     setInputText(currentEntry.sourceText);
-    setSelectedLanguages(currentEntry.targetLanguages);
+    setSelectedLanguages(currentEntry.targetLanguages.filter((l) => l !== language));
     setPhase("input");
     setError(null);
   }
@@ -326,28 +317,9 @@ export default function TranslationView({ mode }: Props) {
         />
 
         <div>
-          <p className="mb-2 text-sm font-medium text-gray-400">{t("sourceLanguageLabel")}</p>
-          <div className="flex flex-wrap gap-2">
-            {KNOWN_LANGUAGES.map((lang) => (
-              <button
-                key={lang.code}
-                onClick={() => handleSourceLanguageChange(lang.code)}
-                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                  sourceLanguage === lang.code
-                    ? "bg-cyan-600 text-white"
-                    : "border border-gray-600 text-gray-400 hover:bg-gray-700"
-                }`}
-              >
-                {lang.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div>
           <p className="mb-2 text-sm font-medium text-gray-400">{t("targetLanguagesLabel")}</p>
           <div className="flex flex-wrap gap-2">
-            {KNOWN_LANGUAGES.filter((lang) => lang.code !== sourceLanguage).map((lang) => (
+            {KNOWN_LANGUAGES.filter((lang) => lang.code !== language).map((lang) => (
               <button
                 key={lang.code}
                 onClick={() => toggleLanguage(lang.code)}

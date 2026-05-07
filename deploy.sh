@@ -37,6 +37,10 @@ for arg in "$@"; do
   esac
 done
 
+if [ "$MIGRATE_WORD" = false ] && [ "$MIGRATE_GRAMMER" = false ] && [ "$MIGRATE_LLM" = false ] && [ "$MIGRATE_PROMPTS" = false ] && [ "$MIGRATE_ARCHIVES" = false ] && [ "$MIGRATE_EXAMPLE_SENTENCES" = false ]; then
+  echo "==> Skipping Firestore migration (use --word, --grammer, --llm, --prompts, --archives, and/or --example-sentences to run)"
+fi
+
 PROJECT_ID="${POSITIONAL[0]:-vocab-trainer-490014}"
 REGION="${POSITIONAL[1]:-asia-northeast1}"
 BACKEND_REPO="vocab-test-backend"
@@ -89,9 +93,7 @@ if [ "$MIGRATE_EXAMPLE_SENTENCES" = true ]; then
   (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
     npx tsx scripts/migrate-example-sentences.ts)
 fi
-if [ "$MIGRATE_WORD" = false ] && [ "$MIGRATE_GRAMMER" = false ] && [ "$MIGRATE_LLM" = false ] && [ "$MIGRATE_PROMPTS" = false ] && [ "$MIGRATE_ARCHIVES" = false ] && [ "$MIGRATE_EXAMPLE_SENTENCES" = false ]; then
-  echo "==> Skipping Firestore migration (use --word, --grammer, --llm, --prompts, --archives, and/or --example-sentences to run)"
-fi
+
 
 # Deploy backend to Cloud Run
 echo "==> Deploying backend to Cloud Run..."
