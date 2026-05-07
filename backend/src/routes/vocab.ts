@@ -85,6 +85,8 @@ const LANGUAGE_TO_ISO: Record<string, string> = {
   korean: "ko",
 };
 
+const ALLOWED_LANGUAGES = new Set(Object.keys(LANGUAGE_TO_ISO));
+
 function fillPlaceholders(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
 }
@@ -363,15 +365,17 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         return { sentence: ex.sentence, translation: ex.translation, segments } as Example;
       });
 
-      // Strip the source language from example translations: a same-language
-      // "translation" is meaningless and the LLM has a tendency to emit one
-      // even when prompted not to. The prompt is the polite ask; this is the
-      // guarantee. Definitions are NOT touched (a same-language definition is
-      // a useful monolingual gloss).
+      // Strip the source language from example translations and definitions:
+      // a same-language translation/definition is redundant for the word's own language.
       if (sourceLangCode) {
         for (const ex of examplesWithSegments) {
           if (ex.translation && typeof ex.translation === "object") {
             delete (ex.translation as Record<string, string>)[sourceLangCode];
+          }
+        }
+        for (const def of merged.definitions as { text: Record<string, string> }[]) {
+          if (def.text && typeof def.text === "object") {
+            delete def.text[sourceLangCode];
           }
         }
       }
@@ -747,6 +751,9 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
     "/:language/file",
     async (request, reply) => {
       const { language } = request.params;
+      if (!ALLOWED_LANGUAGES.has(language)) {
+        return reply.badRequest(`Language '${language}' is not supported. Allowed: ${[...ALLOWED_LANGUAGES].join(", ")}`);
+      }
       if (await languageExists(language)) {
         return reply.conflict(`Language '${language}' already exists`);
       }

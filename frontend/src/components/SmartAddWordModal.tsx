@@ -47,23 +47,16 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   const { t } = useI18n();
   const { settings } = useSettings();
   const LANG_OPTIONS = useMemo(
-    () => [
-      ...settings.languageOrder.map((c) => ({ value: c, label: LANG_LABEL_MAP[c] ?? c })),
-      { value: "__other__", label: "Other" },
-    ],
+    () => settings.languageOrder.map((c) => ({ value: c, label: LANG_LABEL_MAP[c] ?? c })),
     [settings.languageOrder],
   );
   const wordLanguage = prefill?.language || defaultLanguage || settings.defaultAddWordLanguage || "english";
   const [term, setTerm] = useState(prefill?.term ?? "");
   const [transliteration, setTransliteration] = useState("");
-  const [definitions, setDefinitions] = useState<{ langSelect: string; customLang: string; text: string }[]>(() => {
+  const [definitions, setDefinitions] = useState<{ langSelect: string; text: string }[]>(() => {
     const def = settings.defaultDefinitionLanguage || "en";
-    const isKnown = settings.languageOrder.includes(def);
-    return [
-      isKnown
-        ? { langSelect: def, customLang: "", text: "" }
-        : { langSelect: "__other__", customLang: def, text: "" },
-    ];
+    const langSelect = settings.languageOrder.includes(def) ? def : (settings.languageOrder[0] ?? "");
+    return [{ langSelect, text: "" }];
   });
   const [grammaticalCategory, setGrammaticalCategory] = useState("");
   const [level, setLevel] = useState("");
@@ -77,8 +70,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   const [success, setSuccess] = useState(false);
   const [generatedWords, setGeneratedWords] = useState<Word[]>([]);
 
-  function getDefLangKey(def: { langSelect: string; customLang: string }): string {
-    if (def.langSelect === "__other__") return def.customLang.trim();
+  function getDefLangKey(def: { langSelect: string }): string {
     return def.langSelect;
   }
 
@@ -204,7 +196,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
               <label className="text-sm text-gray-400">{t("definition")}</label>
               <button
                 type="button"
-                onClick={() => setDefinitions([...definitions, { langSelect: "", customLang: "", text: "" }])}
+                onClick={() => setDefinitions([...definitions, { langSelect: "", text: "" }])}
                 className="text-xs text-blue-400 hover:text-blue-300"
               >
                 + {t("addDefinition")}
@@ -216,7 +208,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                   value={def.langSelect}
                   onChange={(e) => {
                     const next = [...definitions];
-                    next[i] = { ...next[i], langSelect: e.target.value, customLang: "" };
+                    next[i] = { ...next[i], langSelect: e.target.value };
                     setDefinitions(next);
                   }}
                   className="w-28 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
@@ -226,19 +218,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
-                {def.langSelect === "__other__" && (
-                  <input
-                    type="text"
-                    value={def.customLang}
-                    onChange={(e) => {
-                      const next = [...definitions];
-                      next[i] = { ...next[i], customLang: e.target.value };
-                      setDefinitions(next);
-                    }}
-                    placeholder="Language"
-                    className="w-24 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                  />
-                )}
                 <input
                   type="text"
                   value={def.text}

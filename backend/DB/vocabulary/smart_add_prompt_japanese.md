@@ -45,7 +45,7 @@ CRITICAL: All example sentences MUST be written in Japanese. Do NOT write exampl
 
 ## Output format
 
-The `text` object on every definition MUST contain an entry for every language code listed below — write the meaning in each language (the Japanese entry serves as the monolingual definition; the others are translations of that meaning). The `translation` object on every example sentence MUST contain an entry for every language code listed in the example template below.
+The `text` object on every definition MUST contain an entry for every language code listed below — write the meaning in each language. The `translation` object on every example sentence MUST contain an entry for every language code listed in the example template below.
 
 Return a JSON object:
 {
