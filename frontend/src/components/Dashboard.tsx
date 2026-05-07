@@ -18,7 +18,6 @@ import SmartAddWordModal from "./SmartAddWordModal";
 import GrammarFormModal from "./GrammarFormModal";
 import TranslationView from "./TranslationView";
 import SpeakingWritingView from "./SpeakingWritingView";
-import MetricsView from "./MetricsView";
 import LevelSelectModal from "./LevelSelectModal";
 import QuizFilterModal from "./QuizFilterModal";
 import { getTranslationHistory } from "../api/translation";
@@ -55,8 +54,6 @@ export default function Dashboard() {
   // Speaking & Writing state
   const [speakingWritingMode, setSpeakingWritingMode] = useState<"new" | "resume" | null>(null);
   const [hasSWSession, setHasSWSession] = useState(false);
-  const [showMetrics, setShowMetrics] = useState(false);
-
   // Check for translation history on mount
   useEffect(() => {
     getTranslationHistory(1, 1)
@@ -193,7 +190,6 @@ export default function Dashboard() {
     setGrammarFormLanguage(null);
     setTranslationMode(null);
     setSpeakingWritingMode(null);
-    setShowMetrics(false);
   }
 
   function handleAddWord() {
@@ -254,7 +250,7 @@ export default function Dashboard() {
     setBrowsingGrammarLanguage(language);
   }
 
-  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || selectedLanguage || activeGrammarQuiz || browsingGrammarLanguage || showGrammarFilterModal || showSmartAdd || grammarFormLanguage || translationMode || speakingWritingMode || showMetrics);
+  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || selectedLanguage || activeGrammarQuiz || browsingGrammarLanguage || showGrammarFilterModal || showSmartAdd || grammarFormLanguage || translationMode || speakingWritingMode);
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-900">
@@ -398,8 +394,6 @@ export default function Dashboard() {
           <SpeakingWritingView mode={speakingWritingMode} />
         ) : translationMode ? (
           <TranslationView mode={translationMode} />
-        ) : showMetrics ? (
-          <MetricsView />
         ) : (
           <EmptyState
             language={language ?? ""}
@@ -418,7 +412,6 @@ export default function Dashboard() {
             onStartSpeakingWriting={() => setSpeakingWritingMode("new")}
             onResumeSpeakingWriting={() => setSpeakingWritingMode("resume")}
             hasSWSession={hasSWSession}
-            onOpenMetrics={() => setShowMetrics(true)}
           />
         )}
       </main>
