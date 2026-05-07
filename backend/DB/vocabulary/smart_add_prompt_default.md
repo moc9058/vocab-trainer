@@ -43,7 +43,7 @@ Even when definitions or examples are provided, the user's input may not fully c
 
 ## Output format
 
-The `text` object on every definition MUST contain an entry for every language code listed below — write the meaning in each language. The `translation` object on every example sentence MUST contain an entry for every language code listed in the example template below. If the example sentence is itself in one of the listed languages, omit that language code from `translation` (a same-language "translation" is redundant).
+The `text` object on every definition MUST contain an entry for every language code listed below — write the meaning in each language. The `translation` object on every example sentence MUST contain an entry for every language code listed in the example template below.
 
 Return a JSON object:
 {

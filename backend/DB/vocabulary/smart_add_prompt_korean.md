@@ -45,7 +45,7 @@ CRITICAL: All example sentences MUST be written in Korean. Do NOT write example 
 
 ## Output format
 
-The `text` object on every definition MUST contain an entry for every language code listed below — write the meaning in each language (the Korean entry serves as the monolingual definition; the others are translations of that meaning). The `translation` object on every example sentence MUST contain an entry for every language code listed in the example template below. **Do NOT include a Korean (`ko`) entry in example translations** — the example sentence is already Korean, so a Korean "translation" is redundant. Only include the non-source-language codes shown in the template.
+The `text` object on every definition MUST contain an entry for every language code listed below — write the meaning in each language (the Korean entry serves as the monolingual definition; the others are translations of that meaning). The `translation` object on every example sentence MUST contain an entry for every language code listed in the example template below.
 
 Return a JSON object:
 {
