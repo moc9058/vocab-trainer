@@ -16,6 +16,7 @@ interface Props {
   onClose: () => void;
   prefill?: Prefill;
   defaultLanguage?: string;
+  onJumpToWord?: (wordId: string, term: string) => void;
 }
 
 // LANG_OPTIONS is now derived from settings in the component
@@ -43,7 +44,7 @@ const ALL_TOPICS = [
   "History", "Media & News", "Language Fundamentals",
 ] as const;
 
-export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage }: Props) {
+export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage, onJumpToWord }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const LANG_OPTIONS = useMemo(
@@ -200,10 +201,21 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
               <p className="mt-1 text-xs text-gray-400">Checking…</p>
             )}
             {!checking && existingWord && (
-              <p className="mt-1 text-xs text-amber-400">
-                ⚠ Already in DB
-                {existingWord.transliteration && ` · ${existingWord.transliteration}`}
-                {existingWord.level && ` · ${existingWord.level}`}
+              <p className="mt-1 text-xs text-amber-400 flex items-center gap-1 flex-wrap">
+                <span>
+                  ⚠ Already in DB
+                  {existingWord.transliteration && ` · ${existingWord.transliteration}`}
+                  {existingWord.level && ` · ${existingWord.level}`}
+                </span>
+                {onJumpToWord && (
+                  <button
+                    type="button"
+                    onClick={() => { onJumpToWord(existingWord.id, term.trim()); onClose(); }}
+                    className="underline hover:text-amber-300 cursor-pointer"
+                  >
+                    Jump to word →
+                  </button>
+                )}
               </p>
             )}
           </div>

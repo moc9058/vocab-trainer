@@ -12,15 +12,17 @@ import { urlLanguageToIsoCode } from "../settings/defaults";
 interface Props {
   language: string;
   onBack: () => void;
+  initialExpandId?: string;
+  initialSearch?: string;
 }
 
-export default function WordList({ language, onBack }: Props) {
+export default function WordList({ language, onBack, initialExpandId, initialSearch }: Props) {
   const { t } = useI18n();
   const currentIsoCode = urlLanguageToIsoCode(language) ?? language;
   const [result, setResult] = useState<PaginatedResult<Word> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialSearch ?? "");
   const [topic, setTopic] = useState("");
   const [category, setCategory] = useState("");
   const [level, setLevel] = useState("");
@@ -45,13 +47,22 @@ export default function WordList({ language, onBack }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch ?? "");
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const isInitialMount = useRef(true);
   const requestIdRef = useRef(0);
   const scrollToExpandedRef = useRef(false);
   const silentRefreshRef = useRef(false);
   const checkTermsVersionRef = useRef(0);
+  const initialExpandAppliedRef = useRef(false);
+
+  // Expand and scroll to initialExpandId once the first fetch completes
+  useEffect(() => {
+    if (!initialExpandId || loading || initialExpandAppliedRef.current) return;
+    initialExpandAppliedRef.current = true;
+    setExpandedId(initialExpandId);
+    scrollToExpandedRef.current = true;
+  }, [initialExpandId, loading]);
 
   // Fetch flagged word IDs on mount
   useEffect(() => {
@@ -685,6 +696,18 @@ export default function WordList({ language, onBack }: Props) {
             setExpandedId(word.id);
             scrollToExpandedRef.current = true;
             refreshExistingTerms(word);
+          }}
+          onJumpToWord={(wordId, term) => {
+            setShowSmartAdd(false);
+            setSearch(term);
+            setDebouncedSearch(term);
+            setTopic("");
+            setCategory("");
+            setLevel("");
+            setFlaggedOnly(false);
+            setPage(1);
+            setExpandedId(wordId);
+            scrollToExpandedRef.current = true;
           }}
           onClose={() => setShowSmartAdd(false)}
         />

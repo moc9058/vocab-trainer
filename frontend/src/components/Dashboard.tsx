@@ -49,6 +49,8 @@ export default function Dashboard() {
   const [showGrammarFilterModal, setShowGrammarFilterModal] = useState<string | null>(null);
   // Smart Add Word / Grammar state
   const [showSmartAdd, setShowSmartAdd] = useState(false);
+  const [jumpToWordId, setJumpToWordId] = useState<string | null>(null);
+  const [jumpToWordTerm, setJumpToWordTerm] = useState<string | null>(null);
   const [grammarFormLanguage, setGrammarFormLanguage] = useState<string | null>(null);
   // Translation state
   const [translationMode, setTranslationMode] = useState<"new" | "resume" | null>(null);
@@ -311,6 +313,12 @@ export default function Dashboard() {
           onSave={() => {}}
           onClose={() => setShowSmartAdd(false)}
           defaultLanguage={language}
+          onJumpToWord={(id, term) => {
+            setShowSmartAdd(false);
+            setJumpToWordId(id);
+            setJumpToWordTerm(term);
+            setBrowsingLanguage(language ?? "");
+          }}
         />
       )}
       {grammarFormLanguage && (
@@ -386,7 +394,9 @@ export default function Dashboard() {
         ) : browsingLanguage ? (
           <WordList
             language={browsingLanguage}
-            onBack={() => setBrowsingLanguage(null)}
+            onBack={() => { setBrowsingLanguage(null); setJumpToWordId(null); setJumpToWordTerm(null); }}
+            initialExpandId={jumpToWordId ?? undefined}
+            initialSearch={jumpToWordTerm ?? undefined}
           />
         ) : speakingWritingMode ? (
           <SpeakingWritingView mode={speakingWritingMode} language={isoCode} />
