@@ -50,6 +50,7 @@ export default function WordList({ language, onBack }: Props) {
   const isInitialMount = useRef(true);
   const requestIdRef = useRef(0);
   const scrollToExpandedRef = useRef(false);
+  const silentRefreshRef = useRef(false);
 
   // Fetch flagged word IDs on mount
   useEffect(() => {
@@ -343,8 +344,9 @@ export default function WordList({ language, onBack }: Props) {
 
   const fetchData = useCallback(async () => {
     const currentRequestId = ++requestIdRef.current;
-    setLoading(true);
-    setError(null);
+    const isSilent = silentRefreshRef.current;
+    silentRefreshRef.current = false;
+    if (!isSilent) { setLoading(true); setError(null); }
     try {
       const filters = {
         search: debouncedSearch || undefined,
@@ -630,6 +632,17 @@ export default function WordList({ language, onBack }: Props) {
         <SmartAddWordModal
           defaultLanguage={language}
           onSave={(word) => {
+            setResult(prev =>
+              prev
+                ? {
+                    ...prev,
+                    items: [word, ...prev.items.filter(w => w.id !== word.id)],
+                    total: prev.total + 1,
+                    totalPages: Math.ceil((prev.total + 1) / prev.limit),
+                  }
+                : prev
+            );
+            silentRefreshRef.current = true;
             setShowSmartAdd(false);
             setSearch("");
             setDebouncedSearch("");
