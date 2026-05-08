@@ -428,3 +428,51 @@ Rules:
   return results;
 }
 
+/** Call LLM to fill pinyin for user-provided segment splits (no re-segmentation) */
+export async function fillSegmentPinyin(
+  items: Array<{ sentence: string; splits: string[] }>,
+  config?: { prompt: string; schema: Record<string, unknown> }
+): Promise<Map<number, Segment[]>> {
+  const systemPrompt = config?.prompt
+    ?? `You are a Chinese language expert. Each sentence has already been split into segments by the user. Your ONLY task is to provide pinyin with tone marks for each segment. Do NOT re-segment, merge, or split — use the provided splits exactly.
+
+Return a JSON object with a "results" key containing an array. Each entry has:
+- "index": the sentence number (0-based)
+- "segments": array of {"text": "...", "pinyin": "..."} objects. The "text" values must match the input splits exactly. Omit "pinyin" for non-Chinese tokens (numbers, Latin text, punctuation).
+
+Rules:
+- Use tone marks on pinyin (e.g. "nǐ" not "ni3")
+- Multi-syllable words get space-separated syllables (e.g. "xuéshēng" for 学生)
+- Keep every input split as its own segment — no merging, no splitting`;
+
+  const numbered = items
+    .map((item, i) => `${i}. Sentence: ${item.sentence}\n   Segments: ${JSON.stringify(item.splits)}`)
+    .join("\n");
+  const userPrompt = `Fill pinyin for these Chinese sentences and their pre-defined segments:\n\n${numbered}`;
+
+  const raw = config?.schema
+    ? await callLLMWithSchema(systemPrompt, userPrompt, config.schema, "llm/fill-segment-pinyin")
+    : await callLLM(systemPrompt, userPrompt, "llm/fill-segment-pinyin");
+  const parsed = JSON.parse(stripMarkdownFences(raw));
+  const results = new Map<number, Segment[]>();
+
+  for (const entry of parsed.results ?? []) {
+    if (typeof entry?.index !== "number" || !Array.isArray(entry?.segments)) continue;
+    const segs: Segment[] = [];
+    for (const seg of entry.segments) {
+      if (typeof seg?.text !== "string" || seg.text.length === 0) continue;
+      if (!/^[\p{Script=Han}a-zA-Z]+$/u.test(seg.text)) continue;
+      if (typeof seg.pinyin === "string" && seg.pinyin.length > 0) {
+        segs.push({ text: seg.text, transliteration: seg.pinyin });
+      } else {
+        segs.push({ text: seg.text });
+      }
+    }
+    if (segs.length > 0) {
+      results.set(entry.index, segs);
+    }
+  }
+
+  return results;
+}
+

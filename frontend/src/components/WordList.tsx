@@ -947,24 +947,24 @@ function WordCard({
                 {word.examples.map((ex, i) => {
                   const trans = typeof ex.translation === "string" ? ex.translation : displayTranslation(ex.translation);
                   const segs = (ex.segments ?? []).filter((s) => s.text.trim().length > 0 && !/^\p{P}+$/u.test(s.text));
-                  const exEntries = typeof ex.translation === "object" && ex.translation
+                  const exEntries: [string, string][] = typeof ex.translation === "object" && ex.translation
                     ? displayExEntries(ex.translation).filter(([lang]) => lang !== currentIsoCode)
-                    : [];
+                    : typeof ex.translation === "string" && ex.translation
+                      ? [["", ex.translation]]
+                      : [];
                   return (
                     <li key={i} className="text-base text-gray-300">
                       <span><RubyText text={ex.sentence} segments={ex.segments} /></span>
-                      {typeof ex.translation === "string" && ex.translation ? (
-                        <span className="ml-2 text-gray-400">— {ex.translation}</span>
-                      ) : exEntries.length > 0 ? (
+                      {exEntries.length > 0 && (
                         <div className="ml-2 mt-0.5 space-y-0.5">
                           {exEntries.map(([lang, text]) => (
-                            <p key={lang} className="text-sm text-gray-400">
-                              <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>
+                            <p key={lang || text} className="text-sm text-gray-400">
+                              {lang && <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>}
                               {text}
                             </p>
                           ))}
                         </div>
-                      ) : null}
+                      )}
                       {editMode.key === `${word.id}:${i}` ? (
                         <div className="mt-1 space-y-2">
                           <div className="flex flex-wrap gap-0.5 items-end">
@@ -1304,24 +1304,24 @@ function WordRow({
                   {word.examples.map((ex, i) => {
                     const trans = typeof ex.translation === "string" ? ex.translation : displayTranslation(ex.translation);
                     const segs = (ex.segments ?? []).filter((s) => s.text.trim().length > 0 && !/^\p{P}+$/u.test(s.text));
-                    const exEntries = typeof ex.translation === "object" && ex.translation
+                    const exEntries: [string, string][] = typeof ex.translation === "object" && ex.translation
                       ? displayExEntries(ex.translation).filter(([lang]) => lang !== currentIsoCode)
-                      : [];
+                      : typeof ex.translation === "string" && ex.translation
+                        ? [["", ex.translation]]
+                        : [];
                     return (
                       <li key={i} className="text-base text-gray-300">
                         <span><RubyText text={ex.sentence} segments={ex.segments} /></span>
-                        {typeof ex.translation === "string" && ex.translation ? (
-                          <span className="ml-2 text-gray-400">— {ex.translation}</span>
-                        ) : exEntries.length > 0 ? (
+                        {exEntries.length > 0 && (
                           <div className="ml-2 mt-0.5 space-y-0.5">
                             {exEntries.map(([lang, text]) => (
-                              <p key={lang} className="text-sm text-gray-400">
-                                <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>
+                              <p key={lang || text} className="text-sm text-gray-400">
+                                {lang && <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>}
                                 {text}
                               </p>
                             ))}
                           </div>
-                        ) : null}
+                        )}
                         {editMode.key === `${word.id}:${i}` ? (
                           <div className="mt-1 space-y-2">
                             <div className="flex flex-wrap gap-0.5 items-end">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { useI18n } from "../i18n/context";
 import { getFilters } from "../api/vocab";
 import { displayTranslation, type Word, type Meaning } from "../types";
@@ -19,6 +19,7 @@ interface ExampleFormState {
   id?: string;
   sentence: string;
   translation: string;
+  originalTranslation: string | Record<string, string>;
   locked: boolean;
 }
 
@@ -42,6 +43,7 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
       id: e.id,
       sentence: e.sentence,
       translation: displayTranslation(e.translation),
+      originalTranslation: e.translation ?? "",
       locked: true,
     })) ?? []
   );
@@ -49,6 +51,15 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const prevExamplesLengthRef = useRef(0);
+  const lastExampleRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (examples.length > prevExamplesLengthRef.current) {
+      lastExampleRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    prevExamplesLengthRef.current = examples.length;
+  }, [examples.length]);
 
   useEffect(() => {
     getFilters(language)
@@ -70,18 +81,59 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
     return result;
   }
 
+  function getChipInfo(sentence: string): Array<{ text: string; sepIsSpaceOnly: boolean }> {
+    const chips: Array<{ text: string; sepIsSpaceOnly: boolean }> = [];
+    let prevSep = "";
+    for (const m of sentence.matchAll(/([\p{Script=Han}a-zA-Z]+)|([^\p{Script=Han}a-zA-Z]+)/gu)) {
+      if (m[1]) {
+        chips.push({ text: m[1], sepIsSpaceOnly: chips.length > 0 && /^[\s　]+$/.test(prevSep) });
+        prevSep = "";
+      } else {
+        prevSep = m[2];
+      }
+    }
+    return chips;
+  }
+
+  function removeSepAt(sentence: string, afterIdx: number): string {
+    let wordCount = 0;
+    return [...sentence.matchAll(/([\p{Script=Han}a-zA-Z]+)|([^\p{Script=Han}a-zA-Z]+)/gu)]
+      .map((m) => {
+        if (m[1]) { wordCount++; return m[1]; }
+        if (wordCount === afterIdx + 1 && /^[\s　]+$/.test(m[2])) return "";
+        return m[2];
+      })
+      .join("");
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!term.trim()) return;
     const defs = buildDefinitions();
     if (defs.length === 0) return;
 
+    const isChinese = language === "chinese";
     setSaving(true);
     setError("");
     try {
       const cleanExamples = examples
         .filter((ex) => ex.sentence.trim())
-        .map(({ id, sentence, translation }) => ({ id, sentence: sentence.trim(), translation }));
+        .map(({ id, sentence, translation, originalTranslation }) => {
+          const trimmed = sentence.trim();
+          // If the user hasn't changed the translation display value, round-trip the
+          // original (possibly multi-lang) translation object so we don't flatten it.
+          const resolvedTranslation: string | Record<string, string> =
+            translation === displayTranslation(originalTranslation) ? originalTranslation : translation;
+          if (isChinese) {
+            const cleanSentence = trimmed.replace(/[\s　]+/g, "");
+            if (/[\s　]/.test(trimmed)) {
+              const splits = trimmed.match(/[\p{Script=Han}a-zA-Z]+/gu) ?? [];
+              if (splits.length >= 2) return { id, sentence: cleanSentence, translation: resolvedTranslation, userSplits: splits };
+            }
+            return { id, sentence: cleanSentence, translation: resolvedTranslation };
+          }
+          return { id, sentence: trimmed, translation: resolvedTranslation };
+        });
       await onSave({
         ...(word ? { id: word.id } : {}),
         term: term.trim(),
@@ -274,14 +326,14 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
               <label className="text-sm text-gray-400">{t("examples")}</label>
               <button
                 type="button"
-                onClick={() => setExamples([...examples, { sentence: "", translation: "", locked: false }])}
+                onClick={() => setExamples([...examples, { sentence: "", translation: "", originalTranslation: "", locked: false }])}
                 className="text-xs text-blue-400 hover:text-blue-300"
               >
                 + {t("addExample")}
               </button>
             </div>
             {examples.map((ex, i) => (
-              <div key={i} className="mb-2 rounded-lg border border-gray-600 bg-gray-700 p-2">
+              <div key={i} ref={i === examples.length - 1 ? lastExampleRef : undefined} className="mb-2 rounded-lg border border-gray-600 bg-gray-700 p-2">
                 <input
                   type="text"
                   value={ex.sentence}
@@ -292,13 +344,44 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
                     setExamples(next);
                   }}
                   readOnly={ex.locked}
-                  placeholder={t("sentence")}
+                  placeholder={language === "chinese" ? `${t("sentence")} (use spaces to split)` : t("sentence")}
                   className={`mb-1 w-full rounded border border-gray-600 px-2 py-1 text-sm focus:outline-none ${
                     ex.locked
                       ? "cursor-not-allowed bg-gray-900 text-gray-400"
                       : "bg-gray-800 text-gray-100 focus:border-blue-400"
                   }`}
                 />
+                {language === "chinese" && !ex.locked && (() => {
+                  const chips = getChipInfo(ex.sentence);
+                  if (chips.length < 2) return null;
+                  return (
+                    <div className="mb-1 flex flex-wrap items-center gap-1">
+                      {chips.map((chip, pi) => (
+                        <Fragment key={pi}>
+                          <span className="rounded bg-blue-900/40 px-1.5 py-0.5 text-xs text-blue-200">{chip.text}</span>
+                          {pi < chips.length - 1 && (
+                            chips[pi + 1].sepIsSpaceOnly ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = [...examples];
+                                  next[i] = { ...next[i], sentence: removeSepAt(ex.sentence, pi) };
+                                  setExamples(next);
+                                }}
+                                className="px-0.5 text-xs leading-none text-gray-500 hover:text-red-400"
+                                title="Remove segment boundary"
+                              >
+                                ╱
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-600">·</span>
+                            )
+                          )}
+                        </Fragment>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <div className="flex gap-2">
                   <input
                     type="text"

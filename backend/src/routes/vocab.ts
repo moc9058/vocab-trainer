@@ -32,7 +32,7 @@ import {
 } from "../firestore.js";
 import type { Word, Example, ExampleSentence } from "../types.js";
 import { TOPICS } from "../types.js";
-import { callLLMWithSchema, stripMarkdownFences, validateWord, segmentBatch, type Segment } from "../llm.js";
+import { callLLMWithSchema, stripMarkdownFences, validateWord, segmentBatch, fillSegmentPinyin, type Segment } from "../llm.js";
 
 const LEVEL_OPTIONS: Record<string, string[]> = {
   chinese: ["HSK1-4", "HSK5", "HSK6", "HSK7-9", "Advanced"],
@@ -365,6 +365,27 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         return { sentence: ex.sentence, translation: ex.translation, segments } as Example;
       });
 
+      // For user-provided Chinese examples with userSplits, override LLM segments with
+      // the user's splits + LLM-filled pinyin.
+      if (isChinese && userExCount > 0) {
+        const fillItems: Array<{ index: number; sentence: string; splits: string[] }> = [];
+        for (let i = 0; i < userExCount; i++) {
+          const us = (body.examples![i] as any).userSplits as string[] | undefined;
+          if (Array.isArray(us) && us.length > 0) {
+            fillItems.push({ index: i, sentence: examplesWithSegments[i].sentence, splits: us });
+          }
+        }
+        if (fillItems.length > 0) {
+          const fillMap = await fillSegmentPinyin(
+            fillItems.map((fi) => ({ sentence: fi.sentence, splits: fi.splits })),
+          );
+          for (let j = 0; j < fillItems.length; j++) {
+            const rawSegs = fillMap.get(j);
+            if (rawSegs) (examplesWithSegments[fillItems[j].index] as any).segments = rawSegs;
+          }
+        }
+      }
+
       // Strip the source language from example translations and definitions:
       // a same-language translation/definition is redundant for the word's own language.
       if (sourceLangCode) {
@@ -491,6 +512,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
           target: ExampleSentence;
           exampleId: string;
           newSentence: string;
+          userSplits?: string[];
         }> = [];
 
         for (const ex of body.examples) {
@@ -498,6 +520,8 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
           // sent them. WordFormModal omits segments entirely (its form state
           // doesn't carry them), so we must preserve old segments in that case.
           const hasIncomingSegs = Array.isArray((ex as { segments?: unknown }).segments);
+          const exUserSplits = (ex as any).userSplits as string[] | undefined;
+          const hasUserSplits = isChinese && Array.isArray(exUserSplits) && exUserSplits.length > 0;
           const incomingId = (ex as { id?: string }).id;
 
           // --- Resolve target example sentence ---
@@ -556,9 +580,9 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             if (hasIncomingSegs) {
               await reconcileIncomingSegments(target.segments, ex.segments!);
               updates.segments = ex.segments;
-            } else if (isChinese && target.sentence !== ex.sentence) {
-              // Text changed but frontend didn't send segments (e.g. WordFormModal).
-              // Snapshot the old state and queue for batch re-segmentation after the loop.
+            } else if (isChinese && (hasUserSplits || target.sentence !== ex.sentence)) {
+              // Text changed or user supplied explicit splits.
+              // Snapshot the old state and queue for re-segmentation after the loop.
               needsResegment.push({
                 target: {
                   ...target,
@@ -566,6 +590,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
                 },
                 exampleId: target.id,
                 newSentence: ex.sentence,
+                userSplits: hasUserSplits ? exUserSplits : undefined,
               });
             }
             if (Object.keys(updates).length > 0) {
@@ -599,6 +624,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
                 target: { ...es },
                 exampleId: newId,
                 newSentence: ex.sentence,
+                userSplits: hasUserSplits ? exUserSplits : undefined,
               });
             }
           }
@@ -606,12 +632,42 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
 
         // --- Batch re-segmentation for Chinese examples whose text changed ---
         if (isChinese && needsResegment.length > 0) {
-          const sentences = needsResegment.map((r) => r.newSentence);
-          const segMap = await segmentBatch(sentences, segmentConfig);
+          // Split into items with user-provided splits (fill pinyin only) vs
+          // items needing full auto-segmentation.
+          const withUserSplits = needsResegment
+            .map((r, idx) => ({ ...r, origIdx: idx }))
+            .filter((r) => r.userSplits);
+          const withoutUserSplits = needsResegment
+            .map((r, idx) => ({ ...r, origIdx: idx }))
+            .filter((r) => !r.userSplits);
+
+          // Build a merged result map keyed by original needsResegment index.
+          const mergedSegMap = new Map<number, Segment[]>();
+
+          if (withoutUserSplits.length > 0) {
+            const segMap = await segmentBatch(
+              withoutUserSplits.map((r) => r.newSentence),
+              segmentConfig,
+            );
+            for (let j = 0; j < withoutUserSplits.length; j++) {
+              const segs = segMap.get(j);
+              if (segs) mergedSegMap.set(withoutUserSplits[j].origIdx, segs);
+            }
+          }
+
+          if (withUserSplits.length > 0) {
+            const fillMap = await fillSegmentPinyin(
+              withUserSplits.map((r) => ({ sentence: r.newSentence, splits: r.userSplits! })),
+            );
+            for (let j = 0; j < withUserSplits.length; j++) {
+              const segs = fillMap.get(j);
+              if (segs) mergedSegMap.set(withUserSplits[j].origIdx, segs);
+            }
+          }
 
           // Bulk word-lookup for segment→wordId linking
           const allSegTexts = new Set<string>();
-          for (const [, segs] of segMap) {
+          for (const [, segs] of mergedSegMap) {
             for (const s of segs) allSegTexts.add(s.text);
           }
           const matches = allSegTexts.size > 0
@@ -621,7 +677,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
 
           for (let i = 0; i < needsResegment.length; i++) {
             const { target, exampleId } = needsResegment[i];
-            const rawSegs = segMap.get(i);
+            const rawSegs = mergedSegMap.get(i);
             if (!rawSegs) continue;
 
             const newSegs: { text: string; transliteration?: string; id?: string }[] = rawSegs.map((s) => ({

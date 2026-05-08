@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, Fragment } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP, urlLanguageToIsoCode } from "../settings/defaults";
@@ -16,7 +16,7 @@ type SmartAddPayload = {
   transliteration?: string;
   definitions?: { partOfSpeech: string; text: Record<string, string> }[];
   topics?: string[];
-  examples?: { sentence: string; translation: string }[];
+  examples?: { sentence: string; translation: string; userSplits?: string[] }[];
   level?: string;
   flag?: boolean;
 };
@@ -84,6 +84,15 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [generatedWords, setGeneratedWords] = useState<Word[]>([]);
+  const prevExamplesLengthRef = useRef(0);
+  const lastExampleRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (examples.length > prevExamplesLengthRef.current) {
+      lastExampleRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+    prevExamplesLengthRef.current = examples.length;
+  }, [examples.length]);
 
   useEffect(() => {
     const trimmed = term.trim();
@@ -109,6 +118,31 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     return def.langSelect;
   }
 
+  function getChipInfo(sentence: string): Array<{ text: string; sepIsSpaceOnly: boolean }> {
+    const chips: Array<{ text: string; sepIsSpaceOnly: boolean }> = [];
+    let prevSep = "";
+    for (const m of sentence.matchAll(/([\p{Script=Han}a-zA-Z]+)|([^\p{Script=Han}a-zA-Z]+)/gu)) {
+      if (m[1]) {
+        chips.push({ text: m[1], sepIsSpaceOnly: chips.length > 0 && /^[\s　]+$/.test(prevSep) });
+        prevSep = "";
+      } else {
+        prevSep = m[2];
+      }
+    }
+    return chips;
+  }
+
+  function removeSepAt(sentence: string, afterIdx: number): string {
+    let wordCount = 0;
+    return [...sentence.matchAll(/([\p{Script=Han}a-zA-Z]+)|([^\p{Script=Han}a-zA-Z]+)/gu)]
+      .map((m) => {
+        if (m[1]) { wordCount++; return m[1]; }
+        if (wordCount === afterIdx + 1 && /^[\s　]+$/.test(m[2])) return "";
+        return m[2];
+      })
+      .join("");
+  }
+
   function buildPayload() {
     const defObj: Record<string, string> = {};
     for (const d of definitions) {
@@ -118,7 +152,19 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     const defs = Object.keys(defObj).length > 0 || grammaticalCategory
       ? [{ partOfSpeech: grammaticalCategory || "", text: defObj }]
       : undefined;
-    const validExamples = examples.filter((ex) => ex.sentence.trim());
+    const validExamples = examples
+      .filter((ex) => ex.sentence.trim())
+      .map((ex) => {
+        if (wordLanguage === "chinese") {
+          const cleanSentence = ex.sentence.replace(/[\s　]+/g, "");
+          if (/[\s　]/.test(ex.sentence)) {
+            const splits = ex.sentence.match(/[\p{Script=Han}a-zA-Z]+/gu) ?? [];
+            if (splits.length >= 2) return { sentence: cleanSentence, translation: ex.translation, userSplits: splits };
+          }
+          return { sentence: cleanSentence, translation: ex.translation };
+        }
+        return ex;
+      });
     return {
       term: term.trim(),
       transliteration: wordLanguage === "chinese" ? (transliteration.trim() || undefined) : undefined,
@@ -395,7 +441,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
               </button>
             </div>
             {examples.map((ex, i) => (
-              <div key={i} className="mb-2 rounded-lg border border-gray-600 bg-gray-700 p-2 space-y-1">
+              <div key={i} ref={i === examples.length - 1 ? lastExampleRef : undefined} className="mb-2 rounded-lg border border-gray-600 bg-gray-700 p-2 space-y-1">
                 <textarea
                   ref={(el) => {
                     if (el) {
@@ -410,9 +456,40 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                     setExamples(next);
                   }}
                   rows={1}
-                  placeholder={t("sentence")}
+                  placeholder={wordLanguage === "chinese" ? `${t("sentence")} (use spaces to split)` : t("sentence")}
                   className="w-full resize-none overflow-hidden rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
                 />
+                {wordLanguage === "chinese" && (() => {
+                  const chips = getChipInfo(ex.sentence);
+                  if (chips.length < 2) return null;
+                  return (
+                    <div className="flex flex-wrap items-center gap-1">
+                      {chips.map((chip, pi) => (
+                        <Fragment key={pi}>
+                          <span className="rounded bg-blue-900/40 px-1.5 py-0.5 text-xs text-blue-200">{chip.text}</span>
+                          {pi < chips.length - 1 && (
+                            chips[pi + 1].sepIsSpaceOnly ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = [...examples];
+                                  next[i] = { ...next[i], sentence: removeSepAt(ex.sentence, pi) };
+                                  setExamples(next);
+                                }}
+                                className="px-0.5 text-xs leading-none text-gray-500 hover:text-red-400"
+                                title="Remove segment boundary"
+                              >
+                                ╱
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-600">·</span>
+                            )
+                          )}
+                        </Fragment>
+                      ))}
+                    </div>
+                  );
+                })()}
                 <div className="flex gap-2">
                   {wordLanguage !== "english" && (
                     <input
