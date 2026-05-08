@@ -410,8 +410,10 @@ Rules:
     const segs: Segment[] = [];
     for (const seg of entry.segments) {
       if (typeof seg?.text !== "string" || seg.text.length === 0) continue;
-      // Drop non-word tokens (punctuation, numbers, whitespace, etc.)
-      if (!/[a-zA-Z一-鿿㐀-䶿豈-﫿]/u.test(seg.text)) continue;
+      // Drop dirty segments: text must be composed entirely of Han characters
+      // or Latin letters. This catches pure punctuation ("，") and mixed
+      // content ("，所以") alike.
+      if (!/^[\p{Script=Han}a-zA-Z]+$/u.test(seg.text)) continue;
       if (typeof seg.pinyin === "string" && seg.pinyin.length > 0) {
         segs.push({ text: seg.text, transliteration: seg.pinyin });
       } else {

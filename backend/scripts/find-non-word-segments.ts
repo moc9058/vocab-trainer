@@ -1,15 +1,18 @@
 /**
- * Find (and optionally fix) example sentences that contain non-word segments.
+ * Find (and optionally fix) example sentences that contain dirty segments.
  *
- * A segment is considered non-word if its text contains no CJK characters and
- * no Latin letters — i.e. it is punctuation, whitespace, numbers, or symbols.
+ * A segment is considered dirty if its text is not composed entirely of word
+ * characters (CJK ideographs or Latin letters). This catches:
+ *   - Pure punctuation:  "，"
+ *   - Mixed content:     "，所以"  (punctuation fused with a word)
+ *   - Numbers, spaces, symbols, etc.
  *
  * Usage:
  *   cd backend && npx tsx scripts/find-non-word-segments.ts [--language=chinese] [--limit=<n>] [--fix]
  *
  * Modes:
  *   (default)  Report mode — prints violations and exits 1 if any found
- *   --fix      Strip non-word segments from affected docs in Firestore (no LLM call)
+ *   --fix      Drop dirty segments from affected docs in Firestore (no LLM call)
  *
  * Default language: chinese
  */
@@ -37,14 +40,17 @@ interface Segment {
   id?: string;
 }
 
-/** True if the segment text is a word (contains at least one CJK or Latin letter). */
-function isWordSegment(text: string): boolean {
-  return /[a-zA-Z一-鿿㐀-䶿豈-﫿]/u.test(text);
+// Matches a string composed entirely of CJK ideographs or Latin letters.
+// Any other character (punctuation, numbers, spaces, symbols) causes a miss.
+const CLEAN_SEGMENT_RE = /^[\p{Script=Han}a-zA-Z]+$/u;
+
+function isCleanSegment(text: string): boolean {
+  return CLEAN_SEGMENT_RE.test(text);
 }
 
 async function run() {
   const mode = fix ? "FIX" : "REPORT";
-  console.log(`Finding non-word segments for language "${language}" [${mode}]...\n`);
+  console.log(`Finding dirty segments for language "${language}" [${mode}]...\n`);
 
   const snap = await exampleSentences.where("language", "==", language).get();
   console.log(`Scanned ${snap.size} example sentences.\n`);
@@ -67,35 +73,38 @@ async function run() {
     const segs = d.segments as Segment[] | undefined;
     if (!Array.isArray(segs) || segs.length === 0) continue;
 
-    const bad = segs.filter((s) => !isWordSegment(s.text));
+    const bad = segs.filter((s) => !isCleanSegment(s.text));
     if (bad.length === 0) continue;
 
     violations.push({
       id: doc.id,
       sentence: d.sentence as string,
       badSegments: bad.map((s) => s.text),
-      cleanedSegments: segs.filter((s) => isWordSegment(s.text)),
+      cleanedSegments: segs.flatMap((s) => {
+        if (isCleanSegment(s.text)) return [s];
+        const stripped = s.text.replace(/[^\p{Script=Han}a-zA-Z]/gu, "");
+        return stripped.length > 0 ? [{ ...s, text: stripped }] : [];
+      }),
     });
   }
 
   if (violations.length === 0) {
-    console.log("No non-word segments found.");
+    console.log("No dirty segments found.");
     process.exit(0);
   }
 
-  console.log(`Found ${violations.length} sentence(s) with non-word segments:\n`);
+  console.log(`Found ${violations.length} sentence(s) with dirty segments:\n`);
   for (const v of violations) {
     console.log(`  [${v.id}] ${v.sentence}`);
-    console.log(`    Non-word segments: ${v.badSegments.map((s) => JSON.stringify(s)).join(", ")}`);
+    console.log(`    Dirty: ${v.badSegments.map((s) => JSON.stringify(s)).join(", ")}`);
   }
 
   if (!fix) {
-    console.log(`\nRe-run with --fix to strip these segments in-place.`);
+    console.log(`\nRe-run with --fix to drop these segments in-place.`);
     process.exit(1);
   }
 
-  // Fix mode: strip non-word segments in Firestore
-  console.log(`\nStripping non-word segments from ${violations.length} doc(s)...`);
+  console.log(`\nDropping dirty segments from ${violations.length} doc(s)...`);
   const BATCH_LIMIT = 500;
   let batch = db.batch();
   let batchCount = 0;
