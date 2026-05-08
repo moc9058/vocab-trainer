@@ -53,6 +53,18 @@ export function checkTerms(language: string, terms: string[]): Promise<{ existin
   return postJson(`/api/vocab/${encodeURIComponent(language)}/check-terms`, { terms });
 }
 
+export async function lookupWord(
+  language: string,
+  term: string,
+): Promise<{ term: string; id: string; level: string; transliteration: string } | null> {
+  const res = await fetch(
+    `/api/vocab/${encodeURIComponent(language)}/lookup?term=${encodeURIComponent(term)}`,
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export function smartAddWord(
   language: string,
   data: {

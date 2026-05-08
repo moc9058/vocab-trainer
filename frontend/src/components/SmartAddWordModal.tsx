@@ -1,8 +1,8 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { LANG_LABEL_MAP } from "../settings/defaults";
-import { smartAddWord } from "../api/vocab";
+import { LANG_LABEL_MAP, urlLanguageToIsoCode } from "../settings/defaults";
+import { smartAddWord, lookupWord } from "../api/vocab";
 import { displayTranslation, type Word } from "../types";
 
 interface Prefill {
@@ -50,12 +50,12 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     () => settings.languageOrder.map((c) => ({ value: c, label: LANG_LABEL_MAP[c] ?? c })),
     [settings.languageOrder],
   );
-  const wordLanguage = prefill?.language || defaultLanguage || settings.defaultAddWordLanguage || "english";
+  const wordLanguage = prefill?.language || defaultLanguage || "english";
+  const currentIsoCode = urlLanguageToIsoCode(wordLanguage) ?? "";
   const [term, setTerm] = useState(prefill?.term ?? "");
   const [transliteration, setTransliteration] = useState("");
   const [definitions, setDefinitions] = useState<{ langSelect: string; text: string }[]>(() => {
-    const def = settings.defaultDefinitionLanguage || "en";
-    const langSelect = settings.languageOrder.includes(def) ? def : (settings.languageOrder[0] ?? "");
+    const langSelect = settings.languageOrder[0] ?? "en";
     return [{ langSelect, text: "" }];
   });
   const [grammaticalCategory, setGrammaticalCategory] = useState("");
@@ -65,10 +65,32 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     prefill?.example ? [prefill.example] : [{ sentence: "", translation: "" }],
   );
   const [flagForReview, setFlagForReview] = useState(true);
+  const [checking, setChecking] = useState(false);
+  const [existingWord, setExistingWord] = useState<{ id: string; level: string; transliteration: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [generatedWords, setGeneratedWords] = useState<Word[]>([]);
+
+  useEffect(() => {
+    const trimmed = term.trim();
+    if (!trimmed) {
+      setExistingWord(null);
+      return;
+    }
+    setChecking(true);
+    const timer = setTimeout(async () => {
+      try {
+        const result = await lookupWord(wordLanguage, trimmed);
+        setExistingWord(result ? { id: result.id, level: result.level, transliteration: result.transliteration } : null);
+      } catch {
+        setExistingWord(null);
+      } finally {
+        setChecking(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [term, wordLanguage]);
 
   function getDefLangKey(def: { langSelect: string }): string {
     return def.langSelect;
@@ -148,7 +170,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                   {w.transliteration && (
                     <span className="ml-1 text-gray-400">({w.transliteration})</span>
                   )}
-                  <span className="ml-1 text-gray-500">— {w.definitions.map((m) => Object.values(m.text || {}).join("; ")).join(" | ")}</span>
+                  <span className="ml-1 text-gray-500">— {w.definitions.map((m) => Object.entries(m.text || {}).filter(([lang]) => lang !== currentIsoCode).map(([, v]) => v).join("; ")).join(" | ")}</span>
                 </li>
               ))}
             </ul>
@@ -174,6 +196,16 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
               autoFocus
               className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
             />
+            {checking && (
+              <p className="mt-1 text-xs text-gray-400">Checking…</p>
+            )}
+            {!checking && existingWord && (
+              <p className="mt-1 text-xs text-amber-400">
+                ⚠ Already in DB
+                {existingWord.transliteration && ` · ${existingWord.transliteration}`}
+                {existingWord.level && ` · ${existingWord.level}`}
+              </p>
+            )}
           </div>
 
           {/* Transliteration (optional, Chinese only) */}

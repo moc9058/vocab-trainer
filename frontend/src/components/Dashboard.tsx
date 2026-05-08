@@ -297,7 +297,7 @@ export default function Dashboard() {
         </div>
       </header>
       {showSettingsModal && (
-        <SettingsModal onClose={() => setShowSettingsModal(false)} />
+        <SettingsModal onClose={() => setShowSettingsModal(false)} currentLanguageCode={isoCode} />
       )}
       {showGrammarFilterModal && (
         <GrammarFilterModal

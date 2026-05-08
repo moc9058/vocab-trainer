@@ -18,18 +18,13 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { ALL_KNOWN_LANGUAGES, DEFAULT_SETTINGS, LANG_LABEL_MAP } from "../settings/defaults";
+import { DEFAULT_SETTINGS, LANG_LABEL_MAP } from "../settings/defaults";
 import { uiLanguages, type TranslationKey } from "../i18n/translations";
 
 interface Props {
   onClose: () => void;
+  currentLanguageCode?: string;
 }
-
-const KNOWN_WORD_LANG_OPTIONS = ["english", "chinese"] as const;
-const WORD_LANG_LABELS: Record<string, string> = {
-  english: "English",
-  chinese: "Chinese",
-};
 
 const SPEAKING_USE_CASE_KEYS = ["professional", "casual", "presentation", "interview"] as const;
 const WRITING_USE_CASE_KEYS = ["academic", "social", "email", "creative"] as const;
@@ -63,7 +58,7 @@ function SortableItem({ id }: { id: string }) {
   );
 }
 
-export default function SettingsModal({ onClose }: Props) {
+export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
   const { t } = useI18n();
   const { settings, updateSettings } = useSettings();
 
@@ -74,22 +69,6 @@ export default function SettingsModal({ onClose }: Props) {
   );
   const [displayExLangs, setDisplayExLangs] = useState<Set<string>>(
     new Set(settings.displayExampleTranslationLanguages),
-  );
-  const initialAddWordLangIsKnown = (KNOWN_WORD_LANG_OPTIONS as readonly string[]).includes(
-    settings.defaultAddWordLanguage,
-  );
-  const [defaultAddWordLang, setDefaultAddWordLang] = useState<string>(
-    initialAddWordLangIsKnown ? settings.defaultAddWordLanguage : "__other__",
-  );
-  const [defaultAddWordLangCustom, setDefaultAddWordLangCustom] = useState<string>(
-    initialAddWordLangIsKnown ? "" : settings.defaultAddWordLanguage,
-  );
-  const initialDefLangIsKnown = settings.languageOrder.includes(settings.defaultDefinitionLanguage);
-  const [defaultDefLang, setDefaultDefLang] = useState<string>(
-    initialDefLangIsKnown ? settings.defaultDefinitionLanguage : "__other__",
-  );
-  const [defaultDefLangCustom, setDefaultDefLangCustom] = useState<string>(
-    initialDefLangIsKnown ? "" : settings.defaultDefinitionLanguage,
   );
   const [defaultCorrectionMode, setDefaultCorrectionMode] = useState<"speaking" | "writing">(
     settings.defaultCorrectionMode,
@@ -140,14 +119,6 @@ export default function SettingsModal({ onClose }: Props) {
       activeUiLanguages: order.filter((c) => activeUi.has(c)),
       displayDefinitionLanguages: order.filter((c) => displayDefLangs.has(c)),
       displayExampleTranslationLanguages: order.filter((c) => displayExLangs.has(c)),
-      defaultAddWordLanguage:
-        defaultAddWordLang === "__other__"
-          ? (defaultAddWordLangCustom.trim().toLowerCase() || "english")
-          : defaultAddWordLang,
-      defaultDefinitionLanguage:
-        defaultDefLang === "__other__"
-          ? (defaultDefLangCustom.trim() || "en")
-          : defaultDefLang,
       defaultCorrectionMode,
       defaultSpeakingUseCase,
       defaultWritingUseCase,
@@ -165,10 +136,6 @@ export default function SettingsModal({ onClose }: Props) {
     setActiveUi(new Set(DEFAULT_SETTINGS.activeUiLanguages));
     setDisplayDefLangs(new Set(DEFAULT_SETTINGS.displayDefinitionLanguages));
     setDisplayExLangs(new Set(DEFAULT_SETTINGS.displayExampleTranslationLanguages));
-    setDefaultAddWordLang(DEFAULT_SETTINGS.defaultAddWordLanguage);
-    setDefaultAddWordLangCustom("");
-    setDefaultDefLang(DEFAULT_SETTINGS.defaultDefinitionLanguage);
-    setDefaultDefLangCustom("");
     setDefaultCorrectionMode(DEFAULT_SETTINGS.defaultCorrectionMode);
     setDefaultSpeakingUseCase(DEFAULT_SETTINGS.defaultSpeakingUseCase);
     setDefaultWritingUseCase(DEFAULT_SETTINGS.defaultWritingUseCase);
@@ -233,7 +200,7 @@ export default function SettingsModal({ onClose }: Props) {
           <section className="mb-4">
             <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDisplayDefLangs")}</h4>
             <div className="flex flex-wrap gap-2">
-              {order.map((code) => (
+              {order.filter((code) => code !== currentLanguageCode).map((code) => (
                 <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
                   <input
                     type="checkbox"
@@ -251,7 +218,7 @@ export default function SettingsModal({ onClose }: Props) {
           <section className="mb-4">
             <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDisplayExLangs")}</h4>
             <div className="flex flex-wrap gap-2">
-              {order.map((code) => (
+              {order.filter((code) => code !== currentLanguageCode).map((code) => (
                 <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
                   <input
                     type="checkbox"
@@ -262,66 +229,6 @@ export default function SettingsModal({ onClose }: Props) {
                   {LANG_LABEL_MAP[code] ?? code}
                 </label>
               ))}
-            </div>
-          </section>
-
-          {/* Default Word Language for Smart Add */}
-          <section className="mb-4">
-            <h4 className="mb-1 text-sm font-medium text-gray-300">{t("settingsDefaultAddWordLang")}</h4>
-            <p className="mb-2 text-xs text-gray-500">{t("settingsDefaultAddWordLangHelp")}</p>
-            <div className="flex items-center gap-2">
-              <select
-                value={defaultAddWordLang}
-                onChange={(e) => {
-                  setDefaultAddWordLang(e.target.value);
-                  if (e.target.value !== "__other__") setDefaultAddWordLangCustom("");
-                }}
-                className="w-32 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-              >
-                {KNOWN_WORD_LANG_OPTIONS.map((value) => (
-                  <option key={value} value={value}>{WORD_LANG_LABELS[value]}</option>
-                ))}
-                <option value="__other__">{t("settingsLangOther")}</option>
-              </select>
-              {defaultAddWordLang === "__other__" && (
-                <input
-                  type="text"
-                  value={defaultAddWordLangCustom}
-                  onChange={(e) => setDefaultAddWordLangCustom(e.target.value)}
-                  placeholder="Language"
-                  className="w-32 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                />
-              )}
-            </div>
-          </section>
-
-          {/* Default Definition Language for Smart Add */}
-          <section>
-            <h4 className="mb-1 text-sm font-medium text-gray-300">{t("settingsDefaultDefLang")}</h4>
-            <p className="mb-2 text-xs text-gray-500">{t("settingsDefaultDefLangHelp")}</p>
-            <div className="flex items-center gap-2">
-              <select
-                value={defaultDefLang}
-                onChange={(e) => {
-                  setDefaultDefLang(e.target.value);
-                  if (e.target.value !== "__other__") setDefaultDefLangCustom("");
-                }}
-                className="w-32 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-              >
-                {order.map((code) => (
-                  <option key={code} value={code}>{LANG_LABEL_MAP[code] ?? code}</option>
-                ))}
-                <option value="__other__">{t("settingsLangOther")}</option>
-              </select>
-              {defaultDefLang === "__other__" && (
-                <input
-                  type="text"
-                  value={defaultDefLangCustom}
-                  onChange={(e) => setDefaultDefLangCustom(e.target.value)}
-                  placeholder="Language"
-                  className="w-32 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                />
-              )}
             </div>
           </section>
         </div>

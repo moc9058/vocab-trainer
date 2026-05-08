@@ -7,6 +7,7 @@ import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
 import SmartAddWordModal from "./SmartAddWordModal";
 import { displayTranslation, type Word, type PaginatedResult } from "../types";
+import { urlLanguageToIsoCode } from "../settings/defaults";
 
 interface Props {
   language: string;
@@ -15,6 +16,7 @@ interface Props {
 
 export default function WordList({ language, onBack }: Props) {
   const { t } = useI18n();
+  const currentIsoCode = urlLanguageToIsoCode(language) ?? language;
   const [result, setResult] = useState<PaginatedResult<Word> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -552,6 +554,7 @@ export default function WordList({ language, onBack }: Props) {
                         }}
                         selected={selectedIds.has(word.id)}
                         onToggleSelect={() => toggleSelected(word.id)}
+                        currentIsoCode={currentIsoCode}
                       />
                     ))}
                   </div>
@@ -610,6 +613,7 @@ export default function WordList({ language, onBack }: Props) {
                           }}
                           selected={selectedIds.has(word.id)}
                           onToggleSelect={() => toggleSelected(word.id)}
+                          currentIsoCode={currentIsoCode}
                         />
                       ))}
                     </tbody>
@@ -737,8 +741,10 @@ function WordCard({
   editMode,
   selected,
   onToggleSelect,
+  currentIsoCode,
 }: {
   word: Word;
+  currentIsoCode: string;
   expanded: boolean;
   onToggle: () => void;
   isFlagged: boolean;
@@ -770,7 +776,7 @@ function WordCard({
 }) {
   const { t } = useI18n();
   const { displayDefEntries, displayExEntries } = useSettings();
-  const defText = word.definitions.map((m) => displayDefEntries(m.text || {}).map(([, v]) => v).join("; ")).join(" | ");
+  const defText = word.definitions.map((m) => displayDefEntries(m.text || {}).filter(([lang]) => lang !== currentIsoCode).map(([, v]) => v).join("; ")).join(" | ");
 
   return (
     <div
@@ -827,7 +833,7 @@ function WordCard({
                       </span>
                     )}
                     <div className="mt-1 space-y-0.5">
-                      {displayDefEntries(m.text || {}).map(([lang, def]) => (
+                      {displayDefEntries(m.text || {}).filter(([lang]) => lang !== currentIsoCode).map(([lang, def]) => (
                         <p key={lang} className="text-sm text-gray-300">
                           <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>
                           {def}
@@ -849,7 +855,7 @@ function WordCard({
                   const trans = typeof ex.translation === "string" ? ex.translation : displayTranslation(ex.translation);
                   const segs = (ex.segments ?? []).filter((s) => s.text.trim().length > 0 && !/^\p{P}+$/u.test(s.text));
                   const exEntries = typeof ex.translation === "object" && ex.translation
-                    ? displayExEntries(ex.translation)
+                    ? displayExEntries(ex.translation).filter(([lang]) => lang !== currentIsoCode)
                     : [];
                   return (
                     <li key={i} className="text-base text-gray-300">
@@ -1102,8 +1108,10 @@ function WordRow({
   editMode,
   selected,
   onToggleSelect,
+  currentIsoCode,
 }: {
   word: Word;
+  currentIsoCode: string;
   expanded: boolean;
   onToggle: () => void;
   isFlagged: boolean;
@@ -1135,7 +1143,7 @@ function WordRow({
 }) {
   const { t } = useI18n();
   const { displayDefEntries, displayExEntries } = useSettings();
-  const defText = word.definitions.map((m) => displayDefEntries(m.text || {}).map(([, v]) => v).join("; ")).join(" | ");
+  const defText = word.definitions.map((m) => displayDefEntries(m.text || {}).filter(([lang]) => lang !== currentIsoCode).map(([, v]) => v).join("; ")).join(" | ");
 
   return (
     <>
@@ -1182,7 +1190,7 @@ function WordRow({
                         </span>
                       )}
                       <div className="mt-1 space-y-0.5">
-                        {displayDefEntries(m.text || {}).map(([lang, def]) => (
+                        {displayDefEntries(m.text || {}).filter(([lang]) => lang !== currentIsoCode).map(([lang, def]) => (
                           <p key={lang} className="text-sm text-gray-300">
                             <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>
                             {def}
@@ -1204,7 +1212,7 @@ function WordRow({
                     const trans = typeof ex.translation === "string" ? ex.translation : displayTranslation(ex.translation);
                     const segs = (ex.segments ?? []).filter((s) => s.text.trim().length > 0 && !/^\p{P}+$/u.test(s.text));
                     const exEntries = typeof ex.translation === "object" && ex.translation
-                      ? displayExEntries(ex.translation)
+                      ? displayExEntries(ex.translation).filter(([lang]) => lang !== currentIsoCode)
                       : [];
                     return (
                       <li key={i} className="text-base text-gray-300">
