@@ -375,6 +375,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       setExistingTerms(new Map(Object.entries(existing)));
     }
     handleCancelEdit();
+    silentRefreshRef.current = true;
     await fetchData();
   }
 
