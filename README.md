@@ -284,17 +284,19 @@ vocab-trainer/
 │       │   ├── flagged.ts       # Flagged words API wrappers
 │       │   ├── translation.ts   # Translation API wrappers
 │       │   └── speaking-writing.ts # Speaking & writing correction API wrappers
+│       ├── hooks/
+│       │   └── useWordQueue.ts  # Sequential word-addition queue (enqueue, queueLength, processingTerm, refreshSignal)
 │       ├── components/
-│       │   ├── Dashboard.tsx     # Main layout with quiz/browse orchestration
+│       │   ├── Dashboard.tsx     # Main layout with quiz/browse orchestration + queue status pill & toasts
 │       │   ├── SettingsModal.tsx  # Settings: language order, UI langs, definition/example langs
 │       │   ├── QuizTaking.tsx    # Active quiz interface
-│       │   ├── WordList.tsx      # Paginated word browsing with filters
+│       │   ├── WordList.tsx      # Paginated word browsing with filters (refreshSignal + onQueue props)
 │       │   ├── RubyText.tsx      # Ruby text component for pinyin annotations
 │       │   ├── LanguageSelectModal.tsx
 │       │   ├── LevelSelectModal.tsx
 │       │   ├── QuizFilterModal.tsx
 │       │   ├── WordFormModal.tsx
-│       │   ├── SmartAddWordModal.tsx  # Smart add word with LLM
+│       │   ├── SmartAddWordModal.tsx  # Smart add word with LLM; queue mode via onQueue prop
 │       │   ├── FlaggedReview.tsx      # Review flagged words
 │       │   ├── GrammarList.tsx        # Browse grammar by chapter/subchapter
 │       │   ├── GrammarFilterModal.tsx # Grammar quiz filters
@@ -913,8 +915,8 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 | **Dashboard**           | Main layout. Header with settings gear button, dynamic UI language toggle (ordered and filtered by settings), and "Back" button. |
 | **SettingsModal**       | Settings modal with sections for (1) drag-and-drop language display order reordering via @dnd-kit, (2) active UI language checkboxes, (3) displayed definition / example translation language checkboxes (display-only — generation always covers all four), (4) smart-add defaults (`defaultAddWordLanguage`, `defaultDefinitionLanguage`), (5) speaking/writing defaults (`defaultCorrectionMode`, `defaultSpeakingUseCase`, `defaultWritingUseCase`), and (6) translation defaults (`defaultTranslationSourceLanguage`, `defaultTranslationTargetLanguages`). Persisted to localStorage. |
 | **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows all definitions, transliteration, and example sentences with RubyText annotations. Wrong answers are re-queued until correct. Questions are lazy-loaded in batches of 50 with automatic prefetching at the halfway point. Supports resuming from where the user left off. |
-| **WordList**            | Paginated word browsing with search, topic/category/level filters, progress badges, and expandable word details with pinyin displayed via RubyText. |
-| **SmartAddWordModal**   | Modal to add a word with LLM auto-filling missing fields. Only `term` is required; the LLM generates transliteration, definitions, examples (with translations), and — for Chinese — pinyin segments per example. The LLM **always** generates definitions and example translations in all four supported languages regardless of settings; the settings only control which subset is **displayed** (`displayDefinitionLanguages`, `displayExampleTranslationLanguages`) and which language each form field is **pre-filled** with (`defaultAddWordLanguage` for the outer Language radio, `defaultDefinitionLanguage` for the first definition row). Note that the modal exposes two independent language fields — the outer "word language" (sent as the `:language` route parameter, backend full-name format) and per-row "definition language" (ISO code, used as the key in `definitions[].text`) — easy to confuse. |
+| **WordList**            | Paginated word browsing with search, topic/category/level filters, progress badges, and expandable word details with pinyin displayed via RubyText. Accepts a `refreshSignal` prop (silently re-fetches when the value changes, so newly queued words appear automatically) and an `onQueue` prop (enables queue mode in its embedded SmartAddWordModal). |
+| **SmartAddWordModal**   | Modal to add a word with LLM auto-filling missing fields. Only `term` is required; the LLM generates transliteration, definitions, examples (with translations), and — for Chinese — pinyin segments per example. The LLM **always** generates definitions and example translations in all four supported languages regardless of settings; the settings only control which subset is **displayed** (`displayDefinitionLanguages`, `displayExampleTranslationLanguages`) and which language each form field is **pre-filled** with (`defaultAddWordLanguage` for the outer Language radio, `defaultDefinitionLanguage` for the first definition row). Note that the modal exposes two independent language fields — the outer "word language" (sent as the `:language` route parameter, backend full-name format) and per-row "definition language" (ISO code, used as the key in `definitions[].text`) — easy to confuse. When the `onQueue` prop is provided the modal enters **queue mode**: clicking Save enqueues the word instantly (no blocking LLM wait), flashes "✓ Queued", then resets the form so the user can add the next term immediately. |
 | **FlaggedReview**       | Review interface for flagged words. Allows browsing and unflagging words marked for review. |
 | **LanguageSelectModal** | Modal to pick the target language when starting a new quiz. Lists languages fetched from the API.                  |
 | **LevelSelectModal**    | Modal to select proficiency levels (e.g., HSK1-4–HSK7-9) for filtering. |
