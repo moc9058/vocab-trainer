@@ -51,6 +51,7 @@ export default function WordList({ language, onBack }: Props) {
   const requestIdRef = useRef(0);
   const scrollToExpandedRef = useRef(false);
   const silentRefreshRef = useRef(false);
+  const checkTermsVersionRef = useRef(0);
 
   // Fetch flagged word IDs on mount
   useEffect(() => {
@@ -137,6 +138,27 @@ export default function WordList({ language, onBack }: Props) {
     }
   }
 
+  function refreshExistingTerms(word: Word) {
+    const allTexts = [
+      ...new Set(
+        word.examples.flatMap((ex) => ex.segments?.map((s) => s.text).filter((t) => t.trim().length > 0 && !/^\p{P}+$/u.test(t)) ?? [])
+      ),
+    ];
+    if (allTexts.length === 0) {
+      setExistingTerms(new Map());
+      return;
+    }
+    const v = ++checkTermsVersionRef.current;
+    checkTerms(language, allTexts)
+      .then(({ existing }) => {
+        if (v === checkTermsVersionRef.current)
+          setExistingTerms(new Map(Object.entries(existing)));
+      })
+      .catch(() => {
+        if (v === checkTermsVersionRef.current) setExistingTerms(new Map());
+      });
+  }
+
   function handleToggleExpand(word: Word) {
     if (expandedId === word.id) {
       setExpandedId(null);
@@ -145,22 +167,12 @@ export default function WordList({ language, onBack }: Props) {
     if (editingExample) handleCancelEdit();
     setExpandedId(word.id);
     setBusySegments(new Set());
-    const allTexts = [
-      ...new Set(
-        word.examples.flatMap((ex) => ex.segments?.map((s) => s.text).filter((t) => t.trim().length > 0 && !/^\p{P}+$/u.test(t)) ?? [])
-      ),
-    ];
-    if (allTexts.length > 0) {
-      checkTerms(language, allTexts)
-        .then(({ existing }) => setExistingTerms(new Map(Object.entries(existing))))
-        .catch(() => setExistingTerms(new Map()));
-    } else {
-      setExistingTerms(new Map());
-    }
+    refreshExistingTerms(word);
   }
 
   async function handleAddSegmentWord(term: string, sentence: string, translation: string) {
     if (existingTerms.has(term)) return;
+    checkTermsVersionRef.current++; // invalidate any in-flight checkTerms so it won't overwrite
     setBusySegments((prev) => new Set(prev).add(term));
     try {
       const flag = segmentFlags.get(term) ?? true;
@@ -175,9 +187,28 @@ export default function WordList({ language, onBack }: Props) {
       }
       setResult((prev) => {
         if (!prev) return prev;
-        const newItems = [...prev.items, word, ...(gw ?? [])];
+        const newItems = [word, ...(gw ?? []), ...prev.items];
         return { ...prev, items: newItems, total: prev.total + 1 + (gw?.length ?? 0) };
       });
+    } catch {
+      // Word may have been saved despite the error; re-check to show correct button state
+      const expandedWord = result?.items.find((w) => w.id === expandedId);
+      if (expandedWord) {
+        const allTexts = [...new Set(
+          expandedWord.examples.flatMap((ex) =>
+            ex.segments?.map((s) => s.text).filter((t) => t.trim().length > 0 && !/^\p{P}+$/u.test(t)) ?? []
+          )
+        )];
+        if (allTexts.length > 0) {
+          const v = ++checkTermsVersionRef.current;
+          checkTerms(language, allTexts)
+            .then(({ existing }) => {
+              if (v === checkTermsVersionRef.current)
+                setExistingTerms(new Map(Object.entries(existing)));
+            })
+            .catch(() => {});
+        }
+      }
     } finally {
       setBusySegments((prev) => { const next = new Set(prev); next.delete(term); return next; });
     }
@@ -653,6 +684,7 @@ export default function WordList({ language, onBack }: Props) {
             setPage(1);
             setExpandedId(word.id);
             scrollToExpandedRef.current = true;
+            refreshExistingTerms(word);
           }}
           onClose={() => setShowSmartAdd(false)}
         />

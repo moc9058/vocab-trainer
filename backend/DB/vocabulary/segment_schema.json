@@ -23,7 +23,7 @@
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["text"],
+                "required": ["text", "pinyin"],
                 "properties": {
                   "text": {
                     "type": "string",

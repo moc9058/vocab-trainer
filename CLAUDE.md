@@ -19,6 +19,7 @@ cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts             # Up
 cd backend && npx tsx scripts/backfill-word-languages.ts [--dry-run] [--language=<code>] [--limit=<n>]  # One-off: re-run LLM on existing words to fill missing en/ja/ko/zh definition + example translations
 cd backend && npx tsx scripts/unify-chinese-levels.ts  # One-off: rewrite granular HSK1/2/.../9 labels in `words` and `word_index` to the merged HSK1-4 / HSK5 / HSK6 / HSK7-9 / Advanced buckets
 cd backend && npx tsx scripts/migrate-example-sentences.ts [--dry-run]  # One-off: extract embedded examples from words into example_sentences collection with dedup + bidirectional linking
+cd backend && npx tsx scripts/backfill-missing-segments.ts [--language=<lang>] [--dry-run] [--chunk=<n>]  # One-off: generate pinyin segments + multi-language translations for example sentences missing them; default chunk=50 (segments) / 20 (translations)
 cd backend && npx tsx scripts/backfill-segment-word-ids.ts [--language=<lang>] [--dry-run]  # One-off: scan example sentences and assign segment.id from word_index; also updates appearsInIds on matched words
 cd backend && npx tsx scripts/backfill-word-appears-in.ts [--language=<lang>] [--dry-run]   # One-off: recompute appearsInIds for all words (union of exampleIds + segment refs)
 cd backend && npx tsx scripts/cleanup-dangling-example-refs.ts [--language=<lang>] [--dry-run]  # One-off: remove stale exampleIds/appearsInIds pointing at deleted example sentences

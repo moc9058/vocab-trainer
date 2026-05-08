@@ -594,6 +594,13 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             await addExampleSentence(es);
             await reconcileExampleSegmentRefs(newId, [], ex.segments);
             newExampleIds.push(newId);
+            if (isChinese && !hasIncomingSegs) {
+              needsResegment.push({
+                target: { ...es },
+                exampleId: newId,
+                newSentence: ex.sentence,
+              });
+            }
           }
         }
 
