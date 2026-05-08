@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useI18n } from "../i18n/context";
 import { uiLanguages } from "../i18n/translations";
 import { useSettings } from "../settings/context";
@@ -30,6 +30,8 @@ export default function Dashboard() {
   const { language } = useParams<{ language: string }>();
   const isoCode = language ? (urlLanguageToIsoCode(language) ?? language) : "";
   const navigate = useNavigate();
+  const location = useLocation();
+  const subPath = location.pathname.replace(`/${language}`, "") || "/";
   const { t, language: uiLang, setLanguage } = useI18n();
   const { settings } = useSettings();
   const { enqueue, queueLength, processingTerm, recentResults, clearResults, refreshSignal } = useWordQueue();
@@ -45,30 +47,46 @@ export default function Dashboard() {
     topics: string[];
     categories: string[];
   } | null>(null);
-  const [browsingLanguage, setBrowsingLanguage] = useState<string | null>(null);
-  const [flaggedReviewLanguage, setFlaggedReviewLanguage] = useState<string | null>(null);
   // Grammar state
   const [activeGrammarQuiz, setActiveGrammarQuiz] = useState<GrammarQuizSession | null>(null);
-  const [browsingGrammarLanguage, setBrowsingGrammarLanguage] = useState<string | null>(null);
   const [showGrammarFilterModal, setShowGrammarFilterModal] = useState<string | null>(null);
   // Smart Add Word / Grammar state
   const [showSmartAdd, setShowSmartAdd] = useState(false);
-  const [jumpToWordId, setJumpToWordId] = useState<string | null>(null);
-  const [jumpToWordTerm, setJumpToWordTerm] = useState<string | null>(null);
   const [grammarFormLanguage, setGrammarFormLanguage] = useState<string | null>(null);
-  // Translation state
-  const [translationMode, setTranslationMode] = useState<"new" | "resume" | null>(null);
+  // Translation / Speaking-Writing mode derived from URL location state
+  const locationMode = (location.state as { mode?: string } | null)?.mode as "new" | "resume" | undefined;
+  const translationMode: "new" | "resume" | null = subPath === "/translation" ? (locationMode ?? "resume") : null;
+  const speakingWritingMode: "new" | "resume" | null = subPath === "/speaking-writing" ? (locationMode ?? "resume") : null;
   const [hasTranslationHistory, setHasTranslationHistory] = useState(false);
-  // Speaking & Writing state
-  const [speakingWritingMode, setSpeakingWritingMode] = useState<"new" | "resume" | null>(null);
   const [hasSWSession, setHasSWSession] = useState(false);
+
+  // Session recovery: navigate to /:language/quiz → fetch active session if state is empty
+  useEffect(() => {
+    if (subPath !== "/quiz" || activeQuiz) return;
+    getCurrentSession(language ?? "").then(session => {
+      if (session) setActiveQuiz(session);
+      else navigate(`/${language}`, { replace: true });
+    }).catch(() => navigate(`/${language}`, { replace: true }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subPath, language]);
+
+  // Session recovery: navigate to /:language/grammar-quiz → fetch active session if state is empty
+  useEffect(() => {
+    if (subPath !== "/grammar-quiz" || activeGrammarQuiz) return;
+    getCurrentGrammarSession(language ?? "").then(session => {
+      if (session) setActiveGrammarQuiz(session);
+      else navigate(`/${language}`, { replace: true });
+    }).catch(() => navigate(`/${language}`, { replace: true }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subPath, language]);
+
   // Check for translation history scoped to the current language
   useEffect(() => {
     if (!isoCode) return;
     getTranslationHistory(1, 1, isoCode)
       .then(({ total }) => setHasTranslationHistory(total > 0))
       .catch(() => {});
-  }, [translationMode, isoCode]);
+  }, [subPath, isoCode]);
 
   // Check for speaking/writing session scoped to the current language
   useEffect(() => {
@@ -81,7 +99,7 @@ export default function Dashboard() {
         setHasSWSession(false);
       }
     })();
-  }, [speakingWritingMode, isoCode]);
+  }, [subPath, isoCode]);
 
   // Show toast for the latest queue result
   useEffect(() => {
@@ -135,6 +153,7 @@ export default function Dashboard() {
       setSelectedLanguage(null);
       setSelectedLevels(null);
       setActiveQuiz(session);
+      navigate(`/${language}/quiz`);
     } catch (err) {
       console.error("Failed to start quiz:", err);
       alert(String(err));
@@ -151,6 +170,7 @@ export default function Dashboard() {
       setSelectedLanguage(null);
       setSelectedLevels(null);
       setStarting(false);
+      navigate(`/${language}/quiz`);
     }
   }
 
@@ -171,6 +191,7 @@ export default function Dashboard() {
         levels,
       });
       setActiveQuiz(session);
+      navigate(`/${language}/quiz`);
     } catch (err) {
       console.error("Failed to start quiz:", err);
       alert(String(err));
@@ -190,24 +211,21 @@ export default function Dashboard() {
 
   function handleQuizComplete() {
     setActiveQuiz(null);
+    navigate(`/${language}`);
   }
 
   function goHome() {
     setActiveQuiz(null);
-    setBrowsingLanguage(null);
-    setFlaggedReviewLanguage(null);
     setSelectedLanguage(null);
     setSelectedLevels(null);
     setResumePrompt(null);
     setPendingFilters(null);
     setStarting(false);
     setActiveGrammarQuiz(null);
-    setBrowsingGrammarLanguage(null);
     setShowGrammarFilterModal(null);
     setShowSmartAdd(false);
     setGrammarFormLanguage(null);
-    setTranslationMode(null);
-    setSpeakingWritingMode(null);
+    navigate(`/${language}`);
   }
 
   function handleAddWord() {
@@ -225,12 +243,12 @@ export default function Dashboard() {
 
   function handleFlaggedReview() {
     if (!language) return;
-    setFlaggedReviewLanguage(language);
+    navigate(`/${language}/flagged`);
   }
 
   function handleBrowse() {
     if (!language) return;
-    setBrowsingLanguage(language);
+    navigate(`/${language}/browse`);
   }
 
   function handleStartGrammarQuiz() {
@@ -247,6 +265,7 @@ export default function Dashboard() {
       const existing = await getCurrentGrammarSession(lang);
       if (existing && existing.status === "in-progress") {
         setActiveGrammarQuiz(existing);
+        navigate(`/${language}/grammar-quiz`);
         return;
       }
       const session = await startGrammarQuiz({
@@ -257,6 +276,7 @@ export default function Dashboard() {
         quizMode: filters.quizMode,
       });
       setActiveGrammarQuiz(session);
+      navigate(`/${language}/grammar-quiz`);
     } catch (err) {
       console.error("Failed to start grammar quiz:", err);
       alert(String(err));
@@ -265,10 +285,10 @@ export default function Dashboard() {
 
   function handleBrowseGrammar() {
     if (!language) return;
-    setBrowsingGrammarLanguage(language);
+    navigate(`/${language}/grammar`);
   }
 
-  const showBackButton = !!(activeQuiz || browsingLanguage || flaggedReviewLanguage || selectedLanguage || activeGrammarQuiz || browsingGrammarLanguage || showGrammarFilterModal || showSmartAdd || grammarFormLanguage || translationMode || speakingWritingMode);
+  const showBackButton = (subPath !== "/" && subPath !== "") || !!(selectedLanguage || showGrammarFilterModal || showSmartAdd || grammarFormLanguage);
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-900">
@@ -334,9 +354,7 @@ export default function Dashboard() {
           onQueue={enqueue}
           onJumpToWord={(id, term) => {
             setShowSmartAdd(false);
-            setJumpToWordId(id);
-            setJumpToWordTerm(term);
-            setBrowsingLanguage(language ?? "");
+            navigate(`/${language}/browse`, { state: { expandId: id, search: term } });
           }}
         />
       )}
@@ -405,47 +423,59 @@ export default function Dashboard() {
         </div>
       )}
       <main className="flex-1">
-        {activeGrammarQuiz ? (
-          <GrammarQuizTaking
-            session={activeGrammarQuiz}
-            onComplete={() => setActiveGrammarQuiz(null)}
-            onStartNew={handleStartGrammarQuiz}
-          />
-        ) : browsingGrammarLanguage ? (
-          <GrammarList
-            language={browsingGrammarLanguage}
-            onBack={() => setBrowsingGrammarLanguage(null)}
-          />
-        ) : activeQuiz ? (
-          <QuizTaking
-            session={activeQuiz}
-            onComplete={handleQuizComplete}
-            onBrowse={handleBrowse}
-            onStartNew={handleStartQuiz}
-          />
-        ) : flaggedReviewLanguage ? (
-          <FlaggedReview
-            language={flaggedReviewLanguage}
-            onBack={() => setFlaggedReviewLanguage(null)}
-          />
-        ) : browsingLanguage ? (
+        {subPath === "/quiz" ? (
+          activeQuiz ? (
+            <QuizTaking
+              session={activeQuiz}
+              onComplete={handleQuizComplete}
+              onBrowse={handleBrowse}
+              onStartNew={handleStartQuiz}
+            />
+          ) : (
+            <div className="flex items-center justify-center p-8">
+              <span className="text-gray-400">Loading quiz…</span>
+            </div>
+          )
+        ) : subPath === "/browse" ? (
           <WordList
-            language={browsingLanguage}
-            onBack={() => { setBrowsingLanguage(null); setJumpToWordId(null); setJumpToWordTerm(null); }}
-            initialExpandId={jumpToWordId ?? undefined}
-            initialSearch={jumpToWordTerm ?? undefined}
+            language={language ?? ""}
+            onBack={() => navigate(`/${language}`)}
+            initialExpandId={(location.state as { expandId?: string } | null)?.expandId}
+            initialSearch={(location.state as { search?: string } | null)?.search}
             refreshSignal={refreshSignal}
             onQueue={enqueue}
           />
-        ) : speakingWritingMode ? (
-          <SpeakingWritingView mode={speakingWritingMode} language={isoCode} />
-        ) : translationMode ? (
-          <TranslationView mode={translationMode} language={isoCode} />
+        ) : subPath === "/flagged" ? (
+          <FlaggedReview
+            language={language ?? ""}
+            onBack={() => navigate(`/${language}`)}
+          />
+        ) : subPath === "/grammar" ? (
+          <GrammarList
+            language={language ?? ""}
+            onBack={() => navigate(`/${language}`)}
+          />
+        ) : subPath === "/grammar-quiz" ? (
+          activeGrammarQuiz ? (
+            <GrammarQuizTaking
+              session={activeGrammarQuiz}
+              onComplete={() => { setActiveGrammarQuiz(null); navigate(`/${language}`); }}
+              onStartNew={handleStartGrammarQuiz}
+            />
+          ) : (
+            <div className="flex items-center justify-center p-8">
+              <span className="text-gray-400">Loading quiz…</span>
+            </div>
+          )
+        ) : subPath === "/speaking-writing" ? (
+          <SpeakingWritingView mode={speakingWritingMode!} language={isoCode} />
+        ) : subPath === "/translation" ? (
+          <TranslationView mode={translationMode!} language={isoCode} />
         ) : (
           <EmptyState
             language={language ?? ""}
-            onResume={(session) => setActiveQuiz(session)}
-            onResumeGrammar={(session) => setActiveGrammarQuiz(session)}
+            onResume={(session) => { setActiveQuiz(session); navigate(`/${language}/quiz`); }}
+            onResumeGrammar={(session) => { setActiveGrammarQuiz(session); navigate(`/${language}/grammar-quiz`); }}
             onStartNew={handleStartQuiz}
             onBrowse={handleBrowse}
             onFlaggedReview={handleFlaggedReview}
@@ -453,11 +483,11 @@ export default function Dashboard() {
             onBrowseGrammar={handleBrowseGrammar}
             onAddWord={handleAddWord}
             onAddGrammar={handleAddGrammar}
-            onStartTranslation={() => setTranslationMode("new")}
-            onResumeTranslation={() => setTranslationMode("resume")}
+            onStartTranslation={() => navigate(`/${language}/translation`, { state: { mode: "new" } })}
+            onResumeTranslation={() => navigate(`/${language}/translation`, { state: { mode: "resume" } })}
             hasTranslationHistory={hasTranslationHistory}
-            onStartSpeakingWriting={() => setSpeakingWritingMode("new")}
-            onResumeSpeakingWriting={() => setSpeakingWritingMode("resume")}
+            onStartSpeakingWriting={() => navigate(`/${language}/speaking-writing`, { state: { mode: "new" } })}
+            onResumeSpeakingWriting={() => navigate(`/${language}/speaking-writing`, { state: { mode: "resume" } })}
             hasSWSession={hasSWSession}
           />
         )}
