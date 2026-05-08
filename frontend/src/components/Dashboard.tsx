@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n/context";
 import { uiLanguages } from "../i18n/translations";
@@ -23,6 +23,7 @@ import QuizFilterModal from "./QuizFilterModal";
 import { getTranslationHistory } from "../api/translation";
 import { getSpeakingWritingSession } from "../api/speaking-writing";
 import { urlLanguageToIsoCode } from "../settings/defaults";
+import { useWordQueue } from "../hooks/useWordQueue";
 import type { QuizSession, GrammarQuizSession } from "../types";
 
 export default function Dashboard() {
@@ -31,6 +32,9 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { t, language: uiLang, setLanguage } = useI18n();
   const { settings } = useSettings();
+  const { enqueue, queueLength, processingTerm, recentResults, clearResults, refreshSignal } = useWordQueue();
+  const [visibleToast, setVisibleToast] = useState<{ id: string; term: string; success: boolean; error?: string } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<QuizSession | null>(null);
   const [starting, setStarting] = useState(false);
@@ -78,6 +82,20 @@ export default function Dashboard() {
       }
     })();
   }, [speakingWritingMode, isoCode]);
+
+  // Show toast for the latest queue result
+  useEffect(() => {
+    if (recentResults.length === 0) return;
+    const latest = recentResults[0];
+    if (visibleToast?.id === latest.id) return;
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setVisibleToast(latest);
+    toastTimerRef.current = setTimeout(() => {
+      setVisibleToast(null);
+      clearResults();
+    }, 3000);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recentResults]);
 
   async function handleLanguageSelected(lang: string) {
     setSelectedLanguage(lang);
@@ -313,6 +331,7 @@ export default function Dashboard() {
           onSave={() => {}}
           onClose={() => setShowSmartAdd(false)}
           defaultLanguage={language}
+          onQueue={enqueue}
           onJumpToWord={(id, term) => {
             setShowSmartAdd(false);
             setJumpToWordId(id);
@@ -367,6 +386,24 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      {/* Queue status pill */}
+      {(processingTerm !== null || queueLength > 0) && (
+        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-gray-700 px-4 py-2 text-sm text-gray-200 shadow-lg border border-gray-600">
+          <span className="animate-spin inline-block">⟳</span>
+          <span>
+            {processingTerm ? `Processing: "${processingTerm}"` : "Starting…"}
+            {queueLength > 0 && ` · ${queueLength} queued`}
+          </span>
+        </div>
+      )}
+      {/* Toast notification (shown above the pill if both visible) */}
+      {visibleToast && (
+        <div className={`fixed z-50 rounded-lg px-4 py-2 text-sm shadow-lg border transition-all ${processingTerm !== null || queueLength > 0 ? "bottom-16 right-4" : "bottom-4 right-4"} ${visibleToast.success ? "bg-green-900/90 border-green-700 text-green-200" : "bg-red-900/90 border-red-700 text-red-200"}`}>
+          {visibleToast.success
+            ? `✓ "${visibleToast.term}" added`
+            : `✗ "${visibleToast.term}" failed${visibleToast.error ? `: ${visibleToast.error}` : ""}`}
+        </div>
+      )}
       <main className="flex-1">
         {activeGrammarQuiz ? (
           <GrammarQuizTaking
@@ -397,6 +434,8 @@ export default function Dashboard() {
             onBack={() => { setBrowsingLanguage(null); setJumpToWordId(null); setJumpToWordTerm(null); }}
             initialExpandId={jumpToWordId ?? undefined}
             initialSearch={jumpToWordTerm ?? undefined}
+            refreshSignal={refreshSignal}
+            onQueue={enqueue}
           />
         ) : speakingWritingMode ? (
           <SpeakingWritingView mode={speakingWritingMode} language={isoCode} />

@@ -392,7 +392,7 @@ Rules:
 - Segment into natural Chinese words (not individual characters unless they are standalone words)
 - Use tone marks on pinyin (e.g. "nǐ hǎo" not "ni3 hao3")
 - Multi-syllable words get space-separated pinyin (e.g. "xuéshēng" for 学生)
-- Keep punctuation as separate segments with no pinyin`;
+- Exclude punctuation, numbers, and all non-word tokens — only include actual Chinese words or terms`;
 
   const numbered = sentences
     .map((s, i) => `${i}. ${s}`)
@@ -410,6 +410,8 @@ Rules:
     const segs: Segment[] = [];
     for (const seg of entry.segments) {
       if (typeof seg?.text !== "string" || seg.text.length === 0) continue;
+      // Drop non-word tokens (punctuation, numbers, whitespace, etc.)
+      if (!/[a-zA-Z一-鿿㐀-䶿豈-﫿]/u.test(seg.text)) continue;
       if (typeof seg.pinyin === "string" && seg.pinyin.length > 0) {
         segs.push({ text: seg.text, transliteration: seg.pinyin });
       } else {

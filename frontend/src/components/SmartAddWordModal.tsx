@@ -11,12 +11,23 @@ interface Prefill {
   example?: { sentence: string; translation: string };
 }
 
+type SmartAddPayload = {
+  term: string;
+  transliteration?: string;
+  definitions?: { partOfSpeech: string; text: Record<string, string> }[];
+  topics?: string[];
+  examples?: { sentence: string; translation: string }[];
+  level?: string;
+  flag?: boolean;
+};
+
 interface Props {
   onSave: (word: Word) => void;
   onClose: () => void;
   prefill?: Prefill;
   defaultLanguage?: string;
   onJumpToWord?: (wordId: string, term: string) => void;
+  onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
 }
 
 // LANG_OPTIONS is now derived from settings in the component
@@ -44,7 +55,7 @@ const ALL_TOPICS = [
   "History", "Media & News", "Language Fundamentals",
 ] as const;
 
-export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage, onJumpToWord }: Props) {
+export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage, onJumpToWord, onQueue }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const LANG_OPTIONS = useMemo(
@@ -69,6 +80,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   const [checking, setChecking] = useState(false);
   const [existingWord, setExistingWord] = useState<{ id: string; level: string; transliteration: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [queued, setQueued] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [generatedWords, setGeneratedWords] = useState<Word[]>([]);
@@ -97,39 +109,66 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     return def.langSelect;
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!term.trim() || saving) return;
-
-    setSaving(true);
-    setError("");
-    setSuccess(false);
-
+  function buildPayload() {
     const defObj: Record<string, string> = {};
     for (const d of definitions) {
       const key = getDefLangKey(d);
       if (key && d.text.trim()) defObj[key] = d.text.trim();
     }
-
-    // Bundle user-provided definition hints + category into a definitions array
     const defs = Object.keys(defObj).length > 0 || grammaticalCategory
       ? [{ partOfSpeech: grammaticalCategory || "", text: defObj }]
       : undefined;
-
     const validExamples = examples.filter((ex) => ex.sentence.trim());
+    return {
+      term: term.trim(),
+      transliteration: wordLanguage === "chinese" ? (transliteration.trim() || undefined) : undefined,
+      definitions: defs,
+      topics: topics.length > 0 ? topics : undefined,
+      examples: validExamples.length > 0 ? validExamples : undefined,
+      level: level || undefined,
+      flag: flagForReview,
+    };
+  }
+
+  function resetForm() {
+    setTerm("");
+    setTransliteration("");
+    const langSelect = settings.languageOrder[0] ?? "en";
+    setDefinitions([{ langSelect, text: "" }]);
+    setGrammaticalCategory("");
+    setLevel("");
+    setTopics([]);
+    setExamples([{ sentence: "", translation: "" }]);
+    setExistingWord(null);
+    setError("");
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!term.trim() || saving || queued) return;
+
     const language = wordLanguage;
     if (!language) return;
 
+    const payload = buildPayload();
+
+    // Queue mode: enqueue immediately and reset form for next word
+    if (onQueue) {
+      onQueue(term.trim(), language, payload);
+      setQueued(true);
+      setTimeout(() => {
+        setQueued(false);
+        resetForm();
+      }, 900);
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setSuccess(false);
+
     try {
-      const result = await smartAddWord(language, {
-        term: term.trim(),
-        transliteration: wordLanguage === "chinese" ? (transliteration.trim() || undefined) : undefined,
-        definitions: defs,
-        topics: topics.length > 0 ? topics : undefined,
-        examples: validExamples.length > 0 ? validExamples : undefined,
-        level: level || undefined,
-        flag: flagForReview,
-      });
+      const result = await smartAddWord(language, payload);
       const { generatedWords: gw, ...word } = result;
       setSuccess(true);
       setGeneratedWords(gw ?? []);
@@ -426,10 +465,10 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
             </button>
             <button
               type="submit"
-              disabled={saving || !term.trim()}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
+              disabled={saving || queued || !term.trim()}
+              className={`rounded-lg px-4 py-2 text-sm text-white disabled:opacity-50 ${queued ? "bg-green-600 hover:bg-green-500" : "bg-blue-600 hover:bg-blue-500"}`}
             >
-              {saving ? t("addingWord") : t("save")}
+              {saving ? t("addingWord") : queued ? "✓ Queued" : t("save")}
             </button>
           </div>
         </form>

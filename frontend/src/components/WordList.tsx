@@ -9,14 +9,26 @@ import SmartAddWordModal from "./SmartAddWordModal";
 import { displayTranslation, type Word, type PaginatedResult } from "../types";
 import { urlLanguageToIsoCode } from "../settings/defaults";
 
+type SmartAddPayload = {
+  term: string;
+  transliteration?: string;
+  definitions?: { partOfSpeech: string; text: Record<string, string> }[];
+  topics?: string[];
+  examples?: { sentence: string; translation: string }[];
+  level?: string;
+  flag?: boolean;
+};
+
 interface Props {
   language: string;
   onBack: () => void;
   initialExpandId?: string;
   initialSearch?: string;
+  refreshSignal?: number;
+  onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
 }
 
-export default function WordList({ language, onBack, initialExpandId, initialSearch }: Props) {
+export default function WordList({ language, onBack, initialExpandId, initialSearch, refreshSignal, onQueue }: Props) {
   const { t } = useI18n();
   const currentIsoCode = urlLanguageToIsoCode(language) ?? language;
   const [result, setResult] = useState<PaginatedResult<Word> | null>(null);
@@ -416,6 +428,17 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     fetchData();
   }, [fetchData]);
 
+  // Silent refresh when a queued word finishes processing
+  const prevRefreshSignalRef = useRef(refreshSignal);
+  useEffect(() => {
+    if (refreshSignal === undefined) return;
+    if (refreshSignal === prevRefreshSignalRef.current) return;
+    prevRefreshSignalRef.current = refreshSignal;
+    silentRefreshRef.current = true;
+    fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
+
   // Reset page when filters change (skip initial mount)
   useEffect(() => {
     if (isInitialMount.current) {
@@ -674,7 +697,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       {showSmartAdd && (
         <SmartAddWordModal
           defaultLanguage={language}
-          onSave={(word) => {
+          onSave={onQueue ? () => {} : (word) => {
             setResult(prev =>
               prev
                 ? {
@@ -698,6 +721,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
             scrollToExpandedRef.current = true;
             refreshExistingTerms(word);
           }}
+          onQueue={onQueue}
           onJumpToWord={(wordId, term) => {
             setShowSmartAdd(false);
             setSearch(term);

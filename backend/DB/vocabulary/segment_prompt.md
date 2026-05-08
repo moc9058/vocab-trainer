@@ -8,4 +8,4 @@ Rules:
 - Segment into natural Chinese words (not individual characters unless they are standalone words)
 - Use tone marks on pinyin (e.g. "nǐ hǎo" not "ni3 hao3")
 - Multi-syllable words get space-separated pinyin (e.g. "xuéshēng" for 学生)
-- Keep punctuation as separate segments with no pinyin
+- Exclude punctuation, numbers, and all non-word tokens — only include actual Chinese words or terms
