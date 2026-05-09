@@ -79,3 +79,7 @@ export function smartAddWord(
 ): Promise<Word & { generatedWords?: Word[] }> {
   return postJson(`/api/vocab/${encodeURIComponent(language)}/smart-add`, data);
 }
+
+export function syncSegmentLinks(language: string, exampleIds: string[]): Promise<void> {
+  return postJson(`/api/vocab/${encodeURIComponent(language)}/sync-segment-links`, { exampleIds });
+}

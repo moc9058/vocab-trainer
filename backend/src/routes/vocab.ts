@@ -21,6 +21,7 @@ import {
   updateExampleSentence,
   getExampleSentencesByIds,
   linkWordToExistingExamples,
+  updateSegmentWordLinks,
   reconcileExampleSegmentRefs,
   unlinkWordFromExampleSentence,
   deleteWordIfOrphaned,
@@ -827,6 +828,31 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
   // Unlink a word from a specific example sentence.
   // Behavior:
   //   - If the word has no own exampleIds → delete the word entirely.
+  // Sync segment word-ID links for the given example sentence IDs.
+  // For each example, looks up all segment texts in word_index and writes any
+  // missing seg.id fields plus appearsInIds back-references.
+  fastify.post<{ Params: { language: string }; Body: { exampleIds: string[] } }>(
+    "/:language/sync-segment-links",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["exampleIds"],
+          properties: { exampleIds: { type: "array", items: { type: "string" } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { language } = request.params;
+      const { exampleIds } = request.body;
+      if (!Array.isArray(exampleIds) || exampleIds.length === 0) {
+        return reply.badRequest("exampleIds must be a non-empty array");
+      }
+      await Promise.all(exampleIds.map((id) => updateSegmentWordLinks(id, language)));
+      return reply.status(200).send({ ok: true });
+    }
+  );
+
   //   - Otherwise → clear the segment's `id` on that example and remove the
   //     exampleId from the word's appearsInIds.
   fastify.post<{

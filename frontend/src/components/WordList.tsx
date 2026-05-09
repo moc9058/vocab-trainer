@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord } from "../api/vocab";
+import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks } from "../api/vocab";
 import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
@@ -42,6 +42,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [existingTerms, setExistingTerms] = useState<Map<string, string>>(new Map());
+  const [checkingTerms, setCheckingTerms] = useState(false);
   const [busySegments, setBusySegments] = useState<Set<string>>(new Set());
   const [segmentFlags, setSegmentFlags] = useState<Map<string, boolean>>(new Map());
   const [editingExample, setEditingExample] = useState<string | null>(null);
@@ -70,13 +71,17 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const [segmentAddError, setSegmentAddError] = useState<string | null>(null);
   const segmentErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Expand and scroll to initialExpandId once the first fetch completes
+  // Expand and scroll to initialExpandId once the first fetch completes, then run
+  // the activation check so segment buttons reflect current DB state immediately.
   useEffect(() => {
     if (!initialExpandId || loading || initialExpandAppliedRef.current) return;
     initialExpandAppliedRef.current = true;
     setExpandedId(initialExpandId);
     scrollToExpandedRef.current = true;
-  }, [initialExpandId, loading]);
+    const word = result?.items.find((w) => w.id === initialExpandId);
+    if (word) refreshExistingTerms(word);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialExpandId, loading, result]);
 
   // Fetch flagged word IDs on mount
   useEffect(() => {
@@ -170,23 +175,61 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       ),
     ];
     if (allTexts.length === 0) {
+      setCheckingTerms(false);
       setExistingTerms(new Map());
       return;
     }
+    setCheckingTerms(true);
     const v = ++checkTermsVersionRef.current;
     checkTerms(language, allTexts)
       .then(({ existing }) => {
-        if (v === checkTermsVersionRef.current)
-          setExistingTerms(new Map(Object.entries(existing)));
+        if (v !== checkTermsVersionRef.current) return;
+        const termToId = new Map(Object.entries(existing));
+        setExistingTerms(termToId);
+        setCheckingTerms(false);
+
+        // Find examples whose segments are in word_index but seg.id is not yet set
+        const unlinkedExIds = word.examples
+          .filter((ex) => ex.id && ex.segments?.some((s) => !s.id && termToId.has(s.text)))
+          .map((ex) => ex.id!);
+
+        if (unlinkedExIds.length > 0) {
+          // Patch local state immediately so the link is visible without a refresh
+          setResult((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              items: prev.items.map((w) =>
+                w.id !== word.id ? w : {
+                  ...w,
+                  examples: w.examples.map((ex) => {
+                    if (!ex.id || !unlinkedExIds.includes(ex.id) || !ex.segments) return ex;
+                    return {
+                      ...ex,
+                      segments: ex.segments.map((s) =>
+                        !s.id && termToId.has(s.text) ? { ...s, id: termToId.get(s.text) } : s
+                      ),
+                    };
+                  }),
+                }
+              ),
+            };
+          });
+          // Persist the links to Firestore in background
+          syncSegmentLinks(language, unlinkedExIds).catch(() => {});
+        }
       })
       .catch(() => {
-        if (v === checkTermsVersionRef.current) setExistingTerms(new Map());
+        if (v !== checkTermsVersionRef.current) return;
+        setExistingTerms(new Map());
+        setCheckingTerms(false);
       });
   }
 
   function handleToggleExpand(word: Word) {
     if (expandedId === word.id) {
       setExpandedId(null);
+      setCheckingTerms(false);
       return;
     }
     if (editingExample) handleCancelEdit();
@@ -628,6 +671,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                         onDelete={() => setDeletingId(word.id)}
                         onToggleSegment={handleAddSegmentWord}
                         existingTerms={expandedId === word.id ? existingTerms : new Map()}
+                        checkingTerms={expandedId === word.id ? checkingTerms : false}
                         busySegments={expandedId === word.id ? busySegments : new Set()}
                         segmentFlags={segmentFlags}
                         onToggleSegmentFlag={(term) => setSegmentFlags((prev) => { const next = new Map(prev); next.set(term, !(prev.get(term) ?? true)); return next; })}
@@ -687,6 +731,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                           onDelete={() => setDeletingId(word.id)}
                           onToggleSegment={handleAddSegmentWord}
                           existingTerms={expandedId === word.id ? existingTerms : new Map()}
+                          checkingTerms={expandedId === word.id ? checkingTerms : false}
                           busySegments={expandedId === word.id ? busySegments : new Set()}
                           segmentFlags={segmentFlags}
                           onToggleSegmentFlag={(term) => setSegmentFlags((prev) => { const next = new Map(prev); next.set(term, !(prev.get(term) ?? true)); return next; })}
@@ -859,6 +904,7 @@ function WordCard({
   onDelete,
   onToggleSegment,
   existingTerms,
+  checkingTerms,
   busySegments,
   segmentFlags,
   onToggleSegmentFlag,
@@ -877,6 +923,7 @@ function WordCard({
   onDelete: () => void;
   onToggleSegment?: (term: string, sentence: string, translation: string) => void;
   existingTerms: Map<string, string>;
+  checkingTerms: boolean;
   busySegments: Set<string>;
   segmentFlags: Map<string, boolean>;
   onToggleSegmentFlag: (term: string) => void;
@@ -1120,23 +1167,25 @@ function WordCard({
                             {segs.map((seg, j) => {
                               const isSelf = seg.text === word.term;
                               const exists = isSelf || existingTerms.has(seg.text);
+                              const checking = checkingTerms && !isSelf && !exists;
                               const busy = busySegments.has(seg.text);
                               return (
                                 <div key={j} className="flex flex-col">
                                   <button
-                                    disabled={busy || exists}
-                                    onClick={(e) => { e.stopPropagation(); if (!exists) onToggleSegment(seg.text, ex.sentence, trans); }}
+                                    disabled={busy || exists || checking}
+                                    onClick={(e) => { e.stopPropagation(); if (!exists && !checking) onToggleSegment(seg.text, ex.sentence, trans); }}
                                     className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
                                       isSelf ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
                                       : exists ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
+                                      : checking ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
                                       : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
                                     }`}
                                   >
-                                    {exists ? "" : "+"} {seg.text}
+                                    {exists ? "✓" : checking ? "⋯" : "+"} {seg.text}
                                   </button>
                                   {anyDeactivated && (
                                     <div className="mt-0.5 h-3.5 flex justify-center items-center">
-                                      {!isSelf && !exists && (
+                                      {!isSelf && !exists && !checking && (
                                         <label className="flex items-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
                                           <input
                                             type="checkbox"
@@ -1234,6 +1283,7 @@ function WordRow({
   onDelete,
   onToggleSegment,
   existingTerms,
+  checkingTerms,
   busySegments,
   segmentFlags,
   onToggleSegmentFlag,
@@ -1252,6 +1302,7 @@ function WordRow({
   onDelete: () => void;
   onToggleSegment?: (term: string, sentence: string, translation: string) => void;
   existingTerms: Map<string, string>;
+  checkingTerms: boolean;
   busySegments: Set<string>;
   segmentFlags: Map<string, boolean>;
   onToggleSegmentFlag: (term: string) => void;
@@ -1485,23 +1536,25 @@ function WordRow({
                               {segs.map((seg, j) => {
                                 const isSelf = seg.text === word.term;
                                 const exists = isSelf || existingTerms.has(seg.text);
+                                const checking = checkingTerms && !isSelf && !exists;
                                 const busy = busySegments.has(seg.text);
                                 return (
                                   <div key={j} className="flex flex-col">
                                     <button
-                                      disabled={busy || exists}
-                                      onClick={(e) => { e.stopPropagation(); if (!exists) onToggleSegment(seg.text, ex.sentence, trans); }}
+                                      disabled={busy || exists || checking}
+                                      onClick={(e) => { e.stopPropagation(); if (!exists && !checking) onToggleSegment(seg.text, ex.sentence, trans); }}
                                       className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
                                         isSelf ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
                                         : exists ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
+                                        : checking ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
                                         : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
                                       }`}
                                     >
-                                      {exists ? "" : "+"} {seg.text}
+                                      {exists ? "✓" : checking ? "⋯" : "+"} {seg.text}
                                     </button>
                                     {anyDeactivated && (
                                       <div className="mt-0.5 h-3.5 flex justify-center items-center">
-                                        {!isSelf && !exists && (
+                                        {!isSelf && !exists && !checking && (
                                           <label className="flex items-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
                                             <input
                                               type="checkbox"
