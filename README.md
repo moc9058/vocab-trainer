@@ -396,6 +396,8 @@ vocab-trainer/
 
 For Chinese examples, `examples[].segments` are preserved from the previously stored version of the word whenever the example sentence text is unchanged. Clients (such as `WordFormModal`, which doesn't carry segments through its form state) therefore do not need to round-trip segments — only sentences whose text actually changed will lose their pinyin segments and need to be re-segmented separately. When the request explicitly includes segments (e.g. from the segment editor), any segment missing an `id` is automatically looked up in `word_index` and linked to the matching word if one exists.
 
+Brand-new example sentences added without a translation trigger an LLM call (MINI model) to generate multi-language translations before the word document is updated. Existing example sentences that are dedup-matched also have their translations upgraded: if the incoming multi-language translation contains language keys absent from the stored translation, the two objects are merged (existing non-empty values take priority).
+
 #### `DELETE /api/vocab/:language/:wordId` — Delete word
 
 **Response:** `204 No Content`

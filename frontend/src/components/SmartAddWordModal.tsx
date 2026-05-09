@@ -4,6 +4,7 @@ import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP, urlLanguageToIsoCode } from "../settings/defaults";
 import { smartAddWord, lookupWord } from "../api/vocab";
 import { displayTranslation, type Word } from "../types";
+import { useSegmentChecks } from "../hooks/useSegmentChecks";
 
 interface Prefill {
   term: string;
@@ -85,6 +86,24 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   const [success, setSuccess] = useState(false);
   const [generatedWords, setGeneratedWords] = useState<Word[]>([]);
   const prevExamplesLengthRef = useRef(0);
+
+  const segmentTexts = useMemo(() => {
+    if (wordLanguage !== "chinese") return [];
+    const texts = new Set<string>();
+    for (const ex of examples) {
+      if (ex.sentence && /[\s　]/.test(ex.sentence)) {
+        for (const m of ex.sentence.matchAll(/([\p{Script=Han}a-zA-Z]+)/gu)) {
+          const text = m[1];
+          if (text.trim().length > 0 && !/^\p{P}+$/u.test(text)) texts.add(text);
+        }
+      }
+    }
+    return [...texts];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examples, wordLanguage]);
+
+  const { existingTerms, flaggedIds, checkingTerms, busySegments, addSegment, flagExistingSegment, addError } =
+    useSegmentChecks(wordLanguage, segmentTexts);
   const lastExampleRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -296,9 +315,9 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                   <button
                     type="button"
                     onClick={() => { onJumpToWord(existingWord.id, term.trim()); onClose(); }}
-                    className="underline hover:text-amber-300 cursor-pointer"
+                    className="rounded-md border border-amber-400 bg-amber-500/20 px-2.5 py-1 text-xs text-amber-300 hover:bg-amber-500/30 cursor-pointer"
                   >
-                    Jump to word →
+                    Edit word →
                   </button>
                 )}
               </p>
@@ -463,30 +482,88 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                   const chips = getChipInfo(ex.sentence);
                   if (chips.length < 2) return null;
                   return (
-                    <div className="flex flex-wrap items-center gap-1">
-                      {chips.map((chip, pi) => (
-                        <Fragment key={pi}>
-                          <span className="rounded bg-blue-900/40 px-1.5 py-0.5 text-xs text-blue-200">{chip.text}</span>
-                          {pi < chips.length - 1 && (
-                            chips[pi + 1].sepIsSpaceOnly ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const next = [...examples];
-                                  next[i] = { ...next[i], sentence: removeSepAt(ex.sentence, pi) };
-                                  setExamples(next);
-                                }}
-                                className="px-0.5 text-xs leading-none text-gray-500 hover:text-red-400"
-                                title="Remove segment boundary"
+                    <div className="flex flex-wrap items-start gap-1">
+                      {chips.map((chip, pi) => {
+                        const isPunct = /^\p{P}+$/u.test(chip.text) || chip.text.trim().length === 0;
+                        const exists = !isPunct && existingTerms.has(chip.text);
+                        const wordId = existingTerms.get(chip.text);
+                        const isFlagged = wordId ? flaggedIds.has(wordId) : false;
+                        const checking = !isPunct && checkingTerms && !exists;
+                        const busy = busySegments.has(chip.text);
+                        const isSelf = !isPunct && !exists && !!term.trim() && chip.text === term.trim();
+                        return (
+                          <Fragment key={pi}>
+                            <div className="flex flex-col items-center gap-0.5">
+                              <span
+                                className={`rounded px-1.5 py-0.5 text-xs ${
+                                  isPunct
+                                    ? "text-gray-600"
+                                    : exists && isFlagged
+                                    ? "border border-green-500/40 bg-green-900/20 text-green-300"
+                                    : exists
+                                    ? "border border-blue-500/40 bg-blue-900/20 text-blue-300"
+                                    : checking
+                                    ? "border border-amber-500/40 bg-amber-900/20 text-amber-300"
+                                    : "border border-gray-500/40 bg-gray-800/30 text-gray-300"
+                                } ${busy ? "opacity-50" : ""}`}
                               >
-                                ╱
-                              </button>
-                            ) : (
-                              <span className="text-xs text-gray-600">·</span>
-                            )
-                          )}
-                        </Fragment>
-                      ))}
+                                {exists ? "✓ " : checking ? "⋯ " : ""}{chip.text}
+                              </span>
+                              {!isPunct && !checking && !exists && !isSelf && (
+                                <div className="flex gap-0.5">
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => addSegment(chip.text, ex.sentence, ex.translation, false)}
+                                    className="rounded border border-blue-500/40 bg-blue-900/20 px-2 py-0.5 text-xs text-blue-300 hover:bg-blue-800/40 disabled:opacity-40"
+                                    title={`Add "${chip.text}" to DB`}
+                                  >
+                                    add
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={busy}
+                                    onClick={() => addSegment(chip.text, ex.sentence, ex.translation, true)}
+                                    className="rounded border border-amber-500/40 bg-amber-900/20 px-2 py-0.5 text-xs text-amber-300 hover:bg-amber-800/40 disabled:opacity-40"
+                                    title={`Add "${chip.text}" to DB and flag for review`}
+                                  >
+                                    +flag
+                                  </button>
+                                </div>
+                              )}
+                              {!isPunct && exists && !isFlagged && (
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => flagExistingSegment(chip.text)}
+                                  className="rounded border border-amber-500/40 bg-amber-900/20 px-2 py-0.5 text-xs text-amber-300 hover:bg-amber-800/40 disabled:opacity-40"
+                                  title={`Flag "${chip.text}" for review`}
+                                >
+                                  flag
+                                </button>
+                              )}
+                            </div>
+                            {pi < chips.length - 1 && (
+                              chips[pi + 1].sepIsSpaceOnly ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next = [...examples];
+                                    next[i] = { ...next[i], sentence: removeSepAt(ex.sentence, pi) };
+                                    setExamples(next);
+                                  }}
+                                  className="self-start mt-0.5 px-0.5 text-xs leading-none text-gray-500 hover:text-red-400"
+                                  title="Remove segment boundary"
+                                >
+                                  ╱
+                                </button>
+                              ) : (
+                                <span className="self-start mt-0.5 text-xs text-gray-600">·</span>
+                              )
+                            )}
+                          </Fragment>
+                        );
+                      })}
                     </div>
                   );
                 })()}
@@ -518,6 +595,10 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
             ))}
             <p className="text-xs text-gray-500">LLM will generate if empty</p>
           </div>
+
+          {addError && (
+            <p className="text-xs text-red-400">{addError}</p>
+          )}
 
           {/* Flag for review */}
           <label className="flex items-center gap-2 cursor-pointer">

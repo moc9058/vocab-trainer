@@ -68,6 +68,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const silentRefreshRef = useRef(false);
   const checkTermsVersionRef = useRef(0);
   const initialExpandAppliedRef = useRef(false);
+  const pendingEditIdRef = useRef<string | null>(null);
   const [segmentAddError, setSegmentAddError] = useState<string | null>(null);
   const segmentErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -82,6 +83,17 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     if (word) refreshExistingTerms(word);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialExpandId, loading, result]);
+
+  // Open WordFormModal for a word pending edit (set by onJumpToWord) once fetch completes.
+  useEffect(() => {
+    if (!pendingEditIdRef.current || loading) return;
+    const word = result?.items.find((w) => w.id === pendingEditIdRef.current);
+    if (word) {
+      pendingEditIdRef.current = null;
+      setEditingWord(word);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, loading]);
 
   // Fetch flagged word IDs on mount and whenever the word queue flushes
   useEffect(() => {
@@ -811,6 +823,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
             setPage(1);
             setExpandedId(wordId);
             scrollToExpandedRef.current = true;
+            pendingEditIdRef.current = wordId;
           }}
           onClose={() => setShowSmartAdd(false)}
         />
