@@ -557,7 +557,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
           newSentence: string;
           userSplits?: string[];
         }> = [];
-        // New example docs that were created without a translation.
+        // Examples (new or existing) that have no translation and need LLM generation.
         const needsTranslation: Array<{ exampleId: string; sentence: string }> = [];
 
         for (const ex of body.examples) {
@@ -621,6 +621,21 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             }
             if (JSON.stringify(target.translation) !== JSON.stringify(ex.translation)) {
               updates.translation = ex.translation;
+            }
+            // If neither the stored nor the incoming translation has content, queue
+            // this example for LLM translation generation (same as the brand-new path).
+            const targetHasTrans =
+              target.translation != null &&
+              (typeof target.translation === "string"
+                ? (target.translation as string).trim() !== ""
+                : Object.keys(target.translation as Record<string, string>).length > 0);
+            const exHasTrans =
+              ex.translation != null &&
+              (typeof ex.translation === "string"
+                ? (ex.translation as string).trim() !== ""
+                : Object.keys(ex.translation as Record<string, string>).length > 0);
+            if (!targetHasTrans && !exHasTrans) {
+              needsTranslation.push({ exampleId: target.id, sentence: target.sentence });
             }
             if (hasIncomingSegs) {
               await reconcileIncomingSegments(target.segments, ex.segments!);
@@ -766,7 +781,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
           }
         }
 
-        // --- Generate missing translations for brand-new examples ---
+        // --- Generate missing translations (brand-new or existing without translation) ---
         if (needsTranslation.length > 0) {
           const sourceLangCode = LANGUAGE_TO_ISO[language];
           const translLangs = (ALL_DEFINITION_LANGUAGES as readonly string[]).filter(
