@@ -83,12 +83,13 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialExpandId, loading, result]);
 
-  // Fetch flagged word IDs on mount
+  // Fetch flagged word IDs on mount and whenever the word queue flushes
   useEffect(() => {
     getFlaggedWords(language)
       .then(({ words }) => setFlaggedIds(new Set(words.map((w) => w.id))))
       .catch(() => setFlaggedIds(new Set()));
-  }, [language]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language, refreshSignal]);
 
   async function handleToggleFlag(wordId: string) {
     if (flaggedIds.has(wordId)) {
@@ -791,6 +792,9 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
             setExpandedId(word.id);
             scrollToExpandedRef.current = true;
             refreshExistingTerms(word);
+            getFlaggedWords(language)
+              .then(({ words: fw }) => setFlaggedIds(new Set(fw.map((w) => w.id))))
+              .catch(() => {});
           }}
           onQueue={onQueue}
           onJumpToWord={(wordId, term) => {
