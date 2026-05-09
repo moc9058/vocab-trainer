@@ -356,8 +356,9 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         const segments: Segment[] = [];
         for (const seg of ex.segments) {
           if (typeof seg?.text !== "string" || seg.text.length === 0) continue;
-          if (typeof seg.pinyin === "string" && seg.pinyin.length > 0) {
-            segments.push({ text: seg.text, transliteration: seg.pinyin });
+          const py = seg.pinyin ?? seg.transliteration;
+          if (typeof py === "string" && py.length > 0) {
+            segments.push({ text: seg.text, transliteration: py });
           } else {
             segments.push({ text: seg.text });
           }
@@ -421,17 +422,43 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
 
       const id = await getNextWordId(language);
 
-      // Create example sentence documents
+      // Create example sentence documents.
+      // Dedup reads run in parallel; ID allocations and writes remain sequential.
+      const existingLookups = await Promise.all(
+        examplesWithSegments.map((ex) => findExampleByText(language, ex.sentence))
+      );
       const exampleIds: string[] = [];
-      for (const ex of examplesWithSegments) {
-        // Check dedup: same sentence text shares one example_sentence doc
-        const existing = await findExampleByText(language, ex.sentence);
+      for (let i = 0; i < examplesWithSegments.length; i++) {
+        const ex = examplesWithSegments[i];
+        const existing = existingLookups[i];
         if (existing) {
-          // Overwrite segments with the later occurrence, then reconcile
-          // referenced words' appearsInIds (new ↔ old diff).
-          if (ex.segments) {
-            await updateExampleSentence(existing.id, { segments: ex.segments });
-            await reconcileExampleSegmentRefs(existing.id, existing.segments, ex.segments);
+          const updates: Partial<ExampleSentence> = {};
+
+          // Segments: only fill if the existing doc has none yet.
+          // Preserves manually-tuned or previously-generated segments.
+          if (ex.segments && !existing.segments?.length) {
+            updates.segments = ex.segments;
+          }
+
+          // Translation: fill missing or upgrade a legacy bare string.
+          // Ensures the LLM-generated multi-language translation is persisted
+          // when the sentence already exists (e.g. split-by-spaces case).
+          const newTransIsMultiLang =
+            ex.translation != null &&
+            typeof ex.translation === "object" &&
+            Object.keys(ex.translation).length > 0;
+          const existingTransIsMissing =
+            !existing.translation ||
+            (typeof existing.translation === "string" && !(existing.translation as string).trim());
+          if (newTransIsMultiLang && existingTransIsMissing) {
+            updates.translation = ex.translation;
+          }
+
+          if (Object.keys(updates).length > 0) {
+            await updateExampleSentence(existing.id, updates);
+            if (updates.segments) {
+              await reconcileExampleSegmentRefs(existing.id, existing.segments, updates.segments);
+            }
           }
           exampleIds.push(existing.id);
         } else {
@@ -444,7 +471,6 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             language,
           };
           await addExampleSentence(es);
-          // Register newly-referenced words in their appearsInIds.
           await reconcileExampleSegmentRefs(exId, [], ex.segments);
           exampleIds.push(exId);
         }
@@ -464,8 +490,11 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       // addWord now defaults appearsInIds to include own exampleIds.
       await addWord(language, word, { exampleIds });
 
-      // Reverse-link: find existing example sentences where this word appears as a segment
-      await linkWordToExistingExamples(language, id, merged.term);
+      // Reverse-link: find existing example sentences where this word appears as a segment.
+      // Run fire-and-forget so the 201 response is not blocked by the full collection scan.
+      linkWordToExistingExamples(language, id, merged.term).catch((e) =>
+        fastify.log.error({ err: e, wordId: id, term: merged.term }, "linkWordToExistingExamples failed")
+      );
 
       if (body.flag !== false) {
         await flagWord(language, word.id);

@@ -731,6 +731,7 @@ export async function getAllExampleSentencesForLanguage(language: string): Promi
 export async function linkWordToExistingExamples(language: string, wordId: string, term: string): Promise<string[]> {
   const allEx = await getAllExampleSentencesForLanguage(language);
   const segmentMatched: string[] = [];
+  const updatePromises: Promise<void>[] = [];
   for (const es of allEx) {
     if (!es.segments) continue;
     let changed = false;
@@ -741,24 +742,25 @@ export async function linkWordToExistingExamples(language: string, wordId: strin
       }
     }
     if (changed) {
-      await updateExampleSentence(es.id, { segments: es.segments });
+      updatePromises.push(updateExampleSentence(es.id, { segments: es.segments }));
       segmentMatched.push(es.id);
     }
   }
+  await Promise.all(updatePromises);
 
   // Union the segment-matched IDs into appearsInIds atomically. The word's
   // own exampleIds are already included by `addWord` / `updateWord` at write
   // time, so there's no need to re-read them here. `arrayUnion` is atomic
   // and idempotent, so concurrent writes are not clobbered.
   if (segmentMatched.length > 0) {
-    try {
-      await words.doc(wordId).update({
-        appearsInIds: FieldValue.arrayUnion(...segmentMatched),
-      });
-    } catch (e: unknown) {
-      const code = (e as { code?: number | string }).code;
-      if (code !== 5 && code !== "not-found") throw e;
-    }
+    await Promise.all(
+      segmentMatched.map((esId) =>
+        words.doc(wordId).update({ appearsInIds: FieldValue.arrayUnion(esId) }).catch((e: unknown) => {
+          const code = (e as { code?: number | string }).code;
+          if (code !== 5 && code !== "not-found") throw e;
+        })
+      )
+    );
   }
   return segmentMatched;
 }

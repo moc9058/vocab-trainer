@@ -72,7 +72,7 @@ export function smartAddWord(
     transliteration?: string;
     definitions?: Meaning[];
     topics?: string[];
-    examples?: { sentence: string; translation: string; userSplits?: string[] }[];
+    examples?: { sentence: string; translation: string; userSplits?: string[]; segments?: { text: string; transliteration?: string; id?: string }[] }[];
     level?: string;
     flag?: boolean;
   }

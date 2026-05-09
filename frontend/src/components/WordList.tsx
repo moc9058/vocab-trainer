@@ -201,9 +201,12 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     setBusySegments((prev) => new Set(prev).add(term));
     try {
       const flag = segmentFlags.get(term) ?? true;
+      const parentEx = result?.items
+        .flatMap((w) => w.examples)
+        .find((ex) => ex.sentence === sentence);
       const { generatedWords: gw, ...word } = await smartAddWord(language, {
         term,
-        examples: [{ sentence, translation }],
+        examples: [{ sentence, translation, segments: parentEx?.segments }],
         flag,
       });
       setExistingTerms((prev) => new Map(prev).set(term, word.id));
@@ -212,8 +215,25 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       }
       setResult((prev) => {
         if (!prev) return prev;
-        const newItems = [word, ...(gw ?? []), ...prev.items];
-        return { ...prev, items: newItems, total: prev.total + 1 + (gw?.length ?? 0) };
+        const withNew = [word, ...(gw ?? []), ...prev.items];
+        // Patch seg.id on the parent word's matching example so the linked state
+        // is visible immediately without a page refresh.
+        const patched = withNew.map((w) => {
+          if (w.id !== expandedId) return w;
+          return {
+            ...w,
+            examples: w.examples.map((ex) => {
+              if (ex.sentence !== sentence || !ex.segments) return ex;
+              return {
+                ...ex,
+                segments: ex.segments.map((s) =>
+                  s.text === term && !s.id ? { ...s, id: word.id } : s
+                ),
+              };
+            }),
+          };
+        });
+        return { ...prev, items: patched, total: prev.total + 1 + (gw?.length ?? 0) };
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
