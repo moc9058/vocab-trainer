@@ -5,7 +5,6 @@ import { uiLanguages } from "../i18n/translations";
 import { useSettings } from "../settings/context";
 import SettingsModal from "./SettingsModal";
 import { getCurrentSession, startQuiz } from "../api/quiz";
-import { getFilters } from "../api/vocab";
 import { startGrammarQuiz, getCurrentGrammarSession } from "../api/grammar";
 import EmptyState from "./EmptyState";
 import QuizTaking from "./QuizTaking";
@@ -18,7 +17,6 @@ import SmartAddWordModal from "./SmartAddWordModal";
 import GrammarFormModal from "./GrammarFormModal";
 import TranslationView from "./TranslationView";
 import SpeakingWritingView from "./SpeakingWritingView";
-import LevelSelectModal from "./LevelSelectModal";
 import QuizFilterModal from "./QuizFilterModal";
 import { getTranslationHistory } from "../api/translation";
 import { getSpeakingWritingSession } from "../api/speaking-writing";
@@ -41,11 +39,11 @@ export default function Dashboard() {
   const [activeQuiz, setActiveQuiz] = useState<QuizSession | null>(null);
   const [starting, setStarting] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
-  const [selectedLevels, setSelectedLevels] = useState<string[] | null>(null);
   const [resumePrompt, setResumePrompt] = useState<QuizSession | null>(null);
   const [pendingFilters, setPendingFilters] = useState<{
     topics: string[];
     categories: string[];
+    levels: string[];
   } | null>(null);
   // Grammar state
   const [activeGrammarQuiz, setActiveGrammarQuiz] = useState<GrammarQuizSession | null>(null);
@@ -115,25 +113,12 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recentResults]);
 
-  async function handleLanguageSelected(lang: string) {
+  function handleLanguageSelected(lang: string) {
     setSelectedLanguage(lang);
-    // Auto-skip level selection if language has no levels
-    const { levels } = await getFilters(lang);
-    if (levels.length === 0) {
-      setSelectedLevels([]);
-    }
   }
 
-  function handleLevelsSelected(levels: string[]) {
-    setSelectedLevels(levels);
-  }
-
-  function handleLevelBack() {
-    setSelectedLanguage(null);
-  }
-
-  async function handleFiltersSelected(filters: { topics: string[]; categories: string[] }) {
-    if (starting || !selectedLanguage || !selectedLevels) return;
+  async function handleFiltersSelected(filters: { topics: string[]; categories: string[]; levels: string[] }) {
+    if (starting || !selectedLanguage) return;
     setStarting(true);
     try {
       // Check for existing in-progress session
@@ -148,10 +133,9 @@ export default function Dashboard() {
         language: selectedLanguage,
         topics: filters.topics,
         categories: filters.categories,
-        levels: selectedLevels,
+        levels: filters.levels,
       });
       setSelectedLanguage(null);
-      setSelectedLevels(null);
       setActiveQuiz(session);
       navigate(`/${language}/quiz`);
     } catch (err) {
@@ -168,27 +152,24 @@ export default function Dashboard() {
       setResumePrompt(null);
       setPendingFilters(null);
       setSelectedLanguage(null);
-      setSelectedLevels(null);
       setStarting(false);
       navigate(`/${language}/quiz`);
     }
   }
 
   async function handleStartNew() {
-    if (!selectedLanguage || !selectedLevels || !pendingFilters) return;
+    if (!selectedLanguage || !pendingFilters) return;
     const lang = selectedLanguage;
-    const levels = selectedLevels;
     const filters = pendingFilters;
     setResumePrompt(null);
     setSelectedLanguage(null);
-    setSelectedLevels(null);
     setPendingFilters(null);
     try {
       const session = await startQuiz({
         language: lang,
         topics: filters.topics,
         categories: filters.categories,
-        levels,
+        levels: filters.levels,
       });
       setActiveQuiz(session);
       navigate(`/${language}/quiz`);
@@ -200,13 +181,8 @@ export default function Dashboard() {
     }
   }
 
-  function handleFilterBack() {
-    setSelectedLevels(null);
-  }
-
   function handleFilterClose() {
     setSelectedLanguage(null);
-    setSelectedLevels(null);
   }
 
   function handleQuizComplete() {
@@ -217,7 +193,6 @@ export default function Dashboard() {
   function goHome() {
     setActiveQuiz(null);
     setSelectedLanguage(null);
-    setSelectedLevels(null);
     setResumePrompt(null);
     setPendingFilters(null);
     setStarting(false);
@@ -366,19 +341,10 @@ export default function Dashboard() {
           onClose={() => setGrammarFormLanguage(null)}
         />
       )}
-      {selectedLanguage && !selectedLevels && !resumePrompt && (
-        <LevelSelectModal
-          language={selectedLanguage}
-          onSelect={handleLevelsSelected}
-          onBack={handleLevelBack}
-          onClose={handleFilterClose}
-        />
-      )}
-      {selectedLanguage && selectedLevels && !resumePrompt && (
+      {selectedLanguage && !resumePrompt && (
         <QuizFilterModal
           language={selectedLanguage}
           onStart={handleFiltersSelected}
-          onBack={handleFilterBack}
           onClose={handleFilterClose}
         />
       )}
