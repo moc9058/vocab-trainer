@@ -40,6 +40,7 @@ export interface QuizQuestion {
   transliteration?: string;
   examples?: Example[];
   userCorrect?: boolean;
+  hanjaReadings?: HanjaReading[];
 }
 
 export interface QuizSession {

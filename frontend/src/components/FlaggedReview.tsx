@@ -34,7 +34,7 @@ function TranslationDisplay({ translation }: { translation: string | Record<stri
 
 export default function FlaggedReview({ language, onBack }: Props) {
   const { t } = useI18n();
-  const { displayDefEntries } = useSettings();
+  const { settings, displayDefEntries } = useSettings();
   const [words, setWords] = useState<Word[]>([]);
   const [currentWord, setCurrentWord] = useState<Word | null>(null);
   const [showingAnswer, setShowingAnswer] = useState(false);
@@ -108,6 +108,35 @@ export default function FlaggedReview({ language, onBack }: Props) {
         </button>
       ) : (
         <>
+          {settings.showKoreanHanja && currentWord!.hanjaReadings && currentWord!.hanjaReadings.length > 0 && (
+            <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <div className="h-px flex-1 bg-amber-500/50"></div>
+                <span className="text-xs font-semibold text-amber-400">🀄 {t("sectionKoreanHanja")}</span>
+                <div className="h-px flex-1 bg-amber-500/50"></div>
+              </div>
+              <div className="flex flex-wrap justify-center gap-3">
+                {currentWord!.hanjaReadings.map((r, i) => (
+                  <div key={i} className="flex flex-col items-center rounded-lg bg-gray-800 px-3 py-2 text-center min-w-[56px]">
+                    <div className="flex items-baseline gap-1 text-base font-medium text-gray-100">
+                      <span>{r.simplifiedChar}</span>
+                      {r.simplifiedChar !== r.traditionalChar && (
+                        <>
+                          <span className="text-xs text-gray-500">→</span>
+                          <span className="text-amber-300">{r.traditionalChar}</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="mt-1 space-y-0.5">
+                      {r.hunEum.map((h, j) => (
+                        <p key={j} className="text-xs text-gray-400">{h}</p>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="text-center space-y-2">
             {(currentWord!.definitions ?? []).map((m, mi) => (
               <div key={mi}>

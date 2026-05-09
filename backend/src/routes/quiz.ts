@@ -67,6 +67,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         definitions: w.definitions,
         transliteration: w.transliteration,
         examples: w.examples,
+        ...(w.hanjaReadings ? { hanjaReadings: w.hanjaReadings } : {}),
       }));
 
       const session: QuizSession = {
@@ -139,6 +140,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
           transliteration: word?.transliteration,
           examples: word?.examples ?? [],
           ...(q.userCorrect !== undefined ? { userCorrect: q.userCorrect } : {}),
+          ...(word?.hanjaReadings ? { hanjaReadings: word.hanjaReadings } : {}),
         };
       });
 
