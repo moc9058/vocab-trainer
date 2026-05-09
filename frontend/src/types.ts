@@ -27,6 +27,12 @@ export interface Meaning {
   text: Record<string, string>;
 }
 
+export interface HanjaReading {
+  simplifiedChar: string;
+  traditionalChar: string;
+  hunEum: string[];
+}
+
 export interface QuizQuestion {
   wordId: string;
   term: string;
@@ -57,6 +63,7 @@ export interface Word {
   topics: string[];
   level?: string;
   notes?: string;
+  hanjaReadings?: HanjaReading[];
 }
 
 export interface PaginatedResult<T> {

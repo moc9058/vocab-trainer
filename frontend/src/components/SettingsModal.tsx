@@ -85,6 +85,7 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
   const [defaultTranslationTargets, setDefaultTranslationTargets] = useState<Set<string>>(
     new Set(settings.defaultTranslationTargetLanguages),
   );
+  const [showKoreanHanja, setShowKoreanHanja] = useState<boolean>(settings.showKoreanHanja);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -127,6 +128,7 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
         targetLangs.length > 0
           ? targetLangs
           : [order.find((c) => c !== defaultTranslationSource) ?? defaultTranslationSource],
+      showKoreanHanja,
     });
     onClose();
   }
@@ -141,6 +143,7 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
     setDefaultWritingUseCase(DEFAULT_SETTINGS.defaultWritingUseCase);
     setDefaultTranslationSource(DEFAULT_SETTINGS.defaultTranslationSourceLanguage);
     setDefaultTranslationTargets(new Set(DEFAULT_SETTINGS.defaultTranslationTargetLanguages));
+    setShowKoreanHanja(DEFAULT_SETTINGS.showKoreanHanja);
   }
 
   const supportedUiLanguages = new Set(uiLanguages as readonly string[]);
@@ -231,6 +234,22 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
               ))}
             </div>
           </section>
+
+          {/* Korean Hanja — Chinese only */}
+          {currentLanguageCode === "zh" && (
+            <section>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showKoreanHanja}
+                  onChange={(e) => setShowKoreanHanja(e.target.checked)}
+                  className="accent-blue-600"
+                />
+                <span className="text-sm font-medium text-gray-300">{t("settingsShowKoreanHanja")}</span>
+              </label>
+              <p className="mt-1 text-xs text-gray-400">{t("settingsShowKoreanHanjaHelp")}</p>
+            </section>
+          )}
         </div>
 
         {/* Correction Mode Section */}

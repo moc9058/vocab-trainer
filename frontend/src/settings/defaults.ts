@@ -29,4 +29,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultWritingUseCase: "academic",
   defaultTranslationSourceLanguage: "en",
   defaultTranslationTargetLanguages: ["ja"],
+  showKoreanHanja: true,
 };

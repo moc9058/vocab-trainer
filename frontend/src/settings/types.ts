@@ -15,4 +15,6 @@ export interface AppSettings {
   defaultTranslationSourceLanguage: string;
   /** ISO codes of the target languages pre-selected when opening the translation view. */
   defaultTranslationTargetLanguages: string[];
+  /** Whether to show Korean hanja (번체 + 훈음) in expanded Chinese word cards. */
+  showKoreanHanja: boolean;
 }

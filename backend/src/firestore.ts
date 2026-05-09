@@ -498,6 +498,7 @@ function docToWord(doc: FirebaseFirestore.DocumentSnapshot): WordRaw {
     topics: d.topics ?? [],
     level: d.level,
     notes: d.notes,
+    ...(d.hanjaReadings ? { hanjaReadings: d.hanjaReadings } : {}),
     // New format fields
     ...(isNewFormat ? { exampleIds: d.exampleIds, appearsInIds: d.appearsInIds ?? [] } : {}),
   };
