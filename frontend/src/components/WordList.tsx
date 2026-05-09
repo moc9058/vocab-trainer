@@ -1190,11 +1190,15 @@ function WordCard({
                                   {anyDeactivated && (
                                     <div className="mt-0.5 h-3.5 flex justify-center items-center">
                                       {!isSelf && !exists && !checking && (
-                                        <label className="flex items-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                                        <label
+                                          className={`flex items-center ${busy ? "cursor-default opacity-50" : "cursor-pointer"}`}
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
                                           <input
                                             type="checkbox"
                                             checked={segmentFlags.get(seg.text) ?? true}
                                             onChange={() => onToggleSegmentFlag(seg.text)}
+                                            disabled={busy}
                                             className="accent-amber-500 w-3 h-3"
                                             aria-label={`Flag ${seg.text} for review`}
                                           />
@@ -1559,11 +1563,15 @@ function WordRow({
                                     {anyDeactivated && (
                                       <div className="mt-0.5 h-3.5 flex justify-center items-center">
                                         {!isSelf && !exists && !checking && (
-                                          <label className="flex items-center cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                                          <label
+                                            className={`flex items-center ${busy ? "cursor-default opacity-50" : "cursor-pointer"}`}
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
                                             <input
                                               type="checkbox"
                                               checked={segmentFlags.get(seg.text) ?? true}
                                               onChange={() => onToggleSegmentFlag(seg.text)}
+                                              disabled={busy}
                                               className="accent-amber-500 w-3 h-3"
                                               aria-label={`Flag ${seg.text} for review`}
                                             />
