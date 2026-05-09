@@ -943,9 +943,9 @@ function WordCard({
               {word.definitions.length > 3 && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setShowAllDefs(!showAllDefs); }}
-                  className="mt-1.5 text-xs text-gray-400 hover:text-gray-200 underline"
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-md border border-gray-600 bg-gray-600/30 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-600/60 hover:text-gray-100 transition-colors"
                 >
-                  {showAllDefs ? "Show less" : `+ ${word.definitions.length - 3} more definitions`}
+                  {showAllDefs ? "▲ Show less" : `▼ Show ${word.definitions.length - 3} more definitions`}
                 </button>
               )}
             </>
@@ -1541,9 +1541,9 @@ function WordRow({
                 {word.examples.length > 3 && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setShowAllExamples(!showAllExamples); }}
-                    className="mt-1.5 text-xs text-gray-400 hover:text-gray-200 underline"
+                    className="mt-2 w-full flex items-center justify-center gap-1.5 rounded-md border border-gray-600 bg-gray-600/30 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-600/60 hover:text-gray-100 transition-colors"
                   >
-                    {showAllExamples ? "Show less" : `+ ${word.examples.length - 3} more examples`}
+                    {showAllExamples ? "▲ Show less" : `▼ Show ${word.examples.length - 3} more examples`}
                   </button>
                 )}
               </div>
