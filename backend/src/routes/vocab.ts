@@ -258,7 +258,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       userInput.topics = (body.topics && body.topics.length > 0)
         ? body.topics : null;
       userInput.examples = (body.examples && body.examples.length > 0)
-        ? body.examples : null;
+        ? body.examples.map(({ sentence, translation }) => ({ sentence, translation })) : null;
       if (langLevels) {
         userInput.level = body.level || null;
       }
