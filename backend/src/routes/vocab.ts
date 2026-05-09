@@ -441,18 +441,31 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             updates.segments = ex.segments;
           }
 
-          // Translation: fill missing or upgrade a legacy bare string.
-          // Ensures the LLM-generated multi-language translation is persisted
-          // when the sentence already exists (e.g. split-by-spaces case).
+          // Translation: fill missing, upgrade a legacy bare string, or add
+          // language keys absent from the existing multi-lang object.
+          const newTrans = ex.translation as Record<string, string> | null | undefined;
           const newTransIsMultiLang =
-            ex.translation != null &&
-            typeof ex.translation === "object" &&
-            Object.keys(ex.translation).length > 0;
-          const existingTransIsMissing =
-            !existing.translation ||
-            (typeof existing.translation === "string" && !(existing.translation as string).trim());
-          if (newTransIsMultiLang && existingTransIsMissing) {
-            updates.translation = ex.translation;
+            newTrans != null &&
+            typeof newTrans === "object" &&
+            Object.keys(newTrans).length > 0;
+          if (newTransIsMultiLang) {
+            const existingTrans = existing.translation;
+            const existingIsLegacyString = typeof existingTrans === "string";
+            const existingObj: Record<string, string> =
+              !existingIsLegacyString && existingTrans != null
+                ? (existingTrans as Record<string, string>)
+                : {};
+            const existingHasAllKeys = Object.keys(newTrans).every(
+              (k) => k in existingObj && existingObj[k]?.trim()
+            );
+            if (!existingHasAllKeys) {
+              // Merge: prefer existing non-empty values, fill gaps from LLM.
+              const merged: Record<string, string> = { ...newTrans };
+              for (const [k, v] of Object.entries(existingObj)) {
+                if (v && v.trim()) merged[k] = v;
+              }
+              updates.translation = merged;
+            }
           }
 
           if (Object.keys(updates).length > 0) {
@@ -544,6 +557,8 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
           newSentence: string;
           userSplits?: string[];
         }> = [];
+        // New example docs that were created without a translation.
+        const needsTranslation: Array<{ exampleId: string; sentence: string }> = [];
 
         for (const ex of body.examples) {
           // Only treat segments as "being edited" if the frontend explicitly
@@ -665,6 +680,16 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             await addExampleSentence(es);
             await reconcileExampleSegmentRefs(newId, [], ex.segments);
             newExampleIds.push(newId);
+            // Queue for LLM translation if the frontend sent no translation.
+            const exTranslation = ex.translation;
+            const hasTrans =
+              exTranslation != null &&
+              (typeof exTranslation === "string"
+                ? exTranslation.trim() !== ""
+                : Object.keys(exTranslation).length > 0);
+            if (!hasTrans) {
+              needsTranslation.push({ exampleId: newId, sentence: ex.sentence });
+            }
             if (isChinese && !hasIncomingSegs) {
               needsResegment.push({
                 target: { ...es },
@@ -737,6 +762,53 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             await reconcileExampleSegmentRefs(exampleId, target.segments, newSegs);
             for (const dropped of droppedSegmentWordIds(target.segments, newSegs)) {
               maybeOrphaned.add(dropped);
+            }
+          }
+        }
+
+        // --- Generate missing translations for brand-new examples ---
+        if (needsTranslation.length > 0) {
+          const sourceLangCode = LANGUAGE_TO_ISO[language];
+          const translLangs = (ALL_DEFINITION_LANGUAGES as readonly string[]).filter(
+            (l) => l !== sourceLangCode
+          );
+          if (translLangs.length > 0) {
+            const langSpec = translLangs.map((l) => `"${l}": "..."`).join(", ");
+            const translSchema = {
+              name: "example_translations",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  translations: {
+                    type: "array",
+                    items: {
+                      type: "object",
+                      properties: Object.fromEntries(translLangs.map((l) => [l, { type: "string" }])),
+                      required: translLangs,
+                      additionalProperties: false,
+                    },
+                  },
+                },
+                required: ["translations"],
+                additionalProperties: false,
+              },
+            };
+            const systemPrompt = `You are a translation assistant. For each input sentence, provide a translation object with keys: { ${langSpec} }. Return an array with one object per sentence, in the same order as the input.`;
+            const userPrompt = JSON.stringify(needsTranslation.map((n) => n.sentence));
+            try {
+              const raw = await callLLMWithSchema(systemPrompt, userPrompt, translSchema, "vocab/translate-examples");
+              const result = JSON.parse(stripMarkdownFences(raw)) as { translations: Record<string, string>[] };
+              const translArr = result.translations ?? [];
+              for (let ti = 0; ti < needsTranslation.length; ti++) {
+                const trans = translArr[ti];
+                if (trans && Object.keys(trans).length > 0) {
+                  await updateExampleSentence(needsTranslation[ti].exampleId, { translation: trans });
+                }
+              }
+            } catch (err) {
+              fastify.log.error({ err }, "Failed to generate example translations");
+              // Non-fatal: examples are saved, just without translations
             }
           }
         }

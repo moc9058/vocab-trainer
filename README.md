@@ -88,6 +88,14 @@ cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --archives
 
 Uploads `backend/DB/backup/` and `backend/DB/original/` archive data to Firestore collections `archive_backups` and `archive_originals`. Large files (>1MB) are automatically chunked into 500-item subcollection documents.
 
+### Backfill Missing Segments and Translations
+
+```bash
+cd backend && npx tsx scripts/backfill-missing-segments.ts [--language=<lang>] [--dry-run] [--chunk=<n>]
+```
+
+Generates pinyin segments and multi-language translations for example sentences that are missing them. Default chunk size is 50 (segments) / 20 (translations). Use `--dry-run` to preview without writing.
+
 This will:
 1. Build and push backend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-backend/backend`
 2. Deploy backend to Cloud Run
