@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { smartAddWord } from "../api/vocab";
 
 type SmartAddPayload = Parameters<typeof smartAddWord>[1];
@@ -63,8 +63,16 @@ export function useWordQueue() {
 
   const clearResults = useCallback(() => setRecentResults([]), []);
 
+  const pendingTerms = useMemo(() => {
+    const s = new Set<string>();
+    if (processing) s.add(processing.term);
+    for (const item of queue) s.add(item.term);
+    return s;
+  }, [processing, queue]);
+
   return {
     enqueue,
+    pendingTerms,
     queueLength: queue.length,
     processingTerm: processing?.term ?? null,
     recentResults,

@@ -8,11 +8,16 @@ interface MeaningFormState {
   translations: { lang: string; text: string }[];
 }
 
+type SmartAddPayload = Parameters<typeof smartAddWord>[1];
+
 interface Props {
   language: string;
   word?: Word;
   onSave: (word: Omit<Word, "id"> & { id?: string }) => Promise<void>;
   onClose: () => void;
+  onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
+  pendingTerms?: Set<string>;
+  refreshSignal?: number;
 }
 
 interface ExampleFormState {
@@ -23,7 +28,7 @@ interface ExampleFormState {
   locked: boolean;
 }
 
-export default function WordFormModal({ language, word, onSave, onClose }: Props) {
+export default function WordFormModal({ language, word, onSave, onClose, onQueue, pendingTerms, refreshSignal }: Props) {
   const { t } = useI18n();
   const [term, setTerm] = useState(word?.term ?? "");
   const [transliteration, setTransliteration] = useState(word?.transliteration ?? "");
@@ -108,10 +113,18 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
         });
     }, 300);
     return () => clearTimeout(timer);
-  }, [examples, language]);
+  }, [examples, language, refreshSignal]);
 
   async function handleAddSegment(chipText: string, sentence: string, translation: string) {
-    if (existingTerms.has(chipText)) return;
+    if (existingTerms.has(chipText) || pendingTerms?.has(chipText)) return;
+    if (onQueue) {
+      onQueue(chipText, language, {
+        term: chipText,
+        examples: [{ sentence: sentence.replace(/[\s　]+/g, ""), translation }],
+        flag: segmentFlags.get(chipText) ?? true,
+      });
+      return;
+    }
     segmentVersionRef.current++;
     setBusySegments((prev) => new Set(prev).add(chipText));
     try {
@@ -422,7 +435,8 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
                       c.text.trim().length > 0 &&
                       !/^\p{P}+$/u.test(c.text) &&
                       !(term.trim() && c.text === term.trim()) &&
-                      !existingTerms.has(c.text)
+                      !existingTerms.has(c.text) &&
+                      !pendingTerms?.has(c.text)
                   );
                   return (
                     <div className="mb-1 flex flex-wrap items-start gap-1">
@@ -430,28 +444,30 @@ export default function WordFormModal({ language, word, onSave, onClose }: Props
                         const isPunct = /^\p{P}+$/u.test(chip.text) || chip.text.trim().length === 0;
                         const isSelf  = !isPunct && !!term.trim() && chip.text === term.trim();
                         const exists  = isSelf || (!isPunct && existingTerms.has(chip.text));
-                        const checking = !isPunct && !isSelf && !existingTerms.has(chip.text) && checkingTerms;
+                        const queued  = !isPunct && !isSelf && !exists && !!pendingTerms?.has(chip.text);
+                        const checking = !isPunct && !isSelf && !exists && !queued && checkingTerms;
                         const busy    = busySegments.has(chip.text);
                         return (
                           <Fragment key={pi}>
                             <div className="flex flex-col">
                               <button
                                 type="button"
-                                disabled={busy || exists || checking || isPunct}
-                                onClick={() => { if (!exists && !checking && !isPunct) handleAddSegment(chip.text, ex.sentence, ex.translation); }}
+                                disabled={busy || queued || exists || checking || isPunct}
+                                onClick={() => { if (!exists && !queued && !checking && !isPunct) handleAddSegment(chip.text, ex.sentence, ex.translation); }}
                                 className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
                                   isPunct   ? "text-gray-600 cursor-default"
                                   : isSelf  ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
                                   : exists  ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
+                                  : queued  ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
                                   : checking? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
                                   : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
                                 }`}
                               >
-                                {isPunct || isSelf ? chip.text : exists ? `✓ ${chip.text}` : checking ? `⋯ ${chip.text}` : `+ ${chip.text}`}
+                                {isPunct || isSelf ? chip.text : exists ? `✓ ${chip.text}` : queued ? `⋯ ${chip.text}` : checking ? `⋯ ${chip.text}` : `+ ${chip.text}`}
                               </button>
                               {anyDeactivated && (
                                 <div className="mt-0.5 h-3.5 flex justify-center items-center">
-                                  {!isPunct && !isSelf && !exists && !checking && (
+                                  {!isPunct && !isSelf && !exists && !queued && !checking && (
                                     <label
                                       className={`flex items-center ${busy ? "cursor-default opacity-50" : "cursor-pointer"}`}
                                       onClick={(e) => e.stopPropagation()}

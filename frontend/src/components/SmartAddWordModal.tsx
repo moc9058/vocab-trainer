@@ -28,6 +28,8 @@ interface Props {
   defaultLanguage?: string;
   onJumpToWord?: (wordId: string, term: string) => void;
   onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
+  pendingTerms?: Set<string>;
+  refreshSignal?: number;
 }
 
 // LANG_OPTIONS is now derived from settings in the component
@@ -55,7 +57,7 @@ const ALL_TOPICS = [
   "History", "Media & News", "Language Fundamentals",
 ] as const;
 
-export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage, onJumpToWord, onQueue }: Props) {
+export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage, onJumpToWord, onQueue, pendingTerms, refreshSignal }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const LANG_OPTIONS = useMemo(
@@ -152,10 +154,18 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
         });
     }, 300);
     return () => clearTimeout(timer);
-  }, [examples, wordLanguage]);
+  }, [examples, wordLanguage, refreshSignal]);
 
   async function handleAddSegment(chipText: string, sentence: string, translation: string) {
-    if (existingTerms.has(chipText)) return;
+    if (existingTerms.has(chipText) || pendingTerms?.has(chipText)) return;
+    if (onQueue) {
+      onQueue(chipText, wordLanguage, {
+        term: chipText,
+        examples: [{ sentence: sentence.replace(/[\s　]+/g, ""), translation }],
+        flag: segmentFlags.get(chipText) ?? true,
+      });
+      return;
+    }
     segmentVersionRef.current++;
     setBusySegments((prev) => new Set(prev).add(chipText));
     try {
@@ -251,7 +261,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!term.trim() || saving || queued) return;
+    if (!term.trim() || saving || queued || pendingTerms?.has(term.trim())) return;
 
     const language = wordLanguage;
     if (!language) return;
@@ -344,6 +354,9 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
             />
             {checking && (
               <p className="mt-1 text-xs text-gray-400">Checking…</p>
+            )}
+            {!checking && !existingWord && pendingTerms?.has(term.trim()) && (
+              <p className="mt-1 text-xs text-amber-400">⏳ Already queued</p>
             )}
             {!checking && existingWord && (
               <p className="mt-1 text-xs text-amber-400 flex items-center gap-1 flex-wrap">
@@ -530,34 +543,37 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                           c.text.trim().length > 0 &&
                           !/^\p{P}+$/u.test(c.text) &&
                           !(term.trim() && c.text === term.trim()) &&
-                          !existingTerms.has(c.text)
+                          !existingTerms.has(c.text) &&
+                          !pendingTerms?.has(c.text)
                       );
                       return chips.map((chip, pi) => {
                         const isPunct = /^\p{P}+$/u.test(chip.text) || chip.text.trim().length === 0;
                         const isSelf  = !isPunct && !!term.trim() && chip.text === term.trim();
                         const exists  = isSelf || (!isPunct && existingTerms.has(chip.text));
-                        const checking = !isPunct && !isSelf && !existingTerms.has(chip.text) && checkingTerms;
+                        const queued  = !isPunct && !isSelf && !exists && !!pendingTerms?.has(chip.text);
+                        const checking = !isPunct && !isSelf && !exists && !queued && checkingTerms;
                         const busy    = busySegments.has(chip.text);
                         return (
                           <Fragment key={pi}>
                             <div className="flex flex-col">
                               <button
                                 type="button"
-                                disabled={busy || exists || checking || isPunct}
-                                onClick={() => { if (!exists && !checking && !isPunct) handleAddSegment(chip.text, ex.sentence, ex.translation); }}
+                                disabled={busy || queued || exists || checking || isPunct}
+                                onClick={() => { if (!exists && !queued && !checking && !isPunct) handleAddSegment(chip.text, ex.sentence, ex.translation); }}
                                 className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
                                   isPunct   ? "text-gray-600 cursor-default"
                                   : isSelf  ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
                                   : exists  ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
+                                  : queued  ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
                                   : checking? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
                                   : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
                                 }`}
                               >
-                                {isPunct || isSelf ? chip.text : exists ? `✓ ${chip.text}` : checking ? `⋯ ${chip.text}` : `+ ${chip.text}`}
+                                {isPunct || isSelf ? chip.text : exists ? `✓ ${chip.text}` : queued ? `⋯ ${chip.text}` : checking ? `⋯ ${chip.text}` : `+ ${chip.text}`}
                               </button>
                               {anyDeactivated && (
                                 <div className="mt-0.5 h-3.5 flex justify-center items-center">
-                                  {!isPunct && !isSelf && !exists && !checking && (
+                                  {!isPunct && !isSelf && !exists && !queued && !checking && (
                                     <label
                                       className={`flex items-center ${busy ? "cursor-default opacity-50" : "cursor-pointer"}`}
                                       onClick={(e) => e.stopPropagation()}
@@ -660,7 +676,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
             </button>
             <button
               type="submit"
-              disabled={saving || queued || !term.trim()}
+              disabled={saving || queued || !term.trim() || !!pendingTerms?.has(term.trim())}
               className={`rounded-lg px-4 py-2 text-sm text-white disabled:opacity-50 ${queued ? "bg-green-600 hover:bg-green-500" : "bg-blue-600 hover:bg-blue-500"}`}
             >
               {saving ? t("addingWord") : queued ? "✓ Queued" : t("save")}

@@ -34,7 +34,7 @@ export default function Dashboard() {
   const subPath = location.pathname.replace(`/${language}`, "") || "/";
   const { t, language: uiLang, setLanguage } = useI18n();
   const { settings } = useSettings();
-  const { enqueue, queueLength, processingTerm, recentResults, clearResults, refreshSignal } = useWordQueue();
+  const { enqueue, pendingTerms, queueLength, processingTerm, recentResults, clearResults, refreshSignal } = useWordQueue();
   const [visibleToast, setVisibleToast] = useState<{ id: string; term: string; success: boolean; error?: string } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -352,6 +352,8 @@ export default function Dashboard() {
           onClose={() => setShowSmartAdd(false)}
           defaultLanguage={language}
           onQueue={enqueue}
+          pendingTerms={pendingTerms}
+          refreshSignal={refreshSignal}
           onJumpToWord={(id, term) => {
             setShowSmartAdd(false);
             navigate(`/${language}/browse`, { state: { expandId: id, search: term } });
@@ -444,6 +446,7 @@ export default function Dashboard() {
             initialSearch={(location.state as { search?: string } | null)?.search}
             refreshSignal={refreshSignal}
             onQueue={enqueue}
+            pendingTerms={pendingTerms}
           />
         ) : subPath === "/flagged" ? (
           <FlaggedReview

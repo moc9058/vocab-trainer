@@ -14,7 +14,7 @@ type SmartAddPayload = {
   transliteration?: string;
   definitions?: { partOfSpeech: string; text: Record<string, string> }[];
   topics?: string[];
-  examples?: { sentence: string; translation: string }[];
+  examples?: { sentence: string; translation: string; userSplits?: string[]; segments?: { text: string; transliteration?: string; id?: string }[] }[];
   level?: string;
   flag?: boolean;
 };
@@ -26,9 +26,10 @@ interface Props {
   initialSearch?: string;
   refreshSignal?: number;
   onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
+  pendingTerms?: Set<string>;
 }
 
-export default function WordList({ language, onBack, initialExpandId, initialSearch, refreshSignal, onQueue }: Props) {
+export default function WordList({ language, onBack, initialExpandId, initialSearch, refreshSignal, onQueue, pendingTerms }: Props) {
   const { t } = useI18n();
   const currentIsoCode = urlLanguageToIsoCode(language) ?? language;
   const [result, setResult] = useState<PaginatedResult<Word> | null>(null);
@@ -255,7 +256,17 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   }
 
   async function handleAddSegmentWord(term: string, sentence: string, translation: string) {
-    if (existingTerms.has(term)) return;
+    if (existingTerms.has(term) || pendingTerms?.has(term)) return;
+    if (onQueue) {
+      const flag = segmentFlags.get(term) ?? true;
+      const parentEx = result?.items.flatMap((w) => w.examples).find((ex) => ex.sentence === sentence);
+      onQueue(term, language, {
+        term,
+        examples: [{ sentence, translation, segments: parentEx?.segments }],
+        flag,
+      });
+      return;
+    }
     checkTermsVersionRef.current++; // invalidate any in-flight checkTerms so it won't overwrite
     setBusySegments((prev) => new Set(prev).add(term));
     try {
@@ -524,6 +535,15 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSignal]);
 
+  // After a queued word finishes, re-check segment terms for the expanded word
+  // so queued chips flip to ✓ without a manual expand/collapse.
+  useEffect(() => {
+    if (refreshSignal === undefined || !expandedId) return;
+    const word = result?.items.find((w) => w.id === expandedId);
+    if (word) refreshExistingTerms(word);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
+
   // Reset page when filters change (skip initial mount)
   useEffect(() => {
     if (isInitialMount.current) {
@@ -689,6 +709,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                         existingTerms={expandedId === word.id ? existingTerms : new Map()}
                         checkingTerms={expandedId === word.id ? checkingTerms : false}
                         busySegments={expandedId === word.id ? busySegments : new Set()}
+                        pendingTerms={pendingTerms}
                         segmentFlags={segmentFlags}
                         onToggleSegmentFlag={(term) => setSegmentFlags((prev) => { const next = new Map(prev); next.set(term, !(prev.get(term) ?? true)); return next; })}
                         editMode={{
@@ -749,6 +770,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                           existingTerms={expandedId === word.id ? existingTerms : new Map()}
                           checkingTerms={expandedId === word.id ? checkingTerms : false}
                           busySegments={expandedId === word.id ? busySegments : new Set()}
+                          pendingTerms={pendingTerms}
                           segmentFlags={segmentFlags}
                           onToggleSegmentFlag={(term) => setSegmentFlags((prev) => { const next = new Map(prev); next.set(term, !(prev.get(term) ?? true)); return next; })}
                           editMode={{
@@ -834,6 +856,9 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           word={editingWord}
           onSave={handleUpdateWord}
           onClose={() => setEditingWord(null)}
+          onQueue={onQueue}
+          pendingTerms={pendingTerms}
+          refreshSignal={refreshSignal}
         />
       )}
       {deletingId && (
@@ -926,6 +951,7 @@ function WordCard({
   existingTerms,
   checkingTerms,
   busySegments,
+  pendingTerms,
   segmentFlags,
   onToggleSegmentFlag,
   editMode,
@@ -945,6 +971,7 @@ function WordCard({
   existingTerms: Map<string, string>;
   checkingTerms: boolean;
   busySegments: Set<string>;
+  pendingTerms?: Set<string>;
   segmentFlags: Map<string, boolean>;
   onToggleSegmentFlag: (term: string) => void;
   editMode: {
@@ -1059,7 +1086,7 @@ function WordCard({
                 {(showAllExamples ? word.examples : word.examples.slice(0, 3)).map((ex, i) => {
                   const trans = typeof ex.translation === "string" ? ex.translation : displayTranslation(ex.translation);
                   const segs = (ex.segments ?? []).filter((s) => s.text.trim().length > 0 && !/^\p{P}+$/u.test(s.text));
-                  const anyDeactivated = segs.some((s) => s.text !== word.term && !existingTerms.has(s.text));
+                  const anyDeactivated = segs.some((s) => s.text !== word.term && !existingTerms.has(s.text) && !pendingTerms?.has(s.text));
                   const exEntries: [string, string][] = typeof ex.translation === "object" && ex.translation
                     ? displayExEntries(ex.translation).filter(([lang]) => lang !== currentIsoCode)
                     : typeof ex.translation === "string" && ex.translation
@@ -1187,25 +1214,27 @@ function WordCard({
                             {segs.map((seg, j) => {
                               const isSelf = seg.text === word.term;
                               const exists = isSelf || existingTerms.has(seg.text);
-                              const checking = checkingTerms && !isSelf && !exists;
+                              const queued = !isSelf && !exists && !!pendingTerms?.has(seg.text);
+                              const checking = checkingTerms && !isSelf && !exists && !queued;
                               const busy = busySegments.has(seg.text);
                               return (
                                 <div key={j} className="flex flex-col">
                                   <button
-                                    disabled={busy || exists || checking}
-                                    onClick={(e) => { e.stopPropagation(); if (!exists && !checking) onToggleSegment(seg.text, ex.sentence, trans); }}
+                                    disabled={busy || queued || exists || checking}
+                                    onClick={(e) => { e.stopPropagation(); if (!exists && !queued && !checking) onToggleSegment(seg.text, ex.sentence, trans); }}
                                     className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
                                       isSelf ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
                                       : exists ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
+                                      : queued ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
                                       : checking ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
                                       : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
                                     }`}
                                   >
-                                    {exists ? "✓" : checking ? "⋯" : "+"} {seg.text}
+                                    {exists ? "✓" : queued ? "⋯" : checking ? "⋯" : "+"} {seg.text}
                                   </button>
                                   {anyDeactivated && (
                                     <div className="mt-0.5 h-3.5 flex justify-center items-center">
-                                      {!isSelf && !exists && !checking && (
+                                      {!isSelf && !exists && !queued && !checking && (
                                         <label
                                           className={`flex items-center ${busy ? "cursor-default opacity-50" : "cursor-pointer"}`}
                                           onClick={(e) => e.stopPropagation()}
@@ -1309,6 +1338,7 @@ function WordRow({
   existingTerms,
   checkingTerms,
   busySegments,
+  pendingTerms,
   segmentFlags,
   onToggleSegmentFlag,
   editMode,
@@ -1328,6 +1358,7 @@ function WordRow({
   existingTerms: Map<string, string>;
   checkingTerms: boolean;
   busySegments: Set<string>;
+  pendingTerms?: Set<string>;
   segmentFlags: Map<string, boolean>;
   onToggleSegmentFlag: (term: string) => void;
   editMode: {
@@ -1432,7 +1463,7 @@ function WordRow({
                   {(showAllExamples ? word.examples : word.examples.slice(0, 3)).map((ex, i) => {
                     const trans = typeof ex.translation === "string" ? ex.translation : displayTranslation(ex.translation);
                     const segs = (ex.segments ?? []).filter((s) => s.text.trim().length > 0 && !/^\p{P}+$/u.test(s.text));
-                    const anyDeactivated = segs.some((s) => s.text !== word.term && !existingTerms.has(s.text));
+                    const anyDeactivated = segs.some((s) => s.text !== word.term && !existingTerms.has(s.text) && !pendingTerms?.has(s.text));
                     const exEntries: [string, string][] = typeof ex.translation === "object" && ex.translation
                       ? displayExEntries(ex.translation).filter(([lang]) => lang !== currentIsoCode)
                       : typeof ex.translation === "string" && ex.translation
@@ -1560,25 +1591,27 @@ function WordRow({
                               {segs.map((seg, j) => {
                                 const isSelf = seg.text === word.term;
                                 const exists = isSelf || existingTerms.has(seg.text);
-                                const checking = checkingTerms && !isSelf && !exists;
+                                const queued = !isSelf && !exists && !!pendingTerms?.has(seg.text);
+                                const checking = checkingTerms && !isSelf && !exists && !queued;
                                 const busy = busySegments.has(seg.text);
                                 return (
                                   <div key={j} className="flex flex-col">
                                     <button
-                                      disabled={busy || exists || checking}
-                                      onClick={(e) => { e.stopPropagation(); if (!exists && !checking) onToggleSegment(seg.text, ex.sentence, trans); }}
+                                      disabled={busy || queued || exists || checking}
+                                      onClick={(e) => { e.stopPropagation(); if (!exists && !queued && !checking) onToggleSegment(seg.text, ex.sentence, trans); }}
                                       className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
                                         isSelf ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
                                         : exists ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
+                                        : queued ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
                                         : checking ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
                                         : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
                                       }`}
                                     >
-                                      {exists ? "✓" : checking ? "⋯" : "+"} {seg.text}
+                                      {exists ? "✓" : queued ? "⋯" : checking ? "⋯" : "+"} {seg.text}
                                     </button>
                                     {anyDeactivated && (
                                       <div className="mt-0.5 h-3.5 flex justify-center items-center">
-                                        {!isSelf && !exists && !checking && (
+                                        {!isSelf && !exists && !queued && !checking && (
                                           <label
                                             className={`flex items-center ${busy ? "cursor-default opacity-50" : "cursor-pointer"}`}
                                             onClick={(e) => e.stopPropagation()}
