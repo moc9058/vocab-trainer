@@ -869,6 +869,8 @@ function WordCard({
 }) {
   const { t } = useI18n();
   const { displayDefEntries, displayExEntries } = useSettings();
+  const [showAllDefs, setShowAllDefs] = useState(false);
+  const [showAllExamples, setShowAllExamples] = useState(false);
   const defText = word.definitions.map((m) => displayDefEntries(m.text || {}).filter(([lang]) => lang !== currentIsoCode).map(([, v]) => v).join("; ")).join(" | ");
 
   return (
@@ -914,11 +916,13 @@ function WordCard({
         <div className="mt-2 rounded bg-gray-700 p-3">
           {word.definitions.length > 0 && (
             <>
-              <p className="mb-1 text-xs font-medium text-gray-400">
-                {t("definitions")}
-              </p>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="h-px flex-1 bg-indigo-500/50"></div>
+                <span className="text-xs font-semibold text-indigo-400">📖 {t("definitions")}</span>
+                <div className="h-px flex-1 bg-indigo-500/50"></div>
+              </div>
               <div className="space-y-2">
-                {word.definitions.map((m, i) => (
+                {(showAllDefs ? word.definitions : word.definitions.slice(0, 3)).map((m, i) => (
                   <div key={i} className={`${i > 0 ? "border-t border-gray-600 pt-2" : ""}`}>
                     {m.partOfSpeech && (
                       <span className="mr-2 rounded-full bg-gray-600 px-2 py-0.5 text-xs text-gray-300">
@@ -936,15 +940,25 @@ function WordCard({
                   </div>
                 ))}
               </div>
+              {word.definitions.length > 3 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowAllDefs(!showAllDefs); }}
+                  className="mt-1.5 text-xs text-gray-400 hover:text-gray-200 underline"
+                >
+                  {showAllDefs ? "Show less" : `+ ${word.definitions.length - 3} more definitions`}
+                </button>
+              )}
             </>
           )}
           {word.examples.length > 0 && (
             <div className={word.definitions.length > 0 ? "mt-3" : ""}>
-              <p className="mb-1 text-xs font-medium text-gray-400">
-                {t("examples")}
-              </p>
+              <div className="flex items-center gap-2 mb-3">
+                <div className="h-px flex-1 bg-teal-500/50"></div>
+                <span className="text-xs font-semibold text-teal-400">💬 {t("examples")}</span>
+                <div className="h-px flex-1 bg-teal-500/50"></div>
+              </div>
               <ul className="space-y-2">
-                {word.examples.map((ex, i) => {
+                {(showAllExamples ? word.examples : word.examples.slice(0, 3)).map((ex, i) => {
                   const trans = typeof ex.translation === "string" ? ex.translation : displayTranslation(ex.translation);
                   const segs = (ex.segments ?? []).filter((s) => s.text.trim().length > 0 && !/^\p{P}+$/u.test(s.text));
                   const exEntries: [string, string][] = typeof ex.translation === "object" && ex.translation
@@ -1145,6 +1159,14 @@ function WordCard({
                   );
                 })}
               </ul>
+              {word.examples.length > 3 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setShowAllExamples(!showAllExamples); }}
+                  className="mt-1.5 text-xs text-gray-400 hover:text-gray-200 underline"
+                >
+                  {showAllExamples ? "Show less" : `+ ${word.examples.length - 3} more examples`}
+                </button>
+              )}
             </div>
           )}
           {word.topics.length > 0 && (
@@ -1236,6 +1258,8 @@ function WordRow({
 }) {
   const { t } = useI18n();
   const { displayDefEntries, displayExEntries } = useSettings();
+  const [showAllDefs, setShowAllDefs] = useState(false);
+  const [showAllExamples, setShowAllExamples] = useState(false);
   const defText = word.definitions.map((m) => displayDefEntries(m.text || {}).filter(([lang]) => lang !== currentIsoCode).map(([, v]) => v).join("; ")).join(" | ");
 
   return (
@@ -1271,11 +1295,13 @@ function WordRow({
           <td colSpan={5} className="bg-gray-700 px-4 py-3">
             {word.definitions.length > 0 && (
               <>
-                <p className="mb-1 text-xs font-medium text-gray-400">
-                  {t("definitions")}
-                </p>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-px flex-1 bg-indigo-500/50"></div>
+                  <span className="text-xs font-semibold text-indigo-400">📖 {t("definitions")}</span>
+                  <div className="h-px flex-1 bg-indigo-500/50"></div>
+                </div>
                 <div className="space-y-2">
-                  {word.definitions.map((m, i) => (
+                  {(showAllDefs ? word.definitions : word.definitions.slice(0, 3)).map((m, i) => (
                     <div key={i} className={`${i > 0 ? "border-t border-gray-600 pt-2" : ""}`}>
                       {m.partOfSpeech && (
                         <span className="mr-2 rounded-full bg-gray-600 px-2 py-0.5 text-xs text-gray-300">
@@ -1293,15 +1319,25 @@ function WordRow({
                     </div>
                   ))}
                 </div>
+                {word.definitions.length > 3 && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowAllDefs(!showAllDefs); }}
+                    className="mt-1.5 text-xs text-gray-400 hover:text-gray-200 underline"
+                  >
+                    {showAllDefs ? "Show less" : `+ ${word.definitions.length - 3} more definitions`}
+                  </button>
+                )}
               </>
             )}
             {word.examples.length > 0 && (
               <div className={word.definitions.length > 0 ? "mt-3" : ""}>
-                <p className="mb-1 text-xs font-medium text-gray-400">
-                  {t("examples")}
-                </p>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-px flex-1 bg-teal-500/50"></div>
+                  <span className="text-xs font-semibold text-teal-400">💬 {t("examples")}</span>
+                  <div className="h-px flex-1 bg-teal-500/50"></div>
+                </div>
                 <ul className="space-y-2">
-                  {word.examples.map((ex, i) => {
+                  {(showAllExamples ? word.examples : word.examples.slice(0, 3)).map((ex, i) => {
                     const trans = typeof ex.translation === "string" ? ex.translation : displayTranslation(ex.translation);
                     const segs = (ex.segments ?? []).filter((s) => s.text.trim().length > 0 && !/^\p{P}+$/u.test(s.text));
                     const exEntries: [string, string][] = typeof ex.translation === "object" && ex.translation
@@ -1502,6 +1538,14 @@ function WordRow({
                     );
                   })}
                 </ul>
+                {word.examples.length > 3 && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setShowAllExamples(!showAllExamples); }}
+                    className="mt-1.5 text-xs text-gray-400 hover:text-gray-200 underline"
+                  >
+                    {showAllExamples ? "Show less" : `+ ${word.examples.length - 3} more examples`}
+                  </button>
+                )}
               </div>
             )}
             {word.topics.length > 0 && (

@@ -579,6 +579,14 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             }
             if (hasIncomingSegs) {
               await reconcileIncomingSegments(target.segments, ex.segments!);
+              const unlinked1 = [...new Set(ex.segments!.filter(s => !s.id && s.text?.trim()).map(s => s.text))];
+              if (unlinked1.length > 0) {
+                const hits1 = await lookupWordsByTerms(language, unlinked1);
+                const termToId1 = new Map(hits1.map(m => [m.term, m.id]));
+                for (const seg of ex.segments!) {
+                  if (!seg.id) { const wId = termToId1.get(seg.text); if (wId) seg.id = wId; }
+                }
+              }
               updates.segments = ex.segments;
             } else if (isChinese && (hasUserSplits || target.sentence !== ex.sentence)) {
               // Text changed or user supplied explicit splits.
@@ -608,6 +616,14 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             const newId = await getNextExampleId(language);
             if (hasIncomingSegs) {
               await reconcileIncomingSegments(undefined, ex.segments!);
+              const unlinked2 = [...new Set(ex.segments!.filter(s => !s.id && s.text?.trim()).map(s => s.text))];
+              if (unlinked2.length > 0) {
+                const hits2 = await lookupWordsByTerms(language, unlinked2);
+                const termToId2 = new Map(hits2.map(m => [m.term, m.id]));
+                for (const seg of ex.segments!) {
+                  if (!seg.id) { const wId = termToId2.get(seg.text); if (wId) seg.id = wId; }
+                }
+              }
             }
             const es: ExampleSentence = {
               id: newId,
