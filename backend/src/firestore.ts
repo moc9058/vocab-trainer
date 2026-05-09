@@ -1012,7 +1012,7 @@ export async function updateSegmentWordLinks(exampleId: string, language: string
   let changed = false;
   for (const seg of es.segments) {
     const wId = termToId.get(seg.text);
-    if (wId && seg.id !== wId) {
+    if (wId && !seg.id) {
       seg.id = wId;
       changed = true;
     }

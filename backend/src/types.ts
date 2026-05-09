@@ -24,6 +24,12 @@ export interface Meaning {
   text: Record<string, string>;
 }
 
+export interface HanjaReading {
+  simplifiedChar: string;
+  traditionalChar: string;
+  hunEum: string[];
+}
+
 export interface Word {
   id: string;
   term: string;
@@ -33,6 +39,7 @@ export interface Word {
   topics: Topic[];
   level?: string;
   notes?: string;
+  hanjaReadings?: HanjaReading[];
 }
 
 export const TOPICS = [
