@@ -22,6 +22,7 @@ export interface ExampleSentence {
 export interface Meaning {
   partOfSpeech: string;
   text: Record<string, string>;
+  pinyins?: string[];
 }
 
 export interface HanjaReading {

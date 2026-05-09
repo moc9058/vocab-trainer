@@ -6,6 +6,7 @@ import { displayTranslation, type Word, type Meaning } from "../types";
 interface MeaningFormState {
   partOfSpeech: string;
   translations: { lang: string; text: string }[];
+  pinyinsRaw?: string;
 }
 
 type SmartAddPayload = Parameters<typeof smartAddWord>[1];
@@ -37,9 +38,10 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
       return word.definitions.map((m) => ({
         partOfSpeech: m.partOfSpeech,
         translations: Object.entries(m.text || {}).map(([lang, text]) => ({ lang, text })),
+        pinyinsRaw: m.pinyins?.join(", ") ?? "",
       }));
     }
-    return [{ partOfSpeech: "", translations: [{ lang: "en", text: "" }] }];
+    return [{ partOfSpeech: "", translations: [{ lang: "en", text: "" }], pinyinsRaw: "" }];
   });
   const [topics, setTopics] = useState<Set<string>>(new Set(word?.topics ?? []));
   const [level, setLevel] = useState(word?.level ?? "");
@@ -151,7 +153,10 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
         if (tr.lang.trim() && tr.text.trim()) text[tr.lang.trim()] = tr.text.trim();
       }
       if (Object.keys(text).length > 0) {
-        result.push({ partOfSpeech: m.partOfSpeech.trim(), text });
+        const pinyins = m.pinyinsRaw
+          ? m.pinyinsRaw.split(",").map((s) => s.trim()).filter(Boolean)
+          : undefined;
+        result.push({ partOfSpeech: m.partOfSpeech.trim(), text, ...(pinyins?.length ? { pinyins } : {}) });
       }
     }
     return result;
@@ -289,7 +294,7 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
               <label className="text-sm text-gray-400">{t("definition")} *</label>
               <button
                 type="button"
-                onClick={() => setMeanings([...meanings, { partOfSpeech: "", translations: [{ lang: "en", text: "" }] }])}
+                onClick={() => setMeanings([...meanings, { partOfSpeech: "", translations: [{ lang: "en", text: "" }], pinyinsRaw: "" }])}
                 className="text-xs text-blue-400 hover:text-blue-300"
               >
                 + {t("addDefinition")}
@@ -315,6 +320,15 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
                     </button>
                   )}
                 </div>
+                {language === "chinese" && (
+                  <input
+                    type="text"
+                    value={meaning.pinyinsRaw ?? ""}
+                    onChange={(e) => updateMeaning(mi, { pinyinsRaw: e.target.value })}
+                    placeholder="Pinyin(s), comma-separated (e.g. hǎo, hào)"
+                    className="mb-2 w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                  />
+                )}
                 {meaning.translations.map((tr, ti) => (
                   <div key={ti} className="mb-1 flex gap-2">
                     <input

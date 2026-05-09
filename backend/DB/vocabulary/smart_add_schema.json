@@ -24,6 +24,11 @@
               "type": "string",
               "description": "Part of speech: noun, verb, adjective, adverb, preposition, conjunction, particle, measure word, pronoun, interjection, idiom, set phrase, phrasal verb, collocation, proverb, greeting"
             },
+            "pinyins": {
+              "type": "array",
+              "description": "Pronunciations for this specific definition (Chinese only; use multiple entries for polyphonic characters with distinct readings per meaning)",
+              "items": { "type": "string" }
+            },
             "text": {
               "type": "object",
               "description": "Definitions keyed by language code (e.g. { \"ja\": \"...\", \"en\": \"...\", \"ko\": \"...\" })",

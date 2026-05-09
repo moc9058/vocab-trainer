@@ -258,6 +258,12 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
             {(question!.definitions ?? []).map((m, mi) => (
               <div key={mi}>
                 {m.partOfSpeech && <p className="text-xs text-gray-500 italic">{m.partOfSpeech}</p>}
+                {(() => {
+                  const py = m.pinyins && m.pinyins.length > 0
+                    ? m.pinyins.join(" / ")
+                    : (mi === 0 ? question!.transliteration : undefined);
+                  return py ? <p className="text-sm text-gray-400">{py}</p> : null;
+                })()}
                 {displayDefEntries(m.text || {}).map(([lang, text]) => (
                   <p key={lang} className="text-xl text-green-400">
                     <span className="text-sm text-gray-400">{LANG_LABEL_MAP[lang] || lang}: </span>{text}
@@ -266,10 +272,6 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
               </div>
             ))}
           </div>
-
-          {question!.transliteration && (
-            <p className="text-xl text-gray-400">{question!.transliteration}</p>
-          )}
 
           {question!.examples && question!.examples.length > 0 && (
             <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">

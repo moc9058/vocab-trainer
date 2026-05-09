@@ -291,7 +291,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       // Merge: user-provided fields take priority; definitions & examples get supplemented
       const userDefs = body.definitions ?? [];
       const userDefCount = userDefs.length;
-      const llmDefs = (llmResult.definitions as { partOfSpeech: string; text: Record<string, string> }[]) || [];
+      const llmDefs = (llmResult.definitions as { partOfSpeech: string; text: Record<string, string>; pinyins?: string[] }[]) || [];
       const userExCount = body.examples?.length ?? 0;
       const llmExamples = (llmResult.examples as { sentence: string; translation: string }[]) || [];
 
@@ -305,9 +305,13 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         for (const [lang, text] of Object.entries(userDef.text ?? {})) {
           if (text && text.trim()) mergedText[lang] = text;
         }
+        const pinyins = (userDef as any).pinyins?.length > 0
+          ? (userDef as any).pinyins
+          : (llmDef?.pinyins && llmDef.pinyins.length > 0 ? llmDef.pinyins : undefined);
         return {
           partOfSpeech: userDef.partOfSpeech || llmDef?.partOfSpeech || "",
           text: mergedText,
+          ...(pinyins ? { pinyins } : {}),
         };
       });
 

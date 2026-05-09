@@ -465,7 +465,13 @@ export async function wordIdExists(wordId: string): Promise<boolean> {
 
 /** Normalize old format (definition + grammaticalCategory) to new (definitions: Meaning[]) */
 function normalizeDefinitions(d: Record<string, unknown>): Meaning[] {
-  if (Array.isArray(d.definitions)) return d.definitions as Meaning[];
+  if (Array.isArray(d.definitions)) {
+    return (d.definitions as any[]).map((def) => ({
+      partOfSpeech: def.partOfSpeech ?? "",
+      text: def.text ?? {},
+      ...(Array.isArray(def.pinyins) && def.pinyins.length > 0 ? { pinyins: def.pinyins } : {}),
+    }));
+  }
   // Backward compat: old format had definition: Record<string, string> + grammaticalCategory: string
   if (d.definition && typeof d.definition === "object") {
     return [{ partOfSpeech: (d.grammaticalCategory as string) || "", text: d.definition as Record<string, string> }];
@@ -943,13 +949,35 @@ export async function unlinkWordFromExampleSentence(
 }
 
 /**
+ * Return the canonical pinyin for a word to use as segment transliteration.
+ *
+ * Monophonic words (all definitions share one distinct pinyin, or none have a
+ * pinyins array) get a deterministic value. Polyphonic words (e.g. 得: de /
+ * děi / dé) return undefined so the caller keeps the LLM-generated contextual
+ * value rather than overriding with the wrong reading.
+ */
+export function getCanonicalSegmentPinyin(word: Word): string | undefined {
+  const allPinyins = new Set<string>();
+  for (const def of word.definitions ?? []) {
+    for (const py of def.pinyins ?? []) {
+      const p = py.trim();
+      if (p) allPinyins.add(p);
+    }
+  }
+  if (allPinyins.size === 1) return [...allPinyins][0];
+  if (allPinyins.size === 0) return word.transliteration;
+  return undefined;
+}
+
+/**
  * Reconcile incoming segments against the previous persisted segments of an
  * example sentence so that:
  *   1. A missing `id` is preserved as an explicit deactivation from the
  *      segment editor. The caller owns activation state.
  *   2. For every segment that arrives with an `id`, overwrite its
  *      `transliteration` with the canonical value from the word DB so pinyin
- *      always tracks the word.
+ *      always tracks the word (monophonic words only; polyphonic words keep
+ *      their LLM-generated contextual value).
  *
  * If an id refers to a word that no longer exists, the id is cleared so we do
  * not carry a broken reference forward.
@@ -976,9 +1004,8 @@ export async function reconcileIncomingSegments(
       delete seg.id;
       continue;
     }
-    if (w.transliteration) {
-      seg.transliteration = w.transliteration;
-    }
+    const py = getCanonicalSegmentPinyin(w);
+    if (py) seg.transliteration = py;
   }
 }
 
@@ -1008,23 +1035,36 @@ export async function updateSegmentWordLinks(exampleId: string, language: string
 
   const segTexts = [...new Set(es.segments.map((s: any) => s.text as string).filter((t: string) => t.trim()))];
   const matches = await lookupWordsByTerms(language, segTexts);
-  const termToId = new Map(matches.map((m) => [m.term, m.id]));
+  const termToEntry = new Map(matches.map((m) => [m.term, m]));
 
   let changed = false;
+  const newlyLinkedIds: string[] = [];
   for (const seg of es.segments) {
-    const wId = termToId.get(seg.text);
-    if (wId && !seg.id) {
-      seg.id = wId;
+    const entry = termToEntry.get(seg.text);
+    if (entry && !seg.id) {
+      seg.id = entry.id;
+      newlyLinkedIds.push(entry.id);
       changed = true;
     }
   }
   if (changed) {
+    // Apply canonical pinyin for newly linked segments (monophonic words only).
+    const wordDocs = await getWordsByIds([...new Set(newlyLinkedIds)]);
+    const idToWord = new Map(wordDocs.map((w) => [w.id, w]));
+    for (const seg of es.segments) {
+      if (!seg.id) continue;
+      const w = idToWord.get(seg.id);
+      if (!w) continue;
+      const py = getCanonicalSegmentPinyin(w);
+      if (py) seg.transliteration = py;
+    }
     await exampleSentences.doc(exampleId).update({ segments: es.segments });
   }
 
   // Update appearsInIds on matched words. `arrayUnion` is atomic and
   // idempotent; swallow NOT_FOUND for concurrently-deleted words.
-  for (const [, wId] of termToId) {
+  for (const [, entry] of termToEntry) {
+    const wId = entry.id;
     try {
       await words.doc(wId).update({ appearsInIds: FieldValue.arrayUnion(exampleId) });
     } catch (e: unknown) {

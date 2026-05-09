@@ -41,6 +41,13 @@ Even when definitions or examples are provided, the user's input may not fully c
 
 **Conservative bias:** prefer fewer, broader senses. Merge related usages unless native speakers would clearly recognize them as different meanings. Do not create a separate sense for every collocation or metaphorical extension.
 
+## Pinyin per definition
+
+For each definition, set `pinyins` to the pronunciation(s) specifically relevant to that meaning.
+- For most words this is a single-element array identical to the word-level `transliteration`.
+- For polyphonic words (多音字) where different meanings have genuinely different readings, use the reading that belongs to that sense.
+- Always use tone marks (ā á ǎ à, etc.), not numeric tones.
+
 ## Output format
 
 The `text` object on every definition MUST contain an entry for every language code listed in the template below — write the meaning in each language. The `translation` object on every example sentence MUST contain an entry for every language code listed in the example template below.
@@ -51,7 +58,7 @@ Return a JSON object:
 {
   "term": "the Chinese word",
   "transliteration": "pinyin with tone marks",
-  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { {{DEFINITION_LANGUAGES}} } }],
+  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "pinyins": ["pīnyīn"], "text": { {{DEFINITION_LANGUAGES}} } }],
   "examples": [{ "sentence": "Chinese sentence", {{EXAMPLE_TRANSLATION_SPEC}}, "segments": [{ "text": "word", "pinyin": "pīnyīn" }] }],
   "topics": ["..."],
   "level": "one of the allowed levels",

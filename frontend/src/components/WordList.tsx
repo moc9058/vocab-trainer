@@ -1083,6 +1083,12 @@ function WordCard({
                         {m.partOfSpeech}
                       </span>
                     )}
+                    {(() => {
+                      const py = m.pinyins && m.pinyins.length > 0
+                        ? m.pinyins.join(" / ")
+                        : (i === 0 ? word.transliteration : undefined);
+                      return py ? <span className="text-xs text-gray-400 ml-1">{py}</span> : null;
+                    })()}
                     <div className="mt-1 space-y-0.5">
                       {displayDefEntries(m.text || {}).filter(([lang]) => lang !== currentIsoCode).map(([lang, def]) => (
                         <p key={lang} className="text-sm text-gray-300">
@@ -1489,6 +1495,12 @@ function WordRow({
                           {m.partOfSpeech}
                         </span>
                       )}
+                      {(() => {
+                        const py = m.pinyins && m.pinyins.length > 0
+                          ? m.pinyins.join(" / ")
+                          : (i === 0 ? word.transliteration : undefined);
+                        return py ? <span className="text-xs text-gray-400 ml-1">{py}</span> : null;
+                      })()}
                       <div className="mt-1 space-y-0.5">
                         {displayDefEntries(m.text || {}).filter(([lang]) => lang !== currentIsoCode).map(([lang, def]) => (
                           <p key={lang} className="text-sm text-gray-300">

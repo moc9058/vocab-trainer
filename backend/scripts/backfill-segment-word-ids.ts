@@ -35,8 +35,13 @@ interface Segment {
   id?: string;
 }
 
-async function lookupWordsByTerms(lang: string, terms: string[]): Promise<Map<string, string>> {
-  const termToId = new Map<string, string>();
+interface WordEntry {
+  id: string;
+  transliteration: string;
+}
+
+async function lookupWordsByTerms(lang: string, terms: string[]): Promise<Map<string, WordEntry>> {
+  const termToEntry = new Map<string, WordEntry>();
   const CHUNK = 100;
   for (let i = 0; i < terms.length; i += CHUNK) {
     const chunk = terms.slice(i, i + CHUNK);
@@ -45,11 +50,51 @@ async function lookupWordsByTerms(lang: string, terms: string[]): Promise<Map<st
     for (const doc of docs) {
       if (doc.exists) {
         const d = doc.data()!;
-        termToId.set(d.term as string, d.id as string);
+        termToEntry.set(d.term as string, { id: d.id as string, transliteration: (d.transliteration ?? d.pinyin ?? "") as string });
       }
     }
   }
-  return termToId;
+  return termToEntry;
+}
+
+interface WordDoc {
+  id: string;
+  definitions?: { pinyins?: string[] }[];
+  transliteration?: string;
+}
+
+async function fetchWordDocs(wordIds: string[]): Promise<Map<string, WordDoc>> {
+  const idToWord = new Map<string, WordDoc>();
+  const CHUNK = 100;
+  for (let i = 0; i < wordIds.length; i += CHUNK) {
+    const chunk = wordIds.slice(i, i + CHUNK);
+    const refs = chunk.map((id) => wordsCol.doc(id));
+    const docs = await db.getAll(...refs);
+    for (const doc of docs) {
+      if (doc.exists) {
+        const d = doc.data()!;
+        idToWord.set(doc.id, {
+          id: doc.id,
+          definitions: (d.definitions as { pinyins?: string[] }[] | undefined) ?? [],
+          transliteration: d.transliteration as string | undefined,
+        });
+      }
+    }
+  }
+  return idToWord;
+}
+
+function getCanonicalPinyin(word: WordDoc): string | undefined {
+  const allPinyins = new Set<string>();
+  for (const def of word.definitions ?? []) {
+    for (const py of def.pinyins ?? []) {
+      const p = py.trim();
+      if (p) allPinyins.add(p);
+    }
+  }
+  if (allPinyins.size === 1) return [...allPinyins][0];
+  if (allPinyins.size === 0) return word.transliteration;
+  return undefined;
 }
 
 async function backfill() {
@@ -81,14 +126,17 @@ async function backfill() {
     return;
   }
 
-  // Pass 2: bulk lookup in word_index
-  const termToId = await lookupWordsByTerms(language, [...unresolvedTexts]);
-  console.log(`Matched ${termToId.size} segment texts to existing words.`);
+  // Pass 2: bulk lookup in word_index, then fetch full word docs for canonical pinyin
+  const termToEntry = await lookupWordsByTerms(language, [...unresolvedTexts]);
+  console.log(`Matched ${termToEntry.size} segment texts to existing words.`);
 
-  if (termToId.size === 0) {
+  if (termToEntry.size === 0) {
     console.log("No matches found. Nothing to update.");
     return;
   }
+
+  const allMatchedIds = [...new Set([...termToEntry.values()].map((e) => e.id))];
+  const idToWord = await fetchWordDocs(allMatchedIds);
 
   // Pass 3: for each example sentence with newly-resolvable segments,
   // update segments + track which words need appearsInIds updated
@@ -99,13 +147,15 @@ async function backfill() {
   for (const [exId, segs] of sentenceSegments) {
     let changed = false;
     const newSegs: Segment[] = segs.map((seg) => {
-      if (!seg.id && termToId.has(seg.text)) {
-        const wId = termToId.get(seg.text)!;
+      if (!seg.id && termToEntry.has(seg.text)) {
+        const entry = termToEntry.get(seg.text)!;
+        const wId = entry.id;
         changed = true;
         totalSegmentsLinked++;
         if (!wordAppearsIn.has(wId)) wordAppearsIn.set(wId, new Set());
         wordAppearsIn.get(wId)!.add(exId);
-        return { ...seg, id: wId };
+        const canonicalPinyin = getCanonicalPinyin(idToWord.get(wId) ?? { id: wId, transliteration: entry.transliteration });
+        return { ...seg, id: wId, ...(canonicalPinyin ? { transliteration: canonicalPinyin } : {}) };
       }
       // Collect existing links too so appearsInIds stays accurate
       if (seg.id) {
@@ -123,10 +173,10 @@ async function backfill() {
     console.log(`[DRY RUN] Would update ${sentenceUpdates.size} example sentences.`);
     console.log(`[DRY RUN] Would update appearsInIds on ${wordAppearsIn.size} words.`);
     // Print a preview of up to 10 newly-linked terms
-    const preview = [...termToId.entries()].slice(0, 10);
+    const preview = [...termToEntry.entries()].slice(0, 10);
     console.log("\nPreview of newly-linked terms:");
-    for (const [term, wId] of preview) {
-      console.log(`  "${term}" -> ${wId}`);
+    for (const [term, entry] of preview) {
+      console.log(`  "${term}" -> ${entry.id}`);
     }
     return;
   }
