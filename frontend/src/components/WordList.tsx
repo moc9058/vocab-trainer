@@ -110,8 +110,11 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   async function handleUpdateWord(data: Omit<Word, "id"> & { id?: string }) {
     if (!data.id) return;
     const { id, ...updates } = data as Word;
-    await updateWord(language, id, updates);
+    const updatedWord = await updateWord(language, id, updates);
     await fetchData();
+    if (expandedId === id) {
+      refreshExistingTerms(updatedWord);
+    }
   }
 
   async function handleDeleteWord(wordId: string) {
