@@ -67,6 +67,8 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const silentRefreshRef = useRef(false);
   const checkTermsVersionRef = useRef(0);
   const initialExpandAppliedRef = useRef(false);
+  const [segmentAddError, setSegmentAddError] = useState<string | null>(null);
+  const segmentErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Expand and scroll to initialExpandId once the first fetch completes
   useEffect(() => {
@@ -213,7 +215,11 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
         const newItems = [word, ...(gw ?? []), ...prev.items];
         return { ...prev, items: newItems, total: prev.total + 1 + (gw?.length ?? 0) };
       });
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (segmentErrorTimerRef.current) clearTimeout(segmentErrorTimerRef.current);
+      setSegmentAddError(`Failed to add "${term}"${msg ? `: ${msg}` : ""}`);
+      segmentErrorTimerRef.current = setTimeout(() => setSegmentAddError(null), 3000);
       // Word may have been saved despite the error; re-check to show correct button state
       const expandedWord = result?.items.find((w) => w.id === expandedId);
       if (expandedWord) {
@@ -814,6 +820,11 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           </button>
         </div>
       )}
+      {segmentAddError && (
+        <div className="fixed bottom-4 right-4 z-50 rounded-lg px-4 py-2 text-sm shadow-lg border bg-red-900/90 border-red-700 text-red-200">
+          ✗ {segmentAddError}
+        </div>
+      )}
     </div>
   );
 }
@@ -1083,66 +1094,60 @@ function WordCard({
                           })()}
                         </div>
                       ) : onToggleSegment && segs.length > 0 ? (
-                        <div className="mt-1 space-y-0.5">
-                          {/* Segment buttons row */}
-                          <div className="flex flex-wrap gap-1 items-center">
-                            {segs.map((seg, j) => {
-                              const isSelf = seg.text === word.term;
-                              const exists = isSelf || existingTerms.has(seg.text);
-                              const busy = busySegments.has(seg.text);
-                              return (
-                                <button
-                                  key={j}
-                                  disabled={busy || exists}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!exists) onToggleSegment(seg.text, ex.sentence, trans);
-                                  }}
-                                  className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
-                                    isSelf
-                                      ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
-                                      : exists
-                                        ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
-                                        : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
-                                  }`}
-                                >
-                                  {exists ? "" : "+"} {seg.text}
-                                </button>
-                              );
-                            })}
+                        <div className="mt-1">
+                          <div className="flex flex-wrap gap-1 items-start">
+                            {(() => {
+                              const anyDeactivated = segs.some((s) => s.text !== word.term && !existingTerms.has(s.text));
+                              return segs.map((seg, j) => {
+                                const isSelf = seg.text === word.term;
+                                const exists = isSelf || existingTerms.has(seg.text);
+                                const busy = busySegments.has(seg.text);
+                                const flagged = segmentFlags.get(seg.text) ?? true;
+                                return (
+                                  <div key={j} className="flex flex-col items-center">
+                                    <button
+                                      disabled={busy || exists}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!exists) onToggleSegment(seg.text, ex.sentence, trans);
+                                      }}
+                                      className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
+                                        isSelf
+                                          ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
+                                          : exists
+                                            ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
+                                            : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
+                                      }`}
+                                    >
+                                      {exists ? "" : "+"} {seg.text}
+                                    </button>
+                                    {anyDeactivated && (
+                                      <span className="mt-0.5 h-3.5 flex items-center justify-center">
+                                        {!isSelf && !exists && (
+                                          <label className="flex items-center gap-0.5 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                                            <input
+                                              type="checkbox"
+                                              checked={flagged}
+                                              onChange={() => onToggleSegmentFlag(seg.text)}
+                                              className="accent-amber-500 w-3 h-3"
+                                              aria-label={`Flag ${seg.text} for review`}
+                                            />
+                                          </label>
+                                        )}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              });
+                            })()}
                             <button
                               onClick={(e) => { e.stopPropagation(); editMode.onStart(word, i); }}
-                              className="rounded-full px-2 py-0.5 text-xs border border-gray-500/40 text-gray-400 hover:bg-gray-700/40 transition-colors"
+                              className="rounded-full px-2 py-0.5 text-xs border border-gray-500/40 text-gray-400 hover:bg-gray-700/40 transition-colors self-start"
                               title="Edit segments"
                             >
                               ✎
                             </button>
                           </div>
-                          {/* Flag checkboxes row — only if some segments are deactivated */}
-                          {segs.some((seg) => seg.text !== word.term && !existingTerms.has(seg.text)) && (
-                            <div className="flex flex-wrap gap-1 items-center">
-                              {segs.map((seg, j) => {
-                                const isSelf = seg.text === word.term;
-                                const exists = isSelf || existingTerms.has(seg.text);
-                                const flagged = segmentFlags.get(seg.text) ?? true;
-                                return (
-                                  <span key={j} className="inline-flex justify-center" style={{ width: `${seg.text.length * 0.75 + 1.5}em`, minWidth: "fit-content" }}>
-                                    {!isSelf && !exists && (
-                                      <label className="flex items-center gap-0.5 cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                                        <input
-                                          type="checkbox"
-                                          checked={flagged}
-                                          onChange={() => onToggleSegmentFlag(seg.text)}
-                                          className="accent-amber-500 w-3 h-3"
-                                          aria-label={`Flag ${seg.text} for review`}
-                                        />
-                                      </label>
-                                    )}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                          )}
                         </div>
                       ) : onToggleSegment ? (
                         <div className="mt-1">
@@ -1462,66 +1467,60 @@ function WordRow({
                             })()}
                           </div>
                         ) : onToggleSegment && segs.length > 0 ? (
-                          <div className="mt-1 space-y-0.5">
-                            {/* Segment buttons row */}
-                            <div className="flex flex-wrap gap-1 items-center">
-                              {segs.map((seg, j) => {
-                                const isSelf = seg.text === word.term;
-                              const exists = isSelf || existingTerms.has(seg.text);
-                              const busy = busySegments.has(seg.text);
-                              return (
-                                <button
-                                  key={j}
-                                    disabled={busy || exists}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (!exists) onToggleSegment(seg.text, ex.sentence, trans);
-                                    }}
-                                  className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
-                                    isSelf
-                                      ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
-                                      : exists
-                                          ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
-                                          : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
-                                  }`}
-                                  >
-                                    {exists ? "" : "+"} {seg.text}
-                                  </button>
-                                );
-                              })}
+                          <div className="mt-1">
+                            <div className="flex flex-wrap gap-1 items-start">
+                              {(() => {
+                                const anyDeactivated = segs.some((s) => s.text !== word.term && !existingTerms.has(s.text));
+                                return segs.map((seg, j) => {
+                                  const isSelf = seg.text === word.term;
+                                  const exists = isSelf || existingTerms.has(seg.text);
+                                  const busy = busySegments.has(seg.text);
+                                  const flagged = segmentFlags.get(seg.text) ?? true;
+                                  return (
+                                    <div key={j} className="flex flex-col items-center">
+                                      <button
+                                        disabled={busy || exists}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (!exists) onToggleSegment(seg.text, ex.sentence, trans);
+                                        }}
+                                        className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
+                                          isSelf
+                                            ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
+                                            : exists
+                                              ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
+                                              : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
+                                        }`}
+                                      >
+                                        {exists ? "" : "+"} {seg.text}
+                                      </button>
+                                      {anyDeactivated && (
+                                        <span className="mt-0.5 h-3.5 flex items-center justify-center">
+                                          {!isSelf && !exists && (
+                                            <label className="flex items-center gap-0.5 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                                              <input
+                                                type="checkbox"
+                                                checked={flagged}
+                                                onChange={() => onToggleSegmentFlag(seg.text)}
+                                                className="accent-amber-500 w-3 h-3"
+                                                aria-label={`Flag ${seg.text} for review`}
+                                              />
+                                            </label>
+                                          )}
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                });
+                              })()}
                               <button
                                 onClick={(e) => { e.stopPropagation(); editMode.onStart(word, i); }}
-                                className="rounded-full px-2 py-0.5 text-xs border border-gray-500/40 text-gray-400 hover:bg-gray-700/40 transition-colors"
+                                className="rounded-full px-2 py-0.5 text-xs border border-gray-500/40 text-gray-400 hover:bg-gray-700/40 transition-colors self-start"
                                 title="Edit segments"
                               >
                                 ✎
                               </button>
                             </div>
-                            {/* Flag checkboxes row — only if some segments are deactivated */}
-                            {segs.some((seg) => seg.text !== word.term && !existingTerms.has(seg.text)) && (
-                              <div className="flex flex-wrap gap-1 items-center">
-                                {segs.map((seg, j) => {
-                                  const isSelf = seg.text === word.term;
-                                  const exists = isSelf || existingTerms.has(seg.text);
-                                  const flagged = segmentFlags.get(seg.text) ?? true;
-                                  return (
-                                    <span key={j} className="inline-flex justify-center" style={{ width: `${seg.text.length * 0.75 + 1.5}em`, minWidth: "fit-content" }}>
-                                      {!isSelf && !exists && (
-                                        <label className="flex items-center gap-0.5 cursor-pointer" onClick={(e) => e.stopPropagation()}>
-                                          <input
-                                            type="checkbox"
-                                            checked={flagged}
-                                            onChange={() => onToggleSegmentFlag(seg.text)}
-                                            className="accent-amber-500 w-3 h-3"
-                                            aria-label={`Flag ${seg.text} for review`}
-                                          />
-                                        </label>
-                                      )}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            )}
                           </div>
                         ) : onToggleSegment ? (
                           <div className="mt-1">
