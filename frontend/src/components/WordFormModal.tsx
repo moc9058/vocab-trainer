@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, Fragment } from "react";
 import { useI18n } from "../i18n/context";
-import { getFilters, checkTerms, smartAddWord, getGroups } from "../api/vocab";
+import { getFilters, checkTerms, smartAddWord, getGroups, modifyGroupMembers } from "../api/vocab";
 import { displayTranslation, type Word, type Meaning, type WordGroup } from "../types";
 
 interface MeaningFormState {
@@ -140,11 +140,13 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
 
   async function handleAddSegment(chipText: string, sentence: string, translation: string) {
     if (existingTerms.has(chipText) || pendingTerms?.has(chipText)) return;
+    const groupIds = word?.id ? [...selectedGroupIds] : [];
     if (onQueue) {
       onQueue(chipText, language, {
         term: chipText,
         examples: [{ sentence: sentence.replace(/[\s　]+/g, ""), translation }],
         flag: segmentFlags.get(chipText) ?? true,
+        groupIds: groupIds.length > 0 ? groupIds : undefined,
       });
       return;
     }
@@ -155,7 +157,13 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
         term: chipText,
         examples: [{ sentence: sentence.replace(/[\s　]+/g, ""), translation }],
         flag: segmentFlags.get(chipText) ?? true,
+        groupIds: groupIds.length > 0 ? groupIds : undefined,
       });
+      if (groupIds.length > 0) {
+        await Promise.all(
+          groupIds.map((groupId) => modifyGroupMembers(language, groupId, [addedWord.id], "add"))
+        );
+      }
       setExistingTerms((prev) => new Map(prev).set(chipText, addedWord.id));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
