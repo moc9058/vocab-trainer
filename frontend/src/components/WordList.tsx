@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks, getGroups } from "../api/vocab";
+import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks, getGroups, modifyGroupMembers } from "../api/vocab";
 import GroupPickerModal from "./GroupPickerModal";
 import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
@@ -18,6 +18,7 @@ type SmartAddPayload = {
   examples?: { sentence: string; translation: string; userSplits?: string[]; segments?: { text: string; transliteration?: string; id?: string }[] }[];
   level?: string;
   flag?: boolean;
+  groupIds?: string[];
 };
 
 interface Props {
@@ -124,10 +125,27 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     return () => clearTimeout(timer);
   }, [search]);
 
-  async function handleUpdateWord(data: Omit<Word, "id"> & { id?: string }) {
+  async function handleUpdateWord(data: Omit<Word, "id"> & { id?: string; groupIds?: string[] }) {
     if (!data.id) return;
-    const { id, ...updates } = data as Word;
+    const { id, groupIds, ...updates } = data;
     const updatedWord = await updateWord(language, id, updates);
+    if (groupIds) {
+      const originalGroupIds = new Set(
+        groups.filter((group) => group.wordIds.includes(id)).map((group) => group.id)
+      );
+      const selectedGroupIds = new Set(groupIds);
+      const toAdd = groupIds.filter((groupId) => !originalGroupIds.has(groupId));
+      const toRemove = [...originalGroupIds].filter((groupId) => !selectedGroupIds.has(groupId));
+      const updatedGroups = await Promise.all([
+        ...toAdd.map((groupId) => modifyGroupMembers(language, groupId, [id], "add")),
+        ...toRemove.map((groupId) => modifyGroupMembers(language, groupId, [id], "remove")),
+      ]);
+      if (updatedGroups.length > 0) {
+        setGroups((prev) =>
+          prev.map((group) => updatedGroups.find((updated) => updated.id === group.id) ?? group)
+        );
+      }
+    }
     await fetchData();
     if (expandedId === id) {
       refreshExistingTerms(updatedWord);
@@ -526,7 +544,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
         setLoading(false);
       }
     }
-  }, [language, debouncedSearch, topic, category, level, flaggedOnly, page]);
+  }, [language, debouncedSearch, topic, category, level, flaggedOnly, groupId, page]);
 
   useEffect(() => {
     fetchData();
@@ -540,6 +558,9 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     prevRefreshSignalRef.current = refreshSignal;
     silentRefreshRef.current = true;
     fetchData();
+    getGroups(language)
+      .then(setGroups)
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSignal]);
 

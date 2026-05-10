@@ -77,9 +77,11 @@ export function smartAddWord(
     examples?: { sentence: string; translation: string; userSplits?: string[]; segments?: { text: string; transliteration?: string; id?: string }[] }[];
     level?: string;
     flag?: boolean;
+    groupIds?: string[];
   }
 ): Promise<Word & { generatedWords?: Word[] }> {
-  return postJson(`/api/vocab/${encodeURIComponent(language)}/smart-add`, data);
+  const { groupIds: _groupIds, ...body } = data;
+  return postJson(`/api/vocab/${encodeURIComponent(language)}/smart-add`, body);
 }
 
 export function syncSegmentLinks(language: string, exampleIds: string[]): Promise<void> {

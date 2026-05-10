@@ -176,6 +176,11 @@ export async function getWords(
     const group = await getWordGroup(filters.groupId);
     const groupWordIds = group?.wordIds ?? [];
     let results = await getWordsByIds(groupWordIds);
+    if (filters.flaggedOnly) {
+      const flagged = await getFlaggedWords(language);
+      const flaggedWordIds = new Set(flagged.map((f) => f.wordId));
+      results = results.filter((w) => flaggedWordIds.has(w.id));
+    }
     const { groupId: _g, flaggedOnly: _f, ...rest } = filters;
     results = applyFilters(results, rest);
     return paginateResults(results, page, limit);

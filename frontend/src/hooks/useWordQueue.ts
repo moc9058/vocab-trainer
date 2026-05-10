@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { smartAddWord } from "../api/vocab";
+import { modifyGroupMembers, smartAddWord } from "../api/vocab";
 
 type SmartAddPayload = Parameters<typeof smartAddWord>[1];
 
@@ -37,7 +37,13 @@ export function useWordQueue() {
     setProcessing(next);
 
     smartAddWord(next.language, next.payload)
-      .then(() => {
+      .then(async (word) => {
+        const groupIds = next.payload.groupIds ?? [];
+        if (groupIds.length > 0) {
+          await Promise.all(
+            groupIds.map((groupId) => modifyGroupMembers(next.language, groupId, [word.id], "add"))
+          );
+        }
         setRecentResults((prev) =>
           [{ id: next.id, term: next.term, success: true }, ...prev].slice(0, 5)
         );

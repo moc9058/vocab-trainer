@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from "react";
 import { useI18n } from "../i18n/context";
-import { getFilters, checkTerms, smartAddWord } from "../api/vocab";
-import { displayTranslation, type Word, type Meaning } from "../types";
+import { getFilters, checkTerms, smartAddWord, getGroups } from "../api/vocab";
+import { displayTranslation, type Word, type Meaning, type WordGroup } from "../types";
 
 interface MeaningFormState {
   partOfSpeech: string;
@@ -14,7 +14,7 @@ type SmartAddPayload = Parameters<typeof smartAddWord>[1];
 interface Props {
   language: string;
   word?: Word;
-  onSave: (word: Omit<Word, "id"> & { id?: string }) => Promise<void>;
+  onSave: (word: Omit<Word, "id"> & { id?: string; groupIds?: string[] }) => Promise<void>;
   onClose: () => void;
   onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
   pendingTerms?: Set<string>;
@@ -56,6 +56,8 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
   );
   const [notes, setNotes] = useState(word?.notes ?? "");
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
+  const [groups, setGroups] = useState<WordGroup[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -82,6 +84,25 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
       .then((f) => setAvailableTopics(f.topics))
       .catch(() => {});
   }, [language]);
+
+  useEffect(() => {
+    if (!word?.id) {
+      setGroups([]);
+      setSelectedGroupIds(new Set());
+      return;
+    }
+    getGroups(language)
+      .then((loadedGroups) => {
+        setGroups(loadedGroups);
+        setSelectedGroupIds(new Set(
+          loadedGroups.filter((group) => group.wordIds.includes(word.id)).map((group) => group.id)
+        ));
+      })
+      .catch(() => {
+        setGroups([]);
+        setSelectedGroupIds(new Set());
+      });
+  }, [language, word?.id]);
 
   // Debounced checkTerms for space-split segments
   useEffect(() => {
@@ -224,6 +245,7 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
         level: level.trim() || undefined,
         examples: cleanExamples,
         notes: notes.trim() || undefined,
+        ...(word?.id ? { groupIds: [...selectedGroupIds] } : {}),
       });
       onClose();
     } catch (err) {
@@ -287,6 +309,39 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
               className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
             />
           </div>
+
+          {/* Groups */}
+          {word?.id && groups.length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm text-gray-400">{t("groups")}</label>
+              <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-600 bg-gray-700 p-2">
+                {groups.map((group) => {
+                  const selected = selectedGroupIds.has(group.id);
+                  return (
+                    <button
+                      key={group.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedGroupIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(group.id)) next.delete(group.id);
+                          else next.add(group.id);
+                          return next;
+                        });
+                      }}
+                      className={`rounded-full px-2 py-0.5 text-xs ${
+                        selected
+                          ? "bg-indigo-600 text-white"
+                          : "bg-gray-600 text-gray-300 hover:bg-gray-500"
+                      }`}
+                    >
+                      {group.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Definitions (Meanings) */}
           <div>

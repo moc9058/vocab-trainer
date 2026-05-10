@@ -129,74 +129,98 @@ export default function GroupPickerModal({ language, wordIds, onClose, onDone }:
             {groups.length === 0 && (
               <li className="text-sm text-gray-500 px-1">No groups yet.</li>
             )}
-            {groups.map((group) => (
-              <li key={group.id} className="flex items-center gap-2">
-                {editingId === group.id ? (
-                  <>
-                    <input
-                      autoFocus
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleRename(group.id);
-                        if (e.key === "Escape") setEditingId(null);
-                      }}
-                      className="flex-1 min-w-0 rounded border border-gray-500 bg-gray-700 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                    />
-                    <button
-                      onClick={() => handleRename(group.id)}
-                      disabled={busy === group.id}
-                      className="rounded px-2 py-1 text-xs bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={() => setEditingId(null)}
-                      className="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-700"
-                    >
-                      ✕
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    {!isManageMode ? (
-                      <button
-                        onClick={() => handleAddToGroup(group)}
-                        disabled={busy === group.id}
-                        className="flex-1 min-w-0 text-left rounded-lg px-3 py-1.5 text-sm text-gray-200 hover:bg-gray-700 disabled:opacity-50"
-                      >
-                        {busy === group.id ? "Adding…" : group.name}
-                        <span className="ml-2 text-xs text-gray-500">{group.wordIds.length} words</span>
-                      </button>
-                    ) : (
-                      <span className="flex-1 min-w-0 truncate text-sm text-gray-200 px-1">
-                        {group.name}
-                        <span className="ml-2 text-xs text-gray-500">{group.wordIds.length} words</span>
-                      </span>
-                    )}
-                    <button
-                      onClick={() => startEdit(group)}
-                      className="rounded px-1.5 py-1 text-xs text-gray-400 hover:bg-gray-700"
-                      title={t("renameGroup")}
-                    >
-                      ✏
-                    </button>
-                    <button
-                      onClick={() => handleDelete(group.id)}
-                      disabled={busy === group.id}
-                      className={`rounded px-1.5 py-1 text-xs disabled:opacity-50 ${
-                        confirmedDelete === group.id
-                          ? "bg-red-600 text-white hover:bg-red-500"
-                          : "text-gray-400 hover:bg-gray-700"
-                      }`}
-                      title={confirmedDelete === group.id ? "Click again to confirm" : t("deleteGroup")}
-                    >
-                      {confirmedDelete === group.id ? "Confirm?" : "✕"}
-                    </button>
-                  </>
-                )}
-              </li>
-            ))}
+            {groups.map((group) => {
+              const containedCount = wordIds.filter((wordId) => group.wordIds.includes(wordId)).length;
+              const allSelectedContained = wordIds.length > 0 && containedCount === wordIds.length;
+              const membershipText =
+                wordIds.length === 1
+                  ? "Already in group"
+                  : `${containedCount}/${wordIds.length} selected already in group`;
+
+              return (
+                <li key={group.id} className="flex items-center gap-2">
+                      {editingId === group.id ? (
+                        <>
+                          <input
+                            autoFocus
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleRename(group.id);
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                            className="flex-1 min-w-0 rounded border border-gray-500 bg-gray-700 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                          />
+                          <button
+                            onClick={() => handleRename(group.id)}
+                            disabled={busy === group.id}
+                            className="rounded px-2 py-1 text-xs bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                          <button
+                            onClick={() => setEditingId(null)}
+                            className="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-700"
+                          >
+                            ✕
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          {!isManageMode ? (
+                            <button
+                              onClick={() => handleAddToGroup(group)}
+                              disabled={busy === group.id || allSelectedContained}
+                              className={`flex-1 min-w-0 rounded-lg px-3 py-1.5 text-left text-sm disabled:opacity-70 ${
+                                allSelectedContained
+                                  ? "cursor-default border border-green-700/40 bg-green-950/20 text-gray-300"
+                                  : "text-gray-200 hover:bg-gray-700"
+                              }`}
+                            >
+                              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span className="min-w-0 truncate">{busy === group.id ? "Adding…" : group.name}</span>
+                                <span className="text-xs text-gray-500">{group.wordIds.length} words</span>
+                                {containedCount > 0 && (
+                                  <span className="rounded-full border border-green-700/50 bg-green-950/40 px-1.5 py-0.5 text-[11px] text-green-300">
+                                    ✓ {membershipText}
+                                  </span>
+                                )}
+                              </span>
+                            </button>
+                          ) : (
+                            <span className="flex-1 min-w-0 truncate text-sm text-gray-200 px-1">
+                              {group.name}
+                              <span className="ml-2 text-xs text-gray-500">{group.wordIds.length} words</span>
+                            </span>
+                          )}
+                          {isManageMode && (
+                            <button
+                              onClick={() => startEdit(group)}
+                              className="rounded px-1.5 py-1 text-xs text-gray-400 hover:bg-gray-700"
+                              title={t("renameGroup")}
+                            >
+                              ✏
+                            </button>
+                          )}
+                          {isManageMode && (
+                            <button
+                              onClick={() => handleDelete(group.id)}
+                              disabled={busy === group.id}
+                              className={`rounded px-1.5 py-1 text-xs disabled:opacity-50 ${
+                                confirmedDelete === group.id
+                                  ? "bg-red-600 text-white hover:bg-red-500"
+                                  : "text-gray-400 hover:bg-gray-700"
+                              }`}
+                              title={confirmedDelete === group.id ? "Click again to confirm" : t("deleteGroup")}
+                            >
+                              {confirmedDelete === group.id ? "Confirm?" : "✕"}
+                            </button>
+                          )}
+                        </>
+                      )}
+                </li>
+              );
+            })}
           </ul>
         )}
 

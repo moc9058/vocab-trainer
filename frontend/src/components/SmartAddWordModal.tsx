@@ -2,8 +2,8 @@ import { useState, useMemo, useEffect, useRef, Fragment } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP, urlLanguageToIsoCode } from "../settings/defaults";
-import { smartAddWord, lookupWord, checkTerms } from "../api/vocab";
-import { displayTranslation, type Word } from "../types";
+import { smartAddWord, lookupWord, checkTerms, getGroups, modifyGroupMembers } from "../api/vocab";
+import { displayTranslation, type Word, type WordGroup } from "../types";
 
 interface Prefill {
   term: string;
@@ -19,6 +19,7 @@ type SmartAddPayload = {
   examples?: { sentence: string; translation: string; userSplits?: string[] }[];
   level?: string;
   flag?: boolean;
+  groupIds?: string[];
 };
 
 interface Props {
@@ -75,6 +76,8 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   const [grammaticalCategory, setGrammaticalCategory] = useState("");
   const [level, setLevel] = useState("");
   const [topics, setTopics] = useState<string[]>([]);
+  const [groups, setGroups] = useState<WordGroup[]>([]);
+  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>(
     prefill?.example ? [prefill.example] : [{ sentence: "", translation: "" }],
   );
@@ -92,6 +95,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   const [checkingTerms, setCheckingTerms] = useState(false);
   const [busySegments, setBusySegments] = useState<Set<string>>(new Set());
   const [segmentFlags, setSegmentFlags] = useState<Map<string, boolean>>(new Map());
+  const [queuedSegments, setQueuedSegments] = useState<Set<string>>(new Set());
   const [segmentAddError, setSegmentAddError] = useState<string | null>(null);
   const segmentVersionRef = useRef(0);
   const lastExampleRef = useRef<HTMLDivElement>(null);
@@ -102,6 +106,13 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     }
     prevExamplesLengthRef.current = examples.length;
   }, [examples.length]);
+
+  useEffect(() => {
+    setSelectedGroupIds(new Set());
+    getGroups(wordLanguage)
+      .then(setGroups)
+      .catch(() => setGroups([]));
+  }, [wordLanguage]);
 
   useEffect(() => {
     const trimmed = term.trim();
@@ -146,7 +157,18 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
       checkTerms(wordLanguage, texts)
         .then(({ existing }) => {
           if (v !== segmentVersionRef.current) return;
-          setExistingTerms(new Map(Object.entries(existing)));
+          const existingMap = new Map(Object.entries(existing));
+          setExistingTerms(existingMap);
+          setQueuedSegments((prev) => {
+            const next = new Set(prev);
+            for (const key of prev) {
+              const { chipText } = parseQueuedSegmentKey(key);
+              if (existingMap.has(chipText) || !pendingTerms?.has(chipText)) {
+                next.delete(key);
+              }
+            }
+            return next;
+          });
           setCheckingTerms(false);
         })
         .catch(() => {
@@ -156,13 +178,39 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     return () => clearTimeout(timer);
   }, [examples, wordLanguage, refreshSignal]);
 
+  useEffect(() => {
+    setQueuedSegments((prev) => {
+      const next = new Set(prev);
+      for (const key of prev) {
+        const { chipText } = parseQueuedSegmentKey(key);
+        if (existingTerms.has(chipText) || !pendingTerms?.has(chipText)) {
+          next.delete(key);
+        }
+      }
+      return next;
+    });
+  }, [existingTerms, pendingTerms]);
+
+  function getQueuedSegmentKey(chipText: string, sentence: string): string {
+    return `${chipText}\u0000${sentence.replace(/[\s　]+/g, "")}`;
+  }
+
+  function parseQueuedSegmentKey(key: string): { chipText: string; sentence: string } {
+    const [chipText, sentence = ""] = key.split("\u0000");
+    return { chipText, sentence };
+  }
+
   async function handleAddSegment(chipText: string, sentence: string, translation: string) {
-    if (existingTerms.has(chipText) || pendingTerms?.has(chipText)) return;
+    const queuedKey = getQueuedSegmentKey(chipText, sentence);
+    if (existingTerms.has(chipText) || pendingTerms?.has(chipText) || queuedSegments.has(queuedKey)) return;
+    const groupIds = getSelectedGroupIdsPayload();
     if (onQueue) {
+      setQueuedSegments((prev) => new Set(prev).add(queuedKey));
       onQueue(chipText, wordLanguage, {
         term: chipText,
         examples: [{ sentence: sentence.replace(/[\s　]+/g, ""), translation }],
         flag: segmentFlags.get(chipText) ?? true,
+        groupIds,
       });
       return;
     }
@@ -173,7 +221,16 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
         term: chipText,
         examples: [{ sentence: sentence.replace(/[\s　]+/g, ""), translation }],
         flag: segmentFlags.get(chipText) ?? true,
+        groupIds,
       });
+      if (groupIds && groupIds.length > 0) {
+        const updatedGroups = await Promise.all(
+          groupIds.map((groupId) => modifyGroupMembers(wordLanguage, groupId, [addedWord.id], "add"))
+        );
+        setGroups((prev) =>
+          prev.map((group) => updatedGroups.find((updated) => updated.id === group.id) ?? group)
+        );
+      }
       setExistingTerms((prev) => new Map(prev).set(chipText, addedWord.id));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -213,6 +270,10 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
       .join("");
   }
 
+  function getSelectedGroupIdsPayload(): string[] | undefined {
+    return selectedGroupIds.size > 0 ? [...selectedGroupIds] : undefined;
+  }
+
   function buildPayload() {
     const defObj: Record<string, string> = {};
     for (const d of definitions) {
@@ -243,6 +304,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
       examples: validExamples.length > 0 ? validExamples : undefined,
       level: level || undefined,
       flag: flagForReview,
+      groupIds: getSelectedGroupIdsPayload(),
     };
   }
 
@@ -254,6 +316,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     setGrammaticalCategory("");
     setLevel("");
     setTopics([]);
+    setSelectedGroupIds(new Set());
     setExamples([{ sentence: "", translation: "" }]);
     setExistingWord(null);
     setError("");
@@ -286,6 +349,15 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     try {
       const result = await smartAddWord(language, payload);
       const { generatedWords: gw, ...word } = result;
+      const groupIds = payload.groupIds ?? [];
+      if (groupIds.length > 0) {
+        const updatedGroups = await Promise.all(
+          groupIds.map((groupId) => modifyGroupMembers(language, groupId, [word.id], "add"))
+        );
+        setGroups((prev) =>
+          prev.map((group) => updatedGroups.find((updated) => updated.id === group.id) ?? group)
+        );
+      }
       setSuccess(true);
       setGeneratedWords(gw ?? []);
       onSave(word);
@@ -389,6 +461,39 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                 placeholder="LLM will generate if empty"
                 className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-400 focus:outline-none"
               />
+            </div>
+          )}
+
+          {/* Groups (optional) */}
+          {groups.length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm text-gray-400">{t("groups")}</label>
+              <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-600 bg-gray-700 p-2">
+                {groups.map((group) => {
+                  const selected = selectedGroupIds.has(group.id);
+                  return (
+                    <button
+                      key={group.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedGroupIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(group.id)) next.delete(group.id);
+                          else next.add(group.id);
+                          return next;
+                        });
+                      }}
+                      className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
+                        selected
+                          ? "bg-indigo-600 text-white"
+                          : "bg-gray-600 text-gray-300 hover:bg-gray-500"
+                      }`}
+                    >
+                      {group.name}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -544,13 +649,14 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                           !/^\p{P}+$/u.test(c.text) &&
                           !(term.trim() && c.text === term.trim()) &&
                           !existingTerms.has(c.text) &&
-                          !pendingTerms?.has(c.text)
+                          !pendingTerms?.has(c.text) &&
+                          !queuedSegments.has(getQueuedSegmentKey(c.text, ex.sentence))
                       );
                       return chips.map((chip, pi) => {
                         const isPunct = /^\p{P}+$/u.test(chip.text) || chip.text.trim().length === 0;
                         const isSelf  = !isPunct && !!term.trim() && chip.text === term.trim();
                         const exists  = isSelf || (!isPunct && existingTerms.has(chip.text));
-                        const queued  = !isPunct && !isSelf && !exists && !!pendingTerms?.has(chip.text);
+                        const queued  = !isPunct && !isSelf && !exists && (queuedSegments.has(getQueuedSegmentKey(chip.text, ex.sentence)) || !!pendingTerms?.has(chip.text));
                         const checking = !isPunct && !isSelf && !exists && !queued && checkingTerms;
                         const busy    = busySegments.has(chip.text);
                         return (
