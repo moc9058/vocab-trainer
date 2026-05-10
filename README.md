@@ -70,7 +70,7 @@ cd backend && npx tsx scripts/migrate-grammar-to-firestore.ts
 cd backend && FIRESTORE_PROJECT=vocab-trainer-490014 npx tsx scripts/migrate-llm-config-to-firestore.ts
 ```
 
-Reads Azure OpenAI keys from `.env` and writes them to Firestore `config/llm`. The backend will automatically fetch LLM config from Firestore when `.env` is not available (e.g., in deployed environments).
+Reads OpenAI API and model settings from `.env` and writes them to Firestore `config/llm`. The backend will automatically fetch LLM config from Firestore when `.env` is not available (e.g., in deployed environments).
 
 ### Upload Speaking/Writing + Translation Config
 
@@ -262,7 +262,7 @@ vocab-trainer/
 │   │   ├── index.ts             # Fastify server entry point
 │   │   ├── types.ts             # Shared TypeScript interfaces
 │   │   ├── firestore.ts         # Google Cloud Firestore persistence layer
-│   │   ├── llm.ts               # Azure OpenAI LLM integration
+│   │   ├── llm.ts               # OpenAI LLM integration
 │   │   └── routes/
 │   │       ├── languages.ts     # /api/languages
 │   │       ├── vocab.ts         # /api/vocab
@@ -875,7 +875,7 @@ The stream sends `:keep-alive` comments every 15 seconds to defeat proxy idle ti
 
 ### Speaking & Writing
 
-LLM-powered text correction for speaking and writing practice. One session per language, with a history of corrections within each session. Uses language-specific system prompts and use-case instructions from Firestore `config/speaking_writing` (migrated from `backend/DB/speaking&writing/`) and the FULL model deployment.
+LLM-powered text correction for speaking and writing practice. One session per language, with a history of corrections within each session. Uses language-specific system prompts and use-case instructions from Firestore `config/speaking_writing` (migrated from `backend/DB/speaking&writing/`) and the FULL OpenAI model.
 
 #### `POST /api/speaking-writing/correct` — Submit text for correction
 
@@ -1027,7 +1027,7 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `grammar_quiz_sessions` | One grammar quiz session per language              |
 | `translation_history`  | Translation/analysis entries with structured LLM results |
 | `speaking_writing_sessions` | One speaking/writing correction session per language |
-| `config`               | App configuration (`config/llm` for Azure OpenAI keys, `config/speaking_writing` for prompts/schemas/use-cases, `config/translation` for prompts/schemas, `config/vocabulary` for smart-add and segmentation prompts/schemas) |
+| `config`               | App configuration (`config/llm` for OpenAI API/model settings, `config/speaking_writing` for prompts/schemas/use-cases, `config/translation` for prompts/schemas, `config/vocabulary` for smart-add and segmentation prompts/schemas) |
 | `token_usage`          | Individual LLM call logs with token counts                |
 | `token_usage_daily`    | Daily aggregates by model                                 |
 | `archive_backups`      | Backup word data and grammar backups (chunked subcollections for large files) |
@@ -1042,11 +1042,9 @@ Local JSON files under `backend/DB/` serve as the source for the initial Firesto
 | `PORT`                | `3000`           | Server listening port              |
 | `HOST`                | `0.0.0.0`       | Server listening address           |
 | `FIRESTORE_DATABASE_ID` | `vocab-database` | Firestore database ID            |
-| `AZURE_OPENAI_ENDPOINT` | —               | Azure OpenAI endpoint (falls back to Firestore `config/llm`) |
-| `AZURE_OPENAI_API_KEY`  | —               | Azure OpenAI API key (falls back to Firestore `config/llm`) |
-| `AZURE_OPENAI_DEPLOYMENT_MINI` | —        | Azure OpenAI MINI deployment name for fast tasks (falls back to Firestore `config/llm`) |
-| `AZURE_OPENAI_DEPLOYMENT_FULL` | —        | Azure OpenAI FULL deployment name for translation/analysis (falls back to Firestore `config/llm`) |
-| `AZURE_OPENAI_API_VERSION` | —            | Azure OpenAI API version (falls back to Firestore `config/llm`) |
+| `OPENAI_API_KEY`       | —                | OpenAI API key (falls back to Firestore `config/llm`) |
+| `OPENAI_MODEL_MINI`    | —                | OpenAI model for fast tasks such as smart-add and segmentation (falls back to Firestore `config/llm`) |
+| `OPENAI_MODEL_FULL`    | —                | OpenAI model for translation/analysis and speaking/writing (falls back to Firestore `config/llm`) |
 | `FIRESTORE_PROJECT`    | —                | Google Cloud project ID (required for Firestore in deployed environments) |
 
 ## Docker

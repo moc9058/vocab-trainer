@@ -4,7 +4,7 @@
  * Usage:
  *   cd backend && npx tsx scripts/migrate-llm-config-to-firestore.ts
  *
- * Reads AZURE_OPENAI_* vars from ../.env and writes them to
+ * Reads OPENAI_* vars from ../.env and writes them to
  * Firestore document `config/llm` in the vocab-database.
  */
 
@@ -24,11 +24,9 @@ const db = new Firestore({
 });
 
 const KEYS = [
-  "AZURE_OPENAI_API_KEY",
-  "AZURE_OPENAI_ENDPOINT",
-  "AZURE_OPENAI_API_VERSION",
-  "AZURE_OPENAI_DEPLOYMENT_MINI",
-  "AZURE_OPENAI_DEPLOYMENT_FULL",
+  "OPENAI_API_KEY",
+  "OPENAI_MODEL_MINI",
+  "OPENAI_MODEL_FULL",
 ] as const;
 
 async function main() {

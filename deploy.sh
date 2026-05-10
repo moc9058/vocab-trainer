@@ -7,7 +7,7 @@ set -euo pipefail
 # Options:
 #   --word               Run Firestore word data migration after deploying backend
 #   --grammer            Run Firestore grammar data migration after deploying backend
-#   --llm                Upload LLM config (Azure OpenAI keys) from .env to Firestore
+#   --llm                Upload LLM config (OpenAI key/model names) from .env to Firestore
 #   --prompts            Upload speaking/writing + translation config to Firestore
 #   --archives           Upload backup + original archive data to Firestore
 #   --example-sentences  Migrate embedded examples to example_sentences collection

@@ -279,6 +279,9 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
 
   async function handleAddSegmentWord(term: string, sentence: string, translation: string) {
     if (existingTerms.has(term) || pendingTerms?.has(term)) return;
+    const groupIds = expandedId
+      ? groups.filter((group) => group.wordIds.includes(expandedId)).map((group) => group.id)
+      : [];
     if (onQueue) {
       const flag = segmentFlags.get(term) ?? true;
       const parentEx = result?.items.flatMap((w) => w.examples).find((ex) => ex.sentence === sentence);
@@ -286,6 +289,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
         term,
         examples: [{ sentence, translation, segments: parentEx?.segments }],
         flag,
+        groupIds: groupIds.length > 0 ? groupIds : undefined,
       });
       return;
     }
@@ -300,7 +304,13 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
         term,
         examples: [{ sentence, translation, segments: parentEx?.segments }],
         flag,
+        groupIds: groupIds.length > 0 ? groupIds : undefined,
       });
+      if (groupIds.length > 0) {
+        await Promise.all(
+          groupIds.map((groupId) => modifyGroupMembers(language, groupId, [word.id], "add"))
+        );
+      }
       setExistingTerms((prev) => new Map(prev).set(term, word.id));
       if (flag) {
         setFlaggedIds((prev) => new Set(prev).add(word.id));

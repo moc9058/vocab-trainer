@@ -110,7 +110,11 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   useEffect(() => {
     setSelectedGroupIds(new Set());
     getGroups(wordLanguage)
-      .then(setGroups)
+      .then((loadedGroups) => {
+        setGroups(loadedGroups);
+        const latestGroup = loadedGroups.at(-1);
+        setSelectedGroupIds(latestGroup ? new Set([latestGroup.id]) : new Set());
+      })
       .catch(() => setGroups([]));
   }, [wordLanguage]);
 
@@ -316,7 +320,8 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     setGrammaticalCategory("");
     setLevel("");
     setTopics([]);
-    setSelectedGroupIds(new Set());
+    const latestGroup = groups.at(-1);
+    setSelectedGroupIds(latestGroup ? new Set([latestGroup.id]) : new Set());
     setExamples([{ sentence: "", translation: "" }]);
     setExistingWord(null);
     setError("");

@@ -65,7 +65,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `routes/grammar-quiz.ts` — also exposes `check-missing-words` and `add-missing-words`
   - `routes/translation.ts` / `routes/speaking-writing.ts` — SSE streaming via POST endpoint
 - **Database**: `firestore.ts` — `updateWord` per-sentence-merges old example `segments` onto incoming `examples` when sentence text is unchanged, so `WordFormModal` (which doesn't carry segments through form state) doesn't wipe LLM-generated pinyin on save. `getCanonicalSegmentPinyin(word)` returns `undefined` for polyphonic words so callers keep the LLM-generated contextual value.
-- **LLM**: `llm.ts` — `callLLM*` functions use MINI deployment; `callLLMFull*` use FULL deployment. Config from `.env` (local) or Firestore `config/llm` (deployed).
+- **LLM**: `llm.ts` — `callLLM*` functions use the MINI OpenAI model; `callLLMFull*` use the FULL OpenAI model. Config from `.env` (local) or Firestore `config/llm` (deployed).
 - **Types**: `types.ts` — `Word` carries optional `hanjaReadings?: HanjaReading[]` (`{ simplifiedChar, traditionalChar, hunEum[] }` per character)
 
 ### Data Storage

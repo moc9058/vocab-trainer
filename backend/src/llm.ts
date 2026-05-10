@@ -1,4 +1,4 @@
-import { AzureOpenAI } from "openai";
+import OpenAI from "openai";
 import type { CompletionUsage } from "openai/resources/completions";
 import { Firestore } from "@google-cloud/firestore";
 import { config } from "dotenv";
@@ -15,18 +15,17 @@ config({ path: resolve(__dirname, "../../.env") });
 // Abort a streaming LLM call if no chunks arrive within this window
 const STREAM_IDLE_MS = 30_000;
 
-let client: AzureOpenAI | null = null;
-let deploymentMini = "";
-let deploymentFull = "";
+let client: OpenAI | null = null;
+let modelMini = "";
+let modelFull = "";
 let initPromise: Promise<void> | null = null;
 
 async function loadLLMConfig(): Promise<void> {
   // If all env vars are already set (from .env), skip Firestore
   if (
-    process.env.AZURE_OPENAI_API_KEY &&
-    process.env.AZURE_OPENAI_ENDPOINT &&
-    process.env.AZURE_OPENAI_API_VERSION &&
-    process.env.AZURE_OPENAI_DEPLOYMENT_MINI
+    process.env.OPENAI_API_KEY &&
+    process.env.OPENAI_MODEL_MINI &&
+    process.env.OPENAI_MODEL_FULL
   ) {
     return;
   }
@@ -41,11 +40,9 @@ async function loadLLMConfig(): Promise<void> {
     if (doc.exists) {
       const data = doc.data()!;
       for (const key of [
-        "AZURE_OPENAI_API_KEY",
-        "AZURE_OPENAI_ENDPOINT",
-        "AZURE_OPENAI_API_VERSION",
-        "AZURE_OPENAI_DEPLOYMENT_MINI",
-        "AZURE_OPENAI_DEPLOYMENT_FULL",
+        "OPENAI_API_KEY",
+        "OPENAI_MODEL_MINI",
+        "OPENAI_MODEL_FULL",
       ]) {
         if (!process.env[key] && data[key]) {
           process.env[key] = data[key] as string;
@@ -65,35 +62,39 @@ async function ensureInit(): Promise<void> {
   if (!initPromise) {
     initPromise = (async () => {
       await loadLLMConfig();
-      client = new AzureOpenAI({
-        apiKey: process.env.AZURE_OPENAI_API_KEY,
-        endpoint: process.env.AZURE_OPENAI_ENDPOINT,
-        apiVersion: process.env.AZURE_OPENAI_API_VERSION,
+      if (!process.env.OPENAI_API_KEY) {
+        throw new Error("OPENAI_API_KEY is not configured");
+      }
+      if (!process.env.OPENAI_MODEL_MINI) {
+        throw new Error("OPENAI_MODEL_MINI is not configured");
+      }
+      client = new OpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
         maxRetries: 5,
       });
-      deploymentMini = process.env.AZURE_OPENAI_DEPLOYMENT_MINI!;
-      deploymentFull = process.env.AZURE_OPENAI_DEPLOYMENT_FULL ?? "";
+      modelMini = process.env.OPENAI_MODEL_MINI;
+      modelFull = process.env.OPENAI_MODEL_FULL ?? "";
     })();
   }
   return initPromise;
 }
 
-export async function createAzureClient(): Promise<AzureOpenAI> {
+export async function createOpenAIClient(): Promise<OpenAI> {
   await ensureInit();
   return client!;
 }
 
-export async function getDeploymentMini(): Promise<string> {
+export async function getModelMini(): Promise<string> {
   await ensureInit();
-  return deploymentMini;
+  return modelMini;
 }
 
-export async function getDeploymentFull(): Promise<string> {
+export async function getModelFull(): Promise<string> {
   await ensureInit();
-  if (!deploymentFull) {
-    throw new Error("AZURE_OPENAI_DEPLOYMENT_FULL is not configured");
+  if (!modelFull) {
+    throw new Error("OPENAI_MODEL_FULL is not configured");
   }
-  return deploymentFull;
+  return modelFull;
 }
 
 async function recordUsage(
@@ -121,8 +122,8 @@ async function recordUsage(
 }
 
 export async function callLLM(systemPrompt: string, userPrompt: string, route = "unknown"): Promise<string> {
-  const cl = await createAzureClient();
-  const model = await getDeploymentMini();
+  const cl = await createOpenAIClient();
+  const model = await getModelMini();
   const response = await cl.chat.completions.create({
     model,
     messages: [
@@ -136,8 +137,8 @@ export async function callLLM(systemPrompt: string, userPrompt: string, route = 
 }
 
 export async function callLLMFull(systemPrompt: string, userPrompt: string, route = "unknown"): Promise<string> {
-  const cl = await createAzureClient();
-  const model = await getDeploymentFull();
+  const cl = await createOpenAIClient();
+  const model = await getModelFull();
   const response = await cl.chat.completions.create({
     model,
     messages: [
@@ -156,8 +157,8 @@ export async function callLLMWithSchema(
   jsonSchema: Record<string, unknown>,
   route = "unknown"
 ): Promise<string> {
-  const cl = await createAzureClient();
-  const model = await getDeploymentMini();
+  const cl = await createOpenAIClient();
+  const model = await getModelMini();
   const response = await cl.chat.completions.create({
     model,
     messages: [
@@ -179,8 +180,8 @@ export async function callLLMFullWithSchema(
   jsonSchema: Record<string, unknown>,
   route = "unknown"
 ): Promise<string> {
-  const cl = await createAzureClient();
-  const model = await getDeploymentFull();
+  const cl = await createOpenAIClient();
+  const model = await getModelFull();
   const response = await cl.chat.completions.create({
     model,
     messages: [
@@ -202,8 +203,8 @@ export async function streamLLMFull(
   onChunk: (chunk: string) => void,
   route = "unknown"
 ): Promise<string> {
-  const cl = await createAzureClient();
-  const model = await getDeploymentFull();
+  const cl = await createOpenAIClient();
+  const model = await getModelFull();
   const abortController = new AbortController();
   const stream = await cl.chat.completions.create({
     model,
@@ -248,8 +249,8 @@ export async function streamLLMFullWithSchema(
   onChunk: (chunk: string) => void,
   route = "unknown"
 ): Promise<string> {
-  const cl = await createAzureClient();
-  const model = await getDeploymentFull();
+  const cl = await createOpenAIClient();
+  const model = await getModelFull();
   const abortController = new AbortController();
   const stream = await cl.chat.completions.create({
     model,
@@ -297,8 +298,8 @@ export async function streamLLMWithSchema(
   onChunk: (chunk: string) => void,
   route = "unknown"
 ): Promise<string> {
-  const cl = await createAzureClient();
-  const model = await getDeploymentMini();
+  const cl = await createOpenAIClient();
+  const model = await getModelMini();
   const abortController = new AbortController();
   const stream = await cl.chat.completions.create({
     model,
@@ -475,4 +476,3 @@ Rules:
 
   return results;
 }
-
