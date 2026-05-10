@@ -44,6 +44,7 @@ export default function Dashboard() {
     topics: string[];
     categories: string[];
     levels: string[];
+    groupIds: string[];
   } | null>(null);
   // Grammar state
   const [activeGrammarQuiz, setActiveGrammarQuiz] = useState<GrammarQuizSession | null>(null);
@@ -117,7 +118,7 @@ export default function Dashboard() {
     setSelectedLanguage(lang);
   }
 
-  async function handleFiltersSelected(filters: { topics: string[]; categories: string[]; levels: string[] }) {
+  async function handleFiltersSelected(filters: { topics: string[]; categories: string[]; levels: string[]; groupIds: string[] }) {
     if (starting || !selectedLanguage) return;
     setStarting(true);
     try {
@@ -134,6 +135,7 @@ export default function Dashboard() {
         topics: filters.topics,
         categories: filters.categories,
         levels: filters.levels,
+        groupIds: filters.groupIds,
       });
       setSelectedLanguage(null);
       setActiveQuiz(session);
@@ -170,6 +172,7 @@ export default function Dashboard() {
         topics: filters.topics,
         categories: filters.categories,
         levels: filters.levels,
+        groupIds: filters.groupIds,
       });
       setActiveQuiz(session);
       navigate(`/${language}/quiz`);

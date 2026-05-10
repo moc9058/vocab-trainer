@@ -23,6 +23,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       topics?: string[];
       categories?: string[];
       levels?: string[];
+      groupIds?: string[];
       questionType?: string;
     };
   }>(
@@ -38,16 +39,17 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
             topics: { type: "array", items: { type: "string" } },
             categories: { type: "array", items: { type: "string" } },
             levels: { type: "array", items: { type: "string" } },
+            groupIds: { type: "array", items: { type: "string" } },
             questionType: { type: "string" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { language, questionCount, topics, categories, levels, questionType } = request.body;
+      const { language, questionCount, topics, categories, levels, groupIds, questionType } = request.body;
       const [exists, pool, progressData] = await Promise.all([
         languageExists(language),
-        getFilteredWords(language, { topics, categories, levels }),
+        getFilteredWords(language, { topics, categories, levels, groupIds }),
         getProgressForLanguage(language),
       ]);
 

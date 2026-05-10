@@ -81,6 +81,14 @@ export const TOPICS = [
 
 export type Topic = (typeof TOPICS)[number];
 
+export interface WordGroup {
+  id: string;
+  language: string;
+  name: string;
+  wordIds: string[];
+  createdAt: string;
+}
+
 export interface VocabFile {
   language?: string;
   words: Word[];

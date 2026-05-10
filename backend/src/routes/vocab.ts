@@ -30,6 +30,11 @@ import {
   deleteExampleSentences,
   removeFromAppearsInIds,
   isExampleReferencedByOtherWord,
+  getWordGroups,
+  createWordGroup,
+  updateWordGroup,
+  deleteWordGroup,
+  modifyWordGroupMembers,
 } from "../firestore.js";
 import type { Word, Example, ExampleSentence } from "../types.js";
 import { TOPICS } from "../types.js";
@@ -103,20 +108,20 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
   // List words with filtering & pagination
   fastify.get<{
     Params: { language: string };
-    Querystring: { search?: string; topic?: string; category?: string; level?: string; flaggedOnly?: string; page?: string; limit?: string };
+    Querystring: { search?: string; topic?: string; category?: string; level?: string; flaggedOnly?: string; groupId?: string; page?: string; limit?: string };
   }>("/:language", async (request, reply) => {
     const { language } = request.params;
     if (!(await languageExists(language))) {
       return reply.notFound(`Language '${language}' not found`);
     }
 
-    const { search, topic, category, level, flaggedOnly } = request.query;
+    const { search, topic, category, level, flaggedOnly, groupId } = request.query;
     const page = Math.max(1, parseInt(request.query.page ?? "1", 10) || 1);
     const limit = Math.max(1, Math.min(100, parseInt(request.query.limit ?? "50", 10) || 50));
 
     return await getWords(
       language,
-      { search, topic, category, level, flaggedOnly: flaggedOnly === "true" },
+      { search, topic, category, level, flaggedOnly: flaggedOnly === "true", groupId },
       { page, limit }
     );
   });
@@ -1020,6 +1025,97 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       const existing: Record<string, string> = {};
       for (const m of matches) existing[m.term] = m.id;
       return { existing };
+    }
+  );
+
+  // ========== Word Group Routes ==========
+
+  fastify.get<{ Params: { language: string } }>(
+    "/:language/groups",
+    async (request, reply) => {
+      const { language } = request.params;
+      if (!(await languageExists(language))) return reply.notFound(`Language '${language}' not found`);
+      return await getWordGroups(language);
+    }
+  );
+
+  fastify.post<{ Params: { language: string }; Body: { name: string } }>(
+    "/:language/groups",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["name"],
+          properties: { name: { type: "string", minLength: 1 } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { language } = request.params;
+      const { name } = request.body;
+      if (!(await languageExists(language))) return reply.notFound(`Language '${language}' not found`);
+      const group = await createWordGroup(language, name.trim());
+      reply.code(201);
+      return group;
+    }
+  );
+
+  fastify.put<{ Params: { language: string; groupId: string }; Body: { name: string } }>(
+    "/:language/groups/:groupId",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["name"],
+          properties: { name: { type: "string", minLength: 1 } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { groupId } = request.params;
+      const { name } = request.body;
+      try {
+        return await updateWordGroup(groupId, { name: name.trim() });
+      } catch {
+        return reply.notFound(`Group '${groupId}' not found`);
+      }
+    }
+  );
+
+  fastify.delete<{ Params: { language: string; groupId: string } }>(
+    "/:language/groups/:groupId",
+    async (request, reply) => {
+      const { groupId } = request.params;
+      await deleteWordGroup(groupId);
+      reply.code(204);
+    }
+  );
+
+  fastify.post<{
+    Params: { language: string; groupId: string };
+    Body: { wordIds: string[]; action: "add" | "remove" };
+  }>(
+    "/:language/groups/:groupId/words",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["wordIds", "action"],
+          properties: {
+            wordIds: { type: "array", items: { type: "string" } },
+            action: { type: "string", enum: ["add", "remove"] },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { groupId } = request.params;
+      const { wordIds, action } = request.body;
+      try {
+        return await modifyWordGroupMembers(groupId, wordIds, action);
+      } catch {
+        return reply.notFound(`Group '${groupId}' not found`);
+      }
     }
   );
 };

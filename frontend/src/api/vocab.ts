@@ -1,5 +1,5 @@
 import { fetchJson, postJson, putJson, deleteRequest } from "./client";
-import type { Word, Meaning, PaginatedResult } from "../types";
+import type { Word, Meaning, PaginatedResult, WordGroup } from "../types";
 
 interface WordFilters {
   search?: string;
@@ -7,6 +7,7 @@ interface WordFilters {
   category?: string;
   level?: string;
   flaggedOnly?: boolean;
+  groupId?: string;
 }
 
 export async function getWords(
@@ -23,6 +24,7 @@ export async function getWords(
   if (filters?.category) params.set("category", filters.category);
   if (filters?.level) params.set("level", filters.level);
   if (filters?.flaggedOnly) params.set("flaggedOnly", "true");
+  if (filters?.groupId) params.set("groupId", filters.groupId);
   return fetchJson(`/api/vocab/${encodeURIComponent(language)}?${params}`);
 }
 
@@ -82,4 +84,32 @@ export function smartAddWord(
 
 export function syncSegmentLinks(language: string, exampleIds: string[]): Promise<void> {
   return postJson(`/api/vocab/${encodeURIComponent(language)}/sync-segment-links`, { exampleIds });
+}
+
+export function getGroups(language: string): Promise<WordGroup[]> {
+  return fetchJson(`/api/vocab/${encodeURIComponent(language)}/groups`);
+}
+
+export function createGroup(language: string, name: string): Promise<WordGroup> {
+  return postJson(`/api/vocab/${encodeURIComponent(language)}/groups`, { name });
+}
+
+export function renameGroup(language: string, groupId: string, name: string): Promise<WordGroup> {
+  return putJson(`/api/vocab/${encodeURIComponent(language)}/groups/${encodeURIComponent(groupId)}`, { name });
+}
+
+export function deleteGroup(language: string, groupId: string): Promise<void> {
+  return deleteRequest(`/api/vocab/${encodeURIComponent(language)}/groups/${encodeURIComponent(groupId)}`);
+}
+
+export function modifyGroupMembers(
+  language: string,
+  groupId: string,
+  wordIds: string[],
+  action: "add" | "remove"
+): Promise<WordGroup> {
+  return postJson(
+    `/api/vocab/${encodeURIComponent(language)}/groups/${encodeURIComponent(groupId)}/words`,
+    { wordIds, action }
+  );
 }

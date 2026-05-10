@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
-import { getFilters } from "../api/vocab";
+import { getFilters, getGroups } from "../api/vocab";
+import type { WordGroup } from "../types";
 
 interface Props {
   language: string;
-  onStart: (filters: { topics: string[]; categories: string[]; levels: string[] }) => void;
+  onStart: (filters: { topics: string[]; categories: string[]; levels: string[]; groupIds: string[] }) => void;
   onClose: () => void;
 }
 
@@ -36,22 +37,25 @@ export default function QuizFilterModal({ language, onStart, onClose }: Props) {
   const [allLevels, setAllLevels] = useState<string[]>([]);
   const [allTopics, setAllTopics] = useState<string[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
+  const [allGroups, setAllGroups] = useState<WordGroup[]>([]);
   const [selectedLevels, setSelectedLevels] = useState<Set<string>>(new Set());
   const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getFilters(language)
-      .then(({ levels, topics, categories }) => {
-        setAllLevels(levels);
-        setAllTopics(topics);
-        setAllCategories(categories);
-      })
-      .catch(() => {
-        setAllLevels([]);
-        setAllTopics([]);
-        setAllCategories([]);
+    Promise.allSettled([getFilters(language), getGroups(language)])
+      .then(([filtersResult, groupsResult]) => {
+        if (filtersResult.status === "fulfilled") {
+          const { levels, topics, categories } = filtersResult.value;
+          setAllLevels(levels);
+          setAllTopics(topics);
+          setAllCategories(categories);
+        }
+        if (groupsResult.status === "fulfilled") {
+          setAllGroups(groupsResult.value);
+        }
       })
       .finally(() => setLoading(false));
   }, [language]);
@@ -68,12 +72,13 @@ export default function QuizFilterModal({ language, onStart, onClose }: Props) {
   }
 
   const hasSelection =
-    selectedLevels.size > 0 || selectedTopics.size > 0 || selectedCategories.size > 0;
+    selectedLevels.size > 0 || selectedTopics.size > 0 || selectedCategories.size > 0 || selectedGroupIds.size > 0;
 
   const visibleColumns = [
     allLevels.length > 0 ? "levels" : null,
     allTopics.length > 0 ? "topics" : null,
     allCategories.length > 0 ? "categories" : null,
+    "groups",
   ].filter(Boolean);
 
   return (
@@ -157,40 +162,79 @@ export default function QuizFilterModal({ language, onStart, onClose }: Props) {
                     ))}
                   </ul>
                 </div>
-                {allCategories.length > 0 && <AndDivider />}
+                <AndDivider />
               </>
             )}
 
             {/* Categories column */}
             {allCategories.length > 0 && (
-              <div className="flex-1 flex flex-col min-w-0 min-h-0">
-                <div className="flex items-center gap-2 mb-2">
-                  <h3 className="text-sm font-medium text-gray-300">{t("grammarColumn")}</h3>
-                  <span className="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded select-none">OR</span>
+              <>
+                <div className="flex-1 flex flex-col min-w-0 min-h-0">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-sm font-medium text-gray-300">{t("grammarColumn")}</h3>
+                    <span className="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded select-none">OR</span>
+                    <button
+                      onClick={() => toggleAll(allCategories, selectedCategories, setSelectedCategories)}
+                      className="ml-auto text-xs text-blue-400 hover:text-blue-300"
+                    >
+                      {selectedCategories.size === allCategories.length ? t("clearAll") : t("selectAll")}
+                    </button>
+                  </div>
+                  <ul className="flex-1 overflow-y-auto space-y-1">
+                    {allCategories.map((cat) => (
+                      <li key={cat}>
+                        <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedCategories.has(cat)}
+                            onChange={() => toggle(selectedCategories, setSelectedCategories, cat)}
+                            className="accent-blue-600"
+                          />
+                          {cat}
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <AndDivider />
+              </>
+            )}
+
+            {/* Groups column — always shown */}
+            <div className="flex-1 flex flex-col min-w-0 min-h-0">
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="text-sm font-medium text-gray-300">{t("groups")}</h3>
+                <span className="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded select-none">OR</span>
+                {allGroups.length > 0 && (
                   <button
-                    onClick={() => toggleAll(allCategories, selectedCategories, setSelectedCategories)}
+                    onClick={() => toggleAll(allGroups.map((g) => g.id), selectedGroupIds, setSelectedGroupIds)}
                     className="ml-auto text-xs text-blue-400 hover:text-blue-300"
                   >
-                    {selectedCategories.size === allCategories.length ? t("clearAll") : t("selectAll")}
+                    {selectedGroupIds.size === allGroups.length ? t("clearAll") : t("selectAll")}
                   </button>
-                </div>
+                )}
+              </div>
+              {allGroups.length === 0 ? (
+                <p className="text-xs text-gray-500 px-2">{t("noGroupsHint")}</p>
+              ) : (
                 <ul className="flex-1 overflow-y-auto space-y-1">
-                  {allCategories.map((cat) => (
-                    <li key={cat}>
+                  {allGroups.map((group) => (
+                    <li key={group.id}>
                       <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={selectedCategories.has(cat)}
-                          onChange={() => toggle(selectedCategories, setSelectedCategories, cat)}
+                          checked={selectedGroupIds.has(group.id)}
+                          onChange={() => toggle(selectedGroupIds, setSelectedGroupIds, group.id)}
                           className="accent-blue-600"
                         />
-                        {cat}
+                        <span className="flex-1 min-w-0 truncate">{group.name}</span>
+                        <span className="text-xs text-gray-500 shrink-0">{group.wordIds.length}</span>
                       </label>
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
 
@@ -214,6 +258,7 @@ export default function QuizFilterModal({ language, onStart, onClose }: Props) {
                 topics: [...selectedTopics],
                 categories: [...selectedCategories],
                 levels: [...selectedLevels],
+                groupIds: [...selectedGroupIds],
               })
             }
             disabled={loading}

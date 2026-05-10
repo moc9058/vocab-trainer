@@ -68,6 +68,14 @@ export interface Word {
   hanjaReadings?: HanjaReading[];
 }
 
+export interface WordGroup {
+  id: string;
+  language: string;
+  name: string;
+  wordIds: string[];
+  createdAt: string;
+}
+
 export interface PaginatedResult<T> {
   items: T[];
   total: number;

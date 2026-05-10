@@ -22,6 +22,7 @@ import type {
   TokenUsageRecord,
   TokenUsageDailySummary,
   TokenCostConfig,
+  WordGroup,
 } from "./types.js";
 
 const db = new Firestore({
@@ -41,6 +42,7 @@ const quizSessions = db.collection("quiz_sessions");
 const flaggedWords = db.collection("flagged_words");
 const exampleSentences = db.collection("example_sentences");
 const exampleSentenceIndex = db.collection("example_sentence_index");
+const wordGroups = db.collection("word_groups");
 
 /** Internal type: Word with optional Firestore-stored ID arrays (pre-hydration). */
 interface WordRaw extends Word {
@@ -163,11 +165,21 @@ function paginateResults(results: Word[], page: number, limit: number): Paginate
 
 export async function getWords(
   language: string,
-  filters?: { search?: string; topic?: string; category?: string; level?: string; flaggedOnly?: boolean },
+  filters?: { search?: string; topic?: string; category?: string; level?: string; flaggedOnly?: boolean; groupId?: string },
   pagination?: { page: number; limit: number }
 ): Promise<PaginatedResult<Word>> {
   const page = pagination?.page ?? 1;
   const limit = pagination?.limit ?? 50;
+
+  // Group filter: fetch group's wordIds then apply all other filters in-memory
+  if (filters?.groupId) {
+    const group = await getWordGroup(filters.groupId);
+    const groupWordIds = group?.wordIds ?? [];
+    let results = await getWordsByIds(groupWordIds);
+    const { groupId: _g, flaggedOnly: _f, ...rest } = filters;
+    results = applyFilters(results, rest);
+    return paginateResults(results, page, limit);
+  }
 
   // Flagged-only: fetch only flagged words by ID (avoids full collection scan)
   if (filters?.flaggedOnly) {
@@ -222,7 +234,7 @@ export async function getAllWords(language: string): Promise<Word[]> {
 
 export async function getFilteredWords(
   language: string,
-  filters?: { topics?: string[]; categories?: string[]; levels?: string[] }
+  filters?: { topics?: string[]; categories?: string[]; levels?: string[]; groupIds?: string[] }
 ): Promise<Word[]> {
   // Firestore array-contains can only filter on one topic at a time,
   // so we fetch all words and filter client-side for multi-value filters
@@ -232,9 +244,23 @@ export async function getFilteredWords(
   const hasTopicFilter = filters?.topics && filters.topics.length > 0;
   const hasCategoryFilter = filters?.categories && filters.categories.length > 0;
   const hasLevelFilter = filters?.levels && filters.levels.length > 0;
+  const hasGroupFilter = filters?.groupIds && filters.groupIds.length > 0;
 
-  if (hasTopicFilter || hasCategoryFilter || hasLevelFilter) {
+  // Group filter: resolve all selected groups and compute union of their wordIds
+  let groupWordIdSet: Set<string> | null = null;
+  if (hasGroupFilter) {
+    const groupDocs = await Promise.all(filters!.groupIds!.map((id) => getWordGroup(id)));
+    const union = new Set<string>();
+    for (const g of groupDocs) {
+      if (g) for (const wid of g.wordIds) union.add(wid);
+    }
+    groupWordIdSet = union;
+  }
+
+  if (hasTopicFilter || hasCategoryFilter || hasLevelFilter || hasGroupFilter) {
     results = results.filter((w) => {
+      // Group acts as a scope limiter (AND with other filters)
+      const matchesGroup = !groupWordIdSet || groupWordIdSet.has(w.id);
       // Level acts as a scope limiter (AND with other filters)
       const matchesLevel = !hasLevelFilter || (!!w.level && filters!.levels!.includes(w.level));
       // Topics and categories are additive (OR with each other)
@@ -242,7 +268,7 @@ export async function getFilteredWords(
         ? true
         : (hasTopicFilter && w.topics.some((t) => filters!.topics!.includes(t))) ||
           (hasCategoryFilter && w.definitions.some((m) => filters!.categories!.includes(m.partOfSpeech)));
-      return matchesLevel && matchesContent;
+      return matchesGroup && matchesLevel && matchesContent;
     });
   }
 
@@ -1780,6 +1806,82 @@ export async function getVocabularyConfig(): Promise<{
     segmentSchema: d.segmentSchema,
     segmentPrompt: d.segmentPrompt,
   };
+}
+
+// ========== Word Groups ==========
+
+function docToWordGroup(doc: FirebaseFirestore.DocumentSnapshot): WordGroup {
+  const d = doc.data()!;
+  return {
+    id: d.id as string,
+    language: d.language as string,
+    name: d.name as string,
+    wordIds: (d.wordIds ?? []) as string[],
+    createdAt: d.createdAt as string,
+  };
+}
+
+export async function getWordGroups(language: string): Promise<WordGroup[]> {
+  const snap = await wordGroups.where("language", "==", language).get();
+  return snap.docs.map(docToWordGroup).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function getWordGroup(groupId: string): Promise<WordGroup | null> {
+  const doc = await wordGroups.doc(groupId).get();
+  return doc.exists ? docToWordGroup(doc) : null;
+}
+
+export async function createWordGroup(language: string, name: string): Promise<WordGroup> {
+  const id = `${language}_${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+  const group: WordGroup = {
+    id,
+    language,
+    name,
+    wordIds: [],
+    createdAt: new Date().toISOString(),
+  };
+  await wordGroups.doc(id).set(group);
+  return group;
+}
+
+export async function updateWordGroup(groupId: string, patch: { name?: string }): Promise<WordGroup> {
+  await wordGroups.doc(groupId).update(patch);
+  const updated = await wordGroups.doc(groupId).get();
+  return docToWordGroup(updated);
+}
+
+export async function deleteWordGroup(groupId: string): Promise<void> {
+  await wordGroups.doc(groupId).delete();
+}
+
+export async function modifyWordGroupMembers(
+  groupId: string,
+  wordIds: string[],
+  action: "add" | "remove"
+): Promise<WordGroup> {
+  return db.runTransaction(async (tx) => {
+    const ref = wordGroups.doc(groupId);
+    const doc = await tx.get(ref);
+    if (!doc.exists) throw new Error(`Group '${groupId}' not found`);
+    const current: string[] = doc.data()!.wordIds ?? [];
+    let next: string[];
+    if (action === "add") {
+      const toAdd = new Set(current);
+      for (const id of wordIds) toAdd.add(id);
+      next = [...toAdd];
+    } else {
+      const toRemove = new Set(wordIds);
+      next = current.filter((id) => !toRemove.has(id));
+    }
+    tx.update(ref, { wordIds: next });
+    return {
+      id: doc.data()!.id as string,
+      language: doc.data()!.language as string,
+      name: doc.data()!.name as string,
+      wordIds: next,
+      createdAt: doc.data()!.createdAt as string,
+    };
+  });
 }
 
 export { db };

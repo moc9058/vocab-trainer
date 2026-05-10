@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks } from "../api/vocab";
+import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks, getGroups } from "../api/vocab";
+import GroupPickerModal from "./GroupPickerModal";
 import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
 import SmartAddWordModal from "./SmartAddWordModal";
-import { displayTranslation, type Word, type PaginatedResult } from "../types";
+import { displayTranslation, type Word, type PaginatedResult, type WordGroup } from "../types";
 import { urlLanguageToIsoCode } from "../settings/defaults";
 
 type SmartAddPayload = {
@@ -39,7 +40,10 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const [topic, setTopic] = useState("");
   const [category, setCategory] = useState("");
   const [level, setLevel] = useState("");
+  const [groupId, setGroupId] = useState("");
   const [flaggedOnly, setFlaggedOnly] = useState(false);
+  const [groups, setGroups] = useState<WordGroup[]>([]);
+  const [showGroupPicker, setShowGroupPicker] = useState<{ wordIds: string[]; manage: boolean } | null>(null);
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [existingTerms, setExistingTerms] = useState<Map<string, string>>(new Map());
@@ -491,6 +495,9 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     getFilters(language)
       .then(setFilterOptions)
       .catch(() => setFilterOptions(null));
+    getGroups(language)
+      .then(setGroups)
+      .catch(() => setGroups([]));
   }, [language]);
 
   const fetchData = useCallback(async () => {
@@ -505,6 +512,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
         category: category || undefined,
         level: level || undefined,
         flaggedOnly: flaggedOnly || undefined,
+        groupId: groupId || undefined,
       };
       const data = await getWords(language, filters, page);
       if (currentRequestId !== requestIdRef.current) return; // stale response
@@ -551,7 +559,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       return;
     }
     setPage(1);
-  }, [debouncedSearch, topic, category, level, flaggedOnly]);
+  }, [debouncedSearch, topic, category, level, flaggedOnly, groupId]);
 
   // Scroll to a newly added word after fetchData completes
   useEffect(() => {
@@ -567,7 +575,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   // scoped to the current view, not persisted across navigation.
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [language, debouncedSearch, topic, category, level, flaggedOnly, page]);
+  }, [language, debouncedSearch, topic, category, level, flaggedOnly, groupId, page]);
 
   return (
     <div className="flex h-full flex-col">
@@ -634,6 +642,35 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
               </select>
             </>
           )}
+          {groups.length > 0 && (
+            <div className="flex items-center gap-1">
+              <select
+                value={groupId}
+                onChange={(e) => setGroupId(e.target.value)}
+                className="rounded-lg border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+              >
+                <option value="">{t("groups")}: {t("noGroupFilter")}</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name} ({g.wordIds.length})</option>
+                ))}
+              </select>
+              <button
+                onClick={() => setShowGroupPicker({ wordIds: [], manage: true })}
+                className="rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-xs text-gray-400 hover:bg-gray-600"
+                title={t("manageGroups")}
+              >
+                {t("manageGroups")}
+              </button>
+            </div>
+          )}
+          {groups.length === 0 && (
+            <button
+              onClick={() => setShowGroupPicker({ wordIds: [], manage: true })}
+              className="rounded-lg border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-400 hover:bg-gray-600"
+            >
+              + {t("groups")}
+            </button>
+          )}
           <label className="flex items-center gap-1.5 rounded-lg border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-100 cursor-pointer select-none">
             <input
               type="checkbox"
@@ -658,6 +695,12 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
               className="rounded-lg border border-gray-600 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
             >
               {t("clearSelection")}
+            </button>
+            <button
+              onClick={() => setShowGroupPicker({ wordIds: [...selectedIds], manage: false })}
+              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-500"
+            >
+              {t("addToGroup")}
             </button>
             <button
               onClick={() => setShowBulkDeleteConfirm(true)}
@@ -705,6 +748,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                         onToggleFlag={() => handleToggleFlag(word.id)}
                         onEdit={() => setEditingWord(word)}
                         onDelete={() => setDeletingId(word.id)}
+                        onAddToGroup={() => setShowGroupPicker({ wordIds: [word.id], manage: false })}
                         onToggleSegment={handleAddSegmentWord}
                         existingTerms={expandedId === word.id ? existingTerms : new Map()}
                         checkingTerms={expandedId === word.id ? checkingTerms : false}
@@ -766,6 +810,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                           onToggleFlag={() => handleToggleFlag(word.id)}
                           onEdit={() => setEditingWord(word)}
                           onDelete={() => setDeletingId(word.id)}
+                          onAddToGroup={() => setShowGroupPicker({ wordIds: [word.id], manage: false })}
                           onToggleSegment={handleAddSegmentWord}
                           existingTerms={expandedId === word.id ? existingTerms : new Map()}
                           checkingTerms={expandedId === word.id ? checkingTerms : false}
@@ -935,6 +980,17 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           ✗ {segmentAddError}
         </div>
       )}
+      {showGroupPicker && (
+        <GroupPickerModal
+          language={language}
+          wordIds={showGroupPicker.wordIds}
+          onClose={() => setShowGroupPicker(null)}
+          onDone={(updatedGroups) => {
+            setGroups(updatedGroups);
+            setShowGroupPicker(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -947,6 +1003,7 @@ function WordCard({
   onToggleFlag,
   onEdit,
   onDelete,
+  onAddToGroup,
   onToggleSegment,
   existingTerms,
   checkingTerms,
@@ -967,6 +1024,7 @@ function WordCard({
   onToggleFlag: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onAddToGroup?: () => void;
   onToggleSegment?: (term: string, sentence: string, translation: string) => void;
   existingTerms: Map<string, string>;
   checkingTerms: boolean;
@@ -1335,13 +1393,21 @@ function WordCard({
               ))}
             </div>
           )}
-          <div className="mt-2 flex gap-2">
+          <div className="mt-2 flex flex-wrap gap-2">
             <button
               onClick={(e) => { e.stopPropagation(); onToggleFlag(); }}
               className={`rounded px-2 py-1 text-xs ${isFlagged ? "bg-amber-600 text-white hover:bg-amber-500" : "bg-gray-600 text-gray-200 hover:bg-gray-500"}`}
             >
               {isFlagged ? t("removeFlag") : t("flagForReview")}
             </button>
+            {onAddToGroup && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onAddToGroup(); }}
+                className="rounded bg-indigo-700 px-2 py-1 text-xs text-gray-200 hover:bg-indigo-600"
+              >
+                {t("addToGroup")}
+              </button>
+            )}
             <button
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
               className="rounded bg-gray-600 px-2 py-1 text-xs text-gray-200 hover:bg-gray-500"
@@ -1369,6 +1435,7 @@ function WordRow({
   onToggleFlag,
   onEdit,
   onDelete,
+  onAddToGroup,
   onToggleSegment,
   existingTerms,
   checkingTerms,
@@ -1389,6 +1456,7 @@ function WordRow({
   onToggleFlag: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onAddToGroup?: () => void;
   onToggleSegment?: (term: string, sentence: string, translation: string) => void;
   existingTerms: Map<string, string>;
   checkingTerms: boolean;
@@ -1747,13 +1815,21 @@ function WordRow({
                 ))}
               </div>
             )}
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2 flex flex-wrap gap-2">
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleFlag(); }}
                 className={`rounded px-2 py-1 text-xs ${isFlagged ? "bg-amber-600 text-white hover:bg-amber-500" : "bg-gray-600 text-gray-200 hover:bg-gray-500"}`}
               >
                 {isFlagged ? t("removeFlag") : t("flagForReview")}
               </button>
+              {onAddToGroup && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onAddToGroup(); }}
+                  className="rounded bg-indigo-700 px-2 py-1 text-xs text-gray-200 hover:bg-indigo-600"
+                >
+                  {t("addToGroup")}
+                </button>
+              )}
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(); }}
                 className="rounded bg-gray-600 px-2 py-1 text-xs text-gray-200 hover:bg-gray-500"
