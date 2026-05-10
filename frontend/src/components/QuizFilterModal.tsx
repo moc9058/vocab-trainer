@@ -7,6 +7,9 @@ interface Props {
   language: string;
   onStart: (filters: { topics: string[]; categories: string[]; levels: string[]; groupIds: string[] }) => void;
   onClose: () => void;
+  startLabel?: string;
+  groupCountMode?: "all" | "flagged";
+  flaggedWordIds?: Set<string> | null;
 }
 
 function AndDivider() {
@@ -32,7 +35,14 @@ function AndDivider() {
   );
 }
 
-export default function QuizFilterModal({ language, onStart, onClose }: Props) {
+export default function QuizFilterModal({
+  language,
+  onStart,
+  onClose,
+  startLabel,
+  groupCountMode = "all",
+  flaggedWordIds,
+}: Props) {
   const { t } = useI18n();
   const [allLevels, setAllLevels] = useState<string[]>([]);
   const [allTopics, setAllTopics] = useState<string[]>([]);
@@ -55,6 +65,7 @@ export default function QuizFilterModal({ language, onStart, onClose }: Props) {
         }
         if (groupsResult.status === "fulfilled") {
           setAllGroups(groupsResult.value);
+          setSelectedGroupIds(new Set(groupsResult.value.map((g: WordGroup) => g.id)));
         }
       })
       .finally(() => setLoading(false));
@@ -80,6 +91,13 @@ export default function QuizFilterModal({ language, onStart, onClose }: Props) {
     allCategories.length > 0 ? "categories" : null,
     "groups",
   ].filter(Boolean);
+
+  function groupWordCount(group: WordGroup): string | number {
+    if (groupCountMode === "flagged") {
+      return flaggedWordIds ? group.wordIds.filter((id) => flaggedWordIds.has(id)).length : "...";
+    }
+    return group.wordIds.length;
+  }
 
   return (
     <div
@@ -228,7 +246,7 @@ export default function QuizFilterModal({ language, onStart, onClose }: Props) {
                           className="accent-blue-600"
                         />
                         <span className="flex-1 min-w-0 truncate">{group.name}</span>
-                        <span className="text-xs text-gray-500 shrink-0">{group.wordIds.length}</span>
+                        <span className="text-xs text-gray-500 shrink-0">{groupWordCount(group)}</span>
                       </label>
                     </li>
                   ))}
@@ -264,7 +282,7 @@ export default function QuizFilterModal({ language, onStart, onClose }: Props) {
             disabled={loading}
             className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
           >
-            {t("startQuiz")}
+            {startLabel ?? t("startQuiz")}
           </button>
         </div>
       </div>

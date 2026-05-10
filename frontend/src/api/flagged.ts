@@ -5,6 +5,10 @@ export function getFlaggedWords(language: string): Promise<{ words: Word[]; coun
   return fetchJson(`/api/flagged/${encodeURIComponent(language)}`);
 }
 
+export function getFlaggedWordIds(language: string): Promise<{ wordIds: string[]; count: number }> {
+  return fetchJson(`/api/flagged/${encodeURIComponent(language)}/ids`);
+}
+
 export function getFlaggedWordCount(language: string): Promise<{ count: number }> {
   return fetchJson(`/api/flagged/${encodeURIComponent(language)}/count`);
 }

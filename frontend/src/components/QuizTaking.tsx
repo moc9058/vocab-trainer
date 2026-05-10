@@ -3,10 +3,12 @@ import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP } from "../settings/defaults";
 import { answerQuestion, getQuizQuestions } from "../api/quiz";
+import { getFlaggedWordIds } from "../api/flagged";
 import RubyText from "./RubyText";
 import { displayTranslation, type QuizSession, type QuizQuestion } from "../types";
 
 const BATCH_SIZE = 50;
+const VISIBLE_ANSWER_ITEMS = 4;
 
 interface Props {
   session: QuizSession;
@@ -38,13 +40,17 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showingAnswer, setShowingAnswer] = useState(false);
+  const [showAllDefinitions, setShowAllDefinitions] = useState(false);
+  const [showAllExamples, setShowAllExamples] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
+  const [alreadyFlaggedIds, setAlreadyFlaggedIds] = useState<Set<string>>(new Set());
   const [originalTotal] = useState(() => session.wordIds?.length ?? session.questions.length);
 
   // Track how many questions have been fetched from the server
   const fetchedCountRef = useRef(0);
   const fetchingRef = useRef(false);
+  const submittingRef = useRef(false);
   const totalQuestionsRef = useRef(session.questions.length);
 
   const fetchBatch = useCallback(async (offset: number, limit: number) => {
@@ -95,8 +101,30 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     }
   }, [currentIndex, loading, questions, fetchBatch, session.questions]);
 
+  useEffect(() => {
+    getFlaggedWordIds(session.language)
+      .then(({ wordIds }) => setAlreadyFlaggedIds(new Set(wordIds)))
+      .catch(() => setAlreadyFlaggedIds(new Set()));
+  }, [session.language]);
+
   const question = currentIndex < questions.length ? questions[currentIndex] : null;
   const isComplete = currentSession.status === "completed";
+  const definitions = question?.definitions ?? [];
+  const examples = question?.examples ?? [];
+  const visibleDefinitions = showAllDefinitions ? definitions : definitions.slice(0, VISIBLE_ANSWER_ITEMS);
+  const visibleExamples = showAllExamples ? examples : examples.slice(0, VISIBLE_ANSWER_ITEMS);
+
+  function resetExpandedAnswers() {
+    setShowAllDefinitions(false);
+    setShowAllExamples(false);
+  }
+
+  function revealAnswer() {
+    if (!question) return;
+    resetExpandedAnswers();
+    setShowingAnswer(true);
+    setFlaggedIds(new Set([question.wordId]));
+  }
 
   const segmentWords = useMemo(() => {
     if (!question?.examples) return [];
@@ -104,14 +132,14 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     const result: { id: string; text: string; transliteration?: string }[] = [];
     for (const ex of question.examples) {
       for (const seg of ex.segments ?? []) {
-        if (seg.id && seg.id !== question.wordId && !seen.has(seg.id)) {
+        if (seg.id && seg.id !== question.wordId && !alreadyFlaggedIds.has(seg.id) && !seen.has(seg.id)) {
           seen.add(seg.id);
           result.push({ id: seg.id, text: seg.text, transliteration: seg.transliteration });
         }
       }
     }
     return result;
-  }, [question]);
+  }, [alreadyFlaggedIds, question]);
 
   function toggleFlag(id: string) {
     setFlaggedIds((prev) => {
@@ -123,15 +151,21 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   }
 
   async function handleGrade(correct: boolean) {
-    if (!question || submitting) return;
+    if (!question || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
+    const submittedFlagIds = Array.from(flaggedIds);
     try {
       await answerQuestion({
         sessionId: currentSession.sessionId,
         wordId: question.wordId,
         correct,
-        flagWordIds: flaggedIds.size > 0 ? Array.from(flaggedIds) : undefined,
+        flagWordIds: submittedFlagIds.length > 0 ? submittedFlagIds : undefined,
       });
+
+      if (submittedFlagIds.length > 0) {
+        setAlreadyFlaggedIds((prev) => new Set([...prev, ...submittedFlagIds]));
+      }
 
       setQuestions((prev) => {
         const updated = prev.map((q, i) =>
@@ -169,11 +203,37 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
 
       setCurrentIndex((i) => i + 1);
       setShowingAnswer(false);
+      resetExpandedAnswers();
       setFlaggedIds(new Set());
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (!showingAnswer) {
+        if (question && !event.repeat && (event.key === " " || event.code === "Space")) {
+          event.preventDefault();
+          revealAnswer();
+        }
+        return;
+      }
+
+      if (submittingRef.current || event.repeat) return;
+      if (event.key === "1") {
+        event.preventDefault();
+        void handleGrade(false);
+      } else if (event.key === "2") {
+        event.preventDefault();
+        void handleGrade(true);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [question, showingAnswer, submitting, handleGrade]);
 
   if (loading) {
     return (
@@ -218,7 +278,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
 
       {!showingAnswer ? (
         <button
-          onClick={() => { setShowingAnswer(true); setFlaggedIds(new Set([question!.wordId])); }}
+          onClick={revealAnswer}
           className="rounded-lg bg-gray-700 px-6 py-2 text-gray-300 hover:bg-gray-600"
         >
           {t("showAnswer")}
@@ -255,7 +315,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
             </div>
           )}
           <div className="text-center space-y-2">
-            {(question!.definitions ?? []).map((m, mi) => (
+            {visibleDefinitions.map((m, mi) => (
               <div key={mi}>
                 {m.partOfSpeech && <p className="text-xs text-gray-500 italic">{m.partOfSpeech}</p>}
                 {(() => {
@@ -271,17 +331,39 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
                 ))}
               </div>
             ))}
+            {definitions.length > VISIBLE_ANSWER_ITEMS && (
+              <button
+                type="button"
+                onClick={() => setShowAllDefinitions((v) => !v)}
+                className="mt-1 rounded-md border border-gray-600 bg-gray-700/60 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-600 hover:text-gray-100"
+              >
+                {showAllDefinitions
+                  ? `▲ ${t("showFewerDefinitions")}`
+                  : `▼ ${t("showMoreDefinitions")} (${definitions.length - VISIBLE_ANSWER_ITEMS})`}
+              </button>
+            )}
           </div>
 
-          {question!.examples && question!.examples.length > 0 && (
+          {examples.length > 0 && (
             <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
               <p className="mb-2 text-sm font-medium text-gray-400">{t("examples")}</p>
-              {question!.examples.map((ex, i) => (
+              {visibleExamples.map((ex, i) => (
                 <div key={i} className="mb-2 last:mb-0">
                   <p className="text-lg text-gray-100"><RubyText text={ex.sentence} segments={ex.segments} /></p>
                   <TranslationDisplay translation={ex.translation} />
                 </div>
               ))}
+              {examples.length > VISIBLE_ANSWER_ITEMS && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllExamples((v) => !v)}
+                  className="mt-2 w-full rounded-md border border-gray-600 bg-gray-600/30 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-600/60 hover:text-gray-100"
+                >
+                  {showAllExamples
+                    ? `▲ ${t("showFewerExamples")}`
+                    : `▼ ${t("showMoreExamples")} (${examples.length - VISIBLE_ANSWER_ITEMS})`}
+                </button>
+              )}
             </div>
           )}
 
@@ -319,17 +401,17 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
             <button
               disabled={submitting}
-              onClick={() => handleGrade(true)}
-              className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-2 text-white hover:bg-green-700 disabled:opacity-50"
-            >
-              {t("iWasCorrect")}
-            </button>
-            <button
-              disabled={submitting}
               onClick={() => handleGrade(false)}
               className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-2 text-white hover:bg-red-700 disabled:opacity-50"
             >
               {t("iWasWrong")}
+            </button>
+            <button
+              disabled={submitting}
+              onClick={() => handleGrade(true)}
+              className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              {t("iWasCorrect")}
             </button>
           </div>
         </>

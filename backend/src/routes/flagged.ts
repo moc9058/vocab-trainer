@@ -24,6 +24,20 @@ const flaggedRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // List flagged word IDs only, for lightweight UI counts
+  fastify.get<{ Params: { language: string } }>(
+    "/:language/ids",
+    async (request, reply) => {
+      const { language } = request.params;
+      if (!(await languageExists(language))) {
+        return reply.notFound(`Language '${language}' not found`);
+      }
+      const flagged = await getFlaggedWords(language);
+      const wordIds = flagged.map((f) => f.wordId);
+      return { wordIds, count: wordIds.length };
+    }
+  );
+
   // Get flagged word count
   fastify.get<{ Params: { language: string } }>(
     "/:language/count",

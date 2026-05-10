@@ -59,73 +59,31 @@ docker compose up --build      # Run full stack (backend :3000, frontend :5173)
 Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** + **React 19 / Vite 6 frontend**.
 
 ### Backend (`backend/src/`)
-- **Entry**: `index.ts` — Fastify server with pino logging (stdout + file), CORS, route registration
 - **Routes** (each is a `FastifyPluginAsync` registered under `/api`):
-  - `routes/languages.ts` — lists available languages from Firestore
-  - `routes/vocab.ts` — CRUD for vocabulary words + smart-add with LLM. Smart-add always asks the LLM for definitions and example translations in all four supported codes (`en`/`ja`/`ko`/`zh`) — `ALL_DEFINITION_LANGUAGES` is hardcoded; the language values in the request body are treated as user-supplied anchors only. Chinese levels are normalized at storage time by `CHINESE_LEVEL_NORMALIZE` into the merged HSK buckets.
-  - `routes/quiz.ts` — word quiz sessions with weighted random sampling; hydrated questions include `hanjaReadings`
-  - `routes/progress.ts` — per-word progress tracking
-  - `routes/flagged.ts` — flagged words for review
-  - `routes/grammar.ts` — CRUD for grammar items, chapters, subchapters
-  - `routes/grammar-quiz.ts` — grammar quiz with self-grading, two modes; also exposes `check-missing-words` and `add-missing-words`
-  - `routes/grammar-progress.ts` — per-component grammar progress
-  - `routes/translation.ts` — two-step translation/analysis: decomposition (MINI model) then parallel translation per target language (FULL model); SSE streaming via `POST /translate-stream`
-  - `routes/speaking-writing.ts` — text correction for speaking/writing practice; SSE streaming with language-specific prompts + use-case context
-  - `routes/metrics.ts` — LLM token usage tracking and cost estimation
-- **Database**: `firestore.ts` — Google Cloud Firestore abstraction layer. `updateWord` per-sentence-merges old example `segments` onto the incoming `examples` whenever the sentence text is unchanged, so `WordFormModal` (which doesn't carry segments through its form state) doesn't wipe LLM-generated pinyin on every save. `getCanonicalSegmentPinyin(word)` returns `undefined` for polyphonic words so callers keep the LLM-generated contextual value.
-- **LLM**: `llm.ts` — Azure OpenAI integration. `callLLM`/`callLLMWithSchema`/`streamLLMWithSchema` use MINI deployment; `callLLMFull`/`callLLMFullWithSchema`/`streamLLMFullWithSchema` use FULL deployment. Config loaded from `.env` (local) or Firestore `config/llm` (deployed). All LLM functions accept a `route` parameter and log token counts to Firestore.
-- **Types**: `types.ts` — shared interfaces; `Word` carries optional `hanjaReadings?: HanjaReading[]` (`{ simplifiedChar, traditionalChar, hunEum[] }` per character)
-- Errors via `@fastify/sensible`: `reply.notFound()`, `reply.badRequest()`, `reply.conflict()`
+  - `routes/vocab.ts` — smart-add always asks LLM for all four codes (`en`/`ja`/`ko`/`zh`) — `ALL_DEFINITION_LANGUAGES` is hardcoded; request body languages are anchors only. Chinese levels normalized at storage time by `CHINESE_LEVEL_NORMALIZE`.
+  - `routes/quiz.ts` — hydrated questions include `hanjaReadings`
+  - `routes/grammar-quiz.ts` — also exposes `check-missing-words` and `add-missing-words`
+  - `routes/translation.ts` / `routes/speaking-writing.ts` — SSE streaming via POST endpoint
+- **Database**: `firestore.ts` — `updateWord` per-sentence-merges old example `segments` onto incoming `examples` when sentence text is unchanged, so `WordFormModal` (which doesn't carry segments through form state) doesn't wipe LLM-generated pinyin on save. `getCanonicalSegmentPinyin(word)` returns `undefined` for polyphonic words so callers keep the LLM-generated contextual value.
+- **LLM**: `llm.ts` — `callLLM*` functions use MINI deployment; `callLLMFull*` use FULL deployment. Config from `.env` (local) or Firestore `config/llm` (deployed).
+- **Types**: `types.ts` — `Word` carries optional `hanjaReadings?: HanjaReading[]` (`{ simplifiedChar, traditionalChar, hunEum[] }` per character)
 
 ### Data Storage
-- **Primary**: Google Cloud Firestore (database ID: `vocab-database`)
-  - `languages` — language metadata (word count, topics, levels)
-  - `words` — all vocabulary words partitioned by language field
-  - `progress` — per-word progress (composite key: `{language}_{wordId}`)
-  - `word_index` — fast term lookup (composite key: `{language}_{term}`)
-  - `example_sentences` — normalized example sentences; words store `exampleIds` and `appearsInIds` arrays referencing this collection
-  - `example_sentence_index` — dedup lookup (composite key: `{language}_{sha256(sentence).slice(0,16)}`)
-  - `id_maps` — next ID counters per language
-  - `word_groups` — user-defined word groups per language
-  - `quiz_sessions`, `grammar_quiz_sessions` — one active session per language
-  - `flagged_words`, `grammar_chapters`, `grammar_items`, `grammar_progress`
-  - `translation_history`, `speaking_writing_sessions`
-  - `config` — `config/llm` (Azure OpenAI keys), `config/token_costs`, `config/speaking_writing`, `config/translation`, `config/vocabulary`
-  - `archive_backups`, `archive_originals` — chunked subcollections for large files
-  - `token_usage`, `token_usage_daily` — LLM call logs and daily aggregates
-- **Local files**: `backend/DB/word/`, `backend/DB/grammer/`, `backend/DB/speaking&writing/`, `backend/DB/translation/`, `backend/DB/vocabulary/`, `backend/DB/backup/`
+- **Firestore** (database ID: `vocab-database`). Key composite keys: `progress`/`word_index` use `{language}_{wordId}`, `example_sentence_index` uses `{language}_{sha256(sentence).slice(0,16)}`.
+- `example_sentences` — normalized; words store `exampleIds` and `appearsInIds` arrays referencing this collection
+- `config` subcollections: `config/llm`, `config/token_costs`, `config/speaking_writing`, `config/translation`, `config/vocabulary`
+- **Local files**: `backend/DB/` (word, grammer, speaking&writing, translation, vocabulary, backup)
 
 ### Language Code Convention
-All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean), `zh` (Chinese). This applies to word definition keys, example sentence translation records, grammar data fields, and UI language selection. The export script normalizes legacy keys (e.g., `"Japanese"` → `"ja"`, `"kr"` → `"ko"`) on export.
+All language codes use ISO 639-1: `ja`, `en`, `ko`, `zh`. The export script normalizes legacy keys (e.g., `"Japanese"` → `"ja"`, `"kr"` → `"ko"`) on export.
 
 ### Frontend (`frontend/src/`)
-- **Entry**: `main.tsx` → `App.tsx` (routes: `/` → `LanguageSelectPage`, `/:language/*` → `Dashboard`) → `Dashboard.tsx`
-- **State**: React hooks + Context API (`i18n/context.tsx` for UI language, `settings/context.tsx` for app settings)
-- **Settings**: `settings/context.tsx` — `SettingsProvider` + `useSettings()` hook; persisted to `localStorage("appSettings")`. Key fields:
-  - `languageOrder` — drives definition/language selector/UI button ordering
-  - `displayDefinitionLanguages`, `displayExampleTranslationLanguages` — client-side display filtering (LLM always generates all four languages)
+- **Settings**: `settings/context.tsx` — persisted to `localStorage("appSettings")`.
   - `defaultAddWordLanguage` — backend full-name format (`"english"`, `"chinese"`) — **different from** `defaultDefinitionLanguage` (ISO code)
-  - `showKoreanHanja` — toggles per-character hanja section in word cards, quiz answers, flagged review; only shown in Settings when active language is Chinese
-- **API layer**: `api/client.ts` — `fetchJson`/`postJson`/`putJson`/`deleteRequest`; non-ok responses include body text in thrown error
-- **Hooks**:
-  - `hooks/useWordQueue.ts` — sequential word-addition queue; processes one-at-a-time so segment linking always sees the latest word DB
+  - `showKoreanHanja` — only shown in Settings when active language is Chinese
+- **API layer**: `api/client.ts` — non-ok responses include body text in thrown error
 - **Key components**:
-  - `SmartAddWordModal.tsx` — **two independent language fields**: outer "word language" (backend full-name, `:language` param) vs. per-row "definition language" (ISO code). In queue mode (`onQueue` prop provided), Submit enqueues immediately and resets the form.
-  - `WordList.tsx` — paginated browse; segment chips show `✓`/`+`/`⋯` states; auto-patches unlinked segments via `sync-segment-links` on expand
-  - `WordFormModal.tsx` — manual edit form; does not carry `segments` through form state (preserved server-side by `firestore.ts:updateWord`)
-  - `Dashboard.tsx` — URL sub-paths per view (`/browse`, `/quiz`, `/flagged`, `/grammar`, `/grammar-quiz`, `/translation`, `/speaking-writing`); drives queue status pill and toast notifications
-  - `RubyText.tsx` — ruby annotation for pinyin/furigana above characters
-  - `TranslationView.tsx`, `SpeakingWritingView.tsx` — SSE streaming views with session persistence
-  - `QuizFilterModal.tsx` — topics, categories, levels, word groups filter before quiz start
-  - `MetricsView.tsx` — LLM token usage dashboard with cost estimates
-- **i18n**: `i18n/translations.ts` — English, Japanese, Korean
-- **Styling**: Tailwind CSS 4 utility classes only
-- **Proxy**: Vite proxies `/api` to `localhost:3000` in dev; Nginx in production
-
-### TypeScript Config
-- Backend: ES2024, NodeNext modules, strict mode
-- Frontend: ES2024, ESNext modules, bundler resolution
-
-### Key Dependencies
-- Backend: fastify, @fastify/cors, @fastify/sensible, @google-cloud/firestore, openai (Azure), dotenv
-- Frontend: react, react-dom, vite, @vitejs/plugin-react, tailwindcss, @tailwindcss/vite, @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities
+  - `SmartAddWordModal.tsx` — **two independent language fields**: outer "word language" (backend full-name) vs. per-row "definition language" (ISO code). Queue mode (`onQueue` prop): Submit enqueues immediately and resets form.
+  - `WordFormModal.tsx` — does not carry `segments` through form state (preserved server-side by `firestore.ts:updateWord`)
+  - `hooks/useWordQueue.ts` — processes one-at-a-time so segment linking always sees the latest word DB
+  - `Dashboard.tsx` — URL sub-paths: `/browse`, `/quiz`, `/flagged`, `/grammar`, `/grammar-quiz`, `/translation`, `/speaking-writing`
