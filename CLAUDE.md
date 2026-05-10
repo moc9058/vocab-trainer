@@ -11,24 +11,23 @@ cd backend && npm run build             # TypeScript compile to dist/
 cd backend && npm start                 # Run compiled output (node dist/index.js)
 cd backend && npm run migrate           # One-time word migration from JSON files to Firestore
 cd backend && npm run export            # Export Firestore data back to local JSON files
-cd backend && npx tsx scripts/migrate-grammar-to-firestore.ts  # Grammar migration to Firestore
-cd backend && npx tsx scripts/migrate-llm-config-to-firestore.ts  # Upload LLM config (.env) to Firestore
-cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --prompts   # Upload speaking/writing + translation config to Firestore
-cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --archives  # Upload backup + original archives to Firestore
-cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts             # Upload both prompts + archives
-cd backend && npx tsx scripts/backfill-word-languages.ts [--dry-run] [--language=<code>] [--limit=<n>]  # One-off: re-run LLM on existing words to fill missing en/ja/ko/zh definition + example translations
-cd backend && npx tsx scripts/unify-chinese-levels.ts  # One-off: rewrite granular HSK1/2/.../9 labels in `words` and `word_index` to the merged HSK1-4 / HSK5 / HSK6 / HSK7-9 / Advanced buckets
-cd backend && npx tsx scripts/migrate-example-sentences.ts [--dry-run]  # One-off: extract embedded examples from words into example_sentences collection with dedup + bidirectional linking
-cd backend && npx tsx scripts/backfill-missing-segments.ts [--language=<lang>] [--dry-run] [--chunk=<n>]  # One-off: generate pinyin segments + multi-language translations for example sentences missing them; default chunk=50 (segments) / 20 (translations)
-cd backend && npx tsx scripts/find-non-word-segments.ts [--language=<lang>] [--limit=<n>] [--fix]  # Find example sentences with non-word segments (punctuation etc.); --fix strips them in-place
-cd backend && npx tsx scripts/backfill-segment-word-ids.ts [--language=<lang>] [--dry-run]  # One-off: scan example sentences and assign segment.id from word_index; also updates appearsInIds on matched words
-cd backend && npx tsx scripts/backfill-word-appears-in.ts [--language=<lang>] [--dry-run]   # One-off: recompute appearsInIds for all words (union of exampleIds + segment refs)
-cd backend && npx tsx scripts/cleanup-dangling-example-refs.ts [--language=<lang>] [--dry-run]  # One-off: remove stale exampleIds/appearsInIds pointing at deleted example sentences
-cd backend && npx tsx scripts/smoke-test-invariant.ts  # Run isolated smoke tests of the word↔example_sentence invariant helpers (includes concurrency stress test)
-cd backend && npx tsx scripts/validate-invariant-all.ts [--language=<lang>]  # Read-only deep validator: checks word↔example invariant, dangling refs, and orphan docs across all languages; exits 1 on violations
-cd backend && npx tsx scripts/backfill-hanja-readings.ts [--language=<name>] [--dry-run] [--limit=<n>] [--force]  # One-off: generate per-character Korean hanja (simplifiedChar/traditionalChar/hunEum) for existing words via LLM MINI; default language=chinese
-cd backend && npx tsx scripts/backfill-segment-transliterations.ts [--language=<lang>] [--dry-run]  # One-off: overwrite seg.transliteration from the linked word's canonical pinyin (monophonic words only; polyphonic words like 得 are skipped); default language=chinese
-cd backend && npx tsx scripts/backfill-definition-pinyins.ts [--language=<name>] [--dry-run] [--limit=<n>]  # One-off: copy word-level transliteration into pinyins[] on each definition for existing words; default language=chinese
+cd backend && npx tsx scripts/migrate-grammar-to-firestore.ts
+cd backend && npx tsx scripts/migrate-llm-config-to-firestore.ts
+cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --prompts
+cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --archives
+cd backend && npx tsx scripts/smoke-test-invariant.ts
+cd backend && npx tsx scripts/validate-invariant-all.ts [--language=<lang>]
+cd backend && npx tsx scripts/backfill-word-languages.ts [--dry-run] [--language=<code>] [--limit=<n>]
+cd backend && npx tsx scripts/backfill-missing-segments.ts [--language=<lang>] [--dry-run] [--chunk=<n>]
+cd backend && npx tsx scripts/backfill-segment-word-ids.ts [--language=<lang>] [--dry-run]
+cd backend && npx tsx scripts/backfill-segment-transliterations.ts [--language=<lang>] [--dry-run]
+cd backend && npx tsx scripts/backfill-word-appears-in.ts [--language=<lang>] [--dry-run]
+cd backend && npx tsx scripts/backfill-hanja-readings.ts [--language=<name>] [--dry-run] [--limit=<n>] [--force]
+cd backend && npx tsx scripts/backfill-definition-pinyins.ts [--language=<name>] [--dry-run] [--limit=<n>]
+cd backend && npx tsx scripts/cleanup-dangling-example-refs.ts [--language=<lang>] [--dry-run]
+cd backend && npx tsx scripts/find-non-word-segments.ts [--language=<lang>] [--limit=<n>] [--fix]
+cd backend && npx tsx scripts/unify-chinese-levels.ts
+cd backend && npx tsx scripts/migrate-example-sentences.ts [--dry-run]
 ```
 
 ### Frontend
@@ -44,15 +43,13 @@ docker compose up --build      # Run full stack (backend :3000, frontend :5173)
 
 ### Deploy
 ```bash
-./deploy.sh PROJECT_ID REGION                    # Deploy only
-./deploy.sh PROJECT_ID REGION --word             # Deploy + word migration
-./deploy.sh PROJECT_ID REGION --grammer          # Deploy + grammar migration
-./deploy.sh PROJECT_ID REGION --llm              # Deploy + upload LLM config to Firestore
-./deploy.sh PROJECT_ID REGION --word --grammer   # Deploy + both migrations
-./deploy.sh PROJECT_ID REGION --word --grammer --llm  # Deploy + all migrations
-./deploy.sh PROJECT_ID REGION --prompts              # Deploy + upload speaking/writing & translation config
-./deploy.sh PROJECT_ID REGION --archives             # Deploy + upload backup & original archives
-./deploy.sh PROJECT_ID REGION --example-sentences    # Deploy + migrate embedded examples to example_sentences collection
+./deploy.sh PROJECT_ID REGION            # Deploy only
+./deploy.sh PROJECT_ID REGION --word     # Deploy + word migration
+./deploy.sh PROJECT_ID REGION --grammer  # Deploy + grammar migration
+./deploy.sh PROJECT_ID REGION --llm      # Deploy + upload LLM config to Firestore
+./deploy.sh PROJECT_ID REGION --prompts  # Deploy + upload speaking/writing & translation config
+./deploy.sh PROJECT_ID REGION --archives # Deploy + upload backup & original archives
+./deploy.sh PROJECT_ID REGION --example-sentences  # Deploy + migrate embedded examples
 ```
 
 ### No test or lint commands are configured.
@@ -65,37 +62,20 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
 - **Entry**: `index.ts` — Fastify server with pino logging (stdout + file), CORS, route registration
 - **Routes** (each is a `FastifyPluginAsync` registered under `/api`):
   - `routes/languages.ts` — lists available languages from Firestore
-  - `routes/vocab.ts` — CRUD for vocabulary words + smart-add with LLM (filtering, pagination, word lookup, language create/delete, batch term-existence check via `check-terms`); config (schemas, prompts) loaded from Firestore `config/vocabulary`. Smart-add always asks the LLM for definitions and example translations in all four supported codes (`en`/`ja`/`ko`/`zh`) — `ALL_DEFINITION_LANGUAGES` is hardcoded; the language values in the request body are treated as user-supplied anchors only. Chinese levels are constrained at prompt time by `LEVEL_OPTIONS["chinese"]` (HSK1-4 / HSK5 / HSK6 / HSK7-9 / Advanced) and normalized again at storage time by `CHINESE_LEVEL_NORMALIZE` so granular HSK1/2/.../9 labels are bucketed automatically
-  - `routes/quiz.ts` — word quiz sessions with weighted random sampling; hydrated questions include `hanjaReadings` when present on the word so the frontend can display Korean hanja in quiz answers
-  - `routes/progress.ts` — per-word progress tracking (timesSeen, correctRate, streak)
+  - `routes/vocab.ts` — CRUD for vocabulary words + smart-add with LLM. Smart-add always asks the LLM for definitions and example translations in all four supported codes (`en`/`ja`/`ko`/`zh`) — `ALL_DEFINITION_LANGUAGES` is hardcoded; the language values in the request body are treated as user-supplied anchors only. Chinese levels are normalized at storage time by `CHINESE_LEVEL_NORMALIZE` into the merged HSK buckets.
+  - `routes/quiz.ts` — word quiz sessions with weighted random sampling; hydrated questions include `hanjaReadings`
+  - `routes/progress.ts` — per-word progress tracking
   - `routes/flagged.ts` — flagged words for review
   - `routes/grammar.ts` — CRUD for grammar items, chapters, subchapters
-  - `routes/grammar-quiz.ts` — grammar quiz with self-grading, two modes (existing examples / LLM-generated); also exposes `check-missing-words` (filter a term list against `word_index`) and `add-missing-words` (LLM-enrich each term with definitions/topics/notes and write it as a new word, used to backfill the vocab DB from grammar quiz segments)
+  - `routes/grammar-quiz.ts` — grammar quiz with self-grading, two modes; also exposes `check-missing-words` and `add-missing-words`
   - `routes/grammar-progress.ts` — per-component grammar progress
-  - `routes/translation.ts` — two-step translation/analysis: decomposition (MINI model, structural parsing into sentences/chunks/components) then parallel translation per target language (FULL model, meanings/explanations); only `en`/`ja`/`ko`/`zh` supported; exposes both a non-streaming `POST /translate` and an SSE-streaming `POST /translate-stream` (events: `decompose-start`, `decompose-chunk`, `decompose-result`, `start`, `chunk`, `result`, `done`, `error`); translate input is a flat representation (sourceText + flat chunks/components arrays) built by `buildSlimInput`; history persistence; config (schemas, prompts) loaded from Firestore `config/translation`
-  - `routes/speaking-writing.ts` — text correction for speaking/writing practice; SSE streaming LLM call with language-specific system prompts + use-case context (professional/casual/presentation/interview for speaking; academic/social/email/creative for writing), per-sentence corrections, session persistence; config (schemas, prompts, use cases) loaded from Firestore `config/speaking_writing`
-  - `routes/metrics.ts` — LLM token usage tracking and cost estimation; paginated usage logs, daily aggregates, cost-per-token configuration per model
-- **Database**: `firestore.ts` — Google Cloud Firestore abstraction layer. `updateWord` per-sentence-merges old example `segments` onto the incoming `examples` whenever the sentence text is unchanged, so `WordFormModal` (which doesn't carry segments through its form state) doesn't wipe LLM-generated pinyin on every save; `getCanonicalSegmentPinyin(word)` returns the single shared pinyin for monophonic words (`definitions[].pinyins[]` all agree) or `word.transliteration` as fallback, and `undefined` for polyphonic words (multiple distinct pinyins) so callers keep the LLM-generated contextual value — used by `reconcileIncomingSegments` and `updateSegmentWordLinks` to keep `seg.transliteration` in sync with the linked word
-- **LLM**: `llm.ts` — Azure OpenAI integration (callLLM/callLLMFull with JSON mode, callLLMWithSchema/callLLMFullWithSchema with JSON schema enforcement, streamLLMWithSchema/streamLLMFullWithSchema for streaming with schema, validateWord, segmentBatch); `callLLM`/`callLLMWithSchema`/`streamLLMWithSchema` use MINI deployment, `callLLMFull`/`callLLMFullWithSchema`/`streamLLMFullWithSchema` use FULL deployment; config loaded from `.env` (local) or Firestore `config/llm` (deployed); `validateWord` accepts any word with at least one definition language (not limited to ja/en/ko); all LLM functions accept a `route` parameter for token usage tracking and automatically log token counts to Firestore; `segmentBatch` accepts optional config (prompt + schema) from Firestore
-- **Types**: `types.ts` — shared interfaces (Word, HanjaReading, VocabFile, QuizSession, QuizQuestion, WordProgress, TranslationEntry, SpeakingWritingSession, etc.); `Word` carries an optional `hanjaReadings?: HanjaReading[]` field (`{ simplifiedChar, traditionalChar, hunEum[] }` per character); `QuizQuestion` also exposes `hanjaReadings?` so quiz answers can display hanja
-- Route handlers use Fastify generics for type-safe Params/Querystring/Body and JSON schema validation
+  - `routes/translation.ts` — two-step translation/analysis: decomposition (MINI model) then parallel translation per target language (FULL model); SSE streaming via `POST /translate-stream`
+  - `routes/speaking-writing.ts` — text correction for speaking/writing practice; SSE streaming with language-specific prompts + use-case context
+  - `routes/metrics.ts` — LLM token usage tracking and cost estimation
+- **Database**: `firestore.ts` — Google Cloud Firestore abstraction layer. `updateWord` per-sentence-merges old example `segments` onto the incoming `examples` whenever the sentence text is unchanged, so `WordFormModal` (which doesn't carry segments through its form state) doesn't wipe LLM-generated pinyin on every save. `getCanonicalSegmentPinyin(word)` returns `undefined` for polyphonic words so callers keep the LLM-generated contextual value.
+- **LLM**: `llm.ts` — Azure OpenAI integration. `callLLM`/`callLLMWithSchema`/`streamLLMWithSchema` use MINI deployment; `callLLMFull`/`callLLMFullWithSchema`/`streamLLMFullWithSchema` use FULL deployment. Config loaded from `.env` (local) or Firestore `config/llm` (deployed). All LLM functions accept a `route` parameter and log token counts to Firestore.
+- **Types**: `types.ts` — shared interfaces; `Word` carries optional `hanjaReadings?: HanjaReading[]` (`{ simplifiedChar, traditionalChar, hunEum[] }` per character)
 - Errors via `@fastify/sensible`: `reply.notFound()`, `reply.badRequest()`, `reply.conflict()`
-
-### Backend Scripts (`backend/scripts/`)
-- `migrate-to-firestore.ts` — word migration from JSON files in `DB/word/` to Firestore; backs up current Firestore words to `DB/backup/{language}_{YYYYMMDD}.json` first
-- `export-from-firestore.ts` — export words, grammar, and progress from Firestore back to JSON files in `DB/` (inverse of migrate); normalizes legacy language keys to ISO 639-1
-- `migrate-grammar-to-firestore.ts` — grammar migration from `backend/DB/grammer/` JSON to Firestore; backs up current Firestore grammar to `DB/backup/{language}/` first
-- `migrate-llm-config-to-firestore.ts` — uploads Azure OpenAI config from `.env` to Firestore `config/llm` document
-- `migrate-db-config-to-firestore.ts` — uploads speaking/writing + translation + vocabulary config (`--prompts`) and backup/original archives (`--archives`) to Firestore
-- `unify-chinese-levels.ts` — one-time backfill that scans `words` and `word_index` and rewrites granular HSK1/2/.../9 (and `*-extended`) labels into the merged `HSK1-4` / `HSK5` / `HSK6` / `HSK7-9` / `Advanced` buckets used by the rest of the app
-- `backfill-segment-word-ids.ts` — scans all example sentences for a language and, for each segment without an `id`, looks up its text in `word_index`; assigns the word ID, sets `seg.transliteration` to the word's canonical pinyin (monophonic words only — polyphonic words like 得 are skipped so LLM-generated contextual pinyin is preserved), and updates `appearsInIds` on the matched word; accepts `--language=<lang>` (default: chinese) and `--dry-run`
-- `backfill-segment-transliterations.ts` — one-off backfill that corrects `seg.transliteration` for all existing linked segments: for each segment with a `seg.id`, fetches the word and overwrites the transliteration with the word's canonical pinyin if it differs; skips polyphonic words (multiple distinct pinyins across definitions); accepts `--language=<lang>` (default: chinese) and `--dry-run`
-- `backfill-word-appears-in.ts` — recomputes `appearsInIds` on every word for a language: union of the word's `exampleIds` and all segment refs pointing at the word; adds missing links, removes stale ones; accepts `--language=<lang>` and `--dry-run`
-- `cleanup-dangling-example-refs.ts` — removes entries from `words.exampleIds` and `words.appearsInIds` that point at example sentence docs that no longer exist; accepts `--language=<lang>` and `--dry-run`
-- `smoke-test-invariant.ts` — runs isolated smoke tests of the word↔example_sentence invariant helpers directly against Firestore (uses a test language namespace); includes a concurrency stress phase; exits non-zero on failure
-- `validate-invariant-all.ts` — read-only deep validator: checks the word↔example invariant, dangling exampleIds/appearsInIds/segment.id refs, and orphan example docs across all (or one specified) language; exits 1 on any violation
-- `backfill-hanja-readings.ts` — one-off backfill that calls the LLM MINI model for each word (default language: chinese) and writes per-character Korean hanja data (`simplifiedChar`, `traditionalChar`, `hunEum[]`) to `words.hanjaReadings`; characters with no Korean hanja reading are omitted from the stored array; words where every character lacks a reading get `hanjaReadings: []` (marks as processed, prevents reprocessing); accepts `--language=<name>`, `--dry-run`, `--limit=<n>`, `--force`
-- `backfill-definition-pinyins.ts` — one-off backfill that copies `word.transliteration` into `pinyins: [transliteration]` on each definition that lacks a `pinyins` array; definitions with existing `pinyins` are skipped; accepts `--language=<name>` (default: chinese), `--dry-run`, `--limit=<n>`
 
 ### Data Storage
 - **Primary**: Google Cloud Firestore (database ID: `vocab-database`)
@@ -103,144 +83,44 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `words` — all vocabulary words partitioned by language field
   - `progress` — per-word progress (composite key: `{language}_{wordId}`)
   - `word_index` — fast term lookup (composite key: `{language}_{term}`)
-  - `example_sentences` — normalized example sentences (id, sentence, translation, segments, language, ownerWordId); words store `exampleIds` and `appearsInIds` arrays referencing this collection
-  - `example_sentence_index` — dedup lookup by sentence text (composite key: `{language}_{sha256(sentence).slice(0,16)}` → exampleId)
+  - `example_sentences` — normalized example sentences; words store `exampleIds` and `appearsInIds` arrays referencing this collection
+  - `example_sentence_index` — dedup lookup (composite key: `{language}_{sha256(sentence).slice(0,16)}`)
   - `id_maps` — next ID counters per language
-  - `quiz_sessions` — one active word quiz session per language
-  - `flagged_words` — flagged words for review
-  - `grammar_chapters` — grammar chapter metadata per language
-  - `grammar_items` — flattened grammar components (denormalized chapter/subchapter info)
-  - `grammar_progress` — per-component grammar progress
-  - `grammar_quiz_sessions` — one grammar quiz session per language
-  - `translation_history` — translation/analysis entries with structured LLM results
-  - `speaking_writing_sessions` — one speaking/writing correction session per language (keyed by language code)
-  - `config` — app configuration (e.g., `config/llm` stores Azure OpenAI keys, `config/token_costs` stores cost-per-token rates, `config/speaking_writing` stores prompts/schemas/use-cases, `config/translation` stores prompts/schemas, `config/vocabulary` stores prompts/schemas for smart-add and segmentation)
-  - `archive_backups` — backup word data and grammar backups (chunked subcollections for large files)
-  - `archive_originals` — original HSK files by date folder (chunked subcollections for large files)
-  - `token_usage` — individual LLM call logs with token counts per call
-  - `token_usage_daily` — daily aggregates by model (doc ID: `{model}_{YYYY-MM-DD}`)
-- **Local files** (for migration/export):
-  - Vocabulary: `backend/DB/word/{language}.json` — one file per language (e.g. `chinese.json`)
-  - Grammar: `backend/DB/grammer/chinese/*.json` — per-chapter grammar files
-  - Speaking & Writing: `backend/DB/speaking&writing/` — system prompts per language + output schema (source files for Firestore migration)
-  - Translation: `backend/DB/translation/` — system prompts + schemas (source files for Firestore migration)
-  - Vocabulary: `backend/DB/vocabulary/` — system prompts (with `{{PLACEHOLDER}}` syntax) + JSON schemas for all vocab LLM operations (source files for Firestore migration)
-  - Progress: `backend/data/progress/{language}.json`
-  - Backups: `backend/DB/backup/` — date-stamped word backups + grammar backups per language
-  - Logs: `backend/logs/app-{timestamp}.log`
+  - `word_groups` — user-defined word groups per language
+  - `quiz_sessions`, `grammar_quiz_sessions` — one active session per language
+  - `flagged_words`, `grammar_chapters`, `grammar_items`, `grammar_progress`
+  - `translation_history`, `speaking_writing_sessions`
+  - `config` — `config/llm` (Azure OpenAI keys), `config/token_costs`, `config/speaking_writing`, `config/translation`, `config/vocabulary`
+  - `archive_backups`, `archive_originals` — chunked subcollections for large files
+  - `token_usage`, `token_usage_daily` — LLM call logs and daily aggregates
+- **Local files**: `backend/DB/word/`, `backend/DB/grammer/`, `backend/DB/speaking&writing/`, `backend/DB/translation/`, `backend/DB/vocabulary/`, `backend/DB/backup/`
 
 ### Language Code Convention
-All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean), `zh` (Chinese). This applies to:
-- Word definition keys: `{ "ja": "...", "en": "...", "ko": "..." }` (configurable via settings — not limited to these three)
-- Example sentence translations: `string` (legacy single-language) or `Record<string, string>` (multi-language, e.g. `{ "ja": "...", "ko": "..." }`)
-- Grammar data `Record<string, string>` fields (chapterTitle, subchapter title, term, description)
-- UI language selection and display language options (order and visibility controlled by settings)
-- The export script normalizes legacy keys (e.g., `"Japanese"` → `"ja"`, `"kr"` → `"ko"`) on export
-
-### Key API Endpoints
-- `GET /api/languages` — list languages
-- `GET /api/vocab/:language` — list words (query: search, topic, category, level, page, limit, flaggedOnly)
-- `GET /api/vocab/:language/filters` — available filter options (topics, categories, levels)
-- `GET /api/vocab/:language/:wordId` — get single word by ID
-- `GET /api/vocab/:language/lookup?term=X` — word lookup via word_index
-- `POST /api/vocab/:language/smart-add` — smart add word with LLM filling missing fields, auto-flag; for Chinese, also generates word segments with pinyin on examples; the LLM always generates definitions and example translations in all four supported languages (en/ja/ko/zh) — display filtering happens client-side via the user's settings
-- `POST /api/vocab/:language/check-terms` — given `{ terms: string[] }`, returns `{ existing: Record<term, wordId> }` for terms already in `word_index`
-- `POST /api/vocab/:language/file` — create a new (empty) language
-- `DELETE /api/vocab/:language/file` — delete an entire language
-- `PUT /api/vocab/:language/:wordId` — update word; for Chinese, `examples[].segments` are merged from the previous saved version when the sentence text is unchanged so callers (e.g. `WordFormModal`) don't need to round-trip segments; when incoming segments are explicitly provided (e.g. from the segment editor), any segment missing an `id` is automatically looked up in `word_index` and activated if a matching word exists; example sentences (brand-new or existing/dedup-matched) that have no stored translation and receive no user-provided translation trigger an LLM call (MINI model, `vocab/translate-examples` route) to generate multi-language translations before the word doc is updated; the dedup path also upgrades partial/legacy-string translations by merging missing language keys from the LLM result (existing non-empty values are preserved)
-- `DELETE /api/vocab/:language/:wordId` — delete word
-- `POST /api/vocab/:language/:wordId/unlink-segment` — transactionally unlink a word from one example sentence (body: `{ sentence: string }`); clears the segment's `id` link and removes from `appearsInIds`; if the word owns no other examples it is deleted entirely
-- `POST /api/vocab/:language/sync-segment-links` — for a list of example sentence IDs (body: `{ exampleIds: string[] }`), looks up each segment text in `word_index` and writes missing `seg.id` fields, sets `seg.transliteration` to the word's canonical pinyin for monophonic newly-linked segments, and updates `appearsInIds` back-references; called automatically by `WordList` when a word is expanded and unlinked segments are detected
-- `POST /api/quiz/start` — start word quiz session (returns lightweight questions; full data is fetched on demand)
-- `GET /api/quiz/questions/:language?offset=&limit=` — batch-hydrate full question details (definitions, transliteration, examples) for a slice of the current quiz session
-- `POST /api/quiz/answer` — submit answer (body: sessionId, wordId, correct)
-- `GET /api/quiz/session/language/:language` — get current word quiz session
-- `GET /api/progress/:language` — all progress for language
-- `DELETE /api/progress/:language` — reset progress
-- `GET /api/flagged/:language` — list flagged words (full word data)
-- `GET /api/flagged/:language/count` — count of flagged words
-- `POST /api/flagged/:language/:wordId` — flag a word for review
-- `DELETE /api/flagged/:language/:wordId` — unflag a word
-- `GET /api/grammar/:language/chapters` — list grammar chapters
-- `GET /api/grammar/:language/subchapters` — list subchapters (query: chapters)
-- `GET /api/grammar/:language/items` — list grammar items (query: chapter, subchapter, level, search)
-- `GET /api/grammar/:language/items/:componentId` — get single grammar item by ID
-- `POST /api/grammar/:language/items` — add grammar item
-- `PUT /api/grammar/:language/items/:componentId` — update grammar item
-- `DELETE /api/grammar/:language/items/:componentId` — delete grammar item
-- `POST /api/grammar-quiz/start` — start grammar quiz (body: language, chapters, subchapters, displayLanguage, quizMode)
-- `POST /api/grammar-quiz/answer` — submit self-graded answer (body: language, componentId, correct)
-- `GET /api/grammar-quiz/session/language/:language` — get current grammar quiz session
-- `POST /api/grammar-quiz/check-missing-words` — given `{ language, terms[] }`, returns `{ missing: string[] }` of terms not yet in the word DB
-- `POST /api/grammar-quiz/add-missing-words` — batch-create vocab entries (LLM-enriched definitions/topics/notes) for terms surfaced by the grammar quiz; body: `{ language, words: [{ term, pinyin, sentence, translation }] }`
-- `GET /api/grammar-progress/:language` — all grammar progress
-- `DELETE /api/grammar-progress/:language` — reset grammar progress
-- `POST /api/translation/translate` — two-step LLM translation/analysis (decompose with MINI model, translate with FULL model); body `{ sourceLanguage, sourceText, targetLanguages }`
-- `POST /api/translation/translate-stream` — SSE streaming version of `/translate`; same body. Events: `decompose-start`, `decompose-chunk`, `decompose-result`, then per-language `start`/`chunk`/`result`, then `done` (full saved entry) or `error`
-- `GET /api/translation/history` — paginated translation history
-- `DELETE /api/translation/history` — clear all translation history
-- `DELETE /api/translation/history/:id` — delete single translation entry
-- `POST /api/speaking-writing/correct` — submit text for LLM correction (body: language, mode, useCase, inputText; uses FULL model)
-- `POST /api/speaking-writing/correct-stream` — SSE streaming version of correction (same body; events: `start` → `chunk` (multiple) → `done` with full session, or `error`)
-- `GET /api/speaking-writing/session/:language` — get current speaking/writing session (returns null if none, not 404)
-- `DELETE /api/speaking-writing/session/:language` — delete speaking/writing session
-- `GET /api/metrics/usage` — paginated raw token usage logs (query: model, route, from, to, page, limit)
-- `GET /api/metrics/summary` — aggregated usage summary with cost estimates (query: from, to)
-- `GET /api/metrics/costs` — get cost-per-token configuration
-- `PUT /api/metrics/costs` — update cost-per-token rates (body: { models: Record<string, TokenCostRate> })
-- `DELETE /api/metrics/usage` — clear all usage logs and daily summaries
+All language codes use ISO 639-1: `ja` (Japanese), `en` (English), `ko` (Korean), `zh` (Chinese). This applies to word definition keys, example sentence translation records, grammar data fields, and UI language selection. The export script normalizes legacy keys (e.g., `"Japanese"` → `"ja"`, `"kr"` → `"ko"`) on export.
 
 ### Frontend (`frontend/src/`)
-- **Entry**: `main.tsx` (wraps tree in `BrowserRouter`) → `App.tsx` (routes: `/` → `LanguageSelectPage`, `/:language/*` → `Dashboard`, `*` → redirect to `/`) → `Dashboard.tsx`
+- **Entry**: `main.tsx` → `App.tsx` (routes: `/` → `LanguageSelectPage`, `/:language/*` → `Dashboard`) → `Dashboard.tsx`
 - **State**: React hooks + Context API (`i18n/context.tsx` for UI language, `settings/context.tsx` for app settings)
-- **Settings**: `settings/context.tsx` — `SettingsProvider` + `useSettings()` hook; persisted to `localStorage("appSettings")`. The full `AppSettings` shape lives in `settings/types.ts`; defaults in `settings/defaults.ts`. Fields, grouped by purpose:
-  - **Display preferences** (affect what the user sees, never what the LLM produces):
-    - `languageOrder` — ordered list of language codes; drives definition ordering, language selector ordering, UI language button ordering
-    - `activeUiLanguages` — subset of supported UI languages shown in the header toggle
-    - `displayDefinitionLanguages` — which definition entries are rendered in word displays
-    - `displayExampleTranslationLanguages` — which example translations are rendered
-  - **Smart-add defaults** (pre-fill the Smart Add Word modal; do **not** affect what the LLM generates — generation always covers all four codes):
-    - `defaultAddWordLanguage` — pre-selected outer Language radio (backend full-name format, e.g. `"english"`, `"chinese"`, or any custom string)
-    - `defaultDefinitionLanguage` — pre-selected language for the first definition row (ISO code from `languageOrder` or a free-form custom name)
-  - **Speaking/writing defaults**:
-    - `defaultCorrectionMode` — `"speaking" | "writing"`
-    - `defaultSpeakingUseCase` — e.g. `"professional"`
-    - `defaultWritingUseCase` — e.g. `"academic"`
-  - **Translation defaults**:
-    - `defaultTranslationSourceLanguage` — ISO code
-    - `defaultTranslationTargetLanguages` — array of ISO codes
-  - **Chinese-specific display**:
-    - `showKoreanHanja` — boolean (default `true`); when enabled, expanded word cards, quiz answers, and flagged-review answers show the per-character Korean hanja section (🀄 divider, `simplifiedChar → traditionalChar` + `hunEum` list); controlled by a checkbox that appears in Settings only when the active language is Chinese (`zh`)
-  - Centralized helpers: `sortByLanguageOrder()`, `sortedEntries()`, `displayDefEntries()` (filters by display definition languages), and `displayExEntries()` (filters by display example translation languages)
-- **Settings defaults**: `settings/defaults.ts` — `ALL_KNOWN_LANGUAGES` (en/ja/ko/zh with labels), `LANG_LABEL_MAP`, `DEFAULT_SETTINGS`
-- **API layer**: `api/client.ts` (generic fetchJson/postJson/putJson/deleteRequest — on non-ok responses, reads the response body and includes it in the thrown error message for actionable diagnostics), `api/quiz.ts`, `api/vocab.ts`, `api/grammar.ts`, `api/translation.ts`, `api/speaking-writing.ts`
+- **Settings**: `settings/context.tsx` — `SettingsProvider` + `useSettings()` hook; persisted to `localStorage("appSettings")`. Key fields:
+  - `languageOrder` — drives definition/language selector/UI button ordering
+  - `displayDefinitionLanguages`, `displayExampleTranslationLanguages` — client-side display filtering (LLM always generates all four languages)
+  - `defaultAddWordLanguage` — backend full-name format (`"english"`, `"chinese"`) — **different from** `defaultDefinitionLanguage` (ISO code)
+  - `showKoreanHanja` — toggles per-character hanja section in word cards, quiz answers, flagged review; only shown in Settings when active language is Chinese
+- **API layer**: `api/client.ts` — `fetchJson`/`postJson`/`putJson`/`deleteRequest`; non-ok responses include body text in thrown error
 - **Hooks**:
-  - `hooks/useWordQueue.ts` — sequential word-addition queue; exposes `enqueue(term, language, payload)`, `pendingTerms` (Set of all terms currently in queue or being processed), `queueLength`, `processingTerm`, `recentResults`, `clearResults`, and `refreshSignal` (increments on every successful add); processes items one-at-a-time so each LLM call runs after the previous word is committed to Firestore, ensuring segment linking always sees the latest word database
-- **Components**:
-  - `LanguageSelectPage.tsx` — landing page at `/`; fetches available languages from `/api/languages/`, renders clickable cards, navigates to `/:language` on selection
-  - `Dashboard.tsx` — per-language layout at `/:language/*`; each view has its own URL sub-path (`/browse`, `/quiz`, `/flagged`, `/grammar`, `/grammar-quiz`, `/translation`, `/speaking-writing`); sub-path is derived from `useLocation()` and drives which view is rendered — page refresh stays on the current view; quiz and grammar-quiz pages auto-fetch the active session on mount and redirect home if none exists; header shows "Back" button when on a sub-path (navigates to `/:language`) or "← Languages" when at the language home; uses `useWordQueue` to drive the queue status pill (bottom-right spinner showing `Processing: "{term}" · N queued`) and toast notifications (green/red, 3 s auto-dismiss) that appear as words finish processing
-  - `SettingsModal.tsx` — settings modal with drag-and-drop language reordering (@dnd-kit) plus controls for every `AppSettings` field: active UI languages, display definition / example translation languages, smart-add defaults (`defaultAddWordLanguage`, `defaultDefinitionLanguage`), speaking/writing defaults (`defaultCorrectionMode`, `defaultSpeakingUseCase`, `defaultWritingUseCase`), translation defaults (`defaultTranslationSourceLanguage`, `defaultTranslationTargetLanguages`), and — only when the active language is Chinese — a `showKoreanHanja` checkbox that toggles the Korean hanja section in word cards, quiz answers, and flagged-review answers
-  - `LanguageSelectModal.tsx` — language picker modal (used only by grammar-related flows that may still need a language choice within a session)
-  - `LevelSelectModal.tsx` — proficiency level picker (Chinese HSK buckets, Japanese JLPT)
-  - `QuizFilterModal.tsx` — multi-select filters (topic, category, level) before starting word quiz
-  - `QuizTaking.tsx` — word quiz UI with question display, answer input, progress bar; when `showKoreanHanja` is enabled and the question carries `hanjaReadings`, a 🀄 Korean Hanja section is shown above the definitions in the revealed answer
-  - `WordList.tsx` — paginated word browsing with filters, progress badges, expandable details; accepts optional `initialExpandId` (auto-expands and scrolls to that word on mount) and `initialSearch` (pre-populates the search field) props, used when jumping to an existing word from `SmartAddWordModal`; also accepts `refreshSignal?: number` (triggers a silent re-fetch whenever the value changes, used by Dashboard to refresh after a queued word completes — also re-fetches `flaggedIds` so the flag state stays in sync after queued words complete — also re-runs `refreshExistingTerms` on the expanded word so queued segment chips flip to ✓ automatically), `onQueue?: (term, language, payload) => void` (passed through to its own SmartAddWordModal to enable queue mode; segment chip "+" clicks also route through this queue when it is provided, serializing them with the main word queue instead of firing concurrent HTTP requests), and `pendingTerms?: Set<string>` (from `useWordQueue`; chips whose term is in `pendingTerms` show amber "⋯" and are disabled); expanded word details show the first 3 definitions and first 3 examples by default, with a "show more / show less" toggle when there are more; segment buttons show a loading state (amber "⋯", `checkingTerms`) while `check-terms` is in-flight, amber "⋯" when queued (`pendingTerms`), green "✓" when already in DB, blue "+" when addable; the flag checkbox below each addable segment is hidden while `checkingTerms` is true or the segment is queued/being-added; on expand, if any segments exist in `word_index` but lack a `seg.id`, the links are patched locally and persisted via `sync-segment-links`; after `WordFormModal` saves a word update, `refreshExistingTerms` is called on the returned word so newly added example segments are activated immediately without a page refresh; segment "+" buttons show a red error toast (bottom-right, 3 s auto-dismiss) when `smartAddWord` fails, with the actual backend error message; when `onJumpToWord` fires (from an embedded `SmartAddWordModal`), the word list filters/expands to the target word **and** opens `WordFormModal` in edit mode via `pendingEditIdRef` once the fetch completes; passes `onQueue`, `pendingTerms`, and `refreshSignal` through to the `WordFormModal` it opens
-  - `WordFormModal.tsx` — manual add/edit word form (no LLM); does not carry `examples[].segments` through its form state, which is why `firestore.ts:updateWord` preserves segments by sentence; for Chinese, uses inline debounced `checkTerms` + `smartAddWord` to show WorldList-style `rounded-full` pill buttons (`+`/`✓`/`⋯`) with an amber flag checkbox below each addable segment on space-split example sentences; accepts optional `onQueue?`, `pendingTerms?`, and `refreshSignal?` props — when `onQueue` is provided, segment chip additions route through the queue (amber "⋯" queued state driven by `pendingTerms`) instead of calling `smartAddWord` directly; `checkTerms` effect re-runs on `refreshSignal` so queued chips flip to ✓ after the word is committed
-  - `RubyText.tsx` — ruby annotation component used to render Chinese pinyin (and Japanese furigana) above their base characters in word displays and quiz views
-  - `SmartAddWordModal.tsx` — add word with LLM filling missing fields. **Two language fields**: an outer "word language" (backend full-name format: `"english"`, `"chinese"`, or custom — pre-filled from optional `defaultLanguage` prop, then `defaultAddWordLanguage` setting) sent as the `:language` route parameter, and a per-definition-row "definition language" (ISO code or custom — first row pre-filled from `defaultDefinitionLanguage`) used as the key in `definitions[].text`. These are independent — easy to confuse. The LLM always generates definitions and example translations in all four supported languages regardless of either setting; display filtering is client-side via `displayDefinitionLanguages` / `displayExampleTranslationLanguages`. Duplicate detection via `lookupWord` shows an amber "⚠ Already in DB" warning as the term is typed; if the term is already in `pendingTerms` (queued but not yet in DB), shows an amber "⏳ Already queued" warning instead and disables the submit button; if the optional `onJumpToWord?: (wordId: string, term: string) => void` prop is provided, an "Edit word →" button also appears that closes the modal, filters the word list to the existing word, and opens it in `WordFormModal` edit mode. For Chinese, uses inline debounced `checkTerms` + `smartAddWord` to show WorldList-style `rounded-full` pill buttons with an amber flag checkbox below each addable segment on space-split example sentences; when `onQueue` is provided, segment chip additions route through the queue (amber "⋯" queued state driven by `pendingTerms`) rather than calling `smartAddWord` directly; `checkTerms` effect re-runs on `refreshSignal` so queued chips flip to ✓ after the word commits. When the optional `onQueue?: (term, language, payload) => void` prop is provided the modal operates in **queue mode**: Submit enqueues the word immediately (no blocking LLM wait), flashes "✓ Queued" for ~1 s, then resets the form so the user can type the next term right away — the modal stays open until explicitly closed; optional `pendingTerms?: Set<string>` and `refreshSignal?: number` props are also accepted to drive the "Already queued" detection and `checkTerms` re-runs
-  - `GrammarList.tsx` — browse grammar by chapter/subchapter with inline edit/delete
-  - `GrammarFilterModal.tsx` — grammar quiz filters (chapter, subchapter, display language, quiz mode); display language options follow settings order
-  - `GrammarQuizTaking.tsx` — grammar quiz flashcard UI (display sentence → show answer → self-grade)
-  - `GrammarFormModal.tsx` — add/edit grammar component with chapter/subchapter/topic/description/terms/examples; input language selector follows settings order
-  - `FlaggedReview.tsx` — review flagged words; when `showKoreanHanja` is enabled and the word carries `hanjaReadings`, a 🀄 Korean Hanja section is shown above the definitions in the revealed answer
-  - `TranslationView.tsx` — translation/analysis UI with language selection ordered by settings, schema-based sentence decomposition results, per-language regenerate buttons during streaming, reading column conditional on CJK input, and history navigation
-  - `SpeakingWritingView.tsx` — text correction UI with language selection (ordered by settings), speaking/writing mode toggle, use-case selector (professional/casual/presentation/interview or academic/social/email/creative), SSE streaming with live JSON preview, per-sentence corrections with severity-coded feedback (error/improvement/style), previous/next navigation between corrections, session persistence
-  - `MetricsView.tsx` — LLM token usage dashboard with summary (per-model breakdown, daily table, cost estimates), paginated usage logs, and cost-per-token configuration editor
-  - `EmptyState.tsx` — home screen shown inside a language page; accepts a `language: string` prop and only checks that one language for in-progress sessions; shows vocabulary, translation, speaking & writing, grammar, and system sections
-- **i18n**: `i18n/translations.ts` — English, Japanese, and Korean, keyed by `TranslationKey` type
+  - `hooks/useWordQueue.ts` — sequential word-addition queue; processes one-at-a-time so segment linking always sees the latest word DB
+- **Key components**:
+  - `SmartAddWordModal.tsx` — **two independent language fields**: outer "word language" (backend full-name, `:language` param) vs. per-row "definition language" (ISO code). In queue mode (`onQueue` prop provided), Submit enqueues immediately and resets the form.
+  - `WordList.tsx` — paginated browse; segment chips show `✓`/`+`/`⋯` states; auto-patches unlinked segments via `sync-segment-links` on expand
+  - `WordFormModal.tsx` — manual edit form; does not carry `segments` through form state (preserved server-side by `firestore.ts:updateWord`)
+  - `Dashboard.tsx` — URL sub-paths per view (`/browse`, `/quiz`, `/flagged`, `/grammar`, `/grammar-quiz`, `/translation`, `/speaking-writing`); drives queue status pill and toast notifications
+  - `RubyText.tsx` — ruby annotation for pinyin/furigana above characters
+  - `TranslationView.tsx`, `SpeakingWritingView.tsx` — SSE streaming views with session persistence
+  - `QuizFilterModal.tsx` — topics, categories, levels, word groups filter before quiz start
+  - `MetricsView.tsx` — LLM token usage dashboard with cost estimates
+- **i18n**: `i18n/translations.ts` — English, Japanese, Korean
 - **Styling**: Tailwind CSS 4 utility classes only
-- **Proxy**: Vite proxies `/api` requests to `localhost:3000` in dev
-- **Production**: Nginx serves static assets, proxies `/api/` to backend (configured via `nginx.conf.template`)
+- **Proxy**: Vite proxies `/api` to `localhost:3000` in dev; Nginx in production
 
 ### TypeScript Config
 - Backend: ES2024, NodeNext modules, strict mode

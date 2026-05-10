@@ -426,6 +426,29 @@ For each example sentence ID in the request body, looks up all segment texts in 
 
 **Response:** `200` with `{ ok: true }`
 
+#### `GET /api/vocab/:language/groups` — List word groups
+
+Returns all word groups for the language, sorted by creation time.
+
+#### `POST /api/vocab/:language/groups` — Create word group
+
+**Body:** `{ "name": "My Group" }`  
+**Response:** `201` with the new `WordGroup`.
+
+#### `PUT /api/vocab/:language/groups/:groupId` — Rename word group
+
+**Body:** `{ "name": "New Name" }`  
+**Response:** updated `WordGroup`.
+
+#### `DELETE /api/vocab/:language/groups/:groupId` — Delete word group
+
+**Response:** `204 No Content`
+
+#### `POST /api/vocab/:language/groups/:groupId/words` — Add or remove group members
+
+**Body:** `{ "wordIds": ["1", "2"], "action": "add" | "remove" }`  
+**Response:** updated `WordGroup`.
+
 #### `POST /api/vocab/:language/file` — Create new language file
 
 **Response:** `201` with the new `VocabFile` (empty `words` array).
@@ -527,6 +550,7 @@ Overwrites any existing session for the given language.
   "topics": ["Greetings & Introductions"],
   "categories": ["noun", "verb"],
   "levels": ["HSK1-4"],
+  "groupIds": ["chinese_1234abcd"],
   "questionType": "definition"
 }
 ```
@@ -938,12 +962,13 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 | **Dashboard**           | Main layout at `/:language/*`. Each view has its own URL sub-path (`/browse`, `/quiz`, `/flagged`, `/grammar`, `/grammar-quiz`, `/translation`, `/speaking-writing`) so page refresh stays on the current view. Header shows "Back" button on sub-paths (returns to `/:language`) and "← Languages" on the language home. Quiz and grammar-quiz sub-paths auto-recover the active session on mount and redirect home if none exists. Includes settings gear, dynamic UI language toggle. |
 | **SettingsModal**       | Settings modal with sections for (1) drag-and-drop language display order reordering via @dnd-kit, (2) active UI language checkboxes, (3) displayed definition / example translation language checkboxes (display-only — generation always covers all four), (4) smart-add defaults (`defaultAddWordLanguage`, `defaultDefinitionLanguage`), (5) speaking/writing defaults (`defaultCorrectionMode`, `defaultSpeakingUseCase`, `defaultWritingUseCase`), (6) translation defaults (`defaultTranslationSourceLanguage`, `defaultTranslationTargetLanguages`), and (7) a `showKoreanHanja` checkbox — visible only when the active language is Chinese — that toggles the 🀄 Korean hanja section in word cards, quiz answers, and flagged-review answers. Persisted to localStorage. |
 | **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows all definitions, transliteration, and example sentences with RubyText annotations. When `showKoreanHanja` is enabled and the word has `hanjaReadings`, a 🀄 Korean Hanja section is shown above the definitions. Wrong answers are re-queued until correct. Questions are lazy-loaded in batches of 50 with automatic prefetching at the halfway point. Supports resuming from where the user left off. |
-| **WordList**            | Paginated word browsing with search, topic/category/level filters, progress badges, and expandable word details with pinyin displayed via RubyText. Accepts `refreshSignal` (silently re-fetches on change — also re-runs `refreshExistingTerms` on the expanded word so queued segment chips flip to ✓), `onQueue` (enables queue mode in its embedded SmartAddWordModal; segment chip "+" clicks also route through this queue, serializing them instead of firing concurrent HTTP requests), and `pendingTerms` (Set from `useWordQueue`; chips whose term is in-flight show amber "⋯" and are disabled). Expanded details show the first 3 definitions and first 3 examples by default; a "show more / show less" toggle appears when there are additional entries. Segment buttons show amber "⋯" while the activation check is in-flight or the term is queued, green "✓" when already in the DB, and blue "+" when addable; the flag checkbox below each addable segment is hidden while the activation check is running or the term is queued; on expand, any segments found in `word_index` without a `seg.id` are patched locally and persisted via `sync-segment-links`. When clicking a segment "+" button fails (e.g. LLM error), a red error toast appears bottom-right for 3 seconds with the actual backend error message. When `onJumpToWord` fires from an embedded `SmartAddWordModal`, the list filters/expands to the target word and opens it in `WordFormModal` edit mode (passing `onQueue`/`pendingTerms`/`refreshSignal` through). |
+| **WordList**            | Paginated word browsing with search, topic/category/level/group filters, progress badges, and expandable word details with pinyin displayed via RubyText. Accepts `refreshSignal` (silently re-fetches on change — also re-runs `refreshExistingTerms` on the expanded word so queued segment chips flip to ✓), `onQueue` (enables queue mode in its embedded SmartAddWordModal; segment chip "+" clicks also route through this queue, serializing them instead of firing concurrent HTTP requests), and `pendingTerms` (Set from `useWordQueue`; chips whose term is in-flight show amber "⋯" and are disabled). Expanded details show the first 3 definitions and first 3 examples by default; a "show more / show less" toggle appears when there are additional entries. Segment buttons show amber "⋯" while the activation check is in-flight or the term is queued, green "✓" when already in the DB, and blue "+" when addable; the flag checkbox below each addable segment is hidden while the activation check is running or the term is queued; on expand, any segments found in `word_index` without a `seg.id` are patched locally and persisted via `sync-segment-links`. When clicking a segment "+" button fails (e.g. LLM error), a red error toast appears bottom-right for 3 seconds with the actual backend error message. When `onJumpToWord` fires from an embedded `SmartAddWordModal`, the list filters/expands to the target word and opens it in `WordFormModal` edit mode (passing `onQueue`/`pendingTerms`/`refreshSignal` through). |
 | **SmartAddWordModal**   | Modal to add a word with LLM auto-filling missing fields. Only `term` is required; the LLM generates transliteration, definitions, examples (with translations), and — for Chinese — pinyin segments per example. The LLM **always** generates definitions and example translations in all four supported languages regardless of settings; the settings only control which subset is **displayed** (`displayDefinitionLanguages`, `displayExampleTranslationLanguages`) and which language each form field is **pre-filled** with (`defaultAddWordLanguage` for the outer Language radio, `defaultDefinitionLanguage` for the first definition row). Note that the modal exposes two independent language fields — the outer "word language" (sent as the `:language` route parameter, backend full-name format) and per-row "definition language" (ISO code, used as the key in `definitions[].text`) — easy to confuse. Duplicate detection: shows "⚠ Already in DB" if the term is already in Firestore; shows "⏳ Already queued" (amber) and disables the submit button if the term is in `pendingTerms` (queued but not yet written). For Chinese, uses inline debounced `checkTerms` + `smartAddWord` to show WorldList-style `rounded-full` pill buttons with an amber flag checkbox below each addable segment on space-split example sentences; when `onQueue` is provided, segment chip additions route through the queue (amber "⋯" queued state, `checkTerms` re-runs on `refreshSignal`). When the `onQueue` prop is provided the modal enters **queue mode**: clicking Save enqueues the word instantly (no blocking LLM wait), flashes "✓ Queued", then resets the form so the user can add the next term immediately. Also accepts optional `pendingTerms?: Set<string>` and `refreshSignal?: number` to enable the queued-duplicate detection and chip re-checks. |
 | **FlaggedReview**       | Review interface for flagged words. Allows browsing and unflagging words marked for review. When `showKoreanHanja` is enabled and the word has `hanjaReadings`, a 🀄 Korean Hanja section is shown above the definitions in the revealed answer. |
 | **LanguageSelectModal** | Modal to pick the target language when starting a new quiz. Lists languages fetched from the API.                  |
-| **LevelSelectModal**    | Modal to select proficiency levels (e.g., HSK1-4–HSK7-9) for filtering. |
-| **QuizFilterModal**     | Modal to select topic, category, and level filters before starting a quiz. Supports "Select All" / "Clear All" actions. Level column only appears when words have levels set. Starting with no filters includes all words. |
+| **LevelSelectModal**    | Modal to select proficiency levels (e.g., HSK1-4–HSK7-9) for filtering. (No longer used in the quiz start flow — levels are now inside QuizFilterModal.) |
+| **QuizFilterModal**     | Multi-panel filter modal shown before starting a word quiz. Covers topics, categories, levels, and word groups (all panels separated by AND dividers). Levels and groups were previously in separate modals and are now consolidated here. Supports "Select All" / "Clear All" per panel. |
+| **GroupPickerModal**    | Modal for managing word group membership. Lets users create, rename, and delete groups, and toggle which groups a set of words belongs to. Used from WordList's "Manage Groups" button and per-word "Add to Group" action. |
 | **WordFormModal**       | Modal for adding or editing a word manually with all fields. For Chinese, uses inline debounced `checkTerms` + `smartAddWord` to show WorldList-style `rounded-full` pill buttons with an amber flag checkbox below each addable segment on space-split example sentences. Accepts optional `onQueue?`, `pendingTerms?`, and `refreshSignal?` props — when `onQueue` is provided, segment chip additions route through the queue (amber "⋯" queued state driven by `pendingTerms`) instead of calling `smartAddWord` directly; `checkTerms` re-runs on `refreshSignal` so chips flip to ✓ after the word commits. |
 | **GrammarList**         | Browse grammar items organized by chapter and subchapter with search, filters, and inline edit/delete. |
 | **GrammarFilterModal**  | Modal to select chapter, subchapter, display language, and quiz mode filters before starting a grammar quiz. Quiz mode selector is hidden for Chinese (always LLM). |
@@ -993,6 +1018,7 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `id_maps`            | Term → word ID mappings and next ID counter            |
 | `progress`           | Per-word progress (times seen, correct rate)            |
 | `word_index`         | Fast term → {id, level, transliteration} lookup (composite key: `{language}_{term}`) |
+| `word_groups`        | User-defined word groups per language (id, language, name, wordIds[], createdAt); used to scope quiz and word list |
 | `quiz_sessions`      | One word quiz session per language (keyed by language name)  |
 | `flagged_words`      | Flagged words for review                              |
 | `grammar_chapters`   | Grammar chapter metadata (per language)               |
