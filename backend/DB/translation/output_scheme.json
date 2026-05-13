@@ -5,25 +5,26 @@
     "type": "object",
     "additionalProperties": false,
     "required": [
-      "sentences",
+      "passages",
       "chunks",
       "components"
     ],
     "properties": {
-      "sentences": {
+      "passages": {
         "type": "array",
         "items": {
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "sentenceId",
-            "meaning"
+            "sentenceIds",
+            "translation"
           ],
           "properties": {
-            "sentenceId": {
-              "type": "string"
+            "sentenceIds": {
+              "type": "array",
+              "items": { "type": "string" }
             },
-            "meaning": {
+            "translation": {
               "type": "string"
             }
           }

@@ -250,9 +250,15 @@ export interface SentenceAnalysisResult {
   sentences: SentenceAnalysis[];
 }
 
+export interface TranslationPassage {
+  sentenceIds: string[];
+  translation: string;
+}
+
 export interface TranslationResult {
   language: string;
   error?: string;
+  passages?: TranslationPassage[];
   analysis?: SentenceAnalysisResult;
 }
 

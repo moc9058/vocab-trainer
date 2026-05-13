@@ -3,7 +3,7 @@ import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { ALL_KNOWN_LANGUAGES } from "../settings/defaults";
 import { translateStream, getTranslationHistory, deleteTranslationHistory } from "../api/translation";
-import type { TranslationEntry, TranslationResult, SentenceAnalysis, SentenceAnalysisResult, AnalysisChunk } from "../types";
+import type { TranslationEntry, TranslationResult, TranslationPassage, SentenceAnalysis, SentenceAnalysisResult, AnalysisChunk } from "../types";
 
 interface Props {
   mode: "new" | "resume";
@@ -25,10 +25,10 @@ export default function TranslationView({ mode, language }: Props) {
   const [phase, setPhase] = useState<"input" | "loading" | "results">("input");
   const [inputText, setInputText] = useState("");
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(() => {
-    const targets = settings.defaultTranslationTargetLanguages.filter((c) => c !== language);
-    if (targets.length > 0) return targets;
+    const src = settings.defaultTranslationSourceLanguage;
+    if (src && src !== language) return [src];
     const fallback = settings.languageOrder.find((c) => c !== language);
-    return fallback ? [fallback] : ["ja"];
+    return fallback ? [fallback] : ["en"];
   });
   const [activeTab, setActiveTab] = useState(0);
   const [loadingHistory, setLoadingHistory] = useState(true);
@@ -70,17 +70,15 @@ export default function TranslationView({ mode, language }: Props) {
     return () => { cancelled = true; };
   }, [mode]);
 
-  function toggleLanguage(code: string) {
-    setSelectedLanguages((prev) =>
-      prev.includes(code) ? prev.filter((l) => l !== code) : [...prev, code]
-    );
+  function selectSourceLanguage(code: string) {
+    setSelectedLanguages([code]);
   }
 
   function getTargetLanguages(): string[] {
-    return selectedLanguages.filter((l) => l !== language);
+    return [language];
   }
 
-  const canSubmit = inputText.trim().length > 0 && getTargetLanguages().length > 0;
+  const canSubmit = inputText.trim().length > 0 && selectedLanguages.length > 0;
 
   async function handleTranslate() {
     if (!canSubmit) return;
@@ -105,7 +103,7 @@ export default function TranslationView({ mode, language }: Props) {
     }
 
     try {
-      await translateStream(language, inputText.trim(), getTargetLanguages(), {
+      await translateStream(selectedLanguages[0], inputText.trim(), getTargetLanguages(), {
         onDecomposeChunk(chunk) {
           setDecomposeChunks((prev) => prev + chunk);
         },
@@ -254,7 +252,7 @@ export default function TranslationView({ mode, language }: Props) {
   function handleRegenerateTranslation() {
     if (!currentEntry) return;
     setInputText(currentEntry.sourceText);
-    setSelectedLanguages(currentEntry.targetLanguages.filter((l) => l !== language));
+    setSelectedLanguages([currentEntry.sourceLanguage]);
     setPhase("input");
     setError(null);
   }
@@ -317,12 +315,12 @@ export default function TranslationView({ mode, language }: Props) {
         />
 
         <div>
-          <p className="mb-2 text-sm font-medium text-gray-400">{t("targetLanguagesLabel")}</p>
+          <p className="mb-2 text-sm font-medium text-gray-400">{t("sourceLanguageLabel")}</p>
           <div className="flex flex-wrap gap-2">
             {KNOWN_LANGUAGES.filter((lang) => lang.code !== language).map((lang) => (
               <button
                 key={lang.code}
-                onClick={() => toggleLanguage(lang.code)}
+                onClick={() => selectSourceLanguage(lang.code)}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   selectedLanguages.includes(lang.code)
                     ? "bg-violet-600 text-white"
@@ -510,12 +508,6 @@ export default function TranslationView({ mode, language }: Props) {
         )}
       </div>
 
-      {/* Source text */}
-      <div className="rounded-lg bg-gray-800/60 p-4">
-        <p className="text-sm text-gray-400 mb-1">Source</p>
-        <p className="text-gray-100">{currentEntry.sourceText}</p>
-      </div>
-
       {/* Language tabs */}
       {currentEntry.results.length > 1 && (
         <div className="flex gap-1 rounded-lg bg-gray-800/40 p-1">
@@ -547,9 +539,9 @@ export default function TranslationView({ mode, language }: Props) {
               <p className="text-red-300">{t("translationError")}</p>
               <p className="mt-1 text-sm text-red-400">{result.error}</p>
             </div>
-          ) : result.analysis ? (
-            <AnalysisView analysis={result.analysis} />
-          ) : null}
+          ) : (
+            <ResultView result={result} sourceText={currentEntry.sourceText} />
+          )}
         </div>
       )}
 
@@ -619,42 +611,72 @@ function ChunkRow({ chunk, showReading }: { chunk: AnalysisChunk; showReading: b
   );
 }
 
-function SentenceCard({ sentence }: { sentence: SentenceAnalysis }) {
-  const allComponents = sentence.chunks?.length
-    ? sentence.chunks.flatMap((ch) => ch.components)
-    : sentence.components ?? [];
+function PassageCard({ passage, sentenceById }: { passage: TranslationPassage; sentenceById: Map<string, SentenceAnalysis> }) {
+  const sentences = passage.sentenceIds.map((id) => sentenceById.get(id)).filter(Boolean) as SentenceAnalysis[];
+  const allComponents = sentences.flatMap((s) =>
+    s.chunks?.length ? s.chunks.flatMap((ch) => ch.components) : s.components ?? []
+  );
   const showReading = allComponents.some((c) => CJK_REGEX.test(c.surface));
 
   return (
     <div className="space-y-3">
-      <div className="rounded-lg bg-gray-800/60 p-4">
-        <p className="text-gray-100 font-medium">{sentence.text}</p>
-        {sentence.meaning && (
-          <p className="text-gray-400 text-sm mt-1">{sentence.meaning}</p>
-        )}
-      </div>
-
-      {sentence.chunks?.length ? (
-        <div className="rounded-lg bg-gray-800/60 p-2">
-          {sentence.chunks.map((chunk) => (
-            <ChunkRow key={chunk.chunkId} chunk={chunk} showReading={showReading} />
+      {/* Source + translation card */}
+      <div className="rounded-lg bg-gray-800/60 p-4 space-y-3">
+        <div>
+          {sentences.map((s) => (
+            <p key={s.sentenceId} className="text-gray-100 font-medium">{s.text}</p>
           ))}
         </div>
-      ) : allComponents.length > 0 ? (
-        <div className="rounded-lg bg-gray-800/60 p-4 overflow-x-auto">
-          <ComponentTable components={allComponents} showReading={showReading} />
+        <div className="border-t border-gray-700 pt-3">
+          <p className="text-gray-100 text-base">{passage.translation}</p>
         </div>
-      ) : null}
+      </div>
+      {/* Structural breakdown per sentence */}
+      {sentences.map((s) => {
+        const sentComponents = s.chunks?.length
+          ? s.chunks.flatMap((ch) => ch.components)
+          : s.components ?? [];
+        if (!s.chunks?.length && sentComponents.length === 0) return null;
+        return (
+          <div key={s.sentenceId}>
+            {s.chunks?.length ? (
+              <div className="rounded-lg bg-gray-800/60 p-2">
+                {s.chunks.map((chunk) => (
+                  <ChunkRow key={chunk.chunkId} chunk={chunk} showReading={showReading} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg bg-gray-800/60 p-4 overflow-x-auto">
+                <ComponentTable components={sentComponents} showReading={showReading} />
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function AnalysisView({ analysis }: { analysis: SentenceAnalysisResult }) {
+function ResultView({ result, sourceText }: { result: TranslationResult; sourceText: string }) {
+  const sentenceById = new Map(
+    (result.analysis?.sentences ?? []).map((s) => [s.sentenceId, s])
+  );
+
+  if (result.passages && result.passages.length > 0) {
+    return (
+      <div className="space-y-6">
+        {result.passages.map((passage, i) => (
+          <PassageCard key={i} passage={passage} sentenceById={sentenceById} />
+        ))}
+      </div>
+    );
+  }
+
+  // Fallback: no passages (e.g. old history entries) — show raw source text
   return (
-    <div className="space-y-6">
-      {analysis.sentences.map((sentence) => (
-        <SentenceCard key={sentence.sentenceId} sentence={sentence} />
-      ))}
+    <div className="rounded-lg bg-gray-800/60 p-4">
+      <p className="text-sm text-gray-400 mb-1">Source</p>
+      <p className="text-gray-100">{sourceText}</p>
     </div>
   );
 }

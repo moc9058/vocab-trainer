@@ -1540,7 +1540,7 @@ export async function getTranslationHistory(
 ): Promise<{ entries: TranslationEntry[]; total: number }> {
   const snap = await translationHistory.orderBy("createdAt", "desc").get();
   const allDocs = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as TranslationEntry[];
-  const filtered = language ? allDocs.filter((e) => e.sourceLanguage === language) : allDocs;
+  const filtered = language ? allDocs.filter((e) => e.targetLanguages?.includes(language)) : allDocs;
   const total = filtered.length;
   const offset = (page - 1) * limit;
   const entries = filtered.slice(offset, offset + limit);
@@ -1556,7 +1556,7 @@ export async function deleteTranslationEntry(id: string): Promise<boolean> {
 
 export async function clearTranslationHistory(language?: string): Promise<void> {
   const snap = language
-    ? await translationHistory.where("sourceLanguage", "==", language).get()
+    ? await translationHistory.where("targetLanguages", "array-contains", language).get()
     : await translationHistory.get();
   const BATCH_LIMIT = 500;
   for (let i = 0; i < snap.docs.length; i += BATCH_LIMIT) {

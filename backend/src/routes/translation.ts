@@ -7,7 +7,7 @@ import {
   clearTranslationHistory,
   getTranslationConfig,
 } from "../firestore.js";
-import type { TranslationResult, SentenceAnalysisResult } from "../types.js";
+import type { TranslationResult, TranslationPassage, SentenceAnalysisResult } from "../types.js";
 
 const LANGUAGE_NAMES: Record<string, string> = {
   en: "English",
@@ -21,11 +21,11 @@ function langName(code: string): string {
 }
 
 function buildTranslateSystemPrompt(basePrompt: string, sourceLang: string, targetLang: string): string {
-  return `${basePrompt}\n\nSource language: ${langName(sourceLang)}\nTarget language: ${langName(targetLang)}`;
+  return `${basePrompt}\n\nSource language: ${langName(sourceLang)}\nTarget language: ${langName(targetLang)}\n\nApproach: First determine a natural, idiomatic translation for each sentence as a whole. Then, using that sentence translation as context, write explanations for each chunk and component. Component explanations are supplementary notes — they do not need to compose or sum up to the sentence translation.`;
 }
 
 interface SlimTranslationResponse {
-  sentences: { sentenceId: string; meaning: string }[];
+  passages: { sentenceIds: string[]; translation: string }[];
   chunks: { chunkId: string; meaning: string }[];
   components: { componentId: string; meaning: string; explanation: string }[];
 }
@@ -57,15 +57,18 @@ function mergeTranslation(decomposition: string, slimRaw: string, language: stri
     const decomp = JSON.parse(decomposition) as SentenceAnalysisResult;
     const slim = JSON.parse(stripMarkdownFences(slimRaw)) as SlimTranslationResponse;
 
-    const sentMap = new Map(slim.sentences.map((s) => [s.sentenceId, s.meaning]));
     const chunkMap = new Map(slim.chunks.map((c) => [c.chunkId, c.meaning]));
     const compMap = new Map(slim.components.map((c) => [c.componentId, { meaning: c.meaning, explanation: c.explanation }]));
 
-    const merged: SentenceAnalysisResult = {
+    const passages: TranslationPassage[] = slim.passages.map((p) => ({
+      sentenceIds: p.sentenceIds,
+      translation: p.translation,
+    }));
+
+    const analysis: SentenceAnalysisResult = {
       sentences: decomp.sentences.map((sentence) => ({
         sentenceId: sentence.sentenceId,
         text: sentence.text,
-        meaning: sentMap.get(sentence.sentenceId) ?? "",
         chunks: sentence.chunks.map((chunk) => ({
           chunkId: chunk.chunkId,
           surface: chunk.surface,
@@ -83,7 +86,7 @@ function mergeTranslation(decomposition: string, slimRaw: string, language: stri
       })),
     };
 
-    return { language, analysis: merged };
+    return { language, passages, analysis };
   } catch {
     return { language, error: "Failed to parse or merge translation response" };
   }
@@ -211,7 +214,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
       const decomposition = stripMarkdownFences(decomposeRaw);
       sendEvent("decompose-result", { decomposition });
 
-      // Step 2: translate each language in parallel with streaming
+      // Step 2: translate each language in parallel
       const slimInput = buildSlimInput(decomposition);
       for (const lang of targetLanguages) {
         sendEvent("start", { language: lang });
