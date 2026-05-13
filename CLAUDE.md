@@ -64,14 +64,17 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
   - `routes/quiz.ts` — hydrated questions include `hanjaReadings`
   - `routes/grammar-quiz.ts` — also exposes `check-missing-words` and `add-missing-words`
   - `routes/translation.ts` / `routes/speaking-writing.ts` — SSE streaming via POST endpoint
+  - `routes/translation.ts` — `language` prop = **target** language (active study language); user selects source. Two-step: decompose (MINI, source-lang prompt) → translate (FULL, target-lang prompt). Output uses `passages[].{ sentenceIds[], translation }` — LLM may group consecutive sentences. `buildTranslateSystemPrompt` appends source/target + approach guidance to the Firestore prompt without needing a migration.
 - **Database**: `firestore.ts` — `updateWord` per-sentence-merges old example `segments` onto incoming `examples` when sentence text is unchanged, so `WordFormModal` (which doesn't carry segments through form state) doesn't wipe LLM-generated pinyin on save. `getCanonicalSegmentPinyin(word)` returns `undefined` for polyphonic words so callers keep the LLM-generated contextual value.
 - **LLM**: `llm.ts` — `callLLM*` functions use the MINI OpenAI model; `callLLMFull*` use the FULL OpenAI model. Config from `.env` (local) or Firestore `config/llm` (deployed).
 - **Types**: `types.ts` — `Word` carries optional `hanjaReadings?: HanjaReading[]` (`{ simplifiedChar, traditionalChar, hunEum[] }` per character)
+- **Type mirroring**: `backend/src/types.ts` and `frontend/src/types.ts` share translation interfaces (`TranslationResult`, `TranslationPassage`, `TranslationEntry`) — update both files together.
 
 ### Data Storage
 - **Firestore** (database ID: `vocab-database`). Key composite keys: `progress`/`word_index` use `{language}_{wordId}`, `example_sentence_index` uses `{language}_{sha256(sentence).slice(0,16)}`.
 - `example_sentences` — normalized; words store `exampleIds` and `appearsInIds` arrays referencing this collection
 - `config` subcollections: `config/llm`, `config/token_costs`, `config/speaking_writing`, `config/translation`, `config/vocabulary`
+  - `config/translation` fields: `decomposeSchema`, `decomposePrompts`, `translateSchema`, `translatePrompts` — local source in `backend/DB/translation/`; push with `migrate-db-config-to-firestore.ts --prompts`
 - **Local files**: `backend/DB/` (word, grammer, speaking&writing, translation, vocabulary, backup)
 
 ### Language Code Convention
@@ -82,6 +85,7 @@ All language codes use ISO 639-1: `ja`, `en`, `ko`, `zh`. The export script norm
   - `defaultAddWordLanguage` — backend full-name format (`"english"`, `"chinese"`) — **different from** `defaultDefinitionLanguage` (ISO code)
   - `showKoreanHanja` — only shown in Settings when active language is Chinese
 - **API layer**: `api/client.ts` — non-ok responses include body text in thrown error
+- **i18n in sub-components**: Module-level React components (outside `TranslationView`) must explicitly call `const { t } = useI18n()` — they don't inherit it from parent scope.
 - **Key components**:
   - `SmartAddWordModal.tsx` — **two independent language fields**: outer "word language" (backend full-name) vs. per-row "definition language" (ISO code). Queue mode (`onQueue` prop): Submit enqueues immediately and resets form.
   - `WordFormModal.tsx` — does not carry `segments` through form state (preserved server-side by `firestore.ts:updateWord`)
