@@ -148,6 +148,8 @@ Apply these defaults unless there is a strong pedagogical reason to do otherwise
 - baseForm: provide the lemma when confident, else null
 - reading: always null
 - partOfSpeech: use only the allowed enum values
+  - phrasal verbs and prepositional verbs → use `verb`
+  - determiners (the, a, this, those …) → use `adjective`
 - If confidence is low, prefer null over guessing
 
 ## Decision Priority

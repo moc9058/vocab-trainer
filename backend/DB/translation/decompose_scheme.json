@@ -84,24 +84,14 @@
                             "preposition",
                             "conjunction",
                             "interjection",
-                            "determiner",
                             "particle",
                             "classifier",
                             "numeral",
-                            "onomatopoeia",
                             "idiom",
-                            "set phrase",
-                            "phrasal verb",
-                            "prepositional verb",
-                            "collocation",
-                            "proverb",
-                            "greeting",
                             "auxiliary",
                             "copula",
                             "suffix",
-                            "prefix",
-                            "bound noun",
-                            "ending"
+                            "prefix"
                           ]
                         }
                       }
