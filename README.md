@@ -602,7 +602,7 @@ Returns full question details (definition, transliteration, examples) for a slic
 }
 ```
 
-If `correct` is `false`, the word is re-appended to the end of the question queue and will appear again. This repeats until the user answers correctly.
+If `correct` is `false`, the word is re-inserted into a random position among the remaining unanswered questions and will appear again. This repeats until the user answers correctly.
 
 **Response:** `{ session, wordProgress }` — updated session state and word progress.
 

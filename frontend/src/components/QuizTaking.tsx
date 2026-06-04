@@ -171,15 +171,16 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
         const updated = prev.map((q, i) =>
           i === currentIndex ? { ...q, userCorrect: correct } : q
         );
-        // If wrong, re-queue at the end for another attempt
+        // Reinsert missed words into a random spot in the remaining queue so
+        // they reappear, but not in a fixed order.
         if (!correct) {
-          updated.push({
+          insertRetryQuestion(updated, {
             wordId: question.wordId,
             term: question.term,
             definitions: question.definitions,
             transliteration: question.transliteration,
             examples: question.examples,
-          });
+          }, currentIndex);
         }
         return updated;
       });
@@ -418,4 +419,24 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
       )}
     </div>
   );
+}
+
+function insertRetryQuestion(
+  questions: QuizQuestion[],
+  retryQuestion: QuizQuestion,
+  answeredIndex: number
+) {
+  const remainingUnansweredIndices: number[] = [];
+  for (let i = answeredIndex + 1; i < questions.length; i++) {
+    if (questions[i].userCorrect === undefined) {
+      remainingUnansweredIndices.push(i);
+    }
+  }
+
+  const slot = Math.floor(Math.random() * (remainingUnansweredIndices.length + 1));
+  const insertAt = slot === remainingUnansweredIndices.length
+    ? questions.length
+    : remainingUnansweredIndices[slot];
+
+  questions.splice(insertAt, 0, retryQuestion);
 }

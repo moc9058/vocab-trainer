@@ -182,14 +182,15 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       if (correct) {
         session.score.correct++;
       } else {
-        // Re-queue wrong answer to appear again later
-        session.questions.push({
+        // Re-insert wrong answers into a random spot among the remaining
+        // unanswered questions so retries are not locked to FIFO order.
+        insertRetryQuestion(session.questions, {
           wordId: question.wordId,
           term: question.term,
           definitions: question.definitions ?? [],
           transliteration: question.transliteration,
           examples: question.examples,
-        });
+        }, session.questions.indexOf(question));
         session.score.total++;
       }
 
@@ -293,6 +294,26 @@ function weightedSample(
   }
 
   return selected;
+}
+
+function insertRetryQuestion(
+  questions: QuizQuestion[],
+  retryQuestion: QuizQuestion,
+  answeredIndex: number
+): void {
+  const remainingUnansweredIndices: number[] = [];
+  for (let i = answeredIndex + 1; i < questions.length; i++) {
+    if (questions[i].userCorrect === undefined) {
+      remainingUnansweredIndices.push(i);
+    }
+  }
+
+  const slot = Math.floor(Math.random() * (remainingUnansweredIndices.length + 1));
+  const insertAt = slot === remainingUnansweredIndices.length
+    ? questions.length
+    : remainingUnansweredIndices[slot];
+
+  questions.splice(insertAt, 0, retryQuestion);
 }
 
 export default quizRoutes;
