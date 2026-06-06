@@ -9,6 +9,7 @@ import { displayTranslation, type QuizSession, type QuizQuestion } from "../type
 
 const BATCH_SIZE = 50;
 const VISIBLE_ANSWER_ITEMS = 4;
+const MAX_RETRY_SHARE = 1 / 3;
 
 interface Props {
   session: QuizSession;
@@ -171,8 +172,8 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
         const updated = prev.map((q, i) =>
           i === currentIndex ? { ...q, userCorrect: correct } : q
         );
-        // Reinsert missed words into a random spot in the remaining queue so
-        // they reappear, but not in a fixed order.
+        // Reinsert missed words in a spaced-out order so retries stay
+        // dispersed and do not dominate the remaining queue.
         if (!correct) {
           insertRetryQuestion(updated, {
             wordId: question.wordId,
@@ -426,17 +427,113 @@ function insertRetryQuestion(
   retryQuestion: QuizQuestion,
   answeredIndex: number
 ) {
-  const remainingUnansweredIndices: number[] = [];
-  for (let i = answeredIndex + 1; i < questions.length; i++) {
-    if (questions[i].userCorrect === undefined) {
-      remainingUnansweredIndices.push(i);
+  const insertAt = answeredIndex + 1;
+  questions.splice(insertAt, 0, retryQuestion);
+
+  const seed = `${retryQuestion.wordId}:${answeredIndex}:${questions.length}:${countOccurrences(questions, retryQuestion.wordId)}`;
+  rebalancePendingQuestions(questions, answeredIndex, seed);
+}
+
+function rebalancePendingQuestions(
+  questions: QuizQuestion[],
+  answeredIndex: number,
+  seed: string
+) {
+  const start = answeredIndex + 1;
+  const answeredWordIds = new Set(questions.slice(0, start).map((q) => q.wordId));
+  const pending = questions.slice(start).filter((q) => q.userCorrect === undefined);
+  const rebalanced = buildPendingQueue(answeredWordIds, pending, seed);
+  questions.splice(start, questions.length - start, ...rebalanced);
+}
+
+function buildPendingQueue(
+  answeredWordIds: Set<string>,
+  pendingQuestions: QuizQuestion[],
+  seed: string,
+  opts?: { shuffleRegular?: boolean }
+) {
+  const regular: QuizQuestion[] = [];
+  const retries: QuizQuestion[] = [];
+  const seen = new Set(answeredWordIds);
+
+  for (const question of pendingQuestions) {
+    if (seen.has(question.wordId)) {
+      retries.push(question);
+    } else {
+      regular.push(question);
+      seen.add(question.wordId);
     }
   }
 
-  const slot = Math.floor(Math.random() * (remainingUnansweredIndices.length + 1));
-  const insertAt = slot === remainingUnansweredIndices.length
-    ? questions.length
-    : remainingUnansweredIndices[slot];
+  const orderedRegular = opts?.shuffleRegular
+    ? deterministicOrder(regular, `${seed}:regular`, (q, index) => `${q.wordId}:${index}`)
+    : regular;
+  const orderedRetries = deterministicOrder(retries, `${seed}:retry`, (q, index) => `${q.wordId}:${index}`);
 
-  questions.splice(insertAt, 0, retryQuestion);
+  return interleaveRetryQuestions(orderedRegular, orderedRetries, `${seed}:slots`);
+}
+
+function interleaveRetryQuestions(
+  regular: QuizQuestion[],
+  retries: QuizQuestion[],
+  seed: string
+) {
+  if (regular.length === 0 || retries.length === 0) {
+    return [...regular, ...retries];
+  }
+
+  const maxBalancedRetries = Math.floor((regular.length * MAX_RETRY_SHARE) / (1 - MAX_RETRY_SHARE));
+  const balancedRetryCount = Math.min(retries.length, maxBalancedRetries);
+  const balancedRetries = retries.slice(0, balancedRetryCount);
+  const overflowRetries = retries.slice(balancedRetryCount);
+
+  const slotCount = Math.floor(regular.length / 2);
+  const slotOrder = deterministicOrder(
+    Array.from({ length: slotCount }, (_, index) => index),
+    seed,
+    (slot) => String(slot)
+  );
+  const chosenSlots = slotOrder.slice(0, balancedRetryCount).sort((a, b) => a - b);
+  const retryBySlot = new Map<number, QuizQuestion>();
+  chosenSlots.forEach((slot, index) => retryBySlot.set(slot, balancedRetries[index]));
+
+  const result: QuizQuestion[] = [];
+  for (let i = 0; i < regular.length; i++) {
+    result.push(regular[i]);
+    if (i % 2 === 1) {
+      const retry = retryBySlot.get(Math.floor(i / 2));
+      if (retry) result.push(retry);
+    }
+  }
+
+  result.push(...overflowRetries);
+  return result;
+}
+
+function deterministicOrder<T>(
+  items: T[],
+  seed: string,
+  keyForItem: (item: T, index: number) => string
+) {
+  return [...items]
+    .map((item, index) => ({
+      item,
+      index,
+      key: hashString(`${seed}:${keyForItem(item, index)}`),
+    }))
+    .sort((a, b) => a.key - b.key || a.index - b.index)
+    .map(({ item }) => item);
+}
+
+function hashString(value: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function countOccurrences(questions: QuizQuestion[], wordId: string) {
+  return questions.reduce((count, question) => count + (question.wordId === wordId ? 1 : 0), 0);
 }

@@ -602,7 +602,7 @@ Returns full question details (definition, transliteration, examples) for a slic
 }
 ```
 
-If `correct` is `false`, the word is re-inserted into a random position among the remaining unanswered questions and will appear again. This repeats until the user answers correctly.
+If `correct` is `false`, the word is re-queued among the remaining unanswered questions and spaced out so retry questions stay at roughly one-third of the upcoming queue when enough non-retry questions remain. This repeats until the user answers correctly.
 
 **Response:** `{ session, wordProgress }` — updated session state and word progress.
 

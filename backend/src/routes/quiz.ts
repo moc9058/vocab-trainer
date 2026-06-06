@@ -14,6 +14,8 @@ import {
 } from "../firestore.js";
 import type { QuizSession, QuizQuestion, Word, WordProgress } from "../types.js";
 
+const MAX_RETRY_SHARE = 1 / 3;
+
 const quizRoutes: FastifyPluginAsync = async (fastify) => {
   // Start quiz session
   fastify.post<{
@@ -182,8 +184,8 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       if (correct) {
         session.score.correct++;
       } else {
-        // Re-insert wrong answers into a random spot among the remaining
-        // unanswered questions so retries are not locked to FIFO order.
+        // Re-queue wrong answers in a spaced-out order so retries stay
+        // dispersed and do not dominate the remaining queue.
         insertRetryQuestion(session.questions, {
           wordId: question.wordId,
           term: question.term,
@@ -241,11 +243,12 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         if (q.userCorrect !== undefined) answered.push(q);
         else unanswered.push(q);
       }
-      for (let i = unanswered.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [unanswered[i], unanswered[j]] = [unanswered[j], unanswered[i]];
-      }
-      session.questions = [...answered, ...unanswered];
+      const seed = `${session.sessionId}:${Date.now()}:${unanswered.length}`;
+      const answeredWordIds = new Set(answered.map((q) => q.wordId));
+      session.questions = [
+        ...answered,
+        ...buildPendingQueue(answeredWordIds, unanswered, seed, { shuffleRegular: true }),
+      ];
       await updateQuizSession(session);
 
       return session;
@@ -301,19 +304,115 @@ function insertRetryQuestion(
   retryQuestion: QuizQuestion,
   answeredIndex: number
 ): void {
-  const remainingUnansweredIndices: number[] = [];
-  for (let i = answeredIndex + 1; i < questions.length; i++) {
-    if (questions[i].userCorrect === undefined) {
-      remainingUnansweredIndices.push(i);
+  const insertAt = answeredIndex + 1;
+  questions.splice(insertAt, 0, retryQuestion);
+
+  const seed = `${retryQuestion.wordId}:${answeredIndex}:${questions.length}:${countOccurrences(questions, retryQuestion.wordId)}`;
+  rebalancePendingQuestions(questions, answeredIndex, seed);
+}
+
+function rebalancePendingQuestions(
+  questions: QuizQuestion[],
+  answeredIndex: number,
+  seed: string
+): void {
+  const start = answeredIndex + 1;
+  const answeredWordIds = new Set(questions.slice(0, start).map((q) => q.wordId));
+  const pending = questions.slice(start).filter((q) => q.userCorrect === undefined);
+  const rebalanced = buildPendingQueue(answeredWordIds, pending, seed);
+  questions.splice(start, questions.length - start, ...rebalanced);
+}
+
+function buildPendingQueue(
+  answeredWordIds: Set<string>,
+  pendingQuestions: QuizQuestion[],
+  seed: string,
+  opts?: { shuffleRegular?: boolean }
+): QuizQuestion[] {
+  const regular: QuizQuestion[] = [];
+  const retries: QuizQuestion[] = [];
+  const seen = new Set(answeredWordIds);
+
+  for (const question of pendingQuestions) {
+    if (seen.has(question.wordId)) {
+      retries.push(question);
+    } else {
+      regular.push(question);
+      seen.add(question.wordId);
     }
   }
 
-  const slot = Math.floor(Math.random() * (remainingUnansweredIndices.length + 1));
-  const insertAt = slot === remainingUnansweredIndices.length
-    ? questions.length
-    : remainingUnansweredIndices[slot];
+  const orderedRegular = opts?.shuffleRegular
+    ? deterministicOrder(regular, `${seed}:regular`, (q, index) => `${q.wordId}:${index}`)
+    : regular;
+  const orderedRetries = deterministicOrder(retries, `${seed}:retry`, (q, index) => `${q.wordId}:${index}`);
 
-  questions.splice(insertAt, 0, retryQuestion);
+  return interleaveRetryQuestions(orderedRegular, orderedRetries, `${seed}:slots`);
+}
+
+function interleaveRetryQuestions(
+  regular: QuizQuestion[],
+  retries: QuizQuestion[],
+  seed: string
+): QuizQuestion[] {
+  if (regular.length === 0 || retries.length === 0) {
+    return [...regular, ...retries];
+  }
+
+  const maxBalancedRetries = Math.floor((regular.length * MAX_RETRY_SHARE) / (1 - MAX_RETRY_SHARE));
+  const balancedRetryCount = Math.min(retries.length, maxBalancedRetries);
+  const balancedRetries = retries.slice(0, balancedRetryCount);
+  const overflowRetries = retries.slice(balancedRetryCount);
+
+  const slotCount = Math.floor(regular.length / 2);
+  const slotOrder = deterministicOrder(
+    Array.from({ length: slotCount }, (_, index) => index),
+    seed,
+    (slot) => String(slot)
+  );
+  const chosenSlots = slotOrder.slice(0, balancedRetryCount).sort((a, b) => a - b);
+  const retryBySlot = new Map<number, QuizQuestion>();
+  chosenSlots.forEach((slot, index) => retryBySlot.set(slot, balancedRetries[index]));
+
+  const result: QuizQuestion[] = [];
+  for (let i = 0; i < regular.length; i++) {
+    result.push(regular[i]);
+    if (i % 2 === 1) {
+      const retry = retryBySlot.get(Math.floor(i / 2));
+      if (retry) result.push(retry);
+    }
+  }
+
+  result.push(...overflowRetries);
+  return result;
+}
+
+function deterministicOrder<T>(
+  items: T[],
+  seed: string,
+  keyForItem: (item: T, index: number) => string
+): T[] {
+  return [...items]
+    .map((item, index) => ({
+      item,
+      index,
+      key: hashString(`${seed}:${keyForItem(item, index)}`),
+    }))
+    .sort((a, b) => a.key - b.key || a.index - b.index)
+    .map(({ item }) => item);
+}
+
+function hashString(value: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function countOccurrences(questions: QuizQuestion[], wordId: string): number {
+  return questions.reduce((count, question) => count + (question.wordId === wordId ? 1 : 0), 0);
 }
 
 export default quizRoutes;
