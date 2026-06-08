@@ -19,6 +19,7 @@
  *   --language=<name>    Only process words in this language (default: chinese).
  *   --limit=<n>          Process at most n words.
  *   --force              Re-process words that already have hanjaReadings set.
+ *   --empty-only         Re-process only words whose hanjaReadings is an empty array.
  */
 
 import { Firestore } from "@google-cloud/firestore";
@@ -40,13 +41,15 @@ interface CliArgs {
   language: string;
   limit: number | null;
   force: boolean;
+  emptyOnly: boolean;
 }
 
 function parseArgs(): CliArgs {
-  const args: CliArgs = { dryRun: false, language: "chinese", limit: null, force: false };
+  const args: CliArgs = { dryRun: false, language: "chinese", limit: null, force: false, emptyOnly: false };
   for (const arg of process.argv.slice(2)) {
     if (arg === "--dry-run") args.dryRun = true;
     else if (arg === "--force") args.force = true;
+    else if (arg === "--empty-only") args.emptyOnly = true;
     else if (arg.startsWith("--language=")) args.language = arg.slice("--language=".length);
     else if (arg.startsWith("--limit=")) args.limit = parseInt(arg.slice("--limit=".length), 10) || null;
     else console.warn(`Unknown argument: ${arg}`);
@@ -132,6 +135,7 @@ async function main(): Promise<void> {
   console.log(`  dry-run:  ${args.dryRun}`);
   console.log(`  limit:    ${args.limit ?? "<none>"}`);
   console.log(`  force:    ${args.force}`);
+  console.log(`  empty-only: ${args.emptyOnly}`);
 
   console.log("\nFetching words...");
   const snap = await wordsCol.where("language", "==", args.language).get();
@@ -141,6 +145,7 @@ async function main(): Promise<void> {
   let skipped = 0;
   let processed = 0;
   let updated = 0;
+  let withoutReadings = 0;
   let failed = 0;
 
   for (const doc of snap.docs) {
@@ -153,7 +158,11 @@ async function main(): Promise<void> {
 
     // Skip if already processed (hanjaReadings field present) unless --force
     const alreadySet = Array.isArray(data.hanjaReadings);
-    if (alreadySet && !args.force) {
+    if (args.emptyOnly && (!alreadySet || data.hanjaReadings.length > 0)) {
+      skipped++;
+      continue;
+    }
+    if (alreadySet && !args.force && !args.emptyOnly) {
       skipped++;
       continue;
     }
@@ -176,6 +185,7 @@ async function main(): Promise<void> {
       // Store even if empty (marks word as processed)
       await wordsCol.doc(doc.id).update({ hanjaReadings: readings });
       updated++;
+      if (readings.length === 0) withoutReadings++;
       console.log(`    OK: saved hanjaReadings (${readings.length} entries)`);
     } catch (err) {
       failed++;
@@ -188,6 +198,7 @@ async function main(): Promise<void> {
   console.log(`Skipped:   ${skipped} (already had hanjaReadings)`);
   console.log(`Processed: ${processed}`);
   console.log(`Updated:   ${updated}`);
+  console.log(`No Hanja:  ${withoutReadings}`);
   console.log(`Failed:    ${failed}`);
   if (args.dryRun) console.log("(dry-run — no Firestore writes were made)");
 }

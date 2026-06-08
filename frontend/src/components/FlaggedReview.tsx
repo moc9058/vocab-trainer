@@ -249,15 +249,16 @@ export default function FlaggedReview({ language, onBack }: Props) {
         </button>
       ) : (
         <>
-          {settings.showKoreanHanja && currentWord!.hanjaReadings && currentWord!.hanjaReadings.length > 0 && (
+          {settings.showKoreanHanja && currentWord!.hanjaReadings && (
             <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div className="h-px flex-1 bg-amber-500/50"></div>
                 <span className="text-xs font-semibold text-amber-400">🀄 {t("sectionKoreanHanja")}</span>
                 <div className="h-px flex-1 bg-amber-500/50"></div>
               </div>
-              <div className="flex flex-wrap justify-center gap-3">
-                {currentWord!.hanjaReadings.map((r, i) => (
+              {currentWord!.hanjaReadings.length > 0 ? (
+                <div className="flex flex-wrap justify-center gap-3">
+                  {currentWord!.hanjaReadings.map((r, i) => (
                   <div key={i} className="flex flex-col items-center rounded-lg bg-gray-800 px-3 py-2 text-center min-w-[56px]">
                     <div className="flex items-baseline gap-1 text-base font-medium text-gray-100">
                       <span>{r.simplifiedChar}</span>
@@ -274,8 +275,11 @@ export default function FlaggedReview({ language, onBack }: Props) {
                       ))}
                     </div>
                   </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-center text-sm text-gray-400">{t("noKoreanHanja")}</p>
+              )}
             </div>
           )}
           <div className="text-center space-y-2">

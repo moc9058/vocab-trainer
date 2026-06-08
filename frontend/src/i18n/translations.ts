@@ -205,6 +205,7 @@ const translations = {
     settingsShowKoreanHanja: "Show Korean Hanja",
     settingsShowKoreanHanjaHelp: "Shows traditional hanja (번체) and 훈음 readings for Chinese words.",
     sectionKoreanHanja: "Korean Hanja",
+    noKoreanHanja: "This word has no corresponding Korean Hanja.",
     settingsReset: "Reset to Default",
     settingsAtLeastOne: "At least one language must be selected",
     // System / Metrics
@@ -418,6 +419,7 @@ const translations = {
     settingsShowKoreanHanja: "韓国漢字を表示",
     settingsShowKoreanHanjaHelp: "中国語の単語に番体と訓音を表示します。",
     sectionKoreanHanja: "韓国漢字",
+    noKoreanHanja: "この単語に対応する韓国漢字はありません。",
     settingsReset: "デフォルトに戻す",
     settingsAtLeastOne: "少なくとも1つの言語を選択してください",
     languages: "言語",
@@ -630,6 +632,7 @@ const translations = {
     settingsShowKoreanHanja: "한국어 한자 표시",
     settingsShowKoreanHanjaHelp: "중국어 단어에 번체 한자와 훈음을 표시합니다.",
     sectionKoreanHanja: "한국어 한자",
+    noKoreanHanja: "이 단어에 대응하는 한국어 한자가 없습니다.",
     settingsReset: "기본값으로 재설정",
     settingsAtLeastOne: "최소 1개의 언어를 선택해야 합니다",
     languages: "언어",
