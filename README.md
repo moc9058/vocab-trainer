@@ -557,10 +557,8 @@ Overwrites any existing session for the given language.
 
 All fields except `language` are optional (`questionCount` defaults to all matching words).
 
-Words are selected using **weighted random sampling**:
-- Unseen words get weight **5**
-- Lower accuracy → higher weight: `1 + (1 - correctRate) * 4`
-- Staleness bonus: `daysSinceReview * 0.5` (capped at 7 days)
+Words are selected uniformly at random without replacement. Every remaining
+word has an equal chance of appearing next.
 
 The response returns a lightweight session — questions contain only `wordId` and `term`. Full question details (definitions, transliteration, examples) are fetched separately via the batch endpoint below.
 
@@ -602,7 +600,9 @@ Returns full question details (definition, transliteration, examples) for a slic
 }
 ```
 
-If `correct` is `false`, the word is re-queued among the remaining unanswered questions and spaced out so retry questions stay at roughly one-third of the upcoming queue when enough non-retry questions remain. This repeats until the user answers correctly.
+If `correct` is `false`, the word is re-queued and all remaining questions,
+including retries, are uniformly shuffled. This repeats until the user answers
+correctly.
 
 **Response:** `{ session, wordProgress }` — updated session state and word progress.
 

@@ -9,7 +9,6 @@ import { displayTranslation, type QuizSession, type QuizQuestion } from "../type
 
 const BATCH_SIZE = 50;
 const VISIBLE_ANSWER_ITEMS = 4;
-const MAX_RETRY_SHARE = 1 / 3;
 
 interface Props {
   session: QuizSession;
@@ -37,7 +36,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   const { t } = useI18n();
   const { settings, displayDefEntries } = useSettings();
   const [currentSession, setCurrentSession] = useState(session);
-  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [questions, setQuestions] = useState<QuizQuestion[]>(session.questions);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showingAnswer, setShowingAnswer] = useState(false);
@@ -50,34 +49,30 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
 
   // Track how many questions have been fetched from the server
   const fetchedCountRef = useRef(0);
-  const fetchingRef = useRef(false);
+  const fetchQueueRef = useRef<Promise<void>>(Promise.resolve());
   const submittingRef = useRef(false);
   const totalQuestionsRef = useRef(session.questions.length);
 
-  const fetchBatch = useCallback(async (offset: number, limit: number) => {
-    if (fetchingRef.current) return;
-    fetchingRef.current = true;
-    try {
+  const fetchBatch = useCallback((offset: number, limit: number) => {
+    const request = fetchQueueRef.current.then(async () => {
       const { questions: batch, total } = await getQuizQuestions(session.language, offset, limit);
       totalQuestionsRef.current = total;
-      fetchedCountRef.current = offset + batch.length;
+      fetchedCountRef.current = Math.max(fetchedCountRef.current, offset + batch.length);
       setQuestions((prev) => {
-        // Append new questions, avoiding duplicates by offset
         const newQuestions = [...prev];
         for (let i = 0; i < batch.length; i++) {
           const idx = offset + i;
           if (idx >= newQuestions.length) {
             newQuestions.push(batch[i]);
-          } else if (!newQuestions[idx].definitions || newQuestions[idx].definitions.length === 0) {
-            // Hydrate if the slot exists but has no definitions
+          } else {
             newQuestions[idx] = { ...newQuestions[idx], ...batch[i] };
           }
         }
         return newQuestions;
       });
-    } finally {
-      fetchingRef.current = false;
-    }
+    });
+    fetchQueueRef.current = request.catch(() => {});
+    return request;
   }, [session.language]);
 
   // Initial load: fetch first batch
@@ -85,7 +80,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     // Find the first unanswered question index to know where to start fetching
     const firstUnanswered = session.questions.findIndex((q) => q.userCorrect === undefined);
     const startOffset = Math.max(0, firstUnanswered === -1 ? 0 : firstUnanswered);
-    setCurrentIndex(firstUnanswered === -1 ? session.questions.length : 0);
+    setCurrentIndex(firstUnanswered === -1 ? session.questions.length : firstUnanswered);
 
     fetchBatch(startOffset, BATCH_SIZE).then(() => setLoading(false));
   }, [fetchBatch, session.questions]);
@@ -157,7 +152,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     setSubmitting(true);
     const submittedFlagIds = Array.from(flaggedIds);
     try {
-      await answerQuestion({
+      const { session: updatedSession } = await answerQuestion({
         sessionId: currentSession.sessionId,
         wordId: question.wordId,
         correct,
@@ -169,39 +164,17 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
       }
 
       setQuestions((prev) => {
-        const updated = prev.map((q, i) =>
-          i === currentIndex ? { ...q, userCorrect: correct } : q
-        );
-        // Reinsert missed words in a spaced-out order so retries stay
-        // dispersed and do not dominate the remaining queue.
-        if (!correct) {
-          insertRetryQuestion(updated, {
-            wordId: question.wordId,
-            term: question.term,
-            definitions: question.definitions,
-            transliteration: question.transliteration,
-            examples: question.examples,
-          }, currentIndex);
-        }
-        return updated;
+        const hydratedByWordId = new Map(prev.map((q) => [q.wordId, q]));
+        return updatedSession.questions.map((q) => ({
+          ...hydratedByWordId.get(q.wordId),
+          ...q,
+        }));
       });
-
-      setCurrentSession((prev) => {
-        const newScore = {
-          correct: prev.score.correct + (correct ? 1 : 0),
-          total: prev.score.total + (correct ? 0 : 1),
-        };
-        // Check completion: all loaded questions answered and no more to fetch
-        const remainingUnanswered = questions.filter((q, i) => i !== currentIndex && q.userCorrect === undefined).length;
-        const noMoreToFetch = fetchedCountRef.current >= totalQuestionsRef.current;
-        const allDone = remainingUnanswered === 0 && noMoreToFetch && correct;
-
-        return {
-          ...prev,
-          score: newScore,
-          ...(allDone ? { status: "completed" as const, completedAt: new Date().toISOString() } : {}),
-        };
-      });
+      setCurrentSession(updatedSession);
+      totalQuestionsRef.current = updatedSession.questions.length;
+      if (!correct) {
+        await fetchBatch(currentIndex + 1, BATCH_SIZE);
+      }
 
       setCurrentIndex((i) => i + 1);
       setShowingAnswer(false);
@@ -424,120 +397,4 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
       )}
     </div>
   );
-}
-
-function insertRetryQuestion(
-  questions: QuizQuestion[],
-  retryQuestion: QuizQuestion,
-  answeredIndex: number
-) {
-  const insertAt = answeredIndex + 1;
-  questions.splice(insertAt, 0, retryQuestion);
-
-  const seed = `${retryQuestion.wordId}:${answeredIndex}:${questions.length}:${countOccurrences(questions, retryQuestion.wordId)}`;
-  rebalancePendingQuestions(questions, answeredIndex, seed);
-}
-
-function rebalancePendingQuestions(
-  questions: QuizQuestion[],
-  answeredIndex: number,
-  seed: string
-) {
-  const start = answeredIndex + 1;
-  const answeredWordIds = new Set(questions.slice(0, start).map((q) => q.wordId));
-  const pending = questions.slice(start).filter((q) => q.userCorrect === undefined);
-  const rebalanced = buildPendingQueue(answeredWordIds, pending, seed);
-  questions.splice(start, questions.length - start, ...rebalanced);
-}
-
-function buildPendingQueue(
-  answeredWordIds: Set<string>,
-  pendingQuestions: QuizQuestion[],
-  seed: string,
-  opts?: { shuffleRegular?: boolean }
-) {
-  const regular: QuizQuestion[] = [];
-  const retries: QuizQuestion[] = [];
-  const seen = new Set(answeredWordIds);
-
-  for (const question of pendingQuestions) {
-    if (seen.has(question.wordId)) {
-      retries.push(question);
-    } else {
-      regular.push(question);
-      seen.add(question.wordId);
-    }
-  }
-
-  const orderedRegular = opts?.shuffleRegular
-    ? deterministicOrder(regular, `${seed}:regular`, (q, index) => `${q.wordId}:${index}`)
-    : regular;
-  const orderedRetries = deterministicOrder(retries, `${seed}:retry`, (q, index) => `${q.wordId}:${index}`);
-
-  return interleaveRetryQuestions(orderedRegular, orderedRetries, `${seed}:slots`);
-}
-
-function interleaveRetryQuestions(
-  regular: QuizQuestion[],
-  retries: QuizQuestion[],
-  seed: string
-) {
-  if (regular.length === 0 || retries.length === 0) {
-    return [...regular, ...retries];
-  }
-
-  const maxBalancedRetries = Math.floor((regular.length * MAX_RETRY_SHARE) / (1 - MAX_RETRY_SHARE));
-  const balancedRetryCount = Math.min(retries.length, maxBalancedRetries);
-  const balancedRetries = retries.slice(0, balancedRetryCount);
-  const overflowRetries = retries.slice(balancedRetryCount);
-
-  const slotCount = Math.floor(regular.length / 2);
-  const slotOrder = deterministicOrder(
-    Array.from({ length: slotCount }, (_, index) => index),
-    seed,
-    (slot) => String(slot)
-  );
-  const chosenSlots = slotOrder.slice(0, balancedRetryCount).sort((a, b) => a - b);
-  const retryBySlot = new Map<number, QuizQuestion>();
-  chosenSlots.forEach((slot, index) => retryBySlot.set(slot, balancedRetries[index]));
-
-  const result: QuizQuestion[] = [];
-  for (let i = 0; i < regular.length; i++) {
-    result.push(regular[i]);
-    if (i % 2 === 1) {
-      const retry = retryBySlot.get(Math.floor(i / 2));
-      if (retry) result.push(retry);
-    }
-  }
-
-  result.push(...overflowRetries);
-  return result;
-}
-
-function deterministicOrder<T>(
-  items: T[],
-  seed: string,
-  keyForItem: (item: T, index: number) => string
-) {
-  return [...items]
-    .map((item, index) => ({
-      item,
-      index,
-      key: hashString(`${seed}:${keyForItem(item, index)}`),
-    }))
-    .sort((a, b) => a.key - b.key || a.index - b.index)
-    .map(({ item }) => item);
-}
-
-function hashString(value: string) {
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i++) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-function countOccurrences(questions: QuizQuestion[], wordId: string) {
-  return questions.reduce((count, question) => count + (question.wordId === wordId ? 1 : 0), 0);
 }

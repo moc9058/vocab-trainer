@@ -2,7 +2,6 @@ import type { FastifyPluginAsync } from "fastify";
 import {
   languageExists,
   getFilteredWords,
-  getProgressForLanguage,
   getWordProgress,
   updateWordProgress,
   getQuizSession,
@@ -13,8 +12,6 @@ import {
   flagWord,
 } from "../firestore.js";
 import type { QuizSession, QuizQuestion, Word, WordProgress } from "../types.js";
-
-const MAX_RETRY_SHARE = 1 / 3;
 
 const quizRoutes: FastifyPluginAsync = async (fastify) => {
   // Start quiz session
@@ -49,10 +46,9 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { language, questionCount, topics, categories, levels, groupIds, questionType } = request.body;
-      const [exists, pool, progressData] = await Promise.all([
+      const [exists, pool] = await Promise.all([
         languageExists(language),
         getFilteredWords(language, { topics, categories, levels, groupIds }),
-        getProgressForLanguage(language),
       ]);
 
       if (!exists) {
@@ -63,7 +59,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.badRequest("No words match the given filters");
       }
       const count = questionCount ? Math.min(questionCount, pool.length) : pool.length;
-      const selected = weightedSample(pool, count, progressData.words);
+      const selected = randomSample(pool, count);
 
       const questions: QuizQuestion[] = selected.map((w) => ({
         wordId: w.id,
@@ -184,8 +180,6 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       if (correct) {
         session.score.correct++;
       } else {
-        // Re-queue wrong answers in a spaced-out order so retries stay
-        // dispersed and do not dominate the remaining queue.
         insertRetryQuestion(session.questions, {
           wordId: question.wordId,
           term: question.term,
@@ -236,19 +230,13 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       const session = await getQuizSessionByLanguage(request.params.language);
       if (!session) return reply.notFound("No session found for this language");
 
-      // Shuffle unanswered questions so resume order differs each time
       const answered: QuizQuestion[] = [];
       const unanswered: QuizQuestion[] = [];
       for (const q of session.questions) {
         if (q.userCorrect !== undefined) answered.push(q);
         else unanswered.push(q);
       }
-      const seed = `${session.sessionId}:${Date.now()}:${unanswered.length}`;
-      const answeredWordIds = new Set(answered.map((q) => q.wordId));
-      session.questions = [
-        ...answered,
-        ...buildPendingQueue(answeredWordIds, unanswered, seed, { shuffleRegular: true }),
-      ];
+      session.questions = [...answered, ...shuffle(unanswered)];
       await updateQuizSession(session);
 
       return session;
@@ -256,47 +244,8 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
   );
 };
 
-/**
- * Weighted random sampling: words with lower accuracy, unseen words,
- * and words not reviewed recently get higher weight.
- */
-function weightedSample(
-  words: Word[],
-  count: number,
-  progressMap: Record<string, WordProgress>
-): Word[] {
-  const now = Date.now();
-  const weighted = words.map((w) => {
-    const p = progressMap[w.id];
-    let weight = 1;
-
-    if (!p || p.timesSeen === 0) {
-      weight = 5;
-    } else {
-      weight += (1 - p.correctRate) * 4;
-      const daysSince = (now - new Date(p.lastReviewed).getTime()) / (1000 * 60 * 60 * 24);
-      weight += Math.min(daysSince, 7) * 0.5;
-    }
-
-    return { word: w, weight };
-  });
-
-  const selected: Word[] = [];
-  const remaining = [...weighted];
-
-  for (let i = 0; i < count && remaining.length > 0; i++) {
-    const totalWeight = remaining.reduce((sum, item) => sum + item.weight, 0);
-    let r = Math.random() * totalWeight;
-    let idx = 0;
-    for (; idx < remaining.length - 1; idx++) {
-      r -= remaining[idx].weight;
-      if (r <= 0) break;
-    }
-    selected.push(remaining[idx].word);
-    remaining.splice(idx, 1);
-  }
-
-  return selected;
+function randomSample(words: Word[], count: number): Word[] {
+  return shuffle(words).slice(0, count);
 }
 
 function insertRetryQuestion(
@@ -306,113 +255,16 @@ function insertRetryQuestion(
 ): void {
   const insertAt = answeredIndex + 1;
   questions.splice(insertAt, 0, retryQuestion);
-
-  const seed = `${retryQuestion.wordId}:${answeredIndex}:${questions.length}:${countOccurrences(questions, retryQuestion.wordId)}`;
-  rebalancePendingQuestions(questions, answeredIndex, seed);
+  questions.splice(insertAt, questions.length - insertAt, ...shuffle(questions.slice(insertAt)));
 }
 
-function rebalancePendingQuestions(
-  questions: QuizQuestion[],
-  answeredIndex: number,
-  seed: string
-): void {
-  const start = answeredIndex + 1;
-  const answeredWordIds = new Set(questions.slice(0, start).map((q) => q.wordId));
-  const pending = questions.slice(start).filter((q) => q.userCorrect === undefined);
-  const rebalanced = buildPendingQueue(answeredWordIds, pending, seed);
-  questions.splice(start, questions.length - start, ...rebalanced);
-}
-
-function buildPendingQueue(
-  answeredWordIds: Set<string>,
-  pendingQuestions: QuizQuestion[],
-  seed: string,
-  opts?: { shuffleRegular?: boolean }
-): QuizQuestion[] {
-  const regular: QuizQuestion[] = [];
-  const retries: QuizQuestion[] = [];
-  const seen = new Set(answeredWordIds);
-
-  for (const question of pendingQuestions) {
-    if (seen.has(question.wordId)) {
-      retries.push(question);
-    } else {
-      regular.push(question);
-      seen.add(question.wordId);
-    }
+function shuffle<T>(items: T[]): T[] {
+  const shuffled = [...items];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const randomIndex = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[i]];
   }
-
-  const orderedRegular = opts?.shuffleRegular
-    ? deterministicOrder(regular, `${seed}:regular`, (q, index) => `${q.wordId}:${index}`)
-    : regular;
-  const orderedRetries = deterministicOrder(retries, `${seed}:retry`, (q, index) => `${q.wordId}:${index}`);
-
-  return interleaveRetryQuestions(orderedRegular, orderedRetries, `${seed}:slots`);
-}
-
-function interleaveRetryQuestions(
-  regular: QuizQuestion[],
-  retries: QuizQuestion[],
-  seed: string
-): QuizQuestion[] {
-  if (regular.length === 0 || retries.length === 0) {
-    return [...regular, ...retries];
-  }
-
-  const maxBalancedRetries = Math.floor((regular.length * MAX_RETRY_SHARE) / (1 - MAX_RETRY_SHARE));
-  const balancedRetryCount = Math.min(retries.length, maxBalancedRetries);
-  const balancedRetries = retries.slice(0, balancedRetryCount);
-  const overflowRetries = retries.slice(balancedRetryCount);
-
-  const slotCount = Math.floor(regular.length / 2);
-  const slotOrder = deterministicOrder(
-    Array.from({ length: slotCount }, (_, index) => index),
-    seed,
-    (slot) => String(slot)
-  );
-  const chosenSlots = slotOrder.slice(0, balancedRetryCount).sort((a, b) => a - b);
-  const retryBySlot = new Map<number, QuizQuestion>();
-  chosenSlots.forEach((slot, index) => retryBySlot.set(slot, balancedRetries[index]));
-
-  const result: QuizQuestion[] = [];
-  for (let i = 0; i < regular.length; i++) {
-    result.push(regular[i]);
-    if (i % 2 === 1) {
-      const retry = retryBySlot.get(Math.floor(i / 2));
-      if (retry) result.push(retry);
-    }
-  }
-
-  result.push(...overflowRetries);
-  return result;
-}
-
-function deterministicOrder<T>(
-  items: T[],
-  seed: string,
-  keyForItem: (item: T, index: number) => string
-): T[] {
-  return [...items]
-    .map((item, index) => ({
-      item,
-      index,
-      key: hashString(`${seed}:${keyForItem(item, index)}`),
-    }))
-    .sort((a, b) => a.key - b.key || a.index - b.index)
-    .map(({ item }) => item);
-}
-
-function hashString(value: string): number {
-  let hash = 2166136261;
-  for (let i = 0; i < value.length; i++) {
-    hash ^= value.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
-function countOccurrences(questions: QuizQuestion[], wordId: string): number {
-  return questions.reduce((count, question) => count + (question.wordId === wordId ? 1 : 0), 0);
+  return shuffled;
 }
 
 export default quizRoutes;
