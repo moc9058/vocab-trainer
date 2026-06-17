@@ -72,7 +72,8 @@ Full-stack vocabulary quiz app supporting four study languages (`en`/`ja`/`ko`/`
 - **Database**: `firestore.ts` — `updateWord` per-sentence-merges old example `segments` onto incoming `examples` when sentence text is unchanged, so `WordFormModal` (which doesn't carry segments through form state) doesn't wipe LLM-generated pinyin on save. `getCanonicalSegmentPinyin(word)` returns `undefined` for polyphonic words so callers keep the LLM-generated contextual value.
 - **LLM**: `llm.ts` — `callLLM*` functions use the MINI OpenAI model; `callLLMFull*` use the FULL OpenAI model. Config from `.env` (local) or Firestore `config/llm` (deployed).
 - **Types**: `types.ts` — `Word` carries optional `hanjaReadings?: HanjaReading[]` (`{ simplifiedChar, traditionalChar, hunEum[] }` per character)
-- **Type mirroring**: `backend/src/types.ts` and `frontend/src/types.ts` share translation interfaces (`TranslationResult`, `TranslationPassage`, `TranslationEntry`) — update both files together.
+- **Type mirroring**: `backend/src/types.ts` and `frontend/src/types.ts` share translation interfaces (`TranslationResult`, `TranslationPassage`, `TranslationEntry`) AND grammar/example shapes (`Grammar`, `GrammarExample`, `ExampleSentence`) — update both files together.
+- **`userSplits` contract**: Chinese examples in both `WordFormModal` and `GrammarFormModal` strip `[\s　]+` from the sentence on save and attach `userSplits: string[]` (the segment texts). Backend routes (`vocab.ts`, `grammar.ts:resolveExamplesToIds`) feed `userSplits` to `fillSegmentPinyin` + `lookupWordsByTerms` to produce `example_sentences.segments` with word IDs. `GrammarExample.userSplits` is input-only — never persisted.
 
 ### Data Storage
 - **Firestore** (database ID: `vocab-database`). Key composite keys: `progress`/`word_index` use `{language}_{wordId}`, `example_sentence_index` uses `{language}_{sha256(sentence).slice(0,16)}`.
@@ -93,7 +94,7 @@ All language codes use ISO 639-1: `ja`, `en`, `ko`, `zh`. The export script norm
 - **Key components**:
   - `SmartAddWordModal.tsx` — **two independent language fields**: outer "word language" (backend full-name) vs. per-row "definition language" (ISO code). Queue mode (`onQueue` prop): Submit enqueues immediately and resets form.
   - `WordFormModal.tsx` — does not carry `segments` through form state (preserved server-side by `firestore.ts:updateWord`)
-  - `ExampleSentenceEditor.tsx` — shared example-sentence editor used by `WordFormModal` AND `GrammarFormModal`. Owns the Chinese segment-chip "+" workflow (calls `smartAddWord` to add missing words from an example).
+  - `ExampleSentenceEditor.tsx` — shared example-sentence editor used by `WordFormModal` AND `GrammarFormModal`. Owns the Chinese segment-chip "+" workflow (calls `smartAddWord` to add missing words from an example). The chip rendering + space-splitting + `userSplits` payload are all gated by literal `language === "chinese"` (backend full-name, NOT ISO `"zh"`). Pass the active language string straight through — any sentinel (e.g. `"open"`) silently disables the workflow.
   - `constants/levels.ts` — `LEVEL_OPTIONS` (HSK/JLPT buckets). Used by `SmartAddWordModal` and `GrammarFormModal`. Backend keeps its own copy in `routes/vocab.ts` (LLM-output normalization concern).
   - `hooks/useWordQueue.ts` — processes one-at-a-time so segment linking always sees the latest word DB
   - `Dashboard.tsx` — URL sub-paths: `/browse`, `/quiz`, `/flagged`, `/grammar`, `/grammar-quiz`, `/translation`, `/speaking-writing`

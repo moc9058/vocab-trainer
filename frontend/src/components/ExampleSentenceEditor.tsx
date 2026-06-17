@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, Fragment } from "react";
 import { useI18n } from "../i18n/context";
-import { checkTerms, smartAddWord, modifyGroupMembers } from "../api/vocab";
-import { displayTranslation } from "../types";
+import { checkTerms, smartAddWord, modifyGroupMembers, getGroups } from "../api/vocab";
+import { displayTranslation, type WordGroup } from "../types";
 
 export interface ExampleFormState {
   id?: string;
@@ -22,7 +22,11 @@ interface Props {
   language: string;
   examples: ExampleFormState[];
   setExamples: (next: ExampleFormState[]) => void;
-  selectedGroupIds: Set<string>;
+  /** Form-level group memberships of the parent word/grammar. Currently unused
+   *  by the chip-`+` workflow (each chip carries its own group via the
+   *  per-chip selector). Kept in the prop signature so callers don't need to
+   *  change shape. */
+  selectedGroupIds?: Set<string>;
   currentTerm?: string;
   pendingTerms?: Set<string>;
   refreshSignal?: number;
@@ -33,7 +37,6 @@ export default function ExampleSentenceEditor({
   language,
   examples,
   setExamples,
-  selectedGroupIds,
   currentTerm,
   pendingTerms,
   refreshSignal,
@@ -47,6 +50,36 @@ export default function ExampleSentenceEditor({
   const [segmentFlags, setSegmentFlags] = useState<Map<string, boolean>>(new Map());
   const [segmentAddError, setSegmentAddError] = useState<string | null>(null);
   const segmentVersionRef = useRef(0);
+
+  // Vocab word-groups (sorted latest-first by createdAt). Used to populate the
+  // per-chip group selector; the chip workflow always assigns to a *vocab*
+  // group even when this editor is mounted under GrammarFormModal.
+  const [wordGroups, setWordGroups] = useState<WordGroup[]>([]);
+  // Per-chip group override. Key = chip text; value = groupId or "" (no group).
+  // Absent key falls back to the latest group (wordGroups[0]?.id).
+  const [chipGroupOverrides, setChipGroupOverrides] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    getGroups(language)
+      .then((gs) => {
+        const sorted = [...gs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        setWordGroups(sorted);
+      })
+      .catch(() => setWordGroups([]));
+  }, [language]);
+
+  const latestGroupId = wordGroups[0]?.id ?? "";
+  function getChipGroupId(chipText: string): string {
+    const override = chipGroupOverrides.get(chipText);
+    return override !== undefined ? override : latestGroupId;
+  }
+  function setChipGroupId(chipText: string, groupId: string) {
+    setChipGroupOverrides((prev) => {
+      const next = new Map(prev);
+      next.set(chipText, groupId);
+      return next;
+    });
+  }
 
   const prevExamplesLengthRef = useRef(0);
   const lastExampleRef = useRef<HTMLDivElement>(null);
@@ -93,7 +126,11 @@ export default function ExampleSentenceEditor({
 
   async function handleAddSegment(chipText: string, sentence: string, translation: string) {
     if (existingTerms.has(chipText) || pendingTerms?.has(chipText)) return;
-    const groupIds = [...selectedGroupIds];
+    // Per-chip group choice REPLACES the form-level `selectedGroupIds` for this
+    // workflow: each chip carries exactly the group selected in its dropdown
+    // (latest-created by default, or "" for no group).
+    const chipGroupId = getChipGroupId(chipText);
+    const groupIds = chipGroupId ? [chipGroupId] : [];
     if (onQueue) {
       onQueue(chipText, language, {
         term: chipText,
@@ -256,6 +293,30 @@ export default function ExampleSentenceEditor({
                                   aria-label={`Flag ${chip.text} for review`}
                                 />
                               </label>
+                            )}
+                          </div>
+                        )}
+                        {anyDeactivated && wordGroups.length > 0 && (
+                          <div className="mt-0.5 flex justify-center">
+                            {!isPunct && !isSelf && !exists && !queued && !checking ? (
+                              <select
+                                value={getChipGroupId(chip.text)}
+                                onChange={(e) => setChipGroupId(chip.text, e.target.value)}
+                                disabled={busy}
+                                onClick={(e) => e.stopPropagation()}
+                                className="max-w-[7rem] truncate rounded border border-gray-600 bg-gray-800 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-400 focus:outline-none disabled:opacity-50"
+                                aria-label={`Group for ${chip.text}`}
+                                title={`Group for ${chip.text}`}
+                              >
+                                <option value="">—</option>
+                                {wordGroups.map((g) => (
+                                  <option key={g.id} value={g.id}>
+                                    {g.name}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="h-5" aria-hidden="true" />
                             )}
                           </div>
                         )}
