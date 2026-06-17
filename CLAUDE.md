@@ -56,12 +56,12 @@ docker compose up --build      # Run full stack (backend :3000, frontend :5173)
 
 ## Architecture
 
-Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** + **React 19 / Vite 6 frontend**.
+Full-stack vocabulary quiz app supporting four study languages (`en`/`ja`/`ko`/`zh`; HSK levels apply only to Chinese): **Fastify 5 backend** + **React 19 / Vite 6 frontend**.
 
 ### Backend (`backend/src/`)
 - **Routes** (each is a `FastifyPluginAsync` registered under `/api`):
   - `routes/vocab.ts` — smart-add always asks LLM for all four codes (`en`/`ja`/`ko`/`zh`) — `ALL_DEFINITION_LANGUAGES` is hardcoded; request body languages are anchors only. Chinese levels normalized at storage time by `CHINESE_LEVEL_NORMALIZE`.
-  - `routes/quiz.ts` — hydrated questions include `hanjaReadings`
+  - `routes/quiz.ts` — uses `randomSample` (NOT weighted; weighted lives only in `grammar-quiz.ts:weightedSample`). 2-step hydration: `POST /start` returns lightweight `{wordId, term}` only; client pages `GET /questions/:language?offset&limit` (`BATCH_SIZE=50` in `QuizTaking.tsx`) for `definitions`/`examples`/`hanjaReadings`. Wrong answers call `insertRetryQuestion` server-side, which splices the missed word back into `session.questions` and reshuffles the tail — `score.total` grows accordingly; the frontend re-renders from the mutated session.
   - `routes/grammar-quiz.ts` — also exposes `check-missing-words` and `add-missing-words`
   - `routes/translation.ts` / `routes/speaking-writing.ts` — SSE streaming via POST endpoint
   - `routes/translation.ts` — `language` prop = **target** language (active study language); user selects source. Two-step: decompose (MINI, source-lang prompt) → translate (FULL, target-lang prompt). Output uses `passages[].{ sentenceIds[], translation }` — LLM may group consecutive sentences. `buildTranslateSystemPrompt` appends source/target + approach guidance to the Firestore prompt without needing a migration.
@@ -75,7 +75,7 @@ Full-stack vocabulary quiz app for Chinese (HSK levels): **Fastify 5 backend** +
 - `example_sentences` — normalized; words store `exampleIds` and `appearsInIds` arrays referencing this collection
 - `config` subcollections: `config/llm`, `config/token_costs`, `config/speaking_writing`, `config/translation`, `config/vocabulary`
   - `config/translation` fields: `decomposeSchema`, `decomposePrompts`, `translateSchema`, `translatePrompts` — local source in `backend/DB/translation/`; push with `migrate-db-config-to-firestore.ts --prompts`
-- **Local files**: `backend/DB/` (word, grammer, speaking&writing, translation, vocabulary, backup)
+- **Local files**: `backend/DB/` (grammer, speaking&writing, translation, vocabulary, backup, old, original). Word JSON is no longer mirrored locally — Firestore is the source of truth; `old/` and `original/` hold pre-migration HSK archives.
 
 ### Language Code Convention
 All language codes use ISO 639-1: `ja`, `en`, `ko`, `zh`. The export script normalizes legacy keys (e.g., `"Japanese"` → `"ja"`, `"kr"` → `"ko"`) on export.

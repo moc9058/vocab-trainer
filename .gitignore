@@ -19,3 +19,7 @@ Thumbs.db
 # Runtime data
 backend/data
 backend/logs/
+
+# .claude
+.claude/*
+.claude/settings.json
