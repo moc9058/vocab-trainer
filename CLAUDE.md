@@ -34,6 +34,7 @@ cd backend && npx tsx scripts/migrate-example-sentences.ts [--dry-run]
 ```bash
 cd frontend && npm run dev     # Vite dev server (port 5173, proxies /api to :3000)
 cd frontend && npm run build   # Production build
+cd frontend && npx tsc --noEmit  # Type-check (npm run build is vite-only, no tsc)
 ```
 
 ### Docker
@@ -62,7 +63,7 @@ Full-stack vocabulary quiz app supporting four study languages (`en`/`ja`/`ko`/`
 - **Routes** (each is a `FastifyPluginAsync` registered under `/api`):
   - `routes/vocab.ts` — smart-add always asks LLM for all four codes (`en`/`ja`/`ko`/`zh`) — `ALL_DEFINITION_LANGUAGES` is hardcoded; request body languages are anchors only. Chinese levels normalized at storage time by `CHINESE_LEVEL_NORMALIZE`.
   - `routes/quiz.ts` — uses `randomSample` (NOT weighted; weighted lives only in `grammar-quiz.ts:weightedSample`). 2-step hydration: `POST /start` returns lightweight `{wordId, term}` only; client pages `GET /questions/:language?offset&limit` (`BATCH_SIZE=50` in `QuizTaking.tsx`) for `definitions`/`examples`/`hanjaReadings`. Wrong answers call `insertRetryQuestion` server-side, which splices the missed word back into `session.questions` and reshuffles the tail — `score.total` grows accordingly; the frontend re-renders from the mutated session.
-  - `routes/grammar.ts` — `Grammar` has `statement` + `descriptions: Meaning[]` (mirrors `Word.definitions`). User-curated `grammar_groups` collection mirrors `word_groups` — per-language, owns membership via `grammarIds[]`. CRUD lives under `/api/grammar/:language/groups`.
+  - `routes/grammar.ts` — `Grammar` has `statement` + `descriptions: Meaning[]` (mirrors `Word.definitions`). User-curated `grammar_groups` collection mirrors `word_groups` — per-language, owns membership via `grammarIds[]`. CRUD lives under `/api/grammar/:language/groups`. `POST /:language/smart-add` LLM-enriches `descriptions[].text` to all four ISO codes (mirrors vocab smart-add); `GrammarFormModal` create path uses smart-add, edit (PUT) stays manual. Config in Firestore `config/grammar` (local source `backend/DB/grammer/config/`, pushed by `migrate-db-config-to-firestore.ts --prompts`).
   - `routes/grammar-quiz.ts` — `/start` accepts `groupIds` to scope the pool (no chapters/subchapters/displayLanguage/quizMode); falls back to LLM generation only when an item has no examples. Also exposes `check-missing-words` and `add-missing-words` (currently unused by the UI after the quiz simplification).
   - `routes/translation.ts` / `routes/speaking-writing.ts` — SSE streaming via POST endpoint
   - `routes/translation.ts` — `language` prop = **target** language (active study language); user selects source. Two-step: decompose (MINI, source-lang prompt) → translate (FULL, target-lang prompt). Output uses `passages[].{ sentenceIds[], translation }` — LLM may group consecutive sentences. `buildTranslateSystemPrompt` appends source/target + approach guidance to the Firestore prompt without needing a migration.
@@ -90,5 +91,7 @@ All language codes use ISO 639-1: `ja`, `en`, `ko`, `zh`. The export script norm
 - **Key components**:
   - `SmartAddWordModal.tsx` — **two independent language fields**: outer "word language" (backend full-name) vs. per-row "definition language" (ISO code). Queue mode (`onQueue` prop): Submit enqueues immediately and resets form.
   - `WordFormModal.tsx` — does not carry `segments` through form state (preserved server-side by `firestore.ts:updateWord`)
+  - `ExampleSentenceEditor.tsx` — shared example-sentence editor used by `WordFormModal` AND `GrammarFormModal`. Owns the Chinese segment-chip "+" workflow (calls `smartAddWord` to add missing words from an example).
+  - `constants/levels.ts` — `LEVEL_OPTIONS` (HSK/JLPT buckets). Used by `SmartAddWordModal` and `GrammarFormModal`. Backend keeps its own copy in `routes/vocab.ts` (LLM-output normalization concern).
   - `hooks/useWordQueue.ts` — processes one-at-a-time so segment linking always sees the latest word DB
   - `Dashboard.tsx` — URL sub-paths: `/browse`, `/quiz`, `/flagged`, `/grammar`, `/grammar-quiz`, `/translation`, `/speaking-writing`

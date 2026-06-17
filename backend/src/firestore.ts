@@ -1843,6 +1843,21 @@ export async function getVocabularyConfig(): Promise<{
   };
 }
 
+// ========== Config: Grammar ==========
+
+export async function getGrammarConfig(): Promise<{
+  smartAddSchema: Record<string, unknown>;
+  smartAddPrompts: Record<string, string>;
+}> {
+  const doc = await db.collection("config").doc("grammar").get();
+  if (!doc.exists) throw new Error("Missing config/grammar in Firestore");
+  const d = doc.data()!;
+  return {
+    smartAddSchema: d.smartAddSchema,
+    smartAddPrompts: d.smartAddPrompts,
+  };
+}
+
 // ========== Word Groups ==========
 
 function docToWordGroup(doc: FirebaseFirestore.DocumentSnapshot): WordGroup {

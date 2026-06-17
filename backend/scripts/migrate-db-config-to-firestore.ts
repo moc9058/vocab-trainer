@@ -114,6 +114,32 @@ async function migrateVocabulary(): Promise<void> {
   console.log(`  Schemas: smart_add, segment`);
 }
 
+// ========== Grammar Config ==========
+
+async function migrateGrammar(): Promise<void> {
+  console.log("\n--- Migrating grammar config ---");
+  const dir = resolve(DB_DIR, "grammer", "config");
+
+  const smartAddSchema = JSON.parse(await readFile(resolve(dir, "smart_add_schema.json"), "utf-8"));
+
+  const smartAddPrompts: Record<string, string> = {};
+  const files = await readdir(dir);
+  for (const file of files) {
+    const match = file.match(/^smart_add_prompt_(.+)\.md$/);
+    if (match) {
+      smartAddPrompts[match[1]] = await readFile(resolve(dir, file), "utf-8");
+    }
+  }
+
+  await db.collection("config").doc("grammar").set({
+    smartAddSchema,
+    smartAddPrompts,
+  });
+
+  console.log("  Written to config/grammar");
+  console.log(`  Smart-add prompts: ${Object.keys(smartAddPrompts).join(", ")}`);
+}
+
 // ========== Archive Helpers ==========
 
 function stripEmptyKeys(obj: unknown): unknown {
@@ -293,6 +319,7 @@ async function main(): Promise<void> {
     await migrateSpeakingWriting();
     await migrateTranslation();
     await migrateVocabulary();
+    await migrateGrammar();
   }
   if (runArchives) {
     await migrateBackups();

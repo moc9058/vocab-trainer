@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef, Fragment } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP, urlLanguageToIsoCode } from "../settings/defaults";
+import { LEVEL_OPTIONS } from "../constants/levels";
 import { smartAddWord, lookupWord, checkTerms, getGroups, modifyGroupMembers } from "../api/vocab";
 import { displayTranslation, type Word, type WordGroup } from "../types";
 
@@ -41,11 +42,6 @@ const CATEGORIES = [
   "interjection", "idiom", "set phrase", "phrasal verb", "collocation",
   "proverb", "greeting",
 ] as const;
-
-const LEVEL_OPTIONS: Record<string, string[]> = {
-  chinese: ["HSK1-4", "HSK5", "HSK6", "HSK7-9", "Advanced"],
-  japanese: ["JLPT5", "JLPT4", "JLPT3", "JLPT2", "JLPT1", "Advanced"],
-};
 
 const ALL_TOPICS = [
   "Greetings & Introductions", "Food & Dining", "Shopping & Money",

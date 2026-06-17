@@ -9,10 +9,20 @@ import {
   updateGrammarGroup,
   deleteGrammarGroup,
   modifyGrammarGroupMembers,
+  getGrammarConfig,
 } from "../firestore.js";
-import type { Grammar } from "../types.js";
+import { callLLMWithSchema, stripMarkdownFences } from "../llm.js";
+import type { Grammar, Meaning } from "../types.js";
+
+const ALL_DEFINITION_LANGUAGES = ["en", "ja", "ko", "zh"] as const;
+
+function fillPlaceholders(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
+}
 
 const grammarRoutes: FastifyPluginAsync = async (fastify) => {
+  const grammarConfig = await getGrammarConfig();
+
   // List grammar items with filters & pagination
   fastify.get<{
     Params: { language: string };
@@ -68,6 +78,78 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { language } = request.params;
       const item: Grammar = { ...request.body, language };
+      await upsertGrammarItem(item);
+      return reply.status(201).send(item);
+    }
+  );
+
+  // Smart-add: enriches descriptions with missing language codes via LLM, then upserts.
+  fastify.post<{
+    Params: { language: string };
+    Body: Omit<Grammar, "language">;
+  }>(
+    "/:language/smart-add",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["id", "statement", "descriptions"],
+          properties: {
+            id: { type: "string" },
+            statement: { type: "string" },
+            descriptions: { type: "array" },
+            examples: { type: "array" },
+            words: { type: "array", items: { type: "string" } },
+            level: { type: "string" },
+            tags: { type: "array", items: { type: "string" } },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { language } = request.params;
+      const body = request.body;
+
+      const defLangStr = ALL_DEFINITION_LANGUAGES.map((l) => `"${l}": "..."`).join(", ");
+      const promptTemplate = grammarConfig.smartAddPrompts[language]
+        ?? grammarConfig.smartAddPrompts["default"];
+      const systemPrompt = fillPlaceholders(promptTemplate, {
+        LANGUAGE: language,
+        DEFINITION_LANGUAGES: defLangStr,
+      });
+
+      const userPrompt = JSON.stringify({
+        statement: body.statement,
+        descriptions: body.descriptions,
+      }, null, 2);
+
+      let llmResult: Record<string, unknown>;
+      try {
+        const raw = await callLLMWithSchema(systemPrompt, userPrompt, grammarConfig.smartAddSchema, "grammar/smart-add");
+        llmResult = JSON.parse(stripMarkdownFences(raw));
+      } catch (err) {
+        fastify.log.error({ err, statement: body.statement }, "LLM call failed for grammar smart-add");
+        return reply.internalServerError("Failed to enrich grammar descriptions");
+      }
+
+      const llmDescs = (llmResult.descriptions as Meaning[] | undefined) ?? [];
+
+      // Merge: keep user's text for the language(s) they supplied, fill missing
+      // codes from the LLM's same-index description.
+      const mergedDescs: Meaning[] = body.descriptions.map((userDesc, i) => {
+        const llmDesc = llmDescs[i];
+        const mergedText: Record<string, string> = { ...(llmDesc?.text ?? {}) };
+        for (const [lang, text] of Object.entries(userDesc.text ?? {})) {
+          if (text && text.trim()) mergedText[lang] = text;
+        }
+        return {
+          partOfSpeech: userDesc.partOfSpeech,
+          text: mergedText,
+          ...(userDesc.pinyins?.length ? { pinyins: userDesc.pinyins } : {}),
+        };
+      });
+
+      const item: Grammar = { ...body, language, descriptions: mergedDescs };
       await upsertGrammarItem(item);
       return reply.status(201).send(item);
     }

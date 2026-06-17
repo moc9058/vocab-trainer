@@ -1,0 +1,34 @@
+{
+  "name": "grammar_descriptions",
+  "strict": false,
+  "schema": {
+    "type": "object",
+    "required": ["descriptions"],
+    "properties": {
+      "descriptions": {
+        "type": "array",
+        "description": "Enriched descriptions with full language coverage. Same length, order, and partOfSpeech as the user input.",
+        "items": {
+          "type": "object",
+          "required": ["partOfSpeech", "text"],
+          "properties": {
+            "partOfSpeech": {
+              "type": "string",
+              "description": "Preserved verbatim from the user input."
+            },
+            "pinyins": {
+              "type": "array",
+              "description": "Preserved verbatim from the user input (Chinese only).",
+              "items": { "type": "string" }
+            },
+            "text": {
+              "type": "object",
+              "description": "Description text keyed by language code. MUST contain an entry for every required language code.",
+              "additionalProperties": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

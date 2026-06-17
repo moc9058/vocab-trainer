@@ -1,11 +1,14 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
 import {
-  createGrammarItem,
+  smartAddGrammarItem,
   updateGrammarItem,
   getGrammarGroups,
   modifyGrammarGroupMembers,
 } from "../api/grammar";
+import { ALL_KNOWN_LANGUAGES } from "../settings/defaults";
+import { LEVEL_OPTIONS } from "../constants/levels";
+import ExampleSentenceEditor, { type ExampleFormState } from "./ExampleSentenceEditor";
 import type { Grammar, GrammarGroup, Meaning } from "../types";
 
 interface DescriptionFormState {
@@ -53,8 +56,13 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose }
     return [{ partOfSpeech: "", translations: [{ lang: "en", text: "" }], pinyinsRaw: "" }];
   });
   const [wordsList, setWordsList] = useState<string[]>(editItem?.words ?? []);
-  const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>(
-    editItem?.examples?.map((ex) => ({ sentence: ex.sentence, translation: ex.translation })) ?? []
+  const [examples, setExamples] = useState<ExampleFormState[]>(
+    editItem?.examples?.map((ex) => ({
+      sentence: ex.sentence,
+      translation: ex.translation,
+      originalTranslation: ex.translation ?? "",
+      locked: false,
+    })) ?? []
   );
   const [level, setLevel] = useState(editItem?.level ?? "");
   const [tags, setTags] = useState(editItem?.tags?.join(", ") ?? "");
@@ -137,7 +145,11 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose }
     try {
       const filteredExamples = examples
         .filter((ex) => ex.sentence.trim())
-        .map((ex) => ({ sentence: ex.sentence.trim(), translation: ex.translation.trim() }));
+        .map((ex) => {
+          const trimmed = ex.sentence.trim();
+          const sentence = isChinese ? trimmed.replace(/[\s　]+/g, "") : trimmed;
+          return { sentence, translation: ex.translation.trim() };
+        });
       const wordsArr = wordsList.map((w) => w.trim()).filter(Boolean);
       const tagsArr = tags.trim() ? tags.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
@@ -153,7 +165,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose }
         });
       } else {
         const id = `grammar-${language}-${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
-        saved = await createGrammarItem(language, {
+        saved = await smartAddGrammarItem(language, {
           id,
           statement: statement.trim(),
           descriptions: descs,
@@ -292,13 +304,19 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose }
                 )}
                 {desc.translations.map((tr, ti) => (
                   <div key={ti} className="mb-1 flex gap-2">
-                    <input
-                      type="text"
+                    <select
                       value={tr.lang}
                       onChange={(e) => updateTranslation(di, ti, { lang: e.target.value })}
-                      placeholder={t("definitionLanguage")}
-                      className="w-20 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                    />
+                      aria-label={t("definitionLanguage")}
+                      className="w-28 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                    >
+                      {!ALL_KNOWN_LANGUAGES.some((l) => l.code === tr.lang) && (
+                        <option value={tr.lang}>{tr.lang || t("definitionLanguage")}</option>
+                      )}
+                      {ALL_KNOWN_LANGUAGES.map((l) => (
+                        <option key={l.code} value={l.code}>{l.label}</option>
+                      ))}
+                    </select>
                     <input
                       type="text"
                       value={tr.text}
@@ -325,7 +343,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose }
                   type="button"
                   onClick={() =>
                     updateDescription(di, {
-                      translations: [...desc.translations, { lang: "", text: "" }],
+                      translations: [...desc.translations, { lang: "en", text: "" }],
                     })
                   }
                   className="mt-1 text-xs text-blue-400 hover:text-blue-300"
@@ -374,66 +392,32 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose }
           </div>
 
           {/* Examples */}
-          <div>
-            <label className="mb-1 block text-sm text-gray-400">{t("examples")}</label>
-            {examples.map((ex, i) => (
-              <div key={i}>
-                <InsertButton
-                  onInsert={() => {
-                    const n = [...examples];
-                    n.splice(i, 0, { sentence: "", translation: "" });
-                    setExamples(n);
-                  }}
-                />
-                <div className="rounded-lg border border-gray-600 bg-gray-700 p-2 space-y-1">
-                  <input
-                    type="text"
-                    value={ex.sentence}
-                    onChange={(e) => {
-                      const n = [...examples];
-                      n[i] = { ...n[i], sentence: e.target.value };
-                      setExamples(n);
-                    }}
-                    placeholder={t("sentence")}
-                    className="w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                  />
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={ex.translation}
-                      onChange={(e) => {
-                        const n = [...examples];
-                        n[i] = { ...n[i], translation: e.target.value };
-                        setExamples(n);
-                      }}
-                      placeholder={t("translationLabel")}
-                      className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setExamples(examples.filter((_, j) => j !== i))}
-                      className="text-xs text-red-400 hover:text-red-300"
-                    >
-                      {t("removeExample")}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-            <InsertButton onInsert={() => setExamples([...examples, { sentence: "", translation: "" }])} />
-          </div>
+          <ExampleSentenceEditor
+            language={language}
+            examples={examples}
+            setExamples={setExamples}
+            selectedGroupIds={selectedGroupIds}
+          />
 
           {/* Level */}
-          <div>
-            <label className="mb-1 block text-sm text-gray-400">{t("level")}</label>
-            <input
-              type="text"
-              value={level}
-              onChange={(e) => setLevel(e.target.value)}
-              placeholder="optional"
-              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-400 focus:outline-none"
-            />
-          </div>
+          {LEVEL_OPTIONS[language] && (
+            <div>
+              <label className="mb-1 block text-sm text-gray-400">{t("level")}</label>
+              <select
+                value={level}
+                onChange={(e) => setLevel(e.target.value)}
+                className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+              >
+                <option value="">—</option>
+                {!LEVEL_OPTIONS[language].includes(level) && level && (
+                  <option value={level}>{level}</option>
+                )}
+                {LEVEL_OPTIONS[language].map((lv) => (
+                  <option key={lv} value={lv}>{lv}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Tags */}
           <div>

@@ -29,6 +29,13 @@ export function createGrammarItem(
   return postJson(`/api/grammar/${encodeURIComponent(language)}/items`, item);
 }
 
+export function smartAddGrammarItem(
+  language: string,
+  item: Omit<Grammar, "language">
+): Promise<Grammar> {
+  return postJson(`/api/grammar/${encodeURIComponent(language)}/smart-add`, item);
+}
+
 export function updateGrammarItem(
   language: string,
   grammarId: string,
