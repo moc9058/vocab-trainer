@@ -18,6 +18,7 @@ import GrammarFormModal from "./GrammarFormModal";
 import TranslationView from "./TranslationView";
 import SpeakingWritingView from "./SpeakingWritingView";
 import QuizFilterModal from "./QuizFilterModal";
+import PrintWorksheet from "./PrintWorksheet";
 import { getTranslationHistory } from "../api/translation";
 import { getSpeakingWritingSession } from "../api/speaking-writing";
 import { urlLanguageToIsoCode } from "../settings/defaults";
@@ -32,7 +33,7 @@ export default function Dashboard() {
   const subPath = location.pathname.replace(`/${language}`, "") || "/";
   const { t, language: uiLang, setLanguage } = useI18n();
   const { settings } = useSettings();
-  const { enqueue, pendingTerms, queueLength, processingTerm, recentResults, clearResults, refreshSignal } = useWordQueue();
+  const { enqueue, pendingTerms, queueLength, processingTerms, activeCount, recentResults, clearResults, refreshSignal } = useWordQueue();
   const [visibleToast, setVisibleToast] = useState<{ id: string; term: string; success: boolean; error?: string } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -188,6 +189,16 @@ export default function Dashboard() {
     setSelectedLanguage(null);
   }
 
+  function handlePrintSelected(
+    filters: { topics: string[]; categories: string[]; levels: string[]; groupIds: string[] },
+    count: number | null,
+  ) {
+    if (!selectedLanguage) return;
+    const lang = selectedLanguage;
+    setSelectedLanguage(null);
+    navigate(`/${language}/print-worksheet`, { state: { filters, count, sampleLanguage: lang } });
+  }
+
   function handleQuizComplete() {
     setActiveQuiz(null);
     navigate(`/${language}`);
@@ -341,6 +352,9 @@ export default function Dashboard() {
           language={grammarFormLanguage}
           onSave={() => setGrammarFormLanguage(null)}
           onClose={() => setGrammarFormLanguage(null)}
+          onQueue={enqueue}
+          pendingTerms={pendingTerms}
+          refreshSignal={refreshSignal}
         />
       )}
       {selectedLanguage && !resumePrompt && (
@@ -348,6 +362,7 @@ export default function Dashboard() {
           language={selectedLanguage}
           onStart={handleFiltersSelected}
           onClose={handleFilterClose}
+          onPrint={handlePrintSelected}
         />
       )}
       {resumePrompt && (
@@ -374,19 +389,33 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-      {/* Queue status pill */}
-      {(processingTerm !== null || queueLength > 0) && (
-        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-gray-700 px-4 py-2 text-sm text-gray-200 shadow-lg border border-gray-600">
+      {/* Queue status pill — shows every in-flight word. With parallel
+          processing (CONCURRENCY in useWordQueue.ts), up to N terms can be
+          in the "processing" amber state simultaneously; the rest are
+          queued. `pendingTerms` is the union; `processingTerms` is the
+          currently-running subset. */}
+      {(activeCount > 0 || queueLength > 0) && (
+        <div className="fixed bottom-4 right-4 z-50 flex max-w-md flex-wrap items-center gap-1.5 rounded-2xl bg-gray-700 px-4 py-2 text-sm text-gray-200 shadow-lg border border-gray-600">
           <span className="animate-spin inline-block">⟳</span>
-          <span>
-            {processingTerm ? `Processing: "${processingTerm}"` : "Starting…"}
-            {queueLength > 0 && ` · ${queueLength} queued`}
-          </span>
+          <span className="text-xs text-gray-300">Generating:</span>
+          {[...pendingTerms].map((term) => (
+            <span
+              key={term}
+              className={`rounded-full px-2 py-0.5 text-xs ${
+                processingTerms.has(term)
+                  ? "border border-amber-400/60 bg-amber-900/40 text-amber-100"
+                  : "border border-gray-500/40 bg-gray-800/60 text-gray-300"
+              }`}
+              title={processingTerms.has(term) ? "Processing" : "Queued"}
+            >
+              {term}
+            </span>
+          ))}
         </div>
       )}
       {/* Toast notification (shown above the pill if both visible) */}
       {visibleToast && (
-        <div className={`fixed z-50 rounded-lg px-4 py-2 text-sm shadow-lg border transition-all ${processingTerm !== null || queueLength > 0 ? "bottom-16 right-4" : "bottom-4 right-4"} ${visibleToast.success ? "bg-green-900/90 border-green-700 text-green-200" : "bg-red-900/90 border-red-700 text-red-200"}`}>
+        <div className={`fixed z-50 rounded-lg px-4 py-2 text-sm shadow-lg border transition-all ${activeCount > 0 || queueLength > 0 ? "bottom-16 right-4" : "bottom-4 right-4"} ${visibleToast.success ? "bg-green-900/90 border-green-700 text-green-200" : "bg-red-900/90 border-red-700 text-red-200"}`}>
           {visibleToast.success
             ? `✓ "${visibleToast.term}" added`
             : `✗ "${visibleToast.term}" failed${visibleToast.error ? `: ${visibleToast.error}` : ""}`}
@@ -425,6 +454,9 @@ export default function Dashboard() {
           <GrammarList
             language={language ?? ""}
             onBack={() => navigate(`/${language}`)}
+            onQueue={enqueue}
+            pendingTerms={pendingTerms}
+            refreshSignal={refreshSignal}
           />
         ) : subPath === "/grammar-quiz" ? (
           activeGrammarQuiz ? (
@@ -438,6 +470,26 @@ export default function Dashboard() {
               <span className="text-gray-400">Loading quiz…</span>
             </div>
           )
+        ) : subPath === "/print-worksheet" ? (
+          (() => {
+            const st = (location.state as {
+              filters?: { topics: string[]; categories: string[]; levels: string[]; groupIds: string[] };
+              count?: number | null;
+              sampleLanguage?: string;
+            } | null);
+            if (!st || !st.filters || st.count === undefined || !st.sampleLanguage) {
+              navigate(`/${language}`, { replace: true });
+              return null;
+            }
+            return (
+              <PrintWorksheet
+                language={st.sampleLanguage}
+                filters={st.filters}
+                count={st.count}
+                onBack={() => navigate(`/${language}`)}
+              />
+            );
+          })()
         ) : subPath === "/speaking-writing" ? (
           <SpeakingWritingView mode={speakingWritingMode!} language={isoCode} />
         ) : subPath === "/translation" ? (

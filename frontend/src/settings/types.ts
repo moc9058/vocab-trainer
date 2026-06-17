@@ -17,4 +17,6 @@ export interface AppSettings {
   defaultTranslationTargetLanguages: string[];
   /** Whether to show Korean hanja (번체 + 훈음) in expanded Chinese word cards. */
   showKoreanHanja: boolean;
+  /** ISO code of the definition language printed in the worksheet answer key. */
+  printDefinitionLanguage: string;
 }

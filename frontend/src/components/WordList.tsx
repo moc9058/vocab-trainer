@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks, getGroups, modifyGroupMembers } from "../api/vocab";
@@ -51,6 +51,9 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const [checkingTerms, setCheckingTerms] = useState(false);
   const [busySegments, setBusySegments] = useState<Set<string>>(new Set());
   const [segmentFlags, setSegmentFlags] = useState<Map<string, boolean>>(new Map());
+  // Per-chip group override. Key = chip text; value = groupId, or "" for
+  // "no group". Absent key → falls back to the latest-created group.
+  const [chipGroupOverrides, setChipGroupOverrides] = useState<Map<string, string>>(new Map());
   const [editingExample, setEditingExample] = useState<string | null>(null);
   const [editSegments, setEditSegments] = useState<Array<{ text: string; transliteration?: string; id?: string }>>([]);
   const [editKnownTerms, setEditKnownTerms] = useState<Map<string, string>>(new Map());
@@ -277,11 +280,35 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     refreshExistingTerms(word);
   }
 
-  async function handleAddSegmentWord(term: string, sentence: string, translation: string) {
+  // Groups sorted latest-first by createdAt so the per-chip dropdown can
+  // default to the most recently created group.
+  const sortedGroups = useMemo(
+    () => [...groups].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [groups],
+  );
+  const latestGroupId = sortedGroups[0]?.id ?? "";
+  function getChipGroupId(chipText: string): string {
+    const override = chipGroupOverrides.get(chipText);
+    return override !== undefined ? override : latestGroupId;
+  }
+  function setChipGroupId(chipText: string, groupId: string) {
+    setChipGroupOverrides((prev) => {
+      const next = new Map(prev);
+      next.set(chipText, groupId);
+      return next;
+    });
+  }
+
+  async function handleAddSegmentWord(term: string, sentence: string, translation: string, overrideGroupId?: string) {
     if (existingTerms.has(term) || pendingTerms?.has(term)) return;
-    const groupIds = expandedId
-      ? groups.filter((group) => group.wordIds.includes(expandedId)).map((group) => group.id)
-      : [];
+    // When the chip carries a per-chip group selection (via the dropdown under
+    // it), use it verbatim. Empty string = "no group". `undefined` means the
+    // caller didn't pass a chip-level choice and we fall back to inheriting
+    // the parent word's groups — kept for callers that haven't yet plumbed
+    // the per-chip selector.
+    const groupIds: string[] = overrideGroupId !== undefined
+      ? (overrideGroupId ? [overrideGroupId] : [])
+      : (expandedId ? groups.filter((group) => group.wordIds.includes(expandedId)).map((group) => group.id) : []);
     if (onQueue) {
       const flag = segmentFlags.get(term) ?? true;
       const parentEx = result?.items.flatMap((w) => w.examples).find((ex) => ex.sentence === sentence);
@@ -787,6 +814,9 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                         pendingTerms={pendingTerms}
                         segmentFlags={segmentFlags}
                         onToggleSegmentFlag={(term) => setSegmentFlags((prev) => { const next = new Map(prev); next.set(term, !(prev.get(term) ?? true)); return next; })}
+                        wordGroups={sortedGroups}
+                        getChipGroupId={getChipGroupId}
+                        setChipGroupId={setChipGroupId}
                         editMode={{
                           key: editingExample,
                           segments: editSegments,
@@ -849,6 +879,9 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                           pendingTerms={pendingTerms}
                           segmentFlags={segmentFlags}
                           onToggleSegmentFlag={(term) => setSegmentFlags((prev) => { const next = new Map(prev); next.set(term, !(prev.get(term) ?? true)); return next; })}
+                          wordGroups={sortedGroups}
+                          getChipGroupId={getChipGroupId}
+                          setChipGroupId={setChipGroupId}
                           editMode={{
                             key: editingExample,
                             segments: editSegments,
@@ -1043,6 +1076,9 @@ function WordCard({
   pendingTerms,
   segmentFlags,
   onToggleSegmentFlag,
+  wordGroups,
+  getChipGroupId,
+  setChipGroupId,
   editMode,
   selected,
   onToggleSelect,
@@ -1057,13 +1093,16 @@ function WordCard({
   onEdit: () => void;
   onDelete: () => void;
   onAddToGroup?: () => void;
-  onToggleSegment?: (term: string, sentence: string, translation: string) => void;
+  onToggleSegment?: (term: string, sentence: string, translation: string, groupId?: string) => void;
   existingTerms: Map<string, string>;
   checkingTerms: boolean;
   busySegments: Set<string>;
   pendingTerms?: Set<string>;
   segmentFlags: Map<string, boolean>;
   onToggleSegmentFlag: (term: string) => void;
+  wordGroups: WordGroup[];
+  getChipGroupId: (chipText: string) => string;
+  setChipGroupId: (chipText: string, groupId: string) => void;
   editMode: {
     key: string | null;
     segments: Array<{ text: string; transliteration?: string; id?: string }>;
@@ -1243,12 +1282,17 @@ function WordCard({
                               const isPunct = /^\p{P}+$/u.test(seg.text) || seg.text.trim().length === 0;
                               const canSplit = !isActivated && !isPunct && Array.from(seg.text).length > 1;
                               const prev = j > 0 ? editMode.segments[j - 1] : null;
-                              const prevEditable = prev && !prev.id && !/^\p{P}+$/u.test(prev.text) && prev.text.trim().length > 0;
-                              const thisEditable = !isActivated && !isPunct;
+                              // Merge is allowed across an activated (DB-linked) boundary too.
+                              // `handleMergeSegments` discards both segments' `id`s — the
+                              // resulting combined chip is unactivated and can be (re)linked
+                              // via the "activate" button if the new text matches a known
+                              // word. The underlying DB Word docs are never modified here.
+                              const prevMergeable = prev && !/^\p{P}+$/u.test(prev.text) && prev.text.trim().length > 0;
+                              const thisMergeable = !isPunct;
                               const els: React.ReactNode[] = [];
-                              if (prevEditable && thisEditable) {
+                              if (prevMergeable && thisMergeable) {
                                 els.push(
-                                  <button key={`m${j}`} onClick={(e) => { e.stopPropagation(); editMode.onMerge(j - 1); }} className="rounded bg-yellow-800/30 border border-yellow-500/40 text-yellow-400 hover:bg-yellow-700/40 hover:text-yellow-300 text-[10px] px-1 py-0 leading-4 self-center" title="Merge">+</button>
+                                  <button key={`m${j}`} onClick={(e) => { e.stopPropagation(); editMode.onMerge(j - 1); }} className="rounded bg-yellow-800/30 border border-yellow-500/40 text-yellow-400 hover:bg-yellow-700/40 hover:text-yellow-300 text-[10px] px-1 py-0 leading-4 self-center" title="Merge (deactivates link)">+</button>
                                 );
                               }
                               els.push(
@@ -1350,7 +1394,7 @@ function WordCard({
                                 <div key={j} className="flex flex-col">
                                   <button
                                     disabled={busy || queued || exists || checking}
-                                    onClick={(e) => { e.stopPropagation(); if (!exists && !queued && !checking) onToggleSegment(seg.text, ex.sentence, trans); }}
+                                    onClick={(e) => { e.stopPropagation(); if (!exists && !queued && !checking) onToggleSegment(seg.text, ex.sentence, trans, getChipGroupId(seg.text)); }}
                                     className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
                                       isSelf ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
                                       : exists ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
@@ -1377,6 +1421,28 @@ function WordCard({
                                             aria-label={`Flag ${seg.text} for review`}
                                           />
                                         </label>
+                                      )}
+                                    </div>
+                                  )}
+                                  {anyDeactivated && wordGroups.length > 0 && (
+                                    <div className="mt-0.5 flex justify-center">
+                                      {!isSelf && !exists && !queued && !checking ? (
+                                        <select
+                                          value={getChipGroupId(seg.text)}
+                                          onChange={(e) => setChipGroupId(seg.text, e.target.value)}
+                                          onClick={(e) => e.stopPropagation()}
+                                          disabled={busy}
+                                          className="max-w-[7rem] truncate rounded border border-gray-600 bg-gray-800 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-400 focus:outline-none disabled:opacity-50"
+                                          aria-label={`Group for ${seg.text}`}
+                                          title={`Group for ${seg.text}`}
+                                        >
+                                          <option value="">—</option>
+                                          {wordGroups.map((g) => (
+                                            <option key={g.id} value={g.id}>{g.name}</option>
+                                          ))}
+                                        </select>
+                                      ) : (
+                                        <span className="h-5" aria-hidden="true" />
                                       )}
                                     </div>
                                   )}
@@ -1479,6 +1545,9 @@ function WordRow({
   pendingTerms,
   segmentFlags,
   onToggleSegmentFlag,
+  wordGroups,
+  getChipGroupId,
+  setChipGroupId,
   editMode,
   selected,
   onToggleSelect,
@@ -1493,13 +1562,16 @@ function WordRow({
   onEdit: () => void;
   onDelete: () => void;
   onAddToGroup?: () => void;
-  onToggleSegment?: (term: string, sentence: string, translation: string) => void;
+  onToggleSegment?: (term: string, sentence: string, translation: string, groupId?: string) => void;
   existingTerms: Map<string, string>;
   checkingTerms: boolean;
   busySegments: Set<string>;
   pendingTerms?: Set<string>;
   segmentFlags: Map<string, boolean>;
   onToggleSegmentFlag: (term: string) => void;
+  wordGroups: WordGroup[];
+  getChipGroupId: (chipText: string) => string;
+  setChipGroupId: (chipText: string, groupId: string) => void;
   editMode: {
     key: string | null;
     segments: Array<{ text: string; transliteration?: string; id?: string }>;
@@ -1669,12 +1741,16 @@ function WordRow({
                                 const isPunct = /^\p{P}+$/u.test(seg.text) || seg.text.trim().length === 0;
                                 const canSplit = !isActivated && !isPunct && Array.from(seg.text).length > 1;
                                 const prev = j > 0 ? editMode.segments[j - 1] : null;
-                                const prevEditable = prev && !prev.id && !/^\p{P}+$/u.test(prev.text) && prev.text.trim().length > 0;
-                                const thisEditable = !isActivated && !isPunct;
+                                // See sibling render block for rationale: merging across an
+                                // activated chip just drops the segment-level id; the DB
+                                // Word doc is preserved and can be re-linked to the merged
+                                // chip if its combined text matches a known term.
+                                const prevMergeable = prev && !/^\p{P}+$/u.test(prev.text) && prev.text.trim().length > 0;
+                                const thisMergeable = !isPunct;
                                 const els: React.ReactNode[] = [];
-                                if (prevEditable && thisEditable) {
+                                if (prevMergeable && thisMergeable) {
                                   els.push(
-                                    <button key={`m${j}`} onClick={(e) => { e.stopPropagation(); editMode.onMerge(j - 1); }} className="rounded bg-yellow-800/30 border border-yellow-500/40 text-yellow-400 hover:bg-yellow-700/40 hover:text-yellow-300 text-[10px] px-1 py-0 leading-4 self-center" title="Merge">+</button>
+                                    <button key={`m${j}`} onClick={(e) => { e.stopPropagation(); editMode.onMerge(j - 1); }} className="rounded bg-yellow-800/30 border border-yellow-500/40 text-yellow-400 hover:bg-yellow-700/40 hover:text-yellow-300 text-[10px] px-1 py-0 leading-4 self-center" title="Merge (deactivates link)">+</button>
                                   );
                                 }
                                 els.push(
@@ -1776,7 +1852,7 @@ function WordRow({
                                   <div key={j} className="flex flex-col">
                                     <button
                                       disabled={busy || queued || exists || checking}
-                                      onClick={(e) => { e.stopPropagation(); if (!exists && !queued && !checking) onToggleSegment(seg.text, ex.sentence, trans); }}
+                                      onClick={(e) => { e.stopPropagation(); if (!exists && !queued && !checking) onToggleSegment(seg.text, ex.sentence, trans, getChipGroupId(seg.text)); }}
                                       className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
                                         isSelf ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
                                         : exists ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
@@ -1803,6 +1879,28 @@ function WordRow({
                                               aria-label={`Flag ${seg.text} for review`}
                                             />
                                           </label>
+                                        )}
+                                      </div>
+                                    )}
+                                    {anyDeactivated && wordGroups.length > 0 && (
+                                      <div className="mt-0.5 flex justify-center">
+                                        {!isSelf && !exists && !queued && !checking ? (
+                                          <select
+                                            value={getChipGroupId(seg.text)}
+                                            onChange={(e) => setChipGroupId(seg.text, e.target.value)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            disabled={busy}
+                                            className="max-w-[7rem] truncate rounded border border-gray-600 bg-gray-800 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-400 focus:outline-none disabled:opacity-50"
+                                            aria-label={`Group for ${seg.text}`}
+                                            title={`Group for ${seg.text}`}
+                                          >
+                                            <option value="">—</option>
+                                            {wordGroups.map((g) => (
+                                              <option key={g.id} value={g.id}>{g.name}</option>
+                                            ))}
+                                          </select>
+                                        ) : (
+                                          <span className="h-5" aria-hidden="true" />
                                         )}
                                       </div>
                                     )}

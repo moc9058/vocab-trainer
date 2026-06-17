@@ -53,6 +53,10 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // True while ExampleSentenceEditor has at least one chip mid-smartAddWord.
+  // Used to lock Cancel + backdrop click so we don't drop the modal while a
+  // word is being half-created.
+  const [chipsInFlight, setChipsInFlight] = useState(false);
 
   useEffect(() => {
     getFilters(language)
@@ -158,7 +162,10 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={chipsInFlight ? undefined : onClose}
+    >
       <div
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-gray-800 p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
@@ -363,6 +370,7 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
             pendingTerms={pendingTerms}
             refreshSignal={refreshSignal}
             onQueue={onQueue}
+            onChipInFlightChange={setChipsInFlight}
           />
 
           {/* Notes */}
@@ -380,8 +388,14 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
+              disabled={chipsInFlight}
               onClick={onClose}
-              className="rounded-lg border border-gray-600 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
+              className={`rounded-lg border border-gray-600 px-4 py-2 text-sm ${
+                chipsInFlight
+                  ? "cursor-not-allowed text-gray-500"
+                  : "text-gray-300 hover:bg-gray-700"
+              }`}
+              title={chipsInFlight ? "Wait for word generation to finish" : ""}
             >
               {t("cancel")}
             </button>

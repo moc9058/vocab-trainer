@@ -86,6 +86,7 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
     new Set(settings.defaultTranslationTargetLanguages),
   );
   const [showKoreanHanja, setShowKoreanHanja] = useState<boolean>(settings.showKoreanHanja);
+  const [printDefLang, setPrintDefLang] = useState<string>(settings.printDefinitionLanguage);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -129,6 +130,7 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
           ? targetLangs
           : [order.find((c) => c !== defaultTranslationSource) ?? defaultTranslationSource],
       showKoreanHanja,
+      printDefinitionLanguage: printDefLang,
     });
     onClose();
   }
@@ -144,6 +146,7 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
     setDefaultTranslationSource(DEFAULT_SETTINGS.defaultTranslationSourceLanguage);
     setDefaultTranslationTargets(new Set(DEFAULT_SETTINGS.defaultTranslationTargetLanguages));
     setShowKoreanHanja(DEFAULT_SETTINGS.showKoreanHanja);
+    setPrintDefLang(DEFAULT_SETTINGS.printDefinitionLanguage);
   }
 
   const supportedUiLanguages = new Set(uiLanguages as readonly string[]);
@@ -250,6 +253,24 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
               <p className="mt-1 text-xs text-gray-400">{t("settingsShowKoreanHanjaHelp")}</p>
             </section>
           )}
+        </div>
+
+        {/* Print Worksheet Section */}
+        <div className="mb-6">
+          <h3 className="mb-3 border-b border-gray-700 pb-2 text-base font-semibold text-gray-200">{t("settingsSectionPrint")}</h3>
+          <section>
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsPrintDefLang")}</h4>
+            <select
+              value={printDefLang}
+              onChange={(e) => setPrintDefLang(e.target.value)}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+            >
+              {order.map((code) => (
+                <option key={code} value={code}>{LANG_LABEL_MAP[code] ?? code}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-400">{t("settingsPrintDefLangHelp")}</p>
+          </section>
         </div>
 
         {/* Correction Mode Section */}

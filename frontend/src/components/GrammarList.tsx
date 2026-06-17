@@ -10,13 +10,22 @@ import {
 import type { Grammar, GrammarGroup } from "../types";
 import GrammarFormModal from "./GrammarFormModal";
 import GroupPickerModal from "./GroupPickerModal";
+import type { smartAddWord } from "../api/vocab";
+
+type SmartAddPayload = Parameters<typeof smartAddWord>[1];
 
 interface Props {
   language: string;
   onBack: () => void;
+  /** Passed straight through to the embedded GrammarFormModal so chip-clicks
+   *  in the grammar editor enqueue into the shared word-add queue and surface
+   *  in the global Dashboard "Generating:" pill. */
+  onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
+  pendingTerms?: Set<string>;
+  refreshSignal?: number;
 }
 
-export default function GrammarList({ language, onBack }: Props) {
+export default function GrammarList({ language, onBack, onQueue, pendingTerms, refreshSignal }: Props) {
   const { t } = useI18n();
   const { displayDefEntries } = useSettings();
   const [items, setItems] = useState<Grammar[]>([]);
@@ -280,6 +289,9 @@ export default function GrammarList({ language, onBack }: Props) {
           editItem={editingItem}
           onSave={() => { setEditingItem(null); fetchItems(); }}
           onClose={() => setEditingItem(null)}
+          onQueue={onQueue}
+          pendingTerms={pendingTerms}
+          refreshSignal={refreshSignal}
         />
       )}
 

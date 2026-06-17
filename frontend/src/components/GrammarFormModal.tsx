@@ -10,6 +10,9 @@ import { ALL_KNOWN_LANGUAGES } from "../settings/defaults";
 import { LEVEL_OPTIONS } from "../constants/levels";
 import ExampleSentenceEditor, { type ExampleFormState } from "./ExampleSentenceEditor";
 import type { Grammar, GrammarGroup, Meaning } from "../types";
+import type { smartAddWord } from "../api/vocab";
+
+type SmartAddPayload = Parameters<typeof smartAddWord>[1];
 
 interface DescriptionFormState {
   partOfSpeech: string;
@@ -22,6 +25,12 @@ interface Props {
   editItem?: Grammar;
   onSave: () => void;
   onClose: () => void;
+  /** Optional shared queue. When provided, chip-clicks inside the embedded
+   *  ExampleSentenceEditor enqueue through it instead of calling smartAddWord
+   *  directly, so in-flight terms surface in the global Dashboard pill. */
+  onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
+  pendingTerms?: Set<string>;
+  refreshSignal?: number;
 }
 
 function InsertButton({ onInsert }: { onInsert: () => void }) {
@@ -39,7 +48,7 @@ function InsertButton({ onInsert }: { onInsert: () => void }) {
   );
 }
 
-export default function GrammarFormModal({ language, editItem, onSave, onClose }: Props) {
+export default function GrammarFormModal({ language, editItem, onSave, onClose, onQueue, pendingTerms, refreshSignal }: Props) {
   const { t } = useI18n();
   const isEdit = !!editItem;
   const isChinese = language === "chinese";
@@ -72,6 +81,10 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose }
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // True while ExampleSentenceEditor has at least one chip mid-smartAddWord.
+  // Used to lock Cancel + backdrop click so we don't drop the modal while a
+  // word is being half-created.
+  const [chipsInFlight, setChipsInFlight] = useState(false);
 
   useEffect(() => {
     if (!editItem?.id) {
@@ -207,7 +220,10 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={chipsInFlight ? undefined : onClose}
+    >
       <div
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-gray-800 p-6 shadow-lg"
         onClick={(e) => e.stopPropagation()}
@@ -406,6 +422,10 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose }
             examples={examples}
             setExamples={setExamples}
             selectedGroupIds={selectedGroupIds}
+            onChipInFlightChange={setChipsInFlight}
+            onQueue={onQueue}
+            pendingTerms={pendingTerms}
+            refreshSignal={refreshSignal}
           />
 
           {/* Level */}
@@ -444,8 +464,14 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose }
           <div className="flex justify-end gap-3 pt-2">
             <button
               type="button"
+              disabled={chipsInFlight}
               onClick={onClose}
-              className="rounded-lg border border-gray-600 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
+              className={`rounded-lg border border-gray-600 px-4 py-2 text-sm ${
+                chipsInFlight
+                  ? "cursor-not-allowed text-gray-500"
+                  : "text-gray-300 hover:bg-gray-700"
+              }`}
+              title={chipsInFlight ? "Wait for word generation to finish" : ""}
             >
               {t("cancel")}
             </button>

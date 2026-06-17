@@ -3,13 +3,21 @@ import { useI18n } from "../i18n/context";
 import { getFilters, getGroups } from "../api/vocab";
 import type { WordGroup } from "../types";
 
+export interface QuizFilters {
+  topics: string[];
+  categories: string[];
+  levels: string[];
+  groupIds: string[];
+}
+
 interface Props {
   language: string;
-  onStart: (filters: { topics: string[]; categories: string[]; levels: string[]; groupIds: string[] }) => void;
+  onStart: (filters: QuizFilters) => void;
   onClose: () => void;
   startLabel?: string;
   groupCountMode?: "all" | "flagged";
   flaggedWordIds?: Set<string> | null;
+  onPrint?: (filters: QuizFilters, count: number | null) => void;
 }
 
 function AndDivider() {
@@ -42,6 +50,7 @@ export default function QuizFilterModal({
   startLabel,
   groupCountMode = "all",
   flaggedWordIds,
+  onPrint,
 }: Props) {
   const { t } = useI18n();
   const [allLevels, setAllLevels] = useState<string[]>([]);
@@ -53,6 +62,8 @@ export default function QuizFilterModal({
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  const [printCount, setPrintCount] = useState<number>(30);
+  const [printAllMode, setPrintAllMode] = useState<boolean>(false);
 
   useEffect(() => {
     Promise.allSettled([getFilters(language), getGroups(language)])
@@ -263,13 +274,62 @@ export default function QuizFilterModal({
           <p className="mt-1 text-xs text-gray-400">{t("allWordsHint")}</p>
         )}
 
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+          {onPrint && (
+            <div className="mr-auto flex items-center gap-2 text-sm text-gray-300">
+              <span>{t("worksheetCount")}</span>
+              <input
+                type="number"
+                min={1}
+                value={printAllMode ? "" : printCount}
+                placeholder={printAllMode ? t("worksheetAll") : undefined}
+                onChange={(e) => {
+                  const next = Math.max(1, Number(e.target.value) || 1);
+                  setPrintCount(next);
+                  setPrintAllMode(false);
+                }}
+                disabled={printAllMode}
+                className="w-20 rounded-md border border-gray-600 bg-gray-700 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none disabled:opacity-60"
+              />
+              <button
+                type="button"
+                onClick={() => setPrintAllMode((v) => !v)}
+                aria-pressed={printAllMode}
+                className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
+                  printAllMode
+                    ? "border-blue-500 bg-blue-600 text-white"
+                    : "border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600"
+                }`}
+              >
+                {t("worksheetAll")}
+              </button>
+            </div>
+          )}
           <button
             onClick={onClose}
             className="rounded-lg px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
           >
             {t("cancel")}
           </button>
+          {onPrint && (
+            <button
+              onClick={() =>
+                onPrint(
+                  {
+                    topics: [...selectedTopics],
+                    categories: [...selectedCategories],
+                    levels: [...selectedLevels],
+                    groupIds: [...selectedGroupIds],
+                  },
+                  printAllMode ? null : printCount,
+                )
+              }
+              disabled={loading || (!printAllMode && printCount < 1)}
+              className="rounded-lg border border-gray-600 px-4 py-1.5 text-sm text-gray-200 hover:bg-gray-700 disabled:opacity-50"
+            >
+              {t("printWorksheet")}
+            </button>
+          )}
           <button
             onClick={() =>
               onStart({

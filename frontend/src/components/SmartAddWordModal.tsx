@@ -657,32 +657,37 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                         const isPunct = /^\p{P}+$/u.test(chip.text) || chip.text.trim().length === 0;
                         const isSelf  = !isPunct && !!term.trim() && chip.text === term.trim();
                         const exists  = isSelf || (!isPunct && existingTerms.has(chip.text));
-                        const queued  = !isPunct && !isSelf && !exists && (queuedSegments.has(getQueuedSegmentKey(chip.text, ex.sentence)) || !!pendingTerms?.has(chip.text));
-                        const checking = !isPunct && !isSelf && !exists && !queued && checkingTerms;
                         const busy    = busySegments.has(chip.text);
+                        const queued  = !isPunct && !isSelf && !exists && (queuedSegments.has(getQueuedSegmentKey(chip.text, ex.sentence)) || !!pendingTerms?.has(chip.text));
+                        // `checking` must NOT apply to a chip already in flight
+                        // (busy or queued) — otherwise a freshly typed sibling
+                        // triggers `checkingTerms` globally and the in-flight
+                        // chip would morph from its stable "⋯" state.
+                        const checking = !isPunct && !isSelf && !exists && !queued && !busy && checkingTerms;
+                        const inProgress = queued || busy;
                         return (
                           <Fragment key={pi}>
                             <div className="flex flex-col">
                               <button
                                 type="button"
                                 disabled={busy || queued || exists || checking || isPunct}
-                                onClick={() => { if (!exists && !queued && !checking && !isPunct) handleAddSegment(chip.text, ex.sentence, ex.translation); }}
-                                className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
-                                  isPunct   ? "text-gray-600 cursor-default"
-                                  : isSelf  ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
-                                  : exists  ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
-                                  : queued  ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
-                                  : checking? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
+                                onClick={() => { if (!exists && !queued && !checking && !isPunct && !busy) handleAddSegment(chip.text, ex.sentence, ex.translation); }}
+                                className={`rounded-full px-2 py-0.5 text-xs transition-colors ${
+                                  isPunct      ? "text-gray-600 cursor-default"
+                                  : isSelf     ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
+                                  : exists     ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
+                                  : inProgress ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
+                                  : checking   ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
                                   : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
                                 }`}
                               >
-                                {isPunct || isSelf ? chip.text : exists ? `✓ ${chip.text}` : queued ? `⋯ ${chip.text}` : checking ? `⋯ ${chip.text}` : `+ ${chip.text}`}
+                                {isPunct || isSelf ? chip.text : exists ? `✓ ${chip.text}` : inProgress ? `⋯ ${chip.text}` : checking ? `⋯ ${chip.text}` : `+ ${chip.text}`}
                               </button>
                               {anyDeactivated && (
                                 <div className="mt-0.5 h-3.5 flex justify-center items-center">
-                                  {!isPunct && !isSelf && !exists && !queued && !checking && (
+                                  {!isPunct && !isSelf && !exists && !inProgress && !checking && (
                                     <label
-                                      className={`flex items-center ${busy ? "cursor-default opacity-50" : "cursor-pointer"}`}
+                                      className="flex items-center cursor-pointer"
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <input
@@ -693,7 +698,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                                           next.set(chip.text, !(prev.get(chip.text) ?? true));
                                           return next;
                                         })}
-                                        disabled={busy}
                                         className="accent-amber-500 w-3 h-3"
                                         aria-label={`Flag ${chip.text} for review`}
                                       />

@@ -31,6 +31,10 @@ interface Props {
   pendingTerms?: Set<string>;
   refreshSignal?: number;
   onQueue?: (term: string, language: string, payload: ExampleSegmentQueuePayload) => void;
+  /** Fired whenever the editor has at least one chip mid-`smartAddWord`. Parents
+   *  use this to lock Cancel / backdrop-close while an add is in flight so the
+   *  user can't drop the modal with a half-created word still in progress. */
+  onChipInFlightChange?: (inFlight: boolean) => void;
 }
 
 export default function ExampleSentenceEditor({
@@ -41,6 +45,7 @@ export default function ExampleSentenceEditor({
   pendingTerms,
   refreshSignal,
   onQueue,
+  onChipInFlightChange,
 }: Props) {
   const { t } = useI18n();
 
@@ -67,6 +72,13 @@ export default function ExampleSentenceEditor({
       })
       .catch(() => setWordGroups([]));
   }, [language]);
+
+  // Notify the parent whenever an in-flight smartAddWord state changes so it
+  // can lock Cancel + backdrop-close. We watch `busySegments` only — the
+  // queue-mode `pendingTerms` set is owned by the parent already.
+  useEffect(() => {
+    onChipInFlightChange?.(busySegments.size > 0);
+  }, [busySegments, onChipInFlightChange]);
 
   const latestGroupId = wordGroups[0]?.id ?? "";
   function getChipGroupId(chipText: string): string {
@@ -191,6 +203,17 @@ export default function ExampleSentenceEditor({
 
   const trimmedCurrentTerm = currentTerm?.trim() ?? "";
 
+  // Union of in-flight chip terms (direct-mode busy + queue-mode pending).
+  // Deduped and rendered as an amber pill row so the user can see at a glance
+  // which words are currently being generated, independent of where the
+  // originating chip is on screen.
+  const inFlightTerms: string[] = (() => {
+    const s = new Set<string>();
+    busySegments.forEach((t) => s.add(t));
+    pendingTerms?.forEach((t) => s.add(t));
+    return [...s];
+  })();
+
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
@@ -208,7 +231,32 @@ export default function ExampleSentenceEditor({
           + {t("addExample")}
         </button>
       </div>
-      {examples.map((ex, i) => (
+      {inFlightTerms.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-lg border border-amber-500/40 bg-amber-900/20 px-2 py-1.5">
+          <span className="animate-spin inline-block text-amber-300 text-xs">⟳</span>
+          <span className="text-xs text-amber-300">Generating:</span>
+          {inFlightTerms.map((term) => (
+            <span
+              key={term}
+              className="rounded-full border border-amber-500/40 bg-amber-900/30 px-2 py-0.5 text-xs text-amber-200"
+            >
+              {term}
+            </span>
+          ))}
+        </div>
+      )}
+      {examples.map((ex, i) => {
+        // Chip info is needed both for rendering the chip row AND for deciding
+        // whether the "remove example" button must be locked: any chip from
+        // this sentence whose smartAddWord call is in flight (busy) or has
+        // been queued via `onQueue` (pendingTerms) blocks deletion so the
+        // user can't drop the sentence mid-add — that would leave the queue
+        // worker without context for the words it's processing.
+        const chips = language === "chinese" && !ex.locked ? getChipInfo(ex.sentence) : [];
+        const hasInFlightChips = chips.some(
+          (c) => busySegments.has(c.text) || (pendingTerms?.has(c.text) ?? false),
+        );
+        return (
         <div
           key={i}
           ref={i === examples.length - 1 ? lastExampleRef : undefined}
@@ -232,7 +280,6 @@ export default function ExampleSentenceEditor({
             }`}
           />
           {language === "chinese" && !ex.locked && (() => {
-            const chips = getChipInfo(ex.sentence);
             if (chips.length < 2) return null;
             const anyDeactivated = chips.some(
               (c) =>
@@ -248,9 +295,18 @@ export default function ExampleSentenceEditor({
                   const isPunct = /^\p{P}+$/u.test(chip.text) || chip.text.trim().length === 0;
                   const isSelf = !isPunct && !!trimmedCurrentTerm && chip.text === trimmedCurrentTerm;
                   const exists = isSelf || (!isPunct && existingTerms.has(chip.text));
-                  const queued = !isPunct && !isSelf && !exists && !!pendingTerms?.has(chip.text);
-                  const checking = !isPunct && !isSelf && !exists && !queued && checkingTerms;
                   const busy = busySegments.has(chip.text);
+                  const queued = !isPunct && !isSelf && !exists && !!pendingTerms?.has(chip.text);
+                  // `checking` must NOT apply to a chip already in flight (busy
+                  // or queued) — otherwise a freshly typed sibling chip triggers
+                  // `checkingTerms` globally and the in-flight chip would morph
+                  // from its stable "⋯" state into the same amber/checking
+                  // style, which reads to the user as a status change.
+                  const checking = !isPunct && !isSelf && !exists && !queued && !busy && checkingTerms;
+                  // `inProgress` collapses queued + busy into one stable visual
+                  // (amber "⋯") so chips currently being added don't flicker as
+                  // the debounced check fires on each keystroke.
+                  const inProgress = queued || busy;
                   return (
                     <Fragment key={pi}>
                       <div className="flex flex-col">
@@ -258,26 +314,26 @@ export default function ExampleSentenceEditor({
                           type="button"
                           disabled={busy || queued || exists || checking || isPunct}
                           onClick={() => {
-                            if (!exists && !queued && !checking && !isPunct) {
+                            if (!exists && !queued && !checking && !isPunct && !busy) {
                               handleAddSegment(chip.text, ex.sentence, ex.translation);
                             }
                           }}
-                          className={`rounded-full px-2 py-0.5 text-xs transition-colors ${busy ? "opacity-50 cursor-wait" : ""} ${
-                            isPunct   ? "text-gray-600 cursor-default"
-                            : isSelf  ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
-                            : exists  ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
-                            : queued  ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
-                            : checking? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
+                          className={`rounded-full px-2 py-0.5 text-xs transition-colors ${
+                            isPunct      ? "text-gray-600 cursor-default"
+                            : isSelf     ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
+                            : exists     ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
+                            : inProgress ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
+                            : checking   ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
                             : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
                           }`}
                         >
-                          {isPunct || isSelf ? chip.text : exists ? `✓ ${chip.text}` : queued ? `⋯ ${chip.text}` : checking ? `⋯ ${chip.text}` : `+ ${chip.text}`}
+                          {isPunct || isSelf ? chip.text : exists ? `✓ ${chip.text}` : inProgress ? `⋯ ${chip.text}` : checking ? `⋯ ${chip.text}` : `+ ${chip.text}`}
                         </button>
                         {anyDeactivated && (
                           <div className="mt-0.5 h-3.5 flex justify-center items-center">
-                            {!isPunct && !isSelf && !exists && !queued && !checking && (
+                            {!isPunct && !isSelf && !exists && !inProgress && !checking && (
                               <label
-                                className={`flex items-center ${busy ? "cursor-default opacity-50" : "cursor-pointer"}`}
+                                className="flex items-center cursor-pointer"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <input
@@ -288,7 +344,6 @@ export default function ExampleSentenceEditor({
                                     next.set(chip.text, !(prev.get(chip.text) ?? true));
                                     return next;
                                   })}
-                                  disabled={busy}
                                   className="accent-amber-500 w-3 h-3"
                                   aria-label={`Flag ${chip.text} for review`}
                                 />
@@ -298,13 +353,12 @@ export default function ExampleSentenceEditor({
                         )}
                         {anyDeactivated && wordGroups.length > 0 && (
                           <div className="mt-0.5 flex justify-center">
-                            {!isPunct && !isSelf && !exists && !queued && !checking ? (
+                            {!isPunct && !isSelf && !exists && !inProgress && !checking ? (
                               <select
                                 value={getChipGroupId(chip.text)}
                                 onChange={(e) => setChipGroupId(chip.text, e.target.value)}
-                                disabled={busy}
                                 onClick={(e) => e.stopPropagation()}
-                                className="max-w-[7rem] truncate rounded border border-gray-600 bg-gray-800 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-400 focus:outline-none disabled:opacity-50"
+                                className="max-w-[7rem] truncate rounded border border-gray-600 bg-gray-800 px-1 py-0.5 text-[10px] text-gray-200 focus:border-blue-400 focus:outline-none"
                                 aria-label={`Group for ${chip.text}`}
                                 title={`Group for ${chip.text}`}
                               >
@@ -359,14 +413,21 @@ export default function ExampleSentenceEditor({
             />
             <button
               type="button"
-              onClick={() => setExamples(examples.filter((_, j) => j !== i))}
-              className="text-xs text-red-400 hover:text-red-300"
+              disabled={hasInFlightChips}
+              onClick={() => { if (!hasInFlightChips) setExamples(examples.filter((_, j) => j !== i)); }}
+              className={`text-xs ${
+                hasInFlightChips
+                  ? "cursor-not-allowed text-gray-500"
+                  : "text-red-400 hover:text-red-300"
+              }`}
+              title={hasInFlightChips ? "Wait for word generation to finish" : ""}
             >
               {t("removeExample")}
             </button>
           </div>
         </div>
-      ))}
+        );
+      })}
       {segmentAddError && <p className="text-xs text-red-400">{segmentAddError}</p>}
     </div>
   );

@@ -93,6 +93,48 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // Stateless filter + random sample for printable worksheets.
+  // Does NOT create a quiz session.
+  fastify.post<{
+    Body: {
+      language: string;
+      questionCount?: number;
+      topics?: string[];
+      categories?: string[];
+      levels?: string[];
+      groupIds?: string[];
+    };
+  }>(
+    "/sample",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["language"],
+          properties: {
+            language: { type: "string" },
+            questionCount: { type: "number", minimum: 1 },
+            topics: { type: "array", items: { type: "string" } },
+            categories: { type: "array", items: { type: "string" } },
+            levels: { type: "array", items: { type: "string" } },
+            groupIds: { type: "array", items: { type: "string" } },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { language, questionCount, topics, categories, levels, groupIds } = request.body;
+      const [exists, pool] = await Promise.all([
+        languageExists(language),
+        getFilteredWords(language, { topics, categories, levels, groupIds }),
+      ]);
+      if (!exists) return reply.notFound(`Language '${language}' not found`);
+      if (pool.length === 0) return reply.badRequest("No words match the given filters");
+      const count = questionCount ? Math.min(questionCount, pool.length) : pool.length;
+      return { words: randomSample(pool, count) };
+    }
+  );
+
   // Batch-fetch hydrated questions for a quiz session
   fastify.get<{
     Params: { language: string };
