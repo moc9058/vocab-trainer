@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import {
   getAllGrammarItems,
   getGrammarItem,
+  getGrammarGroup,
   getGrammarProgressForLanguage,
   getGrammarComponentProgress,
   updateGrammarComponentProgress,
@@ -15,38 +16,26 @@ import {
   addExampleSentence,
   findExampleByText,
   linkWordToExistingExamples,
-  type GrammarItemDoc,
-  getVocabularyConfig,
 } from "../firestore.js";
-import type { GrammarQuizSession, GrammarQuizQuestion, GrammarProgress, Word, Meaning, ExampleSentence } from "../types.js";
+import type {
+  Grammar,
+  GrammarQuizSession,
+  GrammarQuizQuestion,
+  GrammarProgress,
+  Word,
+  Meaning,
+  ExampleSentence,
+} from "../types.js";
 import { TOPICS } from "../types.js";
-import { callLLM, stripMarkdownFences, segmentBatch } from "../llm.js";
-
-const LANG_NAMES: Record<string, string> = {
-  ja: "Japanese",
-  en: "English",
-  ko: "Korean",
-};
+import { callLLM, stripMarkdownFences } from "../llm.js";
 
 const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
-  // Load vocabulary config for segment/pinyin prompts
-  let segmentConfig: { prompt: string; schema: Record<string, unknown> } | undefined;
-  try {
-    const vocabConfig = await getVocabularyConfig();
-    segmentConfig = { prompt: vocabConfig.segmentPrompt, schema: vocabConfig.segmentSchema };
-  } catch {
-    // Config not yet migrated — fall back to hardcoded prompts
-  }
-
   // Start grammar quiz
   fastify.post<{
     Body: {
       language: string;
       questionCount?: number;
-      chapters?: number[];
-      subchapters?: string[];
-      displayLanguage?: string;
-      quizMode?: string;
+      groupIds?: string[];
     };
   }>(
     "/start",
@@ -58,26 +47,23 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
           properties: {
             language: { type: "string" },
             questionCount: { type: "number", minimum: 1 },
-            chapters: { type: "array", items: { type: "number" } },
-            subchapters: { type: "array", items: { type: "string" } },
-            displayLanguage: { type: "string" },
-            quizMode: { type: "string" },
+            groupIds: { type: "array", items: { type: "string" } },
           },
         },
       },
     },
     async (request, reply) => {
-      const { language, questionCount, chapters, subchapters, displayLanguage, quizMode } = request.body;
-      const dispLang = displayLanguage || "ja";
-      const mode = language === "chinese" ? "llm" : (quizMode || "existing");
+      const { language, questionCount, groupIds } = request.body;
 
       let pool = await getAllGrammarItems(language);
 
-      if (chapters && chapters.length > 0) {
-        pool = pool.filter((item) => chapters.includes(item.chapterNumber));
-      }
-      if (subchapters && subchapters.length > 0) {
-        pool = pool.filter((item) => subchapters.includes(item.subchapterId));
+      if (groupIds && groupIds.length > 0) {
+        const groupDocs = await Promise.all(groupIds.map((id) => getGrammarGroup(id)));
+        const union = new Set<string>();
+        for (const g of groupDocs) {
+          if (g) for (const gid of g.grammarIds) union.add(gid);
+        }
+        pool = pool.filter((item) => union.has(item.id));
       }
 
       if (pool.length === 0) {
@@ -92,19 +78,21 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       const questions: GrammarQuizQuestion[] = [];
       for (const item of selected) {
         try {
-          const prepared = await prepareQuestion(item, dispLang, mode, segmentConfig);
+          const prepared = await prepareQuestion(item);
           questions.push({
-            componentId: item.id,
-            displaySentence: prepared.displaySentence,
-            chineseSentence: prepared.chineseSentence,
-            segments: prepared.segments,
+            grammarId: item.id,
+            exampleSentence: prepared.sentence,
+            exampleTranslation: prepared.translation,
+            ...(prepared.transliteration ? { exampleTransliteration: prepared.transliteration } : {}),
           });
         } catch (err) {
-          fastify.log.error({ err, componentId: item.id }, "Failed to prepare grammar question");
+          fastify.log.error({ err, grammarId: item.id }, "Failed to prepare grammar question");
+          const fallback = item.examples?.[0];
           questions.push({
-            componentId: item.id,
-            displaySentence: Object.values(item.term).join(" / "),
-            chineseSentence: item.examples?.[0]?.sentence ?? "",
+            grammarId: item.id,
+            exampleSentence: fallback?.sentence ?? item.statement,
+            exampleTranslation: fallback?.translation ?? "",
+            ...(fallback?.transliteration ? { exampleTransliteration: fallback.transliteration } : {}),
           });
         }
       }
@@ -116,10 +104,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
         status: "in-progress",
         score: { correct: 0, total: questions.length },
         questions,
-        ...(chapters ? { chapterFilter: chapters } : {}),
-        ...(subchapters ? { subchapterFilter: subchapters } : {}),
-        displayLanguage: dispLang,
-        quizMode: mode,
+        ...(groupIds && groupIds.length > 0 ? { groupFilter: groupIds } : {}),
       };
 
       await saveGrammarQuizSession(session);
@@ -129,31 +114,31 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Submit answer (self-graded)
   fastify.post<{
-    Body: { language: string; componentId: string; correct: boolean };
+    Body: { language: string; grammarId: string; correct: boolean };
   }>(
     "/answer",
     {
       schema: {
         body: {
           type: "object",
-          required: ["language", "componentId", "correct"],
+          required: ["language", "grammarId", "correct"],
           properties: {
             language: { type: "string" },
-            componentId: { type: "string" },
+            grammarId: { type: "string" },
             correct: { type: "boolean" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { language, componentId, correct } = request.body;
+      const { language, grammarId, correct } = request.body;
 
       const session = await getGrammarQuizSession(language);
       if (!session) return reply.notFound("No grammar quiz session found");
       if (session.status === "completed") return reply.badRequest("Session already completed");
 
       const question = session.questions.find(
-        (q) => q.componentId === componentId && q.userCorrect === undefined
+        (q) => q.grammarId === grammarId && q.userCorrect === undefined
       );
       if (!question) return reply.notFound("Question not found in session");
 
@@ -162,20 +147,22 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
         session.score.correct++;
       } else {
         // Re-queue wrong answer
-        const item = await getGrammarItem(componentId);
+        const item = await getGrammarItem(grammarId);
         if (item) {
           session.questions.push({
-            componentId,
-            displaySentence: question.displaySentence,
-            chineseSentence: question.chineseSentence,
-            segments: question.segments,
+            grammarId,
+            exampleSentence: question.exampleSentence,
+            exampleTranslation: question.exampleTranslation,
+            ...(question.exampleTransliteration
+              ? { exampleTransliteration: question.exampleTransliteration }
+              : {}),
           });
           session.score.total++;
         }
       }
 
       // Update grammar progress
-      const gp = await getGrammarComponentProgress(language, componentId);
+      const gp = await getGrammarComponentProgress(language, grammarId);
       gp.timesSeen++;
       if (correct) {
         gp.timesCorrect++;
@@ -185,7 +172,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       }
       gp.correctRate = gp.timesCorrect / gp.timesSeen;
       gp.lastReviewed = new Date().toISOString();
-      await updateGrammarComponentProgress(language, componentId, gp);
+      await updateGrammarComponentProgress(language, grammarId, gp);
 
       // Check if session is complete
       const allAnswered = session.questions.every((q) => q.userCorrect !== undefined);
@@ -353,129 +340,64 @@ Allowed topics: ${TOPICS.join(", ")}`;
 };
 
 interface PreparedQuestion {
-  displaySentence: string;
-  chineseSentence: string;
-  segments?: { text: string; pinyin?: string }[];
+  sentence: string;
+  translation: string;
+  transliteration?: string;
 }
 
-async function prepareQuestion(
-  item: GrammarItemDoc,
-  displayLanguage: string,
-  mode: string,
-  segmentConfig?: { prompt: string; schema: Record<string, unknown> }
-): Promise<PreparedQuestion> {
-  const langName = LANG_NAMES[displayLanguage] || "Japanese";
-
-  if (mode === "existing" && item.examples && item.examples.length > 0) {
-    // Pick a random example
-    const ex = item.examples[Math.floor(Math.random() * item.examples.length)];
-    const chineseSentence = ex.sentence;
-
-    let displaySentence: string;
-    // Check if translation exists in display language
-    if (ex.translation) {
-      if (displayLanguage === "en") {
-        displaySentence = ex.translation;
-      } else {
-        const raw = await callLLM(
-          "You are a translator. Return valid JSON only.",
-          `Translate the following sentence to ${langName}. Return JSON: { "translation": "..." }
-
-Sentence: ${ex.translation}`,
-          "grammar-quiz/translate"
-        );
-        const parsed = JSON.parse(stripMarkdownFences(raw));
-        displaySentence = parsed.translation ?? ex.translation;
-      }
-    } else {
-      const generated = await generateSentencePair(item, langName);
-      return generated;
-    }
-
-    // Segment the Chinese sentence for pinyin display
-    const segMap = await segmentBatch([chineseSentence], segmentConfig);
-    const segments = segMap.get(0)?.map((s) => ({ text: s.text, pinyin: s.transliteration }));
-    return { displaySentence, chineseSentence, segments };
-  }
-
-  // LLM mode or no examples available — generate fresh
-  return await generateSentencePair(item, langName, segmentConfig);
-}
-
-async function generateSentencePair(
-  item: GrammarItemDoc,
-  langName: string,
-  segmentConfig?: { prompt: string; schema: Record<string, unknown> }
-): Promise<PreparedQuestion> {
-  const parts: string[] = [
-    `Given this Chinese grammar point:`,
-    `Term: ${JSON.stringify(item.term)}`,
-  ];
-  if (item.description && Object.keys(item.description).length > 0) {
-    parts.push(`Description: ${JSON.stringify(item.description)}`);
-  }
-  if (item.words && item.words.length > 0) {
-    parts.push(`Related words: ${item.words.join(", ")}`);
-  }
+async function prepareQuestion(item: Grammar): Promise<PreparedQuestion> {
+  // Prefer an existing example
   if (item.examples && item.examples.length > 0) {
-    parts.push(`Reference examples:`);
-    for (const ex of item.examples) {
-      parts.push(`- ${ex.sentence} (${ex.translation})`);
-    }
+    const ex = item.examples[Math.floor(Math.random() * item.examples.length)];
+    return {
+      sentence: ex.sentence,
+      translation: ex.translation,
+      ...(ex.transliteration ? { transliteration: ex.transliteration } : {}),
+    };
+  }
+
+  // No examples — synthesize one with the LLM, mirroring the user's first description text language.
+  const descriptionDump = (item.descriptions ?? [])
+    .map((d) => {
+      const texts = Object.entries(d.text ?? {})
+        .map(([lang, t]) => `${lang}: ${t}`)
+        .join(" | ");
+      return d.partOfSpeech ? `[${d.partOfSpeech}] ${texts}` : texts;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  const parts: string[] = [
+    `Grammar statement: ${item.statement}`,
+  ];
+  if (descriptionDump) parts.push(`Descriptions:\n${descriptionDump}`);
+  if (item.words && item.words.length > 0) {
+    parts.push(`Related words/terms: ${item.words.join(", ")}`);
   }
   parts.push(
     ``,
-    `Generate a NEW example sentence in Chinese that demonstrates this grammar point` +
-    (item.examples && item.examples.length > 0 ? ` (different from any reference examples)` : ``) +
-    `, and translate it to ${langName}.`,
-    `Also segment the Chinese sentence into individual words with pinyin (tone marks).`,
-    ``,
-    `Return JSON: { "chineseSentence": "...", "displaySentence": "...", "segments": [{ "text": "word", "pinyin": "pīnyīn" }, ...] }`,
-    `Rules for segments:`,
-    `- Segment into natural Chinese words (not individual characters unless standalone)`,
-    `- Use tone marks on pinyin (e.g. "nǐ hǎo" not "ni3 hao3")`,
-    `- Keep punctuation as separate segments with no pinyin`,
+    `Generate a NEW example sentence demonstrating this grammar point, and provide its translation.`,
+    `Return JSON: { "sentence": "...", "translation": "..." }`,
   );
 
   const raw = await callLLM(
-    "You are a Chinese grammar example generator. Follow these steps: 1) Identify the language of the provided description and other fields (they may be in Japanese, English, Korean, or other languages). 2) Understand the grammar point from the provided information. 3) Generate a new Chinese example sentence demonstrating the grammar point. 4) Segment the sentence into words with pinyin. Return valid JSON only.",
+    "You are a grammar example generator. Return valid JSON only.",
     parts.join("\n"),
     "grammar-quiz/generate-sentence"
   );
 
   const parsed = JSON.parse(stripMarkdownFences(raw));
-  let segments: { text: string; pinyin?: string }[] | undefined;
-
-  if (Array.isArray(parsed.segments)) {
-    segments = parsed.segments
-      .filter((s: { text?: string }) => typeof s?.text === "string" && s.text.length > 0)
-      .map((s: { text: string; pinyin?: string }) => ({
-        text: s.text,
-        ...(typeof s.pinyin === "string" && s.pinyin.length > 0 ? { pinyin: s.pinyin } : {}),
-      }));
-  }
-
-  // Fallback: if LLM didn't return valid segments, use segmentBatch
-  if (!segments || segments.length === 0) {
-    const sentence = parsed.chineseSentence ?? "";
-    if (sentence) {
-      const segMap = await segmentBatch([sentence], segmentConfig);
-      segments = segMap.get(0)?.map((s) => ({ text: s.text, pinyin: s.transliteration }));
-    }
-  }
-
   return {
-    chineseSentence: parsed.chineseSentence ?? "",
-    displaySentence: parsed.displaySentence ?? "",
-    segments,
+    sentence: parsed.sentence ?? item.statement,
+    translation: parsed.translation ?? "",
   };
 }
 
 function weightedSample(
-  items: GrammarItemDoc[],
+  items: Grammar[],
   count: number,
   progressMap: Record<string, GrammarProgress>
-): GrammarItemDoc[] {
+): Grammar[] {
   const now = Date.now();
   const weighted = items.map((item) => {
     const p = progressMap[item.id];
@@ -492,7 +414,7 @@ function weightedSample(
     return { item, weight };
   });
 
-  const selected: GrammarItemDoc[] = [];
+  const selected: Grammar[] = [];
   const remaining = [...weighted];
 
   for (let i = 0; i < count && remaining.length > 0; i++) {

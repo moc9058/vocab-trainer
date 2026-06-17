@@ -11,7 +11,7 @@ cd backend && npm run build             # TypeScript compile to dist/
 cd backend && npm start                 # Run compiled output (node dist/index.js)
 cd backend && npm run migrate           # One-time word migration from JSON files to Firestore
 cd backend && npm run export            # Export Firestore data back to local JSON files
-cd backend && npx tsx scripts/migrate-grammar-to-firestore.ts
+cd backend && npx tsx scripts/wipe-grammar-firestore.ts   # Destructive: wipe all grammar collections in Firestore
 cd backend && npx tsx scripts/migrate-llm-config-to-firestore.ts
 cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --prompts
 cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --archives
@@ -45,7 +45,7 @@ docker compose up --build      # Run full stack (backend :3000, frontend :5173)
 ```bash
 ./deploy.sh PROJECT_ID REGION            # Deploy only
 ./deploy.sh PROJECT_ID REGION --word     # Deploy + word migration
-./deploy.sh PROJECT_ID REGION --grammer  # Deploy + grammar migration
+./deploy.sh PROJECT_ID REGION --wipe-grammar  # Deploy + wipe grammar collections (destructive)
 ./deploy.sh PROJECT_ID REGION --llm      # Deploy + upload LLM config to Firestore
 ./deploy.sh PROJECT_ID REGION --prompts  # Deploy + upload speaking/writing & translation config
 ./deploy.sh PROJECT_ID REGION --archives # Deploy + upload backup & original archives
@@ -62,7 +62,8 @@ Full-stack vocabulary quiz app supporting four study languages (`en`/`ja`/`ko`/`
 - **Routes** (each is a `FastifyPluginAsync` registered under `/api`):
   - `routes/vocab.ts` — smart-add always asks LLM for all four codes (`en`/`ja`/`ko`/`zh`) — `ALL_DEFINITION_LANGUAGES` is hardcoded; request body languages are anchors only. Chinese levels normalized at storage time by `CHINESE_LEVEL_NORMALIZE`.
   - `routes/quiz.ts` — uses `randomSample` (NOT weighted; weighted lives only in `grammar-quiz.ts:weightedSample`). 2-step hydration: `POST /start` returns lightweight `{wordId, term}` only; client pages `GET /questions/:language?offset&limit` (`BATCH_SIZE=50` in `QuizTaking.tsx`) for `definitions`/`examples`/`hanjaReadings`. Wrong answers call `insertRetryQuestion` server-side, which splices the missed word back into `session.questions` and reshuffles the tail — `score.total` grows accordingly; the frontend re-renders from the mutated session.
-  - `routes/grammar-quiz.ts` — also exposes `check-missing-words` and `add-missing-words`
+  - `routes/grammar.ts` — `Grammar` has `statement` + `descriptions: Meaning[]` (mirrors `Word.definitions`). User-curated `grammar_groups` collection mirrors `word_groups` — per-language, owns membership via `grammarIds[]`. CRUD lives under `/api/grammar/:language/groups`.
+  - `routes/grammar-quiz.ts` — `/start` accepts `groupIds` to scope the pool (no chapters/subchapters/displayLanguage/quizMode); falls back to LLM generation only when an item has no examples. Also exposes `check-missing-words` and `add-missing-words` (currently unused by the UI after the quiz simplification).
   - `routes/translation.ts` / `routes/speaking-writing.ts` — SSE streaming via POST endpoint
   - `routes/translation.ts` — `language` prop = **target** language (active study language); user selects source. Two-step: decompose (MINI, source-lang prompt) → translate (FULL, target-lang prompt). Output uses `passages[].{ sentenceIds[], translation }` — LLM may group consecutive sentences. `buildTranslateSystemPrompt` appends source/target + approach guidance to the Firestore prompt without needing a migration.
 - **Database**: `firestore.ts` — `updateWord` per-sentence-merges old example `segments` onto incoming `examples` when sentence text is unchanged, so `WordFormModal` (which doesn't carry segments through form state) doesn't wipe LLM-generated pinyin on save. `getCanonicalSegmentPinyin(word)` returns `undefined` for polyphonic words so callers keep the LLM-generated contextual value.

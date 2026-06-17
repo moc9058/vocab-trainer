@@ -92,28 +92,30 @@ export interface GrammarExample {
   transliteration?: string;
 }
 
-export interface GrammarComponent {
+export interface Grammar {
   id: string;
-  term: Record<string, string>;
-  description?: Record<string, string>;
+  language: string;
+  statement: string;
+  descriptions: Meaning[];
   examples?: GrammarExample[];
   words?: string[];
   level?: string;
   tags?: string[];
 }
 
-export interface GrammarItemDoc extends GrammarComponent {
+export interface GrammarGroup {
+  id: string;
   language: string;
-  chapterNumber: number;
-  subchapterId: string;
-  subchapterTitle: Record<string, string>;
+  name: string;
+  grammarIds: string[];
+  createdAt: string;
 }
 
 export interface GrammarQuizQuestion {
-  componentId: string;
-  displaySentence: string;
-  chineseSentence: string;
-  segments?: { text: string; pinyin?: string }[];
+  grammarId: string;
+  exampleSentence: string;
+  exampleTranslation: string;
+  exampleTransliteration?: string;
   userCorrect?: boolean;
 }
 
@@ -125,16 +127,7 @@ export interface GrammarQuizSession {
   status: "in-progress" | "completed";
   score: QuizScore;
   questions: GrammarQuizQuestion[];
-  chapterFilter?: number[];
-  subchapterFilter?: string[];
-  displayLanguage?: string;
-  quizMode?: string;
-}
-
-export interface GrammarChapterInfo {
-  chapterNumber: number;
-  chapterTitle: Record<string, string>;
-  subchapterCount: number;
+  groupFilter?: string[];
 }
 
 // ========== Translation ==========

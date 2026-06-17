@@ -234,7 +234,7 @@ export default function Dashboard() {
     setShowGrammarFilterModal(language);
   }
 
-  async function handleGrammarFiltersSelected(filters: { chapters: number[]; subchapters: string[]; displayLanguage: string; quizMode: string }) {
+  async function handleGrammarFiltersSelected(filters: { groupIds: string[] }) {
     const lang = showGrammarFilterModal;
     if (!lang) return;
     setShowGrammarFilterModal(null);
@@ -248,10 +248,7 @@ export default function Dashboard() {
       }
       const session = await startGrammarQuiz({
         language: lang,
-        chapters: filters.chapters.length > 0 ? filters.chapters : undefined,
-        subchapters: filters.subchapters.length > 0 ? filters.subchapters : undefined,
-        displayLanguage: filters.displayLanguage,
-        quizMode: filters.quizMode,
+        groupIds: filters.groupIds.length > 0 ? filters.groupIds : undefined,
       });
       setActiveGrammarQuiz(session);
       navigate(`/${language}/grammar-quiz`);
@@ -340,6 +337,7 @@ export default function Dashboard() {
       )}
       {grammarFormLanguage && (
         <GrammarFormModal
+          language={grammarFormLanguage}
           onSave={() => setGrammarFormLanguage(null)}
           onClose={() => setGrammarFormLanguage(null)}
         />

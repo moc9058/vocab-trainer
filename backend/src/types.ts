@@ -165,28 +165,23 @@ export interface GrammarExample {
   transliteration?: string;
 }
 
-export interface GrammarComponent {
+export interface Grammar {
   id: string;
-  term: Record<string, string>;
-  description?: Record<string, string>;
+  language: string;
+  statement: string;
+  descriptions: Meaning[];
   examples?: GrammarExample[];
   words?: string[];
   level?: string;
   tags?: string[];
 }
 
-export interface GrammarSubchapter {
+export interface GrammarGroup {
   id: string;
-  title: Record<string, string>;
-  components: GrammarComponent[];
-}
-
-export interface GrammarChapter {
-  chapter: string;
-  chapterNumber: number;
-  chapterTitle: Record<string, string>;
   language: string;
-  subchapters: GrammarSubchapter[];
+  name: string;
+  grammarIds: string[];
+  createdAt: string;
 }
 
 export interface GrammarProgress {
@@ -198,10 +193,10 @@ export interface GrammarProgress {
 }
 
 export interface GrammarQuizQuestion {
-  componentId: string;
-  displaySentence: string;
-  chineseSentence: string;
-  segments?: { text: string; pinyin?: string }[];
+  grammarId: string;
+  exampleSentence: string;
+  exampleTranslation: string;
+  exampleTransliteration?: string;
   userCorrect?: boolean;
 }
 
@@ -213,10 +208,7 @@ export interface GrammarQuizSession {
   status: "in-progress" | "completed";
   score: QuizScore;
   questions: GrammarQuizQuestion[];
-  chapterFilter?: number[];
-  subchapterFilter?: string[];
-  displayLanguage?: string;
-  quizMode?: string;
+  groupFilter?: string[];
 }
 
 // ========== Translation ==========

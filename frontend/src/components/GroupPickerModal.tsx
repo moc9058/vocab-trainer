@@ -1,18 +1,32 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n/context";
 import { getGroups, createGroup, modifyGroupMembers, renameGroup, deleteGroup } from "../api/vocab";
-import type { WordGroup } from "../types";
+import {
+  getGrammarGroups,
+  createGrammarGroup,
+  renameGrammarGroup,
+  deleteGrammarGroup,
+  modifyGrammarGroupMembers,
+} from "../api/grammar";
+import type { WordGroup, GrammarGroup } from "../types";
+
+type AnyGroup = WordGroup | GrammarGroup;
 
 interface Props {
+  kind: "word" | "grammar";
   language: string;
-  wordIds: string[];
+  itemIds: string[];
   onClose: () => void;
-  onDone: (updatedGroups: WordGroup[]) => void;
+  onDone: (updatedGroups: AnyGroup[]) => void;
 }
 
-export default function GroupPickerModal({ language, wordIds, onClose, onDone }: Props) {
+function memberIds(g: AnyGroup): string[] {
+  return (g as WordGroup).wordIds ?? (g as GrammarGroup).grammarIds ?? [];
+}
+
+export default function GroupPickerModal({ kind, language, itemIds, onClose, onDone }: Props) {
   const { t } = useI18n();
-  const [groups, setGroups] = useState<WordGroup[]>([]);
+  const [groups, setGroups] = useState<AnyGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
@@ -22,19 +36,33 @@ export default function GroupPickerModal({ language, wordIds, onClose, onDone }:
   const [confirmedDelete, setConfirmedDelete] = useState<string | null>(null);
   const newInputRef = useRef<HTMLInputElement>(null);
 
-  const isManageMode = wordIds.length === 0;
+  const isManageMode = itemIds.length === 0;
+
+  const api = {
+    list: kind === "word" ? getGroups : getGrammarGroups,
+    create: kind === "word" ? createGroup : createGrammarGroup,
+    rename: kind === "word" ? renameGroup : renameGrammarGroup,
+    remove: kind === "word" ? deleteGroup : deleteGrammarGroup,
+    modify:
+      kind === "word"
+        ? modifyGroupMembers
+        : (lang: string, groupId: string, ids: string[], action: "add" | "remove") =>
+            modifyGrammarGroupMembers(lang, groupId, ids, action),
+  } as const;
 
   useEffect(() => {
-    getGroups(language)
-      .then(setGroups)
+    api
+      .list(language)
+      .then((gs) => setGroups(gs as AnyGroup[]))
       .catch(() => setGroups([]))
       .finally(() => setLoading(false));
-  }, [language]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [language, kind]);
 
-  async function handleAddToGroup(group: WordGroup) {
+  async function handleAddToGroup(group: AnyGroup) {
     setBusy(group.id);
     try {
-      const updated = await modifyGroupMembers(language, group.id, wordIds, "add");
+      const updated = (await api.modify(language, group.id, itemIds, "add")) as AnyGroup;
       const next = groups.map((g) => (g.id === group.id ? updated : g));
       setGroups(next);
       onDone(next);
@@ -49,15 +77,15 @@ export default function GroupPickerModal({ language, wordIds, onClose, onDone }:
     if (!name || creating) return;
     setCreating(true);
     try {
-      const group = await createGroup(language, name);
+      const group = (await api.create(language, name)) as AnyGroup;
       let finalGroup = group;
-      if (wordIds.length > 0) {
-        finalGroup = await modifyGroupMembers(language, group.id, wordIds, "add");
+      if (itemIds.length > 0) {
+        finalGroup = (await api.modify(language, group.id, itemIds, "add")) as AnyGroup;
       }
       const next = [...groups, finalGroup];
       setGroups(next);
       setNewName("");
-      if (wordIds.length > 0) {
+      if (itemIds.length > 0) {
         onDone(next);
         onClose();
       }
@@ -71,7 +99,7 @@ export default function GroupPickerModal({ language, wordIds, onClose, onDone }:
     if (!name) return;
     setBusy(groupId);
     try {
-      const updated = await renameGroup(language, groupId, name);
+      const updated = (await api.rename(language, groupId, name)) as AnyGroup;
       setGroups((prev) => prev.map((g) => (g.id === groupId ? updated : g)));
       setEditingId(null);
     } finally {
@@ -86,7 +114,7 @@ export default function GroupPickerModal({ language, wordIds, onClose, onDone }:
     }
     setBusy(groupId);
     try {
-      await deleteGroup(language, groupId);
+      await api.remove(language, groupId);
       const next = groups.filter((g) => g.id !== groupId);
       setGroups(next);
       setConfirmedDelete(null);
@@ -96,11 +124,13 @@ export default function GroupPickerModal({ language, wordIds, onClose, onDone }:
     }
   }
 
-  function startEdit(group: WordGroup) {
+  function startEdit(group: AnyGroup) {
     setEditingId(group.id);
     setEditName(group.name);
     setConfirmedDelete(null);
   }
+
+  const itemNoun = kind === "word" ? "word" : "grammar";
 
   return (
     <div
@@ -117,7 +147,7 @@ export default function GroupPickerModal({ language, wordIds, onClose, onDone }:
           </h2>
           {!isManageMode && (
             <span className="text-xs text-gray-400">
-              {wordIds.length} word{wordIds.length !== 1 ? "s" : ""}
+              {itemIds.length} {itemNoun}{itemIds.length !== 1 ? "s" : ""}
             </span>
           )}
         </div>
@@ -130,94 +160,95 @@ export default function GroupPickerModal({ language, wordIds, onClose, onDone }:
               <li className="text-sm text-gray-500 px-1">No groups yet.</li>
             )}
             {groups.map((group) => {
-              const containedCount = wordIds.filter((wordId) => group.wordIds.includes(wordId)).length;
-              const allSelectedContained = wordIds.length > 0 && containedCount === wordIds.length;
+              const ids = memberIds(group);
+              const containedCount = itemIds.filter((id) => ids.includes(id)).length;
+              const allSelectedContained = itemIds.length > 0 && containedCount === itemIds.length;
               const membershipText =
-                wordIds.length === 1
+                itemIds.length === 1
                   ? "Already in group"
-                  : `${containedCount}/${wordIds.length} selected already in group`;
+                  : `${containedCount}/${itemIds.length} selected already in group`;
 
               return (
                 <li key={group.id} className="flex items-center gap-2">
-                      {editingId === group.id ? (
-                        <>
-                          <input
-                            autoFocus
-                            value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleRename(group.id);
-                              if (e.key === "Escape") setEditingId(null);
-                            }}
-                            className="flex-1 min-w-0 rounded border border-gray-500 bg-gray-700 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                          />
-                          <button
-                            onClick={() => handleRename(group.id)}
-                            disabled={busy === group.id}
-                            className="rounded px-2 py-1 text-xs bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => setEditingId(null)}
-                            className="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-700"
-                          >
-                            ✕
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          {!isManageMode ? (
-                            <button
-                              onClick={() => handleAddToGroup(group)}
-                              disabled={busy === group.id || allSelectedContained}
-                              className={`flex-1 min-w-0 rounded-lg px-3 py-1.5 text-left text-sm disabled:opacity-70 ${
-                                allSelectedContained
-                                  ? "cursor-default border border-green-700/40 bg-green-950/20 text-gray-300"
-                                  : "text-gray-200 hover:bg-gray-700"
-                              }`}
-                            >
-                              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <span className="min-w-0 truncate">{busy === group.id ? "Adding…" : group.name}</span>
-                                <span className="text-xs text-gray-500">{group.wordIds.length} words</span>
-                                {containedCount > 0 && (
-                                  <span className="rounded-full border border-green-700/50 bg-green-950/40 px-1.5 py-0.5 text-[11px] text-green-300">
-                                    ✓ {membershipText}
-                                  </span>
-                                )}
+                  {editingId === group.id ? (
+                    <>
+                      <input
+                        autoFocus
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleRename(group.id);
+                          if (e.key === "Escape") setEditingId(null);
+                        }}
+                        className="flex-1 min-w-0 rounded border border-gray-500 bg-gray-700 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                      />
+                      <button
+                        onClick={() => handleRename(group.id)}
+                        disabled={busy === group.id}
+                        className="rounded px-2 py-1 text-xs bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-700"
+                      >
+                        ✕
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {!isManageMode ? (
+                        <button
+                          onClick={() => handleAddToGroup(group)}
+                          disabled={busy === group.id || allSelectedContained}
+                          className={`flex-1 min-w-0 rounded-lg px-3 py-1.5 text-left text-sm disabled:opacity-70 ${
+                            allSelectedContained
+                              ? "cursor-default border border-green-700/40 bg-green-950/20 text-gray-300"
+                              : "text-gray-200 hover:bg-gray-700"
+                          }`}
+                        >
+                          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="min-w-0 truncate">{busy === group.id ? "Adding…" : group.name}</span>
+                            <span className="text-xs text-gray-500">{ids.length} {itemNoun}s</span>
+                            {containedCount > 0 && (
+                              <span className="rounded-full border border-green-700/50 bg-green-950/40 px-1.5 py-0.5 text-[11px] text-green-300">
+                                ✓ {membershipText}
                               </span>
-                            </button>
-                          ) : (
-                            <span className="flex-1 min-w-0 truncate text-sm text-gray-200 px-1">
-                              {group.name}
-                              <span className="ml-2 text-xs text-gray-500">{group.wordIds.length} words</span>
-                            </span>
-                          )}
-                          {isManageMode && (
-                            <button
-                              onClick={() => startEdit(group)}
-                              className="rounded px-1.5 py-1 text-xs text-gray-400 hover:bg-gray-700"
-                              title={t("renameGroup")}
-                            >
-                              ✏
-                            </button>
-                          )}
-                          {isManageMode && (
-                            <button
-                              onClick={() => handleDelete(group.id)}
-                              disabled={busy === group.id}
-                              className={`rounded px-1.5 py-1 text-xs disabled:opacity-50 ${
-                                confirmedDelete === group.id
-                                  ? "bg-red-600 text-white hover:bg-red-500"
-                                  : "text-gray-400 hover:bg-gray-700"
-                              }`}
-                              title={confirmedDelete === group.id ? "Click again to confirm" : t("deleteGroup")}
-                            >
-                              {confirmedDelete === group.id ? "Confirm?" : "✕"}
-                            </button>
-                          )}
-                        </>
+                            )}
+                          </span>
+                        </button>
+                      ) : (
+                        <span className="flex-1 min-w-0 truncate text-sm text-gray-200 px-1">
+                          {group.name}
+                          <span className="ml-2 text-xs text-gray-500">{ids.length} {itemNoun}s</span>
+                        </span>
                       )}
+                      {isManageMode && (
+                        <button
+                          onClick={() => startEdit(group)}
+                          className="rounded px-1.5 py-1 text-xs text-gray-400 hover:bg-gray-700"
+                          title={t("renameGroup")}
+                        >
+                          ✏
+                        </button>
+                      )}
+                      {isManageMode && (
+                        <button
+                          onClick={() => handleDelete(group.id)}
+                          disabled={busy === group.id}
+                          className={`rounded px-1.5 py-1 text-xs disabled:opacity-50 ${
+                            confirmedDelete === group.id
+                              ? "bg-red-600 text-white hover:bg-red-500"
+                              : "text-gray-400 hover:bg-gray-700"
+                          }`}
+                          title={confirmedDelete === group.id ? "Click again to confirm" : t("deleteGroup")}
+                        >
+                          {confirmedDelete === group.id ? "Confirm?" : "✕"}
+                        </button>
+                      )}
+                    </>
+                  )}
                 </li>
               );
             })}

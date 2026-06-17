@@ -13,7 +13,8 @@ import type {
   QuizSession,
   PaginatedResult,
   Topic,
-  GrammarComponent,
+  Grammar,
+  GrammarGroup,
   GrammarProgress,
   GrammarQuizSession,
   TranslationEntry,
@@ -1316,89 +1317,52 @@ export async function unflagWord(language: string, wordId: string): Promise<bool
 
 // ========== Grammar ==========
 
-const grammarChapters = db.collection("grammar_chapters");
 const grammarItems = db.collection("grammar_items");
+const grammarGroups = db.collection("grammar_groups");
 const grammarProgress = db.collection("grammar_progress");
 const grammarQuizSessions = db.collection("grammar_quiz_sessions");
 
-export async function listGrammarChapters(language: string): Promise<
-  { chapterNumber: number; chapterTitle: Record<string, string>; subchapterCount: number }[]
-> {
-  const snap = await grammarChapters.where("language", "==", language).get();
-  return snap.docs
-    .map((doc) => {
-      const d = doc.data();
-      return {
-        chapterNumber: d.chapterNumber as number,
-        chapterTitle: d.chapterTitle as Record<string, string>,
-        subchapterCount: d.subchapterCount as number,
-      };
-    })
-    .sort((a, b) => a.chapterNumber - b.chapterNumber);
-}
-
-export async function getChapterSubchapters(
-  language: string,
-  chapterNumbers?: number[]
-): Promise<{ chapterNumber: number; subchapterId: string; subchapterTitle: Record<string, string> }[]> {
-  let query = grammarChapters.where("language", "==", language) as FirebaseFirestore.Query;
-  const snap = await query.get();
-  const result: { chapterNumber: number; subchapterId: string; subchapterTitle: Record<string, string> }[] = [];
-
-  for (const doc of snap.docs) {
-    const d = doc.data();
-    const chNum = d.chapterNumber as number;
-    if (chapterNumbers && chapterNumbers.length > 0 && !chapterNumbers.includes(chNum)) continue;
-    const subs = d.subchapters as { id: string; title: Record<string, string> }[] | undefined;
-    if (subs) {
-      for (const s of subs) {
-        result.push({ chapterNumber: chNum, subchapterId: s.id, subchapterTitle: s.title });
-      }
-    }
-  }
-
-  return result;
-}
-
-export interface GrammarItemDoc extends GrammarComponent {
-  language: string;
-  chapterNumber: number;
-  subchapterId: string;
-  subchapterTitle: Record<string, string>;
-}
-
 export async function getGrammarItems(
   language: string,
-  filters?: { chapter?: number; subchapter?: string; level?: string; search?: string },
+  filters?: { level?: string; search?: string; groupId?: string },
   pagination?: { page: number; limit: number }
-): Promise<PaginatedResult<GrammarItemDoc>> {
-  let query = grammarItems.where("language", "==", language) as FirebaseFirestore.Query;
+): Promise<PaginatedResult<Grammar>> {
+  const page = pagination?.page ?? 1;
+  const limit = pagination?.limit ?? 50;
 
-  if (filters?.chapter) {
-    query = query.where("chapterNumber", "==", filters.chapter);
+  // Group filter: fetch group's grammarIds then apply other filters in-memory.
+  let results: Grammar[];
+  if (filters?.groupId) {
+    const group = await getGrammarGroup(filters.groupId);
+    const ids = group?.grammarIds ?? [];
+    if (ids.length === 0) {
+      return { items: [], total: 0, page, limit, totalPages: 1 };
+    }
+    const docs = await Promise.all(ids.map((id) => grammarItems.doc(id).get()));
+    results = docs
+      .filter((d) => d.exists && d.data()?.language === language)
+      .map((d) => ({ id: d.id, ...d.data() } as Grammar));
+  } else {
+    let query = grammarItems.where("language", "==", language) as FirebaseFirestore.Query;
+    if (filters?.level) {
+      query = query.where("level", "==", filters.level);
+    }
+    const snap = await query.get();
+    results = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Grammar));
   }
-  if (filters?.subchapter) {
-    query = query.where("subchapterId", "==", filters.subchapter);
-  }
-  if (filters?.level) {
-    query = query.where("level", "==", filters.level);
-  }
-
-  const snap = await query.get();
-  let results = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as GrammarItemDoc));
 
   if (filters?.search) {
     const q = filters.search.toLowerCase();
     results = results.filter(
       (item) =>
-        Object.values(item.term).some((t) => (t as string).toLowerCase().includes(q)) ||
-        Object.values(item.description ?? {}).some((d) => (d as string).toLowerCase().includes(q)) ||
+        (item.statement ?? "").toLowerCase().includes(q) ||
+        item.descriptions?.some((d) =>
+          Object.values(d.text ?? {}).some((t) => (t as string).toLowerCase().includes(q))
+        ) ||
         item.words?.some((w: string) => w.toLowerCase().includes(q))
     );
   }
 
-  const page = pagination?.page ?? 1;
-  const limit = pagination?.limit ?? 50;
   const total = results.length;
   const totalPages = Math.ceil(total / limit) || 1;
   const start = (page - 1) * limit;
@@ -1407,38 +1371,104 @@ export async function getGrammarItems(
   return { items, total, page, limit, totalPages };
 }
 
-export async function getAllGrammarItems(language: string): Promise<GrammarItemDoc[]> {
+export async function getAllGrammarItems(language: string): Promise<Grammar[]> {
   const snap = await grammarItems.where("language", "==", language).get();
-  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as GrammarItemDoc));
+  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Grammar));
 }
 
-export async function getGrammarItem(componentId: string): Promise<GrammarItemDoc | null> {
-  const doc = await grammarItems.doc(componentId).get();
+export async function getGrammarItem(grammarId: string): Promise<Grammar | null> {
+  const doc = await grammarItems.doc(grammarId).get();
   if (!doc.exists) return null;
-  return { id: doc.id, ...doc.data() } as GrammarItemDoc;
+  return { id: doc.id, ...doc.data() } as Grammar;
 }
 
-export async function upsertGrammarItem(item: GrammarItemDoc): Promise<void> {
+export async function upsertGrammarItem(item: Grammar): Promise<void> {
   const data: Record<string, unknown> = { ...item };
   delete data.id;
   await grammarItems.doc(item.id).set(data);
 }
 
-export async function deleteGrammarItem(componentId: string): Promise<boolean> {
-  const doc = await grammarItems.doc(componentId).get();
+export async function deleteGrammarItem(grammarId: string): Promise<boolean> {
+  const doc = await grammarItems.doc(grammarId).get();
   if (!doc.exists) return false;
-  await grammarItems.doc(componentId).delete();
+  await grammarItems.doc(grammarId).delete();
   return true;
 }
 
-export async function upsertGrammarChapter(
-  language: string,
-  chapterNumber: number,
-  chapterTitle: Record<string, string>,
-  subchapterCount: number
-): Promise<void> {
-  const docId = `${language}_${chapterNumber}`;
-  await grammarChapters.doc(docId).set({ language, chapterNumber, chapterTitle, subchapterCount });
+// ========== Grammar Groups ==========
+
+function docToGrammarGroup(doc: FirebaseFirestore.DocumentSnapshot): GrammarGroup {
+  const d = doc.data()!;
+  return {
+    id: d.id as string,
+    language: d.language as string,
+    name: d.name as string,
+    grammarIds: (d.grammarIds ?? []) as string[],
+    createdAt: d.createdAt as string,
+  };
+}
+
+export async function getGrammarGroups(language: string): Promise<GrammarGroup[]> {
+  const snap = await grammarGroups.where("language", "==", language).get();
+  return snap.docs.map(docToGrammarGroup).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function getGrammarGroup(groupId: string): Promise<GrammarGroup | null> {
+  const doc = await grammarGroups.doc(groupId).get();
+  return doc.exists ? docToGrammarGroup(doc) : null;
+}
+
+export async function createGrammarGroup(language: string, name: string): Promise<GrammarGroup> {
+  const id = `${language}_${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+  const group: GrammarGroup = {
+    id,
+    language,
+    name,
+    grammarIds: [],
+    createdAt: new Date().toISOString(),
+  };
+  await grammarGroups.doc(id).set(group);
+  return group;
+}
+
+export async function updateGrammarGroup(groupId: string, patch: { name?: string }): Promise<GrammarGroup> {
+  await grammarGroups.doc(groupId).update(patch);
+  const updated = await grammarGroups.doc(groupId).get();
+  return docToGrammarGroup(updated);
+}
+
+export async function deleteGrammarGroup(groupId: string): Promise<void> {
+  await grammarGroups.doc(groupId).delete();
+}
+
+export async function modifyGrammarGroupMembers(
+  groupId: string,
+  grammarIds: string[],
+  action: "add" | "remove"
+): Promise<GrammarGroup> {
+  return db.runTransaction(async (tx) => {
+    const ref = grammarGroups.doc(groupId);
+    const doc = await tx.get(ref);
+    if (!doc.exists) throw new Error(`Grammar group '${groupId}' not found`);
+    const current: string[] = doc.data()!.grammarIds ?? [];
+    let next: string[];
+    if (action === "add") {
+      const toAdd = new Set(current);
+      for (const id of grammarIds) toAdd.add(id);
+      next = [...toAdd];
+    } else {
+      const toRemove = new Set(grammarIds);
+      next = current.filter((id) => !toRemove.has(id));
+    }
+    tx.update(ref, { grammarIds: next });
+    return {
+      id: doc.data()!.id as string,
+      language: doc.data()!.language as string,
+      name: doc.data()!.name as string,
+      grammarIds: next,
+      createdAt: doc.data()!.createdAt as string,
+    };
+  });
 }
 
 // ========== Grammar Progress ==========
@@ -1510,7 +1540,7 @@ export async function getGrammarQuizSession(language: string): Promise<GrammarQu
     status: d.status,
     score: d.score,
     questions: d.questions,
-    chapterFilter: d.chapterFilter,
+    groupFilter: d.groupFilter,
   };
 }
 

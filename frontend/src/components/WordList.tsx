@@ -1013,11 +1013,12 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       )}
       {showGroupPicker && (
         <GroupPickerModal
+          kind="word"
           language={language}
-          wordIds={showGroupPicker.wordIds}
+          itemIds={showGroupPicker.wordIds}
           onClose={() => setShowGroupPicker(null)}
           onDone={(updatedGroups) => {
-            setGroups(updatedGroups);
+            setGroups(updatedGroups as WordGroup[]);
             setShowGroupPicker(null);
           }}
         />

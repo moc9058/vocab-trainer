@@ -2,11 +2,11 @@
 set -euo pipefail
 
 # Deploy vocab-trainer to Google Cloud Run
-# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--word] [--grammer] [--llm] [--prompts] [--archives] [--example-sentences]
+# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--word] [--wipe-grammar] [--llm] [--prompts] [--archives] [--example-sentences]
 #
 # Options:
 #   --word               Run Firestore word data migration after deploying backend
-#   --grammer            Run Firestore grammar data migration after deploying backend
+#   --wipe-grammar       Wipe all grammar collections in Firestore (destructive)
 #   --llm                Upload LLM config (OpenAI key/model names) from .env to Firestore
 #   --prompts            Upload speaking/writing + translation config to Firestore
 #   --archives           Upload backup + original archive data to Firestore
@@ -19,7 +19,7 @@ set -euo pipefail
 #   - Artifact Registry API and Cloud Run API enabled
 
 MIGRATE_WORD=false
-MIGRATE_GRAMMER=false
+WIPE_GRAMMAR=false
 MIGRATE_LLM=false
 MIGRATE_PROMPTS=false
 MIGRATE_ARCHIVES=false
@@ -28,7 +28,7 @@ POSITIONAL=()
 for arg in "$@"; do
   case "$arg" in
     --word) MIGRATE_WORD=true ;;
-    --grammer) MIGRATE_GRAMMER=true ;;
+    --wipe-grammar) WIPE_GRAMMAR=true ;;
     --llm) MIGRATE_LLM=true ;;
     --prompts) MIGRATE_PROMPTS=true ;;
     --archives) MIGRATE_ARCHIVES=true ;;
@@ -37,8 +37,8 @@ for arg in "$@"; do
   esac
 done
 
-if [ "$MIGRATE_WORD" = false ] && [ "$MIGRATE_GRAMMER" = false ] && [ "$MIGRATE_LLM" = false ] && [ "$MIGRATE_PROMPTS" = false ] && [ "$MIGRATE_ARCHIVES" = false ] && [ "$MIGRATE_EXAMPLE_SENTENCES" = false ]; then
-  echo "==> Skipping Firestore migration (use --word, --grammer, --llm, --prompts, --archives, and/or --example-sentences to run)"
+if [ "$MIGRATE_WORD" = false ] && [ "$WIPE_GRAMMAR" = false ] && [ "$MIGRATE_LLM" = false ] && [ "$MIGRATE_PROMPTS" = false ] && [ "$MIGRATE_ARCHIVES" = false ] && [ "$MIGRATE_EXAMPLE_SENTENCES" = false ]; then
+  echo "==> Skipping Firestore migration (use --word, --wipe-grammar, --llm, --prompts, --archives, and/or --example-sentences to run)"
 fi
 
 PROJECT_ID="${POSITIONAL[0]:-vocab-trainer-490014}"
@@ -59,7 +59,7 @@ docker build --platform linux/amd64 -t "${BACKEND_IMAGE}" ./backend
 docker push "${BACKEND_IMAGE}"
 
 # Optionally seed Firestore with data from local files (before deploy so configs are available on startup)
-if [ "$MIGRATE_WORD" = true ] || [ "$MIGRATE_GRAMMER" = true ] || [ "$MIGRATE_LLM" = true ] || [ "$MIGRATE_PROMPTS" = true ] || [ "$MIGRATE_ARCHIVES" = true ] || [ "$MIGRATE_EXAMPLE_SENTENCES" = true ]; then
+if [ "$MIGRATE_WORD" = true ] || [ "$WIPE_GRAMMAR" = true ] || [ "$MIGRATE_LLM" = true ] || [ "$MIGRATE_PROMPTS" = true ] || [ "$MIGRATE_ARCHIVES" = true ] || [ "$MIGRATE_EXAMPLE_SENTENCES" = true ]; then
   echo "==> Installing backend dependencies for migration..."
   (cd backend && npm install --silent)
 fi
@@ -68,10 +68,10 @@ if [ "$MIGRATE_WORD" = true ]; then
   (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
     npx tsx scripts/migrate-to-firestore.ts)
 fi
-if [ "$MIGRATE_GRAMMER" = true ]; then
-  echo "==> Running Firestore grammar migration..."
+if [ "$WIPE_GRAMMAR" = true ]; then
+  echo "==> Wiping grammar collections in Firestore..."
   (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
-    npx tsx scripts/migrate-grammar-to-firestore.ts)
+    npx tsx scripts/wipe-grammar-firestore.ts)
 fi
 if [ "$MIGRATE_LLM" = true ]; then
   echo "==> Uploading LLM config to Firestore..."
