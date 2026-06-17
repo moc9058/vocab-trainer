@@ -1,5 +1,6 @@
 /**
- * Deep invariant + completeness validator for word ↔ example_sentence data.
+ * Deep invariant + completeness validator for word ↔ example_sentence and
+ * grammar ↔ example_sentence data.
  *
  * Checks:
  *   1. Word ↔ example invariant: W.appearsInIds == W.exampleIds ∪ segRefs
@@ -9,9 +10,13 @@
  *   4. Dangling segment.id entries: every segment id must point at an
  *      existing word doc in the same language.
  *   5. Orphan example sentences: example docs not referenced by any word's
- *      exampleIds or appearsInIds.
+ *      exampleIds/appearsInIds AND not referenced by any grammar's exampleIds.
  *   6. Orphan words: words with no references anywhere (empty exampleIds
  *      AND empty appearsInIds) — flagged but not deleted.
+ *   7. Grammar dangling exampleIds: every id in a grammar's exampleIds must
+ *      point at an existing example sentence doc.
+ *   8. Grammar bidirectional: for every (grammarId, exId) pair, the example's
+ *      appearsInGrammarIds must contain grammarId, and vice versa.
  *
  * Read-only — makes zero writes. Exit code 1 if any violation is found.
  */
@@ -27,6 +32,7 @@ interface Report {
   language: string;
   wordCount: number;
   exampleCount: number;
+  grammarCount: number;
   violations: string[];
   warnings: string[];
   orphanWords: string[];
@@ -37,17 +43,20 @@ async function validateLanguage(language: string): Promise<Report> {
     language,
     wordCount: 0,
     exampleCount: 0,
+    grammarCount: 0,
     violations: [],
     warnings: [],
     orphanWords: [],
   };
 
-  const [wordSnap, exSnap] = await Promise.all([
+  const [wordSnap, exSnap, grammarSnap] = await Promise.all([
     db.collection("words").where("language", "==", language).get(),
     db.collection("example_sentences").where("language", "==", language).get(),
+    db.collection("grammar_items").where("language", "==", language).get(),
   ]);
   report.wordCount = wordSnap.size;
   report.exampleCount = exSnap.size;
+  report.grammarCount = grammarSnap.size;
 
   const wordIds = new Set(wordSnap.docs.map((d) => d.id));
   const exIds = new Set(exSnap.docs.map((d) => d.id));
@@ -115,11 +124,61 @@ async function validateLanguage(language: string): Promise<Report> {
     }
   }
 
-  // Orphan examples: not referenced by any word's exampleIds or appearsInIds.
+  // ===== Grammar invariants =====
+
+  // Build appearsInGrammarIds map from example_sentences for bidirectional check.
+  const reverseGrammarRefs = new Map<string, Set<string>>(); // exId -> grammarIds
+  for (const doc of exSnap.docs) {
+    const d = doc.data();
+    const list = (d.appearsInGrammarIds ?? []) as string[];
+    if (list.length > 0) reverseGrammarRefs.set(doc.id, new Set(list));
+  }
+
+  // Forward map from grammar docs: grammarId -> exampleIds
+  const forwardGrammarRefs = new Map<string, Set<string>>();
+  for (const doc of grammarSnap.docs) {
+    const d = doc.data();
+    const list = (d.exampleIds ?? []) as string[];
+    if (list.length === 0) continue;
+    forwardGrammarRefs.set(doc.id, new Set(list));
+
+    for (const exId of list) {
+      if (!exIds.has(exId)) {
+        report.violations.push(
+          `grammar dangling exampleIds: grammar ${doc.id} references non-existent example ${exId}`,
+        );
+        continue;
+      }
+      allReferencedExIds.add(exId);
+      // Bidirectional: example.appearsInGrammarIds must contain this grammar id.
+      const back = reverseGrammarRefs.get(exId);
+      if (!back || !back.has(doc.id)) {
+        report.violations.push(
+          `grammar bidirectional drift: grammar ${doc.id} → example ${exId} but example.appearsInGrammarIds missing ${doc.id}`,
+        );
+      }
+    }
+  }
+
+  // Reverse direction: any (exId, grammarId) pair on the example side must
+  // have a matching forward link.
+  for (const [exId, grammarIds] of reverseGrammarRefs) {
+    for (const gId of grammarIds) {
+      const forward = forwardGrammarRefs.get(gId);
+      if (!forward || !forward.has(exId)) {
+        report.violations.push(
+          `grammar bidirectional drift: example ${exId}.appearsInGrammarIds claims grammar ${gId} but grammar.exampleIds missing ${exId}`,
+        );
+      }
+    }
+  }
+
+  // Orphan examples: not referenced by any word's exampleIds/appearsInIds AND
+  // not referenced by any grammar's exampleIds.
   for (const doc of exSnap.docs) {
     if (!allReferencedExIds.has(doc.id)) {
       report.violations.push(
-        `orphan example: ${doc.id} is not referenced by any word`,
+        `orphan example: ${doc.id} is not referenced by any word or grammar`,
       );
     }
   }
@@ -140,7 +199,7 @@ async function main() {
   for (const lang of languages) {
     const report = await validateLanguage(lang);
     console.log(`=== ${lang} ===`);
-    console.log(`  words: ${report.wordCount}, examples: ${report.exampleCount}`);
+    console.log(`  words: ${report.wordCount}, examples: ${report.exampleCount}, grammar: ${report.grammarCount}`);
     console.log(`  violations: ${report.violations.length}`);
     if (report.violations.length > 0) {
       for (const v of report.violations.slice(0, 20)) console.log(`    - ${v}`);

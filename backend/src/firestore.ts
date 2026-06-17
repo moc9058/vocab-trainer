@@ -447,12 +447,15 @@ export async function deleteWord(language: string, wordId: string): Promise<bool
   const d = doc.data()!;
   const term = d.term as string;
 
-  // Delete example sentences that are no longer referenced by any other word.
+  // Delete example sentences that are no longer referenced by any other word
+  // OR by any grammar item. The cross-domain check is required: a vocab word
+  // and a grammar item can share an `example_sentences` doc via the sha256
+  // dedup index — deleting the word must not clobber the grammar-owned copy.
   const exampleIds = (d.exampleIds ?? []) as string[];
   if (exampleIds.length > 0) {
     const toDelete: string[] = [];
     for (const exId of exampleIds) {
-      const referenced = await isExampleReferencedByOtherWord(language, exId, wordId);
+      const referenced = await isExampleReferencedByAny(language, exId, { exceptWordId: wordId });
       if (!referenced) toDelete.push(exId);
     }
     if (toDelete.length > 0) {
@@ -704,6 +707,9 @@ export async function deleteExampleSentences(ids: string[]): Promise<void> {
 
   // Collect the wordId -> set<exampleId> cleanup map for appearsInIds.
   const cleanupMap = new Map<string, Set<string>>();
+  // Collect the grammarId -> set<exampleId> cleanup map for appearsInGrammarIds.
+  // (Read from each example's own `appearsInGrammarIds`, the reverse-link list.)
+  const grammarCleanupMap = new Map<string, Set<string>>();
   for (const doc of docs) {
     if (!doc.exists) continue;
     const d = doc.data()!;
@@ -712,6 +718,11 @@ export async function deleteExampleSentences(ids: string[]): Promise<void> {
       if (!seg.id) continue;
       if (!cleanupMap.has(seg.id)) cleanupMap.set(seg.id, new Set());
       cleanupMap.get(seg.id)!.add(doc.id);
+    }
+    const grammarIds = (d.appearsInGrammarIds ?? []) as string[];
+    for (const gId of grammarIds) {
+      if (!grammarCleanupMap.has(gId)) grammarCleanupMap.set(gId, new Set());
+      grammarCleanupMap.get(gId)!.add(doc.id);
     }
   }
 
@@ -722,6 +733,17 @@ export async function deleteExampleSentences(ids: string[]): Promise<void> {
   for (const [wId, exIds] of cleanupMap) {
     try {
       await words.doc(wId).update({ appearsInIds: FieldValue.arrayRemove(...exIds) });
+    } catch (e: unknown) {
+      const code = (e as { code?: number | string }).code;
+      if (code !== 5 && code !== "not-found") throw e;
+    }
+  }
+
+  // Mirror the cleanup for grammar items: strip the about-to-be-deleted
+  // example IDs from each referenced grammar's exampleIds.
+  for (const [gId, exIds] of grammarCleanupMap) {
+    try {
+      await grammarItems.doc(gId).update({ exampleIds: FieldValue.arrayRemove(...exIds) });
     } catch (e: unknown) {
       const code = (e as { code?: number | string }).code;
       if (code !== 5 && code !== "not-found") throw e;
@@ -904,6 +926,9 @@ export async function removeFromAppearsInIds(
  * `exampleId` in its `appearsInIds`. Since the invariant guarantees
  * `appearsInIds ⊇ exampleIds`, querying `appearsInIds` alone catches
  * both owned references and segment references.
+ *
+ * NOTE: This only checks vocab-side references. For full cross-domain
+ * orphan checks (vocab + grammar), prefer `isExampleReferencedByAny`.
  */
 export async function isExampleReferencedByOtherWord(
   language: string,
@@ -915,6 +940,35 @@ export async function isExampleReferencedByOtherWord(
     .where("appearsInIds", "array-contains", exampleId)
     .get();
   return snap.docs.some((d) => d.id !== exceptWordId);
+}
+
+/**
+ * Return true if `exampleId` is still referenced by any word or any grammar
+ * item in `language`, excluding the caller-specified word/grammar IDs.
+ *
+ * Used by delete-cascade paths in both vocab and grammar to decide whether an
+ * example sentence should be orphan-deleted. Combines the vocab `appearsInIds`
+ * check with a grammar `exampleIds` check so vocab deletes don't clobber
+ * grammar-owned examples, and grammar deletes don't clobber vocab-owned ones.
+ */
+export async function isExampleReferencedByAny(
+  language: string,
+  exampleId: string,
+  opts: { exceptWordId?: string; exceptGrammarId?: string } = {},
+): Promise<boolean> {
+  const [wordSnap, grammarSnap] = await Promise.all([
+    words
+      .where("language", "==", language)
+      .where("appearsInIds", "array-contains", exampleId)
+      .get(),
+    grammarItems
+      .where("language", "==", language)
+      .where("exampleIds", "array-contains", exampleId)
+      .get(),
+  ]);
+  const wordRef = wordSnap.docs.some((d) => d.id !== opts.exceptWordId);
+  const grammarRef = grammarSnap.docs.some((d) => d.id !== opts.exceptGrammarId);
+  return wordRef || grammarRef;
 }
 
 /**
@@ -1322,6 +1376,41 @@ const grammarGroups = db.collection("grammar_groups");
 const grammarProgress = db.collection("grammar_progress");
 const grammarQuizSessions = db.collection("grammar_quiz_sessions");
 
+/**
+ * Hydrate a Grammar's `examples` field from the normalized `example_sentences`
+ * collection using its `exampleIds`. Preserves the existing inline `examples`
+ * if the doc hasn't been migrated yet (transitional fallback).
+ *
+ * Grammar example translations are stored as plain strings, but a dedup-shared
+ * doc may carry a multi-lang object (because vocab uses Record<string,string>).
+ * We coerce defensively at the boundary so frontend rendering stays simple.
+ */
+async function hydrateGrammarItems(items: Grammar[]): Promise<Grammar[]> {
+  const allIds = new Set<string>();
+  for (const it of items) {
+    for (const id of it.exampleIds ?? []) allIds.add(id);
+  }
+  if (allIds.size === 0) return items;
+
+  const docs = await getExampleSentencesByIds([...allIds]);
+  const byId = new Map(docs.map((d) => [d.id, d]));
+
+  return items.map((it) => {
+    if (!it.exampleIds || it.exampleIds.length === 0) return it;
+    const examples = it.exampleIds
+      .map((exId) => {
+        const es = byId.get(exId);
+        if (!es) return null;
+        const translation = typeof es.translation === "string"
+          ? es.translation
+          : Object.values(es.translation ?? {})[0] ?? "";
+        return { sentence: es.sentence, translation };
+      })
+      .filter((ex): ex is { sentence: string; translation: string } => ex !== null);
+    return { ...it, examples };
+  });
+}
+
 export async function getGrammarItems(
   language: string,
   filters?: { level?: string; search?: string; groupId?: string },
@@ -1366,31 +1455,161 @@ export async function getGrammarItems(
   const total = results.length;
   const totalPages = Math.ceil(total / limit) || 1;
   const start = (page - 1) * limit;
-  const items = results.slice(start, start + limit);
+  const items = await hydrateGrammarItems(results.slice(start, start + limit));
 
   return { items, total, page, limit, totalPages };
 }
 
 export async function getAllGrammarItems(language: string): Promise<Grammar[]> {
   const snap = await grammarItems.where("language", "==", language).get();
-  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Grammar));
+  const items = snap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Grammar));
+  return hydrateGrammarItems(items);
 }
 
 export async function getGrammarItem(grammarId: string): Promise<Grammar | null> {
   const doc = await grammarItems.doc(grammarId).get();
   if (!doc.exists) return null;
-  return { id: doc.id, ...doc.data() } as Grammar;
+  const raw = { id: doc.id, ...doc.data() } as Grammar;
+  const [hydrated] = await hydrateGrammarItems([raw]);
+  return hydrated;
 }
 
+/**
+ * Legacy whole-doc set. Prefer `addGrammar` / `updateGrammar` when the
+ * caller has resolved `exampleIds` — those maintain the grammar↔example
+ * back-references (`appearsInGrammarIds`) atomically. This function is kept
+ * for routes that haven't been migrated yet and for callers that store
+ * inline examples without normalizing them.
+ */
 export async function upsertGrammarItem(item: Grammar): Promise<void> {
   const data: Record<string, unknown> = { ...item };
   delete data.id;
   await grammarItems.doc(item.id).set(data);
 }
 
+/**
+ * Create a grammar item with normalized example references. Mirrors `addWord`:
+ *
+ * - Writes `grammar_items` doc with `exampleIds` (and without inline `examples`).
+ * - For every example id, atomically arrayUnion the grammar id into the
+ *   example's `appearsInGrammarIds` so the reverse link is in lockstep.
+ *
+ * The grammar doc write and back-link writes happen in a single Firestore
+ * batch (capped at 500 ops) so a partial crash leaves no orphaned half-link.
+ */
+export async function addGrammar(
+  item: Grammar,
+  opts: { exampleIds?: string[] } = {},
+): Promise<void> {
+  const data: Record<string, unknown> = { ...item };
+  delete data.id;
+  delete data.examples; // normalized — never write inline alongside exampleIds
+  data.exampleIds = opts.exampleIds ?? [];
+
+  const batch = db.batch();
+  batch.set(grammarItems.doc(item.id), data);
+  for (const exId of opts.exampleIds ?? []) {
+    batch.update(exampleSentences.doc(exId), {
+      appearsInGrammarIds: FieldValue.arrayUnion(item.id),
+    });
+  }
+  await batch.commit();
+}
+
+/**
+ * Update a grammar item, reconciling example back-references atomically.
+ *
+ * - If `opts.exampleIds` is provided, computes the delta vs the existing
+ *   `grammar_items.exampleIds` and:
+ *     · arrayUnion(grammarId) into `appearsInGrammarIds` of added examples
+ *     · arrayRemove(grammarId) from `appearsInGrammarIds` of dropped examples
+ * - The orphan-delete decision for dropped examples is left to the caller
+ *   (route handler), which can apply `isExampleReferencedByAny` and call
+ *   `deleteExampleSentences` before invoking `updateGrammar`. This mirrors
+ *   the vocab PUT path's ordering: delete-then-update.
+ * - All writes (grammar doc + back-link updates) happen in one batch.
+ */
+export async function updateGrammar(
+  grammarId: string,
+  patch: Partial<Grammar>,
+  opts: { exampleIds?: string[] } = {},
+): Promise<Grammar | null> {
+  const doc = await grammarItems.doc(grammarId).get();
+  if (!doc.exists) return null;
+  const oldData = doc.data()!;
+  const oldExampleIds = (oldData.exampleIds ?? []) as string[];
+
+  const data: Record<string, unknown> = { ...patch };
+  delete data.id;
+  delete data.examples; // never coexist with exampleIds
+
+  let added: string[] = [];
+  let removed: string[] = [];
+  if (opts.exampleIds) {
+    const newSet = new Set(opts.exampleIds);
+    const oldSet = new Set(oldExampleIds);
+    added = opts.exampleIds.filter((id) => !oldSet.has(id));
+    removed = oldExampleIds.filter((id) => !newSet.has(id));
+    data.exampleIds = opts.exampleIds;
+  }
+
+  const batch = db.batch();
+  batch.update(grammarItems.doc(grammarId), data);
+  for (const exId of added) {
+    batch.update(exampleSentences.doc(exId), {
+      appearsInGrammarIds: FieldValue.arrayUnion(grammarId),
+    });
+  }
+  for (const exId of removed) {
+    batch.update(exampleSentences.doc(exId), {
+      appearsInGrammarIds: FieldValue.arrayRemove(grammarId),
+    });
+  }
+  await batch.commit();
+
+  const updated = await grammarItems.doc(grammarId).get();
+  return { id: updated.id, ...updated.data() } as Grammar;
+}
+
 export async function deleteGrammarItem(grammarId: string): Promise<boolean> {
   const doc = await grammarItems.doc(grammarId).get();
   if (!doc.exists) return false;
+  const data = doc.data()!;
+  const language = data.language as string;
+  const exampleIds = (data.exampleIds ?? []) as string[];
+
+  // Cross-domain orphan check: an example survives the grammar delete if any
+  // word's appearsInIds or any other grammar item's exampleIds still references
+  // it. Otherwise it is orphan-deleted.
+  if (exampleIds.length > 0) {
+    const toDelete: string[] = [];
+    const toUnlink: string[] = [];
+    for (const exId of exampleIds) {
+      const referenced = await isExampleReferencedByAny(
+        language,
+        exId,
+        { exceptGrammarId: grammarId },
+      );
+      if (referenced) toUnlink.push(exId);
+      else toDelete.push(exId);
+    }
+
+    // For survivors, strip this grammar id from appearsInGrammarIds.
+    if (toUnlink.length > 0) {
+      const batch = db.batch();
+      for (const exId of toUnlink) {
+        batch.update(exampleSentences.doc(exId), {
+          appearsInGrammarIds: FieldValue.arrayRemove(grammarId),
+        });
+      }
+      await batch.commit();
+    }
+
+    if (toDelete.length > 0) {
+      await deleteExampleSentences(toDelete);
+    }
+  }
+
   await grammarItems.doc(grammarId).delete();
   return true;
 }

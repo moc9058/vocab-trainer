@@ -211,7 +211,8 @@ export default function Dashboard() {
   }
 
   function handleAddGrammar() {
-    setGrammarFormLanguage("open");
+    if (!language) return;
+    setGrammarFormLanguage(language);
   }
 
   async function handleStartQuiz() {

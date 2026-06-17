@@ -62,7 +62,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose }
       translation: ex.translation,
       originalTranslation: ex.translation ?? "",
       locked: false,
-    })) ?? []
+    })) ?? [{ sentence: "", translation: "", originalTranslation: "", locked: false }]
   );
   const [level, setLevel] = useState(editItem?.level ?? "");
   const [tags, setTags] = useState(editItem?.tags?.join(", ") ?? "");
@@ -147,8 +147,17 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose }
         .filter((ex) => ex.sentence.trim())
         .map((ex) => {
           const trimmed = ex.sentence.trim();
-          const sentence = isChinese ? trimmed.replace(/[\s　]+/g, "") : trimmed;
-          return { sentence, translation: ex.translation.trim() };
+          if (isChinese) {
+            const sentence = trimmed.replace(/[\s　]+/g, "");
+            if (/[\s　]/.test(trimmed)) {
+              const splits = trimmed.match(/[\p{Script=Han}a-zA-Z]+/gu) ?? [];
+              if (splits.length >= 2) {
+                return { sentence, translation: ex.translation.trim(), userSplits: splits };
+              }
+            }
+            return { sentence, translation: ex.translation.trim() };
+          }
+          return { sentence: trimmed, translation: ex.translation.trim() };
         });
       const wordsArr = wordsList.map((w) => w.trim()).filter(Boolean);
       const tagsArr = tags.trim() ? tags.split(",").map((s) => s.trim()).filter(Boolean) : [];

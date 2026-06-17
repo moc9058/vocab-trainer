@@ -17,6 +17,7 @@ export interface ExampleSentence {
   segments?: { text: string; transliteration?: string; id?: string }[];
   language: string;
   ownerWordId?: string;
+  appearsInGrammarIds?: string[];
 }
 
 export interface Meaning {
@@ -163,6 +164,8 @@ export interface GrammarExample {
   sentence: string;
   translation: string;
   transliteration?: string;
+  /** Input-only: user-specified segment splits (spaces in sentence field), never persisted. */
+  userSplits?: string[];
 }
 
 export interface Grammar {
@@ -170,7 +173,9 @@ export interface Grammar {
   language: string;
   statement: string;
   descriptions: Meaning[];
+  /** @deprecated Use `exampleIds` + the `example_sentences` collection. Kept as a transitional fallback until all docs are migrated. */
   examples?: GrammarExample[];
+  exampleIds?: string[];
   words?: string[];
   level?: string;
   tags?: string[];

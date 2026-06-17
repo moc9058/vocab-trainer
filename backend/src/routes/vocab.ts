@@ -29,7 +29,7 @@ import {
   droppedSegmentWordIds,
   deleteExampleSentences,
   removeFromAppearsInIds,
-  isExampleReferencedByOtherWord,
+  isExampleReferencedByAny,
   getWordGroups,
   createWordGroup,
   updateWordGroup,
@@ -838,17 +838,17 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         }
 
         // Examples the user removed outright or renamed out from under this
-        // word. Delete an example only if no other word still references it
-        // (in either exampleIds or appearsInIds).
+        // word. Delete an example only if no other word AND no grammar item
+        // still references it (cross-domain check guards dedup-shared docs).
         const droppedExampleIds = (currentExIds ?? []).filter(
           (id) => !newExampleIds.includes(id),
         );
         const toDelete: string[] = [];
         for (const exId of droppedExampleIds) {
-          const referenced = await isExampleReferencedByOtherWord(
+          const referenced = await isExampleReferencedByAny(
             language,
             exId,
-            wordId,
+            { exceptWordId: wordId },
           );
           if (!referenced) toDelete.push(exId);
         }

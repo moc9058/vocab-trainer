@@ -27,9 +27,13 @@ import {
   deleteExampleSentences,
   removeFromAppearsInIds,
   isExampleReferencedByOtherWord,
+  isExampleReferencedByAny,
   getExampleSentencesByIds,
+  addGrammar,
+  updateGrammar,
+  deleteGrammarItem,
 } from "../src/firestore.js";
-import type { Word, ExampleSentence } from "../src/types.js";
+import type { Word, ExampleSentence, Grammar } from "../src/types.js";
 
 const LANG = "_smoke_test";
 
@@ -43,6 +47,7 @@ const examplesCol = db.collection("example_sentences");
 const exampleIndexCol = db.collection("example_sentence_index");
 const wordIndexCol = db.collection("word_index");
 const languagesCol = db.collection("languages");
+const grammarCol = db.collection("grammar_items");
 
 let passed = 0;
 let failed = 0;
@@ -127,11 +132,25 @@ async function readExample(id: string): Promise<Record<string, unknown> | null> 
   return doc.exists ? doc.data()! : null;
 }
 
+async function readGrammar(id: string): Promise<Record<string, unknown> | null> {
+  const doc = await grammarCol.doc(id).get();
+  return doc.exists ? doc.data()! : null;
+}
+
+function makeGrammar(id: string, statement: string): Grammar {
+  return {
+    id,
+    language: LANG,
+    statement,
+    descriptions: [{ partOfSpeech: "particle", text: { en: `desc for ${statement}` } }],
+  };
+}
+
 // --- Cleanup ---
 
 async function cleanup(): Promise<void> {
-  // words + examples by language
-  for (const coll of [wordsCol, examplesCol]) {
+  // words + examples + grammar by language
+  for (const coll of [wordsCol, examplesCol, grammarCol]) {
     const snap = await coll.where("language", "==", LANG).get();
     if (snap.size === 0) continue;
     const batch = db.batch();
@@ -762,6 +781,75 @@ async function testConcurrentReconciles() {
   await assertInvariant("T8 final state");
 }
 
+async function testGrammarInvariant() {
+  console.log("\n[T15] grammar ↔ example_sentence invariant (bidirectional + cross-domain)");
+
+  // Setup: one example shared with a vocab word, one example unique to grammar.
+  const eShared = "smoke_e15_shared";
+  const eGrammarOnly = "smoke_e15_grammar";
+  const wOwner = "smoke_w15_owner";
+
+  await makeExample(eShared, "shared sentence fifteen");
+  await makeExample(eGrammarOnly, "grammar-only sentence fifteen");
+  await addWord(LANG, makeWord(wOwner, "term15"), { exampleIds: [eShared] });
+
+  // Phase A: create grammar G1 with both examples.
+  const g1 = "smoke_g15_1";
+  await addGrammar(makeGrammar(g1, "G1 statement"), {
+    exampleIds: [eShared, eGrammarOnly],
+  });
+
+  const g1Doc = await readGrammar(g1);
+  const g1ExIds = new Set<string>((g1Doc?.exampleIds ?? []) as string[]);
+  assert(
+    g1ExIds.has(eShared) && g1ExIds.has(eGrammarOnly),
+    `G1.exampleIds contains both (got ${[...g1ExIds].join(",")})`,
+  );
+
+  const eSharedDoc = await readExample(eShared);
+  const eSharedGrammar = new Set<string>((eSharedDoc?.appearsInGrammarIds ?? []) as string[]);
+  assert(eSharedGrammar.has(g1), "shared example's appearsInGrammarIds contains G1");
+
+  const eGrammarOnlyDoc = await readExample(eGrammarOnly);
+  const eGrammarOnlyGrammar = new Set<string>(
+    (eGrammarOnlyDoc?.appearsInGrammarIds ?? []) as string[],
+  );
+  assert(eGrammarOnlyGrammar.has(g1), "grammar-only example's appearsInGrammarIds contains G1");
+
+  // Phase B: cross-domain reference check.
+  const sharedRef = await isExampleReferencedByAny(LANG, eShared, { exceptWordId: wOwner });
+  assert(sharedRef, "isExampleReferencedByAny sees grammar reference on shared example");
+  const wordRefAlone = await isExampleReferencedByAny(LANG, eShared, { exceptGrammarId: g1 });
+  assert(wordRefAlone, "isExampleReferencedByAny sees word reference on shared example");
+
+  // Phase C: update G1 to drop the shared example. It must survive (word owns it).
+  await updateGrammar(g1, {}, { exampleIds: [eGrammarOnly] });
+
+  const sharedAfterDrop = await readExample(eShared);
+  assert(sharedAfterDrop !== null, "shared example survives the drop");
+  const sharedGrammarAfterDrop = new Set<string>(
+    (sharedAfterDrop?.appearsInGrammarIds ?? []) as string[],
+  );
+  assert(
+    !sharedGrammarAfterDrop.has(g1),
+    "shared example's appearsInGrammarIds no longer contains G1",
+  );
+
+  // Phase D: delete G1. Grammar-only example is now orphan-deleted. Shared
+  // example survives (still word-referenced).
+  await deleteGrammarItem(g1);
+  assert((await readGrammar(g1)) === null, "G1 deleted");
+  assert((await readExample(eGrammarOnly)) === null, "grammar-only example orphan-deleted");
+  assert((await readExample(eShared)) !== null, "shared example still present (word-referenced)");
+
+  // Phase E: delete the word that owned the shared example. With grammar gone
+  // and no other refs, the example should also be orphan-deleted by deleteWord.
+  await deleteWord(LANG, wOwner);
+  assert((await readExample(eShared)) === null, "shared example orphan-deleted after word delete");
+
+  await assertInvariant("T15");
+}
+
 // --- Main ---
 
 async function main() {
@@ -785,6 +873,7 @@ async function main() {
     await testPutHandlerDropAndRename();
     await testInPlaceRenameAndSegmentEdit();
     await testDeleteWordPreservesReferencedExample();
+    await testGrammarInvariant();
     await testConcurrentReconciles();
   } catch (e) {
     failed++;

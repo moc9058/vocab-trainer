@@ -16,6 +16,7 @@ import {
   addExampleSentence,
   findExampleByText,
   linkWordToExistingExamples,
+  getExampleSentencesByIds,
 } from "../firestore.js";
 import type {
   Grammar,
@@ -346,7 +347,21 @@ interface PreparedQuestion {
 }
 
 async function prepareQuestion(item: Grammar): Promise<PreparedQuestion> {
-  // Prefer an existing example
+  // Prefer hydrating from the normalized example_sentences collection.
+  if (item.exampleIds && item.exampleIds.length > 0) {
+    const docs = await getExampleSentencesByIds(item.exampleIds);
+    if (docs.length > 0) {
+      const es = docs[Math.floor(Math.random() * docs.length)];
+      // Grammar translations are stored as a plain string; coerce defensively
+      // in case a doc dedup-shared with vocab carries a multi-lang object.
+      const translation = typeof es.translation === "string"
+        ? es.translation
+        : Object.values(es.translation ?? {})[0] ?? "";
+      return { sentence: es.sentence, translation };
+    }
+  }
+
+  // Transitional fallback for pre-migration docs that still hold inline examples.
   if (item.examples && item.examples.length > 0) {
     const ex = item.examples[Math.floor(Math.random() * item.examples.length)];
     return {
