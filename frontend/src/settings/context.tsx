@@ -12,6 +12,8 @@ interface SettingsContextValue {
   displayDefEntries: (record: Record<string, string>) => [string, string][];
   /** Sorted entries filtered to languages selected for example translation display. */
   displayExEntries: (record: Record<string, string>) => [string, string][];
+  /** Sorted entries filtered to languages selected for grammar definition display. */
+  displayGrammarDefEntries: (record: Record<string, string>) => [string, string][];
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -105,6 +107,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     [sortedEntries, settings.displayExampleTranslationLanguages],
   );
 
+  const displayGrammarDefEntries = useCallback(
+    (record: Record<string, string>): [string, string][] => {
+      const allowed = new Set(settings.displayGrammarDefinitionLanguages);
+      return sortedEntries(record).filter(([lang]) => allowed.has(lang));
+    },
+    [sortedEntries, settings.displayGrammarDefinitionLanguages],
+  );
+
   const value = useMemo(
     () => ({
       settings,
@@ -113,8 +123,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       sortedEntries,
       displayDefEntries,
       displayExEntries,
+      displayGrammarDefEntries,
     }),
-    [settings, updateSettings, sortByLanguageOrder, sortedEntries, displayDefEntries, displayExEntries],
+    [settings, updateSettings, sortByLanguageOrder, sortedEntries, displayDefEntries, displayExEntries, displayGrammarDefEntries],
   );
 
   return (

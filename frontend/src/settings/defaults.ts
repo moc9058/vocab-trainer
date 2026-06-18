@@ -30,6 +30,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultTranslationSourceLanguage: "en",
   defaultTranslationTargetLanguages: ["ja"],
   showKoreanHanja: true,
+  displayGrammarDefinitionLanguages: ["en", "ja", "ko", "zh"],
   printDefinitionLanguage: "en",
-  sectionOrder: ["vocabulary", "speaking-writing", "translation", "grammar", "expressions"],
+  sectionOrder: ["vocabulary", "speaking-writing", "translation", "grammar"],
 };

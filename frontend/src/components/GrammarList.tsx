@@ -10,9 +10,13 @@ import {
 import type { Grammar, GrammarGroup } from "../types";
 import GrammarFormModal from "./GrammarFormModal";
 import GroupPickerModal from "./GroupPickerModal";
+import RubyText from "./RubyText";
 import type { smartAddWord } from "../api/vocab";
+import type { useGrammarQueue } from "../hooks/useGrammarQueue";
 
 type SmartAddPayload = Parameters<typeof smartAddWord>[1];
+type GrammarEnqueue = ReturnType<typeof useGrammarQueue>["enqueue"];
+type GrammarEnqueueUpdate = ReturnType<typeof useGrammarQueue>["enqueueUpdate"];
 
 interface Props {
   language: string;
@@ -21,13 +25,18 @@ interface Props {
    *  in the grammar editor enqueue into the shared word-add queue and surface
    *  in the global Dashboard "Generating:" pill. */
   onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
+  /** When provided, grammar create-mode submits enqueue into the shared grammar
+   *  queue instead of awaiting directly, keeping the modal open for rapid adds. */
+  onGrammarQueue?: GrammarEnqueue;
+  /** When provided, grammar edit-mode submits enqueue instead of awaiting. */
+  onGrammarUpdateQueue?: GrammarEnqueueUpdate;
   pendingTerms?: Set<string>;
   refreshSignal?: number;
 }
 
-export default function GrammarList({ language, onBack, onQueue, pendingTerms, refreshSignal }: Props) {
+export default function GrammarList({ language, onBack, onQueue, onGrammarQueue, onGrammarUpdateQueue, pendingTerms, refreshSignal }: Props) {
   const { t } = useI18n();
-  const { displayDefEntries } = useSettings();
+  const { displayGrammarDefEntries } = useSettings();
   const [items, setItems] = useState<Grammar[]>([]);
   const [groups, setGroups] = useState<GrammarGroup[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
@@ -36,6 +45,7 @@ export default function GrammarList({ language, onBack, onQueue, pendingTerms, r
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState<Grammar | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [groupPickerIds, setGroupPickerIds] = useState<string[] | null>(null);
@@ -63,7 +73,7 @@ export default function GrammarList({ language, onBack, onQueue, pendingTerms, r
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
-  }, [language, selectedGroupId, search, page]);
+  }, [language, selectedGroupId, search, page, refreshSignal]);
 
   useEffect(() => {
     fetchItems();
@@ -90,12 +100,20 @@ export default function GrammarList({ language, onBack, onQueue, pendingTerms, r
     <div className="mx-auto max-w-4xl p-4 sm:p-6">
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-gray-100">{t("grammarBrowse")}</h2>
-        <button
-          onClick={onBack}
-          className="rounded-lg border border-gray-600 px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
-        >
-          {t("back")}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="rounded-lg border border-gray-600 px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
+          >
+            {t("addGrammar")}
+          </button>
+          <button
+            onClick={onBack}
+            className="rounded-lg border border-gray-600 px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
+          >
+            {t("back")}
+          </button>
+        </div>
       </div>
 
       {/* Group filter + Manage Groups */}
@@ -170,7 +188,7 @@ export default function GrammarList({ language, onBack, onQueue, pendingTerms, r
                 <div className="mt-3 border-t border-gray-700 pt-3">
                   {/* Descriptions */}
                   {item.descriptions?.map((d, di) => {
-                    const entries = displayDefEntries(d.text || {});
+                    const entries = displayGrammarDefEntries(d.text || {});
                     return (
                       <div key={di} className="mb-2">
                         {d.partOfSpeech && (
@@ -213,7 +231,9 @@ export default function GrammarList({ language, onBack, onQueue, pendingTerms, r
                       <p className="text-xs font-medium text-gray-400">{t("examples")}</p>
                       {item.examples.map((ex, i) => (
                         <div key={i} className="rounded bg-gray-700/50 px-3 py-2">
-                          <p className="text-sm text-gray-100">{ex.sentence}</p>
+                          <p className="text-sm text-gray-100">
+                            <RubyText text={ex.sentence} segments={ex.segments} />
+                          </p>
                           {ex.transliteration && (
                             <p className="text-xs text-gray-400">{ex.transliteration}</p>
                           )}
@@ -282,6 +302,19 @@ export default function GrammarList({ language, onBack, onQueue, pendingTerms, r
         </div>
       )}
 
+      {/* Add modal */}
+      {showAddModal && (
+        <GrammarFormModal
+          language={language}
+          onSave={() => { setShowAddModal(false); fetchItems(); }}
+          onClose={() => setShowAddModal(false)}
+          onQueue={onQueue}
+          onGrammarQueue={onGrammarQueue}
+          pendingTerms={pendingTerms}
+          refreshSignal={refreshSignal}
+        />
+      )}
+
       {/* Edit modal */}
       {editingItem && (
         <GrammarFormModal
@@ -290,6 +323,7 @@ export default function GrammarList({ language, onBack, onQueue, pendingTerms, r
           onSave={() => { setEditingItem(null); fetchItems(); }}
           onClose={() => setEditingItem(null)}
           onQueue={onQueue}
+          onGrammarUpdateQueue={onGrammarUpdateQueue}
           pendingTerms={pendingTerms}
           refreshSignal={refreshSignal}
         />

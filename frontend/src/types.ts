@@ -90,6 +90,7 @@ export interface GrammarExample {
   sentence: string;
   translation: string;
   transliteration?: string;
+  segments?: { text: string; transliteration?: string; id?: string }[];
   /** Input-only: user-specified segment splits (spaces in sentence field), never persisted. */
   userSplits?: string[];
 }

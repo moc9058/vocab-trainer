@@ -13,6 +13,7 @@ import type { Grammar, GrammarGroup, Meaning } from "../types";
 import type { smartAddWord } from "../api/vocab";
 
 type SmartAddPayload = Parameters<typeof smartAddWord>[1];
+type GrammarPayload = Omit<Grammar, "language">;
 
 interface DescriptionFormState {
   partOfSpeech: string;
@@ -29,6 +30,12 @@ interface Props {
    *  ExampleSentenceEditor enqueue through it instead of calling smartAddWord
    *  directly, so in-flight terms surface in the global Dashboard pill. */
   onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
+  /** When provided, create-mode submits enqueue instead of awaiting directly.
+   *  Form resets after enqueue so the user can add another grammar immediately. */
+  onGrammarQueue?: (statement: string, language: string, payload: GrammarPayload) => void;
+  /** When provided, edit-mode submits enqueue instead of awaiting directly.
+   *  Modal closes after brief "✓ Queued" flash. */
+  onGrammarUpdateQueue?: (statement: string, language: string, grammarId: string, updates: Partial<Grammar>, groupsToAdd: string[], groupsToRemove: string[]) => void;
   pendingTerms?: Set<string>;
   refreshSignal?: number;
 }
@@ -48,7 +55,7 @@ function InsertButton({ onInsert }: { onInsert: () => void }) {
   );
 }
 
-export default function GrammarFormModal({ language, editItem, onSave, onClose, onQueue, pendingTerms, refreshSignal }: Props) {
+export default function GrammarFormModal({ language, editItem, onSave, onClose, onQueue, onGrammarQueue, onGrammarUpdateQueue, pendingTerms, refreshSignal }: Props) {
   const { t } = useI18n();
   const isEdit = !!editItem;
   const isChinese = language === "chinese";
@@ -80,6 +87,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
 
   const [saving, setSaving] = useState(false);
+  const [queued, setQueued] = useState(false);
   const [error, setError] = useState("");
   // True while ExampleSentenceEditor has at least one chip mid-smartAddWord.
   // Used to lock Cancel + backdrop click so we don't drop the modal while a
@@ -144,6 +152,16 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
     return result;
   }
 
+  function resetForm() {
+    setStatement("");
+    setDescriptions([{ partOfSpeech: "", translations: [{ lang: "en", text: "" }], pinyinsRaw: "" }]);
+    setExamples([{ sentence: "", translation: "", originalTranslation: "", locked: false }]);
+    setWordsList([]);
+    setLevel("");
+    setTags("");
+    setError("");
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!statement.trim()) return;
@@ -175,9 +193,10 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
       const wordsArr = wordsList.map((w) => w.trim()).filter(Boolean);
       const tagsArr = tags.trim() ? tags.split(",").map((s) => s.trim()).filter(Boolean) : [];
 
-      let saved: Grammar;
-      if (isEdit && editItem) {
-        saved = await updateGrammarItem(language, editItem.id, {
+      if (!isEdit && onGrammarQueue) {
+        const id = `grammar-${language}-${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+        onGrammarQueue(statement.trim(), language, {
+          id,
           statement: statement.trim(),
           descriptions: descs,
           examples: filteredExamples.length > 0 ? filteredExamples : undefined,
@@ -185,6 +204,37 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
           level: level.trim() || undefined,
           tags: tagsArr.length > 0 ? tagsArr : undefined,
         });
+        setSaving(false);
+        setQueued(true);
+        setTimeout(() => { setQueued(false); resetForm(); }, 900);
+        return;
+      }
+
+      const updates = {
+        statement: statement.trim(),
+        descriptions: descs,
+        examples: filteredExamples.length > 0 ? filteredExamples : undefined,
+        words: wordsArr.length > 0 ? wordsArr : undefined,
+        level: level.trim() || undefined,
+        tags: tagsArr.length > 0 ? tagsArr : undefined,
+      };
+
+      if (isEdit && editItem && onGrammarUpdateQueue) {
+        const original = new Set(
+          groups.filter((g) => g.grammarIds.includes(editItem.id)).map((g) => g.id)
+        );
+        const toAdd = [...selectedGroupIds].filter((id) => !original.has(id));
+        const toRemove = [...original].filter((id) => !selectedGroupIds.has(id));
+        onGrammarUpdateQueue(statement.trim(), language, editItem.id, updates, toAdd, toRemove);
+        setSaving(false);
+        setQueued(true);
+        setTimeout(() => { setQueued(false); onSave(); }, 900);
+        return;
+      }
+
+      let saved: Grammar;
+      if (isEdit && editItem) {
+        saved = await updateGrammarItem(language, editItem.id, updates);
       } else {
         const id = `grammar-${language}-${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
         saved = await smartAddGrammarItem(language, {
@@ -301,13 +351,6 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
             {descriptions.map((desc, di) => (
               <div key={di} className="mb-3 rounded-lg border border-gray-600 bg-gray-700 p-3">
                 <div className="mb-2 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={desc.partOfSpeech}
-                    onChange={(e) => updateDescription(di, { partOfSpeech: e.target.value })}
-                    placeholder={t("category")}
-                    className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                  />
                   {descriptions.length > 1 && (
                     <button
                       type="button"
@@ -342,12 +385,12 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
                         <option key={l.code} value={l.code}>{l.label}</option>
                       ))}
                     </select>
-                    <input
-                      type="text"
+                    <textarea
                       value={tr.text}
                       onChange={(e) => updateTranslation(di, ti, { text: e.target.value })}
                       placeholder={t("definitionText")}
-                      className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                      rows={2}
+                      className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none resize-none"
                     />
                     {desc.translations.length > 1 && (
                       <button
@@ -477,10 +520,10 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
             </button>
             <button
               type="submit"
-              disabled={saving || !statement.trim()}
-              className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
+              disabled={saving || queued || !statement.trim()}
+              className={`rounded-lg px-4 py-2 text-sm text-white disabled:opacity-50 ${queued ? "bg-green-600 hover:bg-green-500" : "bg-blue-600 hover:bg-blue-500"}`}
             >
-              {saving ? "..." : t("save")}
+              {saving ? "..." : queued ? "✓ Queued" : t("save")}
             </button>
           </div>
         </form>

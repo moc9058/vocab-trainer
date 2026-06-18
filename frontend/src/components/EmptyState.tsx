@@ -33,7 +33,7 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onStar
   const { settings } = useSettings();
   const isoCode = urlLanguageToIsoCode(language) ?? language;
   const showGrammar = isoCode !== "en";
-  const sectionOrder: string[] = settings.sectionOrder ?? ["vocabulary", "speaking-writing", "translation", "grammar", "expressions"];
+  const sectionOrder: string[] = (settings.sectionOrder ?? ["vocabulary", "speaking-writing", "translation", "grammar"]).filter(s => s !== "expressions");
   const [vocabSession, setVocabSession] = useState<QuizSession | null>(null);
   const [grammarSession, setGrammarSession] = useState<GrammarQuizSession | null>(null);
   const [loading, setLoading] = useState(true);
@@ -137,24 +137,28 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onStar
                 >
                   {t("startSpeakingWriting")}
                 </button>
-                <button
-                  onClick={onStartExpressionQuiz}
-                  className="sm:col-span-2 rounded-lg bg-orange-600 px-5 py-3 text-center font-medium text-white hover:bg-orange-500 transition-colors"
-                >
-                  {t("startExpressionQuiz")}
-                </button>
-                <button
-                  onClick={onBrowseExpressions}
-                  className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  {t("browseExpressions")}
-                </button>
-                <button
-                  onClick={onAddExpression}
-                  className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  {t("addExpression")}
-                </button>
+                {isoCode !== "zh" && (
+                  <>
+                    <button
+                      onClick={onStartExpressionQuiz}
+                      className="sm:col-span-2 rounded-lg bg-orange-600 px-5 py-3 text-center font-medium text-white hover:bg-orange-500 transition-colors"
+                    >
+                      {t("startExpressionQuiz")}
+                    </button>
+                    <button
+                      onClick={onBrowseExpressions}
+                      className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                    >
+                      {t("browseExpressions")}
+                    </button>
+                    <button
+                      onClick={onAddExpression}
+                      className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                    >
+                      {t("addExpression")}
+                    </button>
+                  </>
+                )}
               </div>
             </section>
           );
@@ -217,27 +221,6 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onStar
                   className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
                 >
                   {t("addGrammar")}
-                </button>
-              </div>
-            </section>
-          );
-          if (section === "expressions") return (
-            <section key="expressions" className="rounded-xl bg-gray-800/60 p-4 sm:p-5">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">
-                {t("sectionExpressions")}
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  onClick={onBrowseExpressions}
-                  className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  {t("browseExpressions")}
-                </button>
-                <button
-                  onClick={onAddExpression}
-                  className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  {t("addExpression")}
                 </button>
               </div>
             </section>

@@ -17,14 +17,15 @@ import SmartAddWordModal from "./SmartAddWordModal";
 import GrammarFormModal from "./GrammarFormModal";
 import TranslationView from "./TranslationView";
 import SpeakingWritingView from "./SpeakingWritingView";
-import ExpressionList from "./ExpressionList";
 import ExpressionQuizView from "./ExpressionQuizView";
+import ExpressionList from "./ExpressionList";
 import QuizFilterModal from "./QuizFilterModal";
 import PrintWorksheet from "./PrintWorksheet";
 import { getTranslationHistory } from "../api/translation";
 import { getSpeakingWritingSession } from "../api/speaking-writing";
 import { urlLanguageToIsoCode } from "../settings/defaults";
 import { useWordQueue } from "../hooks/useWordQueue";
+import { useGrammarQueue } from "../hooks/useGrammarQueue";
 import type { QuizSession, GrammarQuizSession } from "../types";
 
 export default function Dashboard() {
@@ -36,6 +37,7 @@ export default function Dashboard() {
   const { t, language: uiLang, setLanguage } = useI18n();
   const { settings } = useSettings();
   const { enqueue, pendingTerms, queueLength, processingTerms, activeCount, recentResults, clearResults, refreshSignal } = useWordQueue();
+  const { enqueue: enqueueGrammar, enqueueUpdate: enqueueGrammarUpdate, pendingTerms: grammarPendingTerms, processingTerms: grammarProcessingTerms, queueLength: grammarQueueLength, activeCount: grammarActiveCount, recentResults: grammarRecentResults, clearResults: clearGrammarResults, refreshSignal: grammarRefreshSignal } = useGrammarQueue();
   const [visibleToast, setVisibleToast] = useState<{ id: string; term: string; success: boolean; error?: string } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -106,7 +108,7 @@ export default function Dashboard() {
     })();
   }, [subPath, isoCode]);
 
-  // Show toast for the latest queue result
+  // Show toast for the latest word queue result
   useEffect(() => {
     if (recentResults.length === 0) return;
     const latest = recentResults[0];
@@ -119,6 +121,20 @@ export default function Dashboard() {
     }, 3000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [recentResults]);
+
+  // Show toast for the latest grammar queue result
+  useEffect(() => {
+    if (grammarRecentResults.length === 0) return;
+    const latest = grammarRecentResults[0];
+    if (visibleToast?.id === latest.id) return;
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setVisibleToast({ id: latest.id, term: latest.statement, success: latest.success, error: latest.error });
+    toastTimerRef.current = setTimeout(() => {
+      setVisibleToast(null);
+      clearGrammarResults();
+    }, 3000);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grammarRecentResults]);
 
   function handleLanguageSelected(lang: string) {
     setSelectedLanguage(lang);
@@ -280,14 +296,14 @@ export default function Dashboard() {
     navigate(`/${language}/grammar`);
   }
 
-  function handleBrowseExpressions() {
-    if (!language) return;
-    navigate(`/${language}/expressions`);
-  }
-
   function handleStartExpressionQuiz() {
     if (!language) return;
     navigate(`/${language}/speaking-writing`, { state: { mode: "new", subMode: "expression-quiz" } });
+  }
+
+  function handleBrowseExpressions() {
+    if (!language) return;
+    navigate(`/${language}/expressions`);
   }
 
   const showBackButton = (subPath !== "/" && subPath !== "") || !!(selectedLanguage || showGrammarFilterModal || showSmartAdd || grammarFormLanguage);
@@ -368,6 +384,8 @@ export default function Dashboard() {
           onSave={() => setGrammarFormLanguage(null)}
           onClose={() => setGrammarFormLanguage(null)}
           onQueue={enqueue}
+          onGrammarQueue={enqueueGrammar}
+          onGrammarUpdateQueue={enqueueGrammarUpdate}
           pendingTerms={pendingTerms}
           refreshSignal={refreshSignal}
         />
@@ -404,24 +422,24 @@ export default function Dashboard() {
           </div>
         </div>
       )}
-      {/* Queue status pill — shows every in-flight word. With parallel
-          processing (CONCURRENCY in useWordQueue.ts), up to N terms can be
+      {/* Queue status pill — shows every in-flight word/grammar. With parallel
+          processing (CONCURRENCY in useWordQueue/useGrammarQueue), up to N terms can be
           in the "processing" amber state simultaneously; the rest are
           queued. `pendingTerms` is the union; `processingTerms` is the
           currently-running subset. */}
-      {(activeCount > 0 || queueLength > 0) && (
+      {(activeCount + grammarActiveCount > 0 || queueLength + grammarQueueLength > 0) && (
         <div className="fixed bottom-4 right-4 z-50 flex max-w-md flex-wrap items-center gap-1.5 rounded-2xl bg-gray-700 px-4 py-2 text-sm text-gray-200 shadow-lg border border-gray-600">
           <span className="animate-spin inline-block">⟳</span>
           <span className="text-xs text-gray-300">Generating:</span>
-          {[...pendingTerms].map((term) => (
+          {[...[...pendingTerms, ...grammarPendingTerms]].map((term) => (
             <span
               key={term}
               className={`rounded-full px-2 py-0.5 text-xs ${
-                processingTerms.has(term)
+                processingTerms.has(term) || grammarProcessingTerms.has(term)
                   ? "border border-amber-400/60 bg-amber-900/40 text-amber-100"
                   : "border border-gray-500/40 bg-gray-800/60 text-gray-300"
               }`}
-              title={processingTerms.has(term) ? "Processing" : "Queued"}
+              title={processingTerms.has(term) || grammarProcessingTerms.has(term) ? "Processing" : "Queued"}
             >
               {term}
             </span>
@@ -430,7 +448,7 @@ export default function Dashboard() {
       )}
       {/* Toast notification (shown above the pill if both visible) */}
       {visibleToast && (
-        <div className={`fixed z-50 rounded-lg px-4 py-2 text-sm shadow-lg border transition-all ${activeCount > 0 || queueLength > 0 ? "bottom-16 right-4" : "bottom-4 right-4"} ${visibleToast.success ? "bg-green-900/90 border-green-700 text-green-200" : "bg-red-900/90 border-red-700 text-red-200"}`}>
+        <div className={`fixed z-50 rounded-lg px-4 py-2 text-sm shadow-lg border transition-all ${activeCount + grammarActiveCount > 0 || queueLength + grammarQueueLength > 0 ? "bottom-16 right-4" : "bottom-4 right-4"} ${visibleToast.success ? "bg-green-900/90 border-green-700 text-green-200" : "bg-red-900/90 border-red-700 text-red-200"}`}>
           {visibleToast.success
             ? `✓ "${visibleToast.term}" added`
             : `✗ "${visibleToast.term}" failed${visibleToast.error ? `: ${visibleToast.error}` : ""}`}
@@ -470,8 +488,10 @@ export default function Dashboard() {
             language={language ?? ""}
             onBack={() => navigate(`/${language}`)}
             onQueue={enqueue}
+            onGrammarQueue={enqueueGrammar}
+            onGrammarUpdateQueue={enqueueGrammarUpdate}
             pendingTerms={pendingTerms}
-            refreshSignal={refreshSignal}
+            refreshSignal={refreshSignal + grammarRefreshSignal}
           />
         ) : subPath === "/grammar-quiz" ? (
           activeGrammarQuiz ? (

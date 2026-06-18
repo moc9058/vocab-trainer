@@ -110,8 +110,13 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
     new Set(settings.defaultTranslationTargetLanguages),
   );
   const [showKoreanHanja, setShowKoreanHanja] = useState<boolean>(settings.showKoreanHanja);
+  const [displayGrammarDefLangs, setDisplayGrammarDefLangs] = useState<Set<string>>(
+    new Set(settings.displayGrammarDefinitionLanguages),
+  );
   const [printDefLang, setPrintDefLang] = useState<string>(settings.printDefinitionLanguage);
-  const [sectionOrder, setSectionOrder] = useState<string[]>([...(settings.sectionOrder ?? ["vocabulary", "speaking-writing", "translation", "grammar"])]);
+  const [sectionOrder, setSectionOrder] = useState<string[]>(
+    (settings.sectionOrder ?? ["vocabulary", "speaking-writing", "translation", "grammar"]).filter(k => k in SECTION_LABEL_KEYS)
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -166,6 +171,7 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
           ? targetLangs
           : [order.find((c) => c !== defaultTranslationSource) ?? defaultTranslationSource],
       showKoreanHanja,
+      displayGrammarDefinitionLanguages: order.filter((c) => displayGrammarDefLangs.has(c)),
       printDefinitionLanguage: printDefLang,
       sectionOrder,
     });
@@ -183,6 +189,7 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
     setDefaultTranslationSource(DEFAULT_SETTINGS.defaultTranslationSourceLanguage);
     setDefaultTranslationTargets(new Set(DEFAULT_SETTINGS.defaultTranslationTargetLanguages));
     setShowKoreanHanja(DEFAULT_SETTINGS.showKoreanHanja);
+    setDisplayGrammarDefLangs(new Set(DEFAULT_SETTINGS.displayGrammarDefinitionLanguages));
     setPrintDefLang(DEFAULT_SETTINGS.printDefinitionLanguage);
     setSectionOrder([...DEFAULT_SETTINGS.sectionOrder]);
   }
@@ -305,6 +312,27 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
               <p className="mt-1 text-xs text-gray-400">{t("settingsShowKoreanHanjaHelp")}</p>
             </section>
           )}
+        </div>
+
+        {/* Grammar Section */}
+        <div className="mb-6">
+          <h3 className="mb-3 border-b border-gray-700 pb-2 text-base font-semibold text-gray-200">{t("settingsSectionGrammarSettings")}</h3>
+          <section>
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDisplayGrammarDefLangs")}</h4>
+            <div className="flex flex-wrap gap-2">
+              {order.filter((code) => code !== currentLanguageCode).map((code) => (
+                <label key={code} className="flex items-center gap-1.5 text-sm text-gray-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={displayGrammarDefLangs.has(code)}
+                    onChange={() => toggleSet(displayGrammarDefLangs, code, setDisplayGrammarDefLangs)}
+                    className="accent-blue-600"
+                  />
+                  {LANG_LABEL_MAP[code] ?? code}
+                </label>
+              ))}
+            </div>
+          </section>
         </div>
 
         {/* Print Worksheet Section */}

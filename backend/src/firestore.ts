@@ -1406,7 +1406,7 @@ async function hydrateGrammarItems(items: Grammar[]): Promise<Grammar[]> {
         const translation = typeof es.translation === "string"
           ? es.translation
           : Object.values(es.translation ?? {})[0] ?? "";
-        return { sentence: es.sentence, translation };
+        return { sentence: es.sentence, translation, ...(es.segments ? { segments: es.segments } : {}) };
       })
       .filter((ex): ex is { sentence: string; translation: string } => ex !== null);
     return { ...it, examples };

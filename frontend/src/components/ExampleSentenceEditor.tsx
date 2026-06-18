@@ -201,6 +201,10 @@ export default function ExampleSentenceEditor({
       .join("");
   }
 
+  function sentenceComplete(sentence: string): boolean {
+    return /[。！？…\.!?]$/.test(sentence.trim());
+  }
+
   const trimmedCurrentTerm = currentTerm?.trim() ?? "";
 
   // Union of in-flight chip terms (direct-mode busy + queue-mode pending).
@@ -279,7 +283,7 @@ export default function ExampleSentenceEditor({
                 : "bg-gray-800 text-gray-100 focus:border-blue-400"
             }`}
           />
-          {language === "chinese" && !ex.locked && (() => {
+          {language === "chinese" && !ex.locked && sentenceComplete(ex.sentence) && (() => {
             if (chips.length < 2) return null;
             const anyDeactivated = chips.some(
               (c) =>
@@ -428,6 +432,18 @@ export default function ExampleSentenceEditor({
         </div>
         );
       })}
+      <button
+        type="button"
+        onClick={() =>
+          setExamples([
+            ...examples,
+            { sentence: "", translation: "", originalTranslation: "", locked: false },
+          ])
+        }
+        className="mt-1 text-xs text-blue-400 hover:text-blue-300"
+      >
+        + {t("addExample")}
+      </button>
       {segmentAddError && <p className="text-xs text-red-400">{segmentAddError}</p>}
     </div>
   );
