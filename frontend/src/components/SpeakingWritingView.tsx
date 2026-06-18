@@ -3,6 +3,7 @@ import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { submitCorrectionStream, getSpeakingWritingSession, deleteSpeakingWritingSession } from "../api/speaking-writing";
 import type { SpeakingWritingSession, CorrectionItem } from "../types";
+import ExpressionFormModal from "./ExpressionFormModal";
 
 interface Props {
   mode: "new" | "resume";
@@ -39,6 +40,7 @@ export default function SpeakingWritingView({ mode, language }: Props) {
   const [loadingSession, setLoadingSession] = useState(mode === "resume");
   const [error, setError] = useState<string | null>(null);
   const [streamingChunks, setStreamingChunks] = useState("");
+  const [showExpressionModal, setShowExpressionModal] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const needsCleanupRef = useRef(mode === "new");
 
@@ -332,6 +334,12 @@ export default function SpeakingWritingView({ mode, language }: Props) {
         >
           {t("regenerate")}
         </button>
+        <button
+          onClick={() => setShowExpressionModal(true)}
+          className="rounded-lg border border-orange-600 px-3 py-2 text-sm text-orange-400 hover:bg-orange-900/30 transition-colors"
+        >
+          + {t("addExpression")}
+        </button>
         <div className="flex-1" />
         {hasPrevious && (
           <button
@@ -388,6 +396,14 @@ export default function SpeakingWritingView({ mode, language }: Props) {
         <p className="text-center text-xs text-gray-500">
           {correctionIndex + 1} / {session.corrections.length}
         </p>
+      )}
+
+      {showExpressionModal && (
+        <ExpressionFormModal
+          language={language}
+          onSave={() => setShowExpressionModal(false)}
+          onClose={() => setShowExpressionModal(false)}
+        />
       )}
     </div>
   );
