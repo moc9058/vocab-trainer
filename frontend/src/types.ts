@@ -217,4 +217,46 @@ export interface SpeakingWritingSession {
   status: "in-progress" | "completed";
   corrections: SpeakingWritingEntry[];
   currentIndex: number;
+  expressionQuiz?: ExpressionQuizSubsession;
 }
+
+// ========== Expressions ==========
+
+export interface Expression {
+  id: string;
+  language: string;
+  phrase: string;
+  context: string;
+  description?: string;
+  purpose?: ("speaking" | "writing")[];
+  groupIds?: string[];
+}
+
+export interface ExpressionGroup {
+  id: string;
+  language: string;
+  name: string;
+  expressionIds: string[];
+  createdAt: string;
+}
+
+export interface ExpressionQuizQuestion {
+  expressionId: string;
+  phrase: string;
+  context: string;
+  description?: string;
+  userInput?: string;
+  correctionResult?: CorrectionResult;
+  userCorrect?: boolean;
+}
+
+export interface ExpressionQuizSubsession {
+  purposeFilter?: ("speaking" | "writing")[];
+  startedAt: string;
+  completedAt?: string;
+  status: "in-progress" | "completed";
+  score: QuizScore;
+  questions: ExpressionQuizQuestion[];
+  groupFilter?: string[];
+}
+

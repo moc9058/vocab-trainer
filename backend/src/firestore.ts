@@ -24,6 +24,8 @@ import type {
   TokenUsageDailySummary,
   TokenCostConfig,
   WordGroup,
+  Expression,
+  ExpressionGroup,
 } from "./types.js";
 
 const db = new Firestore({
@@ -1834,6 +1836,7 @@ export async function getSpeakingWritingSession(
     status: d.status,
     corrections: d.corrections ?? [],
     currentIndex: d.currentIndex ?? 0,
+    ...(d.expressionQuiz !== undefined ? { expressionQuiz: d.expressionQuiz } : {}),
   };
 }
 
@@ -1841,7 +1844,8 @@ export async function saveSpeakingWritingSession(
   session: SpeakingWritingSession
 ): Promise<void> {
   const { sessionId, ...data } = session;
-  await speakingWritingSessions.doc(session.language).set(data);
+  const clean = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
+  await speakingWritingSessions.doc(session.language).set(clean);
 }
 
 export async function deleteSpeakingWritingSession(
@@ -1851,6 +1855,168 @@ export async function deleteSpeakingWritingSession(
   if (!doc.exists) return false;
   await speakingWritingSessions.doc(language).delete();
   return true;
+}
+
+// ========== Expressions ==========
+
+const expressionItems = db.collection("expression_items");
+const expressionGroups = db.collection("expression_groups");
+
+function docToExpression(doc: FirebaseFirestore.DocumentSnapshot): Expression {
+  const d = doc.data()!;
+  return {
+    id: d.id as string,
+    language: d.language as string,
+    phrase: d.phrase as string,
+    context: d.context as string,
+    ...(d.description !== undefined ? { description: d.description as string } : {}),
+    ...(d.purpose !== undefined ? { purpose: d.purpose as ("speaking" | "writing")[] } : {}),
+    ...(d.groupIds !== undefined ? { groupIds: d.groupIds as string[] } : {}),
+  };
+}
+
+export async function getExpressions(
+  language: string,
+  filters?: { search?: string; purpose?: string; groupId?: string },
+  pagination?: { page: number; limit: number }
+): Promise<PaginatedResult<Expression>> {
+  const page = pagination?.page ?? 1;
+  const limit = pagination?.limit ?? 50;
+
+  let snap: FirebaseFirestore.QuerySnapshot;
+  if (filters?.groupId) {
+    const group = await getExpressionGroup(filters.groupId);
+    const ids = group?.expressionIds ?? [];
+    if (ids.length === 0) return { items: [], total: 0, page, limit, totalPages: 1 };
+    const chunks: Expression[] = [];
+    for (let i = 0; i < ids.length; i += 10) {
+      const batch = ids.slice(i, i + 10);
+      const batchSnap = await expressionItems.where("id", "in", batch).get();
+      chunks.push(...batchSnap.docs.map(docToExpression));
+    }
+    let results = chunks;
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      results = results.filter((e) => e.phrase.toLowerCase().includes(q) || e.context.toLowerCase().includes(q));
+    }
+    if (filters.purpose) {
+      results = results.filter((e) => !e.purpose || e.purpose.includes(filters.purpose as "speaking" | "writing"));
+    }
+    const total = results.length;
+    const offset = (page - 1) * limit;
+    return { items: results.slice(offset, offset + limit), total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+  }
+
+  snap = await expressionItems.where("language", "==", language).get();
+  let results = snap.docs.map(docToExpression);
+  if (filters?.search) {
+    const q = filters.search.toLowerCase();
+    results = results.filter((e) => e.phrase.toLowerCase().includes(q) || e.context.toLowerCase().includes(q));
+  }
+  if (filters?.purpose) {
+    results = results.filter((e) => !e.purpose || e.purpose.includes(filters.purpose as "speaking" | "writing"));
+  }
+  const total = results.length;
+  const offset = (page - 1) * limit;
+  return { items: results.slice(offset, offset + limit), total, page, limit, totalPages: Math.max(1, Math.ceil(total / limit)) };
+}
+
+export async function getAllExpressions(language: string): Promise<Expression[]> {
+  const snap = await expressionItems.where("language", "==", language).get();
+  return snap.docs.map(docToExpression);
+}
+
+export async function getExpression(id: string): Promise<Expression | null> {
+  const doc = await expressionItems.doc(id).get();
+  return doc.exists ? docToExpression(doc) : null;
+}
+
+export async function addExpression(expr: Expression): Promise<void> {
+  const { id, ...data } = expr;
+  await expressionItems.doc(id).set({ id, ...data });
+}
+
+export async function updateExpression(id: string, patch: Partial<Expression>): Promise<Expression> {
+  const cleanPatch = Object.fromEntries(Object.entries(patch).filter(([_, v]) => v !== undefined));
+  await expressionItems.doc(id).update(cleanPatch);
+  const updated = await expressionItems.doc(id).get();
+  return docToExpression(updated);
+}
+
+export async function deleteExpression(id: string): Promise<boolean> {
+  const doc = await expressionItems.doc(id).get();
+  if (!doc.exists) return false;
+  await expressionItems.doc(id).delete();
+  return true;
+}
+
+// ========== Expression Groups ==========
+
+function docToExpressionGroup(doc: FirebaseFirestore.DocumentSnapshot): ExpressionGroup {
+  const d = doc.data()!;
+  return {
+    id: d.id as string,
+    language: d.language as string,
+    name: d.name as string,
+    expressionIds: (d.expressionIds as string[]) ?? [],
+    createdAt: d.createdAt as string,
+  };
+}
+
+export async function getExpressionGroups(language: string): Promise<ExpressionGroup[]> {
+  const snap = await expressionGroups.where("language", "==", language).get();
+  return snap.docs.map(docToExpressionGroup).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export async function getExpressionGroup(groupId: string): Promise<ExpressionGroup | null> {
+  const doc = await expressionGroups.doc(groupId).get();
+  return doc.exists ? docToExpressionGroup(doc) : null;
+}
+
+export async function createExpressionGroup(language: string, name: string): Promise<ExpressionGroup> {
+  const id = `${language}_${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+  const group: ExpressionGroup = { id, language, name, expressionIds: [], createdAt: new Date().toISOString() };
+  await expressionGroups.doc(id).set(group);
+  return group;
+}
+
+export async function updateExpressionGroup(groupId: string, patch: { name?: string }): Promise<ExpressionGroup> {
+  await expressionGroups.doc(groupId).update(patch);
+  const updated = await expressionGroups.doc(groupId).get();
+  return docToExpressionGroup(updated);
+}
+
+export async function deleteExpressionGroup(groupId: string): Promise<void> {
+  await expressionGroups.doc(groupId).delete();
+}
+
+export async function modifyExpressionGroupMembers(
+  groupId: string,
+  expressionIds: string[],
+  action: "add" | "remove"
+): Promise<ExpressionGroup> {
+  return db.runTransaction(async (tx) => {
+    const ref = expressionGroups.doc(groupId);
+    const doc = await tx.get(ref);
+    if (!doc.exists) throw new Error(`Expression group '${groupId}' not found`);
+    const current: string[] = doc.data()!.expressionIds ?? [];
+    let next: string[];
+    if (action === "add") {
+      const toAdd = new Set(expressionIds);
+      next = [...current.filter((id) => !toAdd.has(id)), ...expressionIds];
+    } else {
+      const toRemove = new Set(expressionIds);
+      next = current.filter((id) => !toRemove.has(id));
+    }
+    tx.update(ref, { expressionIds: next });
+    return {
+      id: doc.data()!.id as string,
+      language: doc.data()!.language as string,
+      name: doc.data()!.name as string,
+      expressionIds: next,
+      createdAt: doc.data()!.createdAt as string,
+    };
+  });
 }
 
 // ========== Token Usage Metrics ==========

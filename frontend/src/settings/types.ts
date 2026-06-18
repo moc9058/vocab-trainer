@@ -19,4 +19,6 @@ export interface AppSettings {
   showKoreanHanja: boolean;
   /** ISO code of the definition language printed in the worksheet answer key. */
   printDefinitionLanguage: string;
+  /** Order of the main dashboard sections: vocabulary, speaking-writing, translation, grammar. */
+  sectionOrder: string[];
 }

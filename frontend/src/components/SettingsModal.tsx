@@ -58,6 +58,30 @@ function SortableItem({ id }: { id: string }) {
   );
 }
 
+const SECTION_LABEL_KEYS: Record<string, string> = {
+  vocabulary: "sectionVocabulary",
+  "speaking-writing": "sectionSpeakingWriting",
+  translation: "sectionTranslation",
+  grammar: "sectionGrammar",
+};
+
+function SortableSection({ id, label }: { id: string; label: string }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="flex items-center gap-3 rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 cursor-grab active:cursor-grabbing"
+    >
+      <span className="text-gray-500">⠿</span>
+      <span className="text-sm text-gray-200">{label}</span>
+    </div>
+  );
+}
+
 export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
   const { t } = useI18n();
   const { settings, updateSettings } = useSettings();
@@ -87,6 +111,7 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
   );
   const [showKoreanHanja, setShowKoreanHanja] = useState<boolean>(settings.showKoreanHanja);
   const [printDefLang, setPrintDefLang] = useState<string>(settings.printDefinitionLanguage);
+  const [sectionOrder, setSectionOrder] = useState<string[]>([...(settings.sectionOrder ?? ["vocabulary", "speaking-writing", "translation", "grammar"])]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -97,6 +122,17 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
     const { active, over } = event;
     if (over && active.id !== over.id) {
       setOrder((prev) => {
+        const oldIndex = prev.indexOf(active.id as string);
+        const newIndex = prev.indexOf(over.id as string);
+        return arrayMove(prev, oldIndex, newIndex);
+      });
+    }
+  }
+
+  function handleSectionDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setSectionOrder((prev) => {
         const oldIndex = prev.indexOf(active.id as string);
         const newIndex = prev.indexOf(over.id as string);
         return arrayMove(prev, oldIndex, newIndex);
@@ -131,6 +167,7 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
           : [order.find((c) => c !== defaultTranslationSource) ?? defaultTranslationSource],
       showKoreanHanja,
       printDefinitionLanguage: printDefLang,
+      sectionOrder,
     });
     onClose();
   }
@@ -147,6 +184,7 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
     setDefaultTranslationTargets(new Set(DEFAULT_SETTINGS.defaultTranslationTargetLanguages));
     setShowKoreanHanja(DEFAULT_SETTINGS.showKoreanHanja);
     setPrintDefLang(DEFAULT_SETTINGS.printDefinitionLanguage);
+    setSectionOrder([...DEFAULT_SETTINGS.sectionOrder]);
   }
 
   const supportedUiLanguages = new Set(uiLanguages as readonly string[]);
@@ -171,6 +209,20 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
                 <div className="space-y-1.5">
                   {order.map((code) => (
                     <SortableItem key={code} id={code} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </section>
+
+          {/* Section Order */}
+          <section className="mb-4">
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsSectionOrder")}</h4>
+            <DndContext id="section-order" sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSectionDragEnd}>
+              <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
+                <div className="space-y-1.5">
+                  {sectionOrder.map((key) => (
+                    <SortableSection key={key} id={key} label={t(SECTION_LABEL_KEYS[key] as import("../i18n/translations").TranslationKey)} />
                   ))}
                 </div>
               </SortableContext>

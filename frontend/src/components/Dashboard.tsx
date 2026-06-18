@@ -17,6 +17,8 @@ import SmartAddWordModal from "./SmartAddWordModal";
 import GrammarFormModal from "./GrammarFormModal";
 import TranslationView from "./TranslationView";
 import SpeakingWritingView from "./SpeakingWritingView";
+import ExpressionList from "./ExpressionList";
+import ExpressionQuizView from "./ExpressionQuizView";
 import QuizFilterModal from "./QuizFilterModal";
 import PrintWorksheet from "./PrintWorksheet";
 import { getTranslationHistory } from "../api/translation";
@@ -54,7 +56,9 @@ export default function Dashboard() {
   const [showSmartAdd, setShowSmartAdd] = useState(false);
   const [grammarFormLanguage, setGrammarFormLanguage] = useState<string | null>(null);
   // Translation / Speaking-Writing mode derived from URL location state
-  const locationMode = (location.state as { mode?: string } | null)?.mode as "new" | "resume" | undefined;
+  const locationState = location.state as { mode?: string; subMode?: string } | null;
+  const locationMode = locationState?.mode as "new" | "resume" | undefined;
+  const locationSubMode = locationState?.subMode as "expression-quiz" | undefined;
   const translationMode: "new" | "resume" | null = subPath === "/translation" ? (locationMode ?? "resume") : null;
   const speakingWritingMode: "new" | "resume" | null = subPath === "/speaking-writing" ? (locationMode ?? "resume") : null;
   const [hasTranslationHistory, setHasTranslationHistory] = useState(false);
@@ -79,6 +83,7 @@ export default function Dashboard() {
     }).catch(() => navigate(`/${language}`, { replace: true }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subPath, language]);
+
 
   // Check for translation history scoped to the current language
   useEffect(() => {
@@ -273,6 +278,16 @@ export default function Dashboard() {
   function handleBrowseGrammar() {
     if (!language) return;
     navigate(`/${language}/grammar`);
+  }
+
+  function handleBrowseExpressions() {
+    if (!language) return;
+    navigate(`/${language}/expressions`);
+  }
+
+  function handleStartExpressionQuiz() {
+    if (!language) return;
+    navigate(`/${language}/speaking-writing`, { state: { mode: "new", subMode: "expression-quiz" } });
   }
 
   const showBackButton = (subPath !== "/" && subPath !== "") || !!(selectedLanguage || showGrammarFilterModal || showSmartAdd || grammarFormLanguage);
@@ -490,8 +505,20 @@ export default function Dashboard() {
               />
             );
           })()
+        ) : subPath === "/expressions" ? (
+          <ExpressionList
+            language={isoCode}
+            onBack={() => navigate(`/${language}`)}
+          />
         ) : subPath === "/speaking-writing" ? (
-          <SpeakingWritingView mode={speakingWritingMode!} language={isoCode} />
+          locationSubMode === "expression-quiz" ? (
+            <ExpressionQuizView
+              language={isoCode}
+              onBack={() => navigate(`/${language}`)}
+            />
+          ) : (
+            <SpeakingWritingView mode={speakingWritingMode!} language={isoCode} />
+          )
         ) : subPath === "/translation" ? (
           <TranslationView mode={translationMode!} language={isoCode} />
         ) : (
@@ -512,6 +539,9 @@ export default function Dashboard() {
             onStartSpeakingWriting={() => navigate(`/${language}/speaking-writing`, { state: { mode: "new" } })}
             onResumeSpeakingWriting={() => navigate(`/${language}/speaking-writing`, { state: { mode: "resume" } })}
             hasSWSession={hasSWSession}
+            onStartExpressionQuiz={handleStartExpressionQuiz}
+            onBrowseExpressions={handleBrowseExpressions}
+            onAddExpression={() => navigate(`/${language}/expressions`)}
           />
         )}
       </main>

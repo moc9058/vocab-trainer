@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Point gcloud to the real Python on Windows (avoids Microsoft Store App Execution Alias stub)
+export CLOUDSDK_PYTHON="${CLOUDSDK_PYTHON:-/c/Users/azureuser/AppData/Local/Programs/Python/Python314/python.exe}"
+
 # Deploy vocab-trainer to Google Cloud Run
 # Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--word] [--wipe-grammar] [--llm] [--prompts] [--archives] [--example-sentences] [--grammar-examples]
 #

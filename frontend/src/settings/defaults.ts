@@ -31,4 +31,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultTranslationTargetLanguages: ["ja"],
   showKoreanHanja: true,
   printDefinitionLanguage: "en",
+  sectionOrder: ["vocabulary", "speaking-writing", "translation", "grammar", "expressions"],
 };

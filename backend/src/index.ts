@@ -13,6 +13,8 @@ import grammarQuizRoutes from "./routes/grammar-quiz.js";
 import grammarProgressRoutes from "./routes/grammar-progress.js";
 import translationRoutes from "./routes/translation.js";
 import speakingWritingRoutes from "./routes/speaking-writing.js";
+import expressionRoutes from "./routes/expressions.js";
+import expressionQuizRoutes from "./routes/expression-quiz.js";
 import metricsRoutes from "./routes/metrics.js";
 
 const LOG_DIR = resolve(import.meta.dirname, "..", "logs");
@@ -45,6 +47,8 @@ await fastify.register(grammarQuizRoutes, { prefix: "/api/grammar-quiz" });
 await fastify.register(grammarProgressRoutes, { prefix: "/api/grammar-progress" });
 await fastify.register(translationRoutes, { prefix: "/api/translation" });
 await fastify.register(speakingWritingRoutes, { prefix: "/api/speaking-writing" });
+await fastify.register(expressionRoutes, { prefix: "/api/expressions" });
+await fastify.register(expressionQuizRoutes, { prefix: "/api/expression-quiz" });
 await fastify.register(metricsRoutes, { prefix: "/api/metrics" });
 
 const port = parseInt(process.env.PORT ?? "3000", 10);
