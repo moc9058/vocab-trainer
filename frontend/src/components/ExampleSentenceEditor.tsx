@@ -107,7 +107,7 @@ export default function ExampleSentenceEditor({
     if (language !== "chinese") return;
     const texts = [...new Set(
       examples.flatMap((ex) => {
-        if (!ex.locked && ex.sentence && /[\s　]/.test(ex.sentence)) {
+        if (!ex.locked && ex.sentence && /[\s　]/.test(ex.sentence) && sentenceComplete(ex.sentence)) {
           return [...ex.sentence.matchAll(/([\p{Script=Han}a-zA-Z]+)/gu)]
             .map((m) => m[1])
             .filter((t) => !/^\p{P}+$/u.test(t));
