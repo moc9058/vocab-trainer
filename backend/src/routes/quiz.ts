@@ -10,6 +10,7 @@ import {
   updateQuizSession,
   getWordsByIds,
   flagWord,
+  getWordGroup,
 } from "../firestore.js";
 import type { QuizSession, QuizQuestion, Word, WordProgress } from "../types.js";
 
@@ -23,6 +24,8 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       categories?: string[];
       levels?: string[];
       groupIds?: string[];
+      groupWeights?: Record<string, number>;
+      flaggedOnly?: boolean;
       questionType?: string;
     };
   }>(
@@ -39,16 +42,18 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
             categories: { type: "array", items: { type: "string" } },
             levels: { type: "array", items: { type: "string" } },
             groupIds: { type: "array", items: { type: "string" } },
+            groupWeights: { type: "object", additionalProperties: { type: "number" } },
+            flaggedOnly: { type: "boolean" },
             questionType: { type: "string" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { language, questionCount, topics, categories, levels, groupIds, questionType } = request.body;
+      const { language, questionCount, topics, categories, levels, groupIds, groupWeights, flaggedOnly, questionType } = request.body;
       const [exists, pool] = await Promise.all([
         languageExists(language),
-        getFilteredWords(language, { topics, categories, levels, groupIds }),
+        getFilteredWords(language, { topics, categories, levels, groupIds, flaggedOnly }),
       ]);
 
       if (!exists) {
@@ -59,7 +64,26 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.badRequest("No words match the given filters");
       }
       const count = questionCount ? Math.min(questionCount, pool.length) : pool.length;
-      const selected = randomSample(pool, count);
+
+      // When groups are selected, order the pool by a weighted interleave: each next word's
+      // group is drawn proportionally to its weight (default 1), then a random word from it.
+      // A group drops out of the draw once all its words have been placed; the existing retry
+      // flow keeps a group "active" until its words are actually answered correct.
+      let selected: Word[];
+      let groupMembership: Record<string, string[]> | undefined;
+      if (groupIds && groupIds.length > 0) {
+        const membership = await buildGroupMembership(groupIds, pool);
+        const buckets = groupIds.map((id) => ({
+          weight: groupWeights?.[id] ?? 1,
+          items: membership[id] ?? [],
+        }));
+        selected = weightedInterleave(buckets).slice(0, count);
+        groupMembership = Object.fromEntries(
+          Object.entries(membership).map(([id, ws]) => [id, ws.map((w) => w.id)])
+        );
+      } else {
+        selected = randomSample(pool, count);
+      }
 
       const questions: QuizQuestion[] = selected.map((w) => ({
         wordId: w.id,
@@ -79,6 +103,9 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         questions,
         ...(questionType ? { questionType } : {}),
         wordIds: selected.map((w) => w.id),
+        ...(groupWeights ? { groupWeights } : {}),
+        ...(groupMembership ? { groupMembership } : {}),
+        ...(flaggedOnly ? { flaggedOnly } : {}),
       };
 
       await createQuizSession(session);
@@ -103,6 +130,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       categories?: string[];
       levels?: string[];
       groupIds?: string[];
+      flaggedOnly?: boolean;
     };
   }>(
     "/sample",
@@ -118,15 +146,16 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
             categories: { type: "array", items: { type: "string" } },
             levels: { type: "array", items: { type: "string" } },
             groupIds: { type: "array", items: { type: "string" } },
+            flaggedOnly: { type: "boolean" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { language, questionCount, topics, categories, levels, groupIds } = request.body;
+      const { language, questionCount, topics, categories, levels, groupIds, flaggedOnly } = request.body;
       const [exists, pool] = await Promise.all([
         languageExists(language),
-        getFilteredWords(language, { topics, categories, levels, groupIds }),
+        getFilteredWords(language, { topics, categories, levels, groupIds, flaggedOnly }),
       ]);
       if (!exists) return reply.notFound(`Language '${language}' not found`);
       if (pool.length === 0) return reply.badRequest("No words match the given filters");
@@ -278,7 +307,9 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         if (q.userCorrect !== undefined) answered.push(q);
         else unanswered.push(q);
       }
-      session.questions = [...answered, ...shuffle(unanswered)];
+      // Preserve weighted ordering on resume when this was a weighted (grouped) session;
+      // otherwise fall back to a uniform shuffle of the remaining questions.
+      session.questions = [...answered, ...reweightUnanswered(unanswered, session)];
       await updateQuizSession(session);
 
       return session;
@@ -290,14 +321,90 @@ function randomSample(words: Word[], count: number): Word[] {
   return shuffle(words).slice(0, count);
 }
 
+// Weighted interleave: repeatedly pick a bucket with probability proportional to its
+// weight (among buckets that still have items), then take a random item from it. Used to
+// order the quiz by group weight. Buckets with weight <= 0 or no items are skipped.
+function weightedInterleave<T>(buckets: { weight: number; items: T[] }[]): T[] {
+  const pools = buckets
+    .filter((b) => b.weight > 0 && b.items.length > 0)
+    .map((b) => ({ weight: b.weight, items: shuffle(b.items) }));
+  const order: T[] = [];
+  while (pools.some((p) => p.items.length > 0)) {
+    const active = pools.filter((p) => p.items.length > 0);
+    const total = active.reduce((sum, p) => sum + p.weight, 0);
+    let r = Math.random() * total;
+    let chosen = active[active.length - 1];
+    for (const p of active) {
+      r -= p.weight;
+      if (r <= 0) {
+        chosen = p;
+        break;
+      }
+    }
+    order.push(chosen.items.pop()!);
+  }
+  return order;
+}
+
+// Assign each pooled word to exactly one of the selected groups — the first group (in
+// groupIds order) whose membership contains it — so weighted draws have well-defined
+// denominators and each word appears once.
+async function buildGroupMembership(
+  groupIds: string[],
+  pool: Word[]
+): Promise<Record<string, Word[]>> {
+  const groupDocs = await Promise.all(groupIds.map((id) => getWordGroup(id)));
+  const wordById = new Map(pool.map((w) => [w.id, w]));
+  const assigned = new Set<string>();
+  const membership: Record<string, Word[]> = {};
+  for (const id of groupIds) membership[id] = [];
+  for (const g of groupDocs) {
+    if (!g) continue;
+    for (const wid of g.wordIds) {
+      if (wordById.has(wid) && !assigned.has(wid)) {
+        assigned.add(wid);
+        membership[g.id].push(wordById.get(wid)!);
+      }
+    }
+  }
+  return membership;
+}
+
+// Re-order the unanswered tail on resume. For weighted (grouped) sessions, rebuild the
+// order with the stored per-group weights so resuming keeps the weighting; otherwise just
+// shuffle uniformly.
+function reweightUnanswered(unanswered: QuizQuestion[], session: QuizSession): QuizQuestion[] {
+  const membership = session.groupMembership;
+  if (!membership || Object.keys(membership).length === 0) {
+    return shuffle(unanswered);
+  }
+  const byWordId = new Map<string, QuizQuestion>();
+  for (const q of unanswered) byWordId.set(q.wordId, q);
+  const buckets = Object.entries(membership).map(([gid, wordIds]) => ({
+    weight: session.groupWeights?.[gid] ?? 1,
+    items: wordIds.filter((wid) => byWordId.has(wid)).map((wid) => byWordId.get(wid)!),
+  }));
+  const ordered = weightedInterleave(buckets);
+  // Append any unanswered question not covered by the stored membership.
+  const covered = new Set(ordered.map((q) => q.wordId));
+  for (const q of unanswered) {
+    if (!covered.has(q.wordId)) ordered.push(q);
+  }
+  return ordered;
+}
+
 function insertRetryQuestion(
   questions: QuizQuestion[],
   retryQuestion: QuizQuestion,
   answeredIndex: number
 ): void {
-  const insertAt = answeredIndex + 1;
-  questions.splice(insertAt, 0, retryQuestion);
-  questions.splice(insertAt, questions.length - insertAt, ...shuffle(questions.slice(insertAt)));
+  // Insert the retry copy at a random position within the remaining tail so it does not
+  // always appear next. Unlike a full tail reshuffle, this preserves the existing order of
+  // the rest of the tail — important for keeping a weighted (grouped) quiz's ordering intact.
+  const tailStart = answeredIndex + 1;
+  const tailLen = questions.length - tailStart;
+  const pos = tailStart + Math.floor(Math.random() * (tailLen + 1));
+  questions.splice(pos, 0, retryQuestion);
 }
 
 function shuffle<T>(items: T[]): T[] {

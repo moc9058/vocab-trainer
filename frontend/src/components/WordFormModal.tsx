@@ -18,11 +18,12 @@ interface Props {
   onSave: (word: Omit<Word, "id"> & { id?: string; groupIds?: string[] }) => Promise<void>;
   onClose: () => void;
   onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
+  onQueueEdit?: (data: Omit<Word, "id"> & { id: string; groupIds: string[] }) => void;
   pendingTerms?: Set<string>;
   refreshSignal?: number;
 }
 
-export default function WordFormModal({ language, word, onSave, onClose, onQueue, pendingTerms, refreshSignal }: Props) {
+export default function WordFormModal({ language, word, onSave, onClose, onQueue, onQueueEdit, pendingTerms, refreshSignal }: Props) {
   const { t } = useI18n();
   const [term, setTerm] = useState(word?.term ?? "");
   const [transliteration, setTransliteration] = useState(word?.transliteration ?? "");
@@ -107,36 +108,47 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
     if (defs.length === 0) return;
 
     const isChinese = language === "chinese";
+    const cleanExamples = examples
+      .filter((ex) => ex.sentence.trim())
+      .map(({ id, sentence, translation, originalTranslation }) => {
+        const trimmed = sentence.trim();
+        // If the user hasn't changed the translation display value, round-trip the
+        // original (possibly multi-lang) translation object so we don't flatten it.
+        const resolvedTranslation: string | Record<string, string> =
+          translation === displayTranslation(originalTranslation) ? originalTranslation : translation;
+        if (isChinese) {
+          const cleanSentence = trimmed.replace(/[\s　]+/g, "");
+          if (/[\s　]/.test(trimmed)) {
+            const splits = trimmed.match(/[\p{Script=Han}a-zA-Z]+/gu) ?? [];
+            if (splits.length >= 2) return { id, sentence: cleanSentence, translation: resolvedTranslation, userSplits: splits };
+          }
+          return { id, sentence: cleanSentence, translation: resolvedTranslation };
+        }
+        return { id, sentence: trimmed, translation: resolvedTranslation };
+      });
+
+    const payload = {
+      term: term.trim(),
+      transliteration: transliteration.trim() || undefined,
+      definitions: defs,
+      topics: [...topics],
+      level: level.trim() || undefined,
+      examples: cleanExamples,
+      notes: notes.trim() || undefined,
+    };
+
+    if (word?.id && onQueueEdit) {
+      onQueueEdit({ ...payload, id: word.id, groupIds: [...selectedGroupIds] });
+      onClose();
+      return;
+    }
+
     setSaving(true);
     setError("");
     try {
-      const cleanExamples = examples
-        .filter((ex) => ex.sentence.trim())
-        .map(({ id, sentence, translation, originalTranslation }) => {
-          const trimmed = sentence.trim();
-          // If the user hasn't changed the translation display value, round-trip the
-          // original (possibly multi-lang) translation object so we don't flatten it.
-          const resolvedTranslation: string | Record<string, string> =
-            translation === displayTranslation(originalTranslation) ? originalTranslation : translation;
-          if (isChinese) {
-            const cleanSentence = trimmed.replace(/[\s　]+/g, "");
-            if (/[\s　]/.test(trimmed)) {
-              const splits = trimmed.match(/[\p{Script=Han}a-zA-Z]+/gu) ?? [];
-              if (splits.length >= 2) return { id, sentence: cleanSentence, translation: resolvedTranslation, userSplits: splits };
-            }
-            return { id, sentence: cleanSentence, translation: resolvedTranslation };
-          }
-          return { id, sentence: trimmed, translation: resolvedTranslation };
-        });
       await onSave({
         ...(word ? { id: word.id } : {}),
-        term: term.trim(),
-        transliteration: transliteration.trim() || undefined,
-        definitions: defs,
-        topics: [...topics],
-        level: level.trim() || undefined,
-        examples: cleanExamples,
-        notes: notes.trim() || undefined,
+        ...payload,
         ...(word?.id ? { groupIds: [...selectedGroupIds] } : {}),
       });
       onClose();

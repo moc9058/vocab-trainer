@@ -138,7 +138,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     if (wordLanguage !== "chinese") return;
     const texts = [...new Set(
       examples.flatMap((ex) => {
-        if (ex.sentence && /[\s　]/.test(ex.sentence)) {
+        if (ex.sentence && /[\s　]/.test(ex.sentence) && sentenceComplete(ex.sentence)) {
           return [...ex.sentence.matchAll(/([\p{Script=Han}a-zA-Z]+)/gu)]
             .map((m) => m[1])
             .filter((t) => !/^\p{P}+$/u.test(t));
@@ -149,6 +149,15 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     if (texts.length === 0) {
       setExistingTerms(new Map());
       setCheckingTerms(false);
+      setQueuedSegments((prev) => {
+        if (prev.size === 0) return prev;
+        const next = new Set(prev);
+        for (const key of prev) {
+          const { chipText } = parseQueuedSegmentKey(key);
+          if (!pendingTerms?.has(chipText)) next.delete(key);
+        }
+        return next.size === prev.size ? prev : next;
+      });
       return;
     }
     setCheckingTerms(true);
@@ -159,7 +168,13 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           if (v !== segmentVersionRef.current) return;
           const existingMap = new Map(Object.entries(existing));
           setExistingTerms(existingMap);
+          // Definitive answer: drop the queued pin only now. A chip found in
+          // the DB becomes green ✓ (existingMap); one no longer in flight that
+          // wasn't found reverts to blue "+ " (genuine failure). Keeping the
+          // pin until this round-trip is what prevents the chip flashing back
+          // to its un-added state in the window after it leaves `pendingTerms`.
           setQueuedSegments((prev) => {
+            if (prev.size === 0) return prev;
             const next = new Set(prev);
             for (const key of prev) {
               const { chipText } = parseQueuedSegmentKey(key);
@@ -167,7 +182,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                 next.delete(key);
               }
             }
-            return next;
+            return next.size === prev.size ? prev : next;
           });
           setCheckingTerms(false);
         })
@@ -176,20 +191,13 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
         });
     }, 300);
     return () => clearTimeout(timer);
-  }, [examples, wordLanguage, refreshSignal]);
-
-  useEffect(() => {
-    setQueuedSegments((prev) => {
-      const next = new Set(prev);
-      for (const key of prev) {
-        const { chipText } = parseQueuedSegmentKey(key);
-        if (existingTerms.has(chipText) || !pendingTerms?.has(chipText)) {
-          next.delete(key);
-        }
-      }
-      return next;
-    });
-  }, [existingTerms, pendingTerms]);
+    // `pendingTerms` is a dep so a queue failure (which doesn't bump
+    // `refreshSignal`) still re-runs the check and clears the stale pin.
+    // NOTE: do NOT add a separate effect that unpins on `pendingTerms` change
+    // alone — that drops the pin the instant the queue finishes, before this
+    // confirming round-trip populates `existingTerms`, which is exactly the
+    // window that makes the chip flash back to its un-added "+ " state.
+  }, [examples, wordLanguage, refreshSignal, pendingTerms]);
 
   function getQueuedSegmentKey(chipText: string, sentence: string): string {
     return `${chipText}\u0000${sentence.replace(/[\s　]+/g, "")}`;
@@ -243,6 +251,10 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
 
   function getDefLangKey(def: { langSelect: string }): string {
     return def.langSelect;
+  }
+
+  function sentenceComplete(sentence: string): boolean {
+    return /[。！？…\.!?"'」』]$/.test(sentence.trim());
   }
 
   function getChipInfo(sentence: string): Array<{ text: string; sepIsSpaceOnly: boolean }> {
@@ -638,7 +650,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                   placeholder={wordLanguage === "chinese" ? `${t("sentence")} (use spaces to split)` : t("sentence")}
                   className="w-full resize-none overflow-hidden rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
                 />
-                {wordLanguage === "chinese" && (() => {
+                {wordLanguage === "chinese" && sentenceComplete(ex.sentence) && (() => {
                   const chips = getChipInfo(ex.sentence);
                   if (chips.length < 2) return null;
                   return (

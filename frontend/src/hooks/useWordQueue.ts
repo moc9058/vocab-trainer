@@ -1,27 +1,45 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { modifyGroupMembers, smartAddWord } from "../api/vocab";
+import { modifyGroupMembers, smartAddWord, updateWord } from "../api/vocab";
+import type { Word } from "../types";
 
 type SmartAddPayload = Parameters<typeof smartAddWord>[1];
 
-// Maximum smartAddWord calls in flight at once. Higher = faster bulk adds,
+// Maximum concurrent queue item executions. Higher = faster bulk adds,
 // but raises the risk that two parallel adds touching the same example
 // sentence write segment.id forward-links last-writer-wins. Reverse links
 // (Word.appearsInIds) remain correct via arrayUnion; run syncSegmentLinks
 // after a heavy batch if you spot a gap.
 const CONCURRENCY = 4;
 
-interface QueueItem {
-  id: string;
-  term: string;
-  language: string;
-  payload: SmartAddPayload;
-}
+type QueueItem =
+  | { id: string; type: "create"; term: string; language: string; payload: SmartAddPayload }
+  | { id: string; type: "update"; term: string; language: string; wordId: string; updates: Partial<Word>; groupsToAdd: string[]; groupsToRemove: string[] };
 
 export interface QueueResult {
   id: string;
   term: string;
   success: boolean;
   error?: string;
+}
+
+async function processItem(item: QueueItem): Promise<void> {
+  if (item.type === "create") {
+    const word = await smartAddWord(item.language, item.payload);
+    const groupIds = item.payload.groupIds ?? [];
+    if (groupIds.length > 0) {
+      await Promise.all(
+        groupIds.map((groupId) =>
+          modifyGroupMembers(item.language, groupId, [word.id], "add"),
+        ),
+      );
+    }
+  } else {
+    await updateWord(item.language, item.wordId, item.updates);
+    await Promise.all([
+      ...item.groupsToAdd.map((gid) => modifyGroupMembers(item.language, gid, [item.wordId], "add")),
+      ...item.groupsToRemove.map((gid) => modifyGroupMembers(item.language, gid, [item.wordId], "remove")),
+    ]);
+  }
 }
 
 export function useWordQueue() {
@@ -41,16 +59,8 @@ export function useWordQueue() {
     setProcessing((prev) => [...prev, ...toStart]);
 
     for (const item of toStart) {
-      smartAddWord(item.language, item.payload)
-        .then(async (word) => {
-          const groupIds = item.payload.groupIds ?? [];
-          if (groupIds.length > 0) {
-            await Promise.all(
-              groupIds.map((groupId) =>
-                modifyGroupMembers(item.language, groupId, [word.id], "add"),
-              ),
-            );
-          }
+      processItem(item)
+        .then(() => {
           setRecentResults((prev) =>
             [{ id: item.id, term: item.term, success: true }, ...prev].slice(0, 5),
           );
@@ -71,7 +81,21 @@ export function useWordQueue() {
   const enqueue = useCallback((term: string, language: string, payload: SmartAddPayload) => {
     setQueue((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), term, language, payload },
+      { id: crypto.randomUUID(), type: "create", term, language, payload },
+    ]);
+  }, []);
+
+  const enqueueUpdate = useCallback((
+    term: string,
+    language: string,
+    wordId: string,
+    updates: Partial<Word>,
+    groupsToAdd: string[],
+    groupsToRemove: string[],
+  ) => {
+    setQueue((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), type: "update", term, language, wordId, updates, groupsToAdd, groupsToRemove },
     ]);
   }, []);
 
@@ -92,6 +116,7 @@ export function useWordQueue() {
 
   return {
     enqueue,
+    enqueueUpdate,
     pendingTerms,
     processingTerms,
     queueLength: queue.length,

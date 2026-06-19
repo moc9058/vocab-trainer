@@ -16,6 +16,8 @@ export function startQuiz(opts: {
   categories?: string[];
   levels?: string[];
   groupIds?: string[];
+  groupWeights?: Record<string, number>;
+  flaggedOnly?: boolean;
   questionType?: string;
 }): Promise<QuizSession> {
   return postJson<QuizSession>("/api/quiz/start", opts);
@@ -36,6 +38,7 @@ export function sampleWords(opts: {
   categories?: string[];
   levels?: string[];
   groupIds?: string[];
+  flaggedOnly?: boolean;
 }): Promise<{ words: Word[] }> {
   return postJson<{ words: Word[] }>("/api/quiz/sample", opts);
 }

@@ -28,10 +28,23 @@ interface Props {
   initialSearch?: string;
   refreshSignal?: number;
   onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
+  onQueueEdit?: (term: string, language: string, wordId: string, updates: Partial<Word>, groupsToAdd: string[], groupsToRemove: string[]) => void;
   pendingTerms?: Set<string>;
 }
 
-export default function WordList({ language, onBack, initialExpandId, initialSearch, refreshSignal, onQueue, pendingTerms }: Props) {
+function getPageNumbers(current: number, total: number): (number | "...")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages: (number | "...")[] = [1];
+  if (current > 3) pages.push("...");
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+  for (let i = start; i <= end; i++) pages.push(i);
+  if (current < total - 2) pages.push("...");
+  pages.push(total);
+  return pages;
+}
+
+export default function WordList({ language, onBack, initialExpandId, initialSearch, refreshSignal, onQueue, onQueueEdit, pendingTerms }: Props) {
   const { t } = useI18n();
   const currentIsoCode = urlLanguageToIsoCode(language) ?? language;
   const [result, setResult] = useState<PaginatedResult<Word> | null>(null);
@@ -153,6 +166,16 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     if (expandedId === id) {
       refreshExistingTerms(updatedWord);
     }
+  }
+
+  function handleQueueEditWord(data: Omit<Word, "id"> & { id: string; groupIds: string[] }) {
+    if (!onQueueEdit) return;
+    const { id, groupIds: selectedGroupIds, ...updates } = data;
+    const originalGroupIds = new Set(groups.filter((g) => g.wordIds.includes(id)).map((g) => g.id));
+    const selectedSet = new Set(selectedGroupIds);
+    const toAdd = selectedGroupIds.filter((gId) => !originalGroupIds.has(gId));
+    const toRemove = [...originalGroupIds].filter((gId) => !selectedSet.has(gId));
+    onQueueEdit(data.term, language, id, updates, toAdd, toRemove);
   }
 
   async function handleDeleteWord(wordId: string) {
@@ -966,6 +989,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           onSave={handleUpdateWord}
           onClose={() => setEditingWord(null)}
           onQueue={onQueue}
+          onQueueEdit={onQueueEdit ? handleQueueEditWord : undefined}
           pendingTerms={pendingTerms}
           refreshSignal={refreshSignal}
         />
@@ -1019,7 +1043,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
 
       {/* Pagination */}
       {result && result.totalPages > 1 && (
-        <div className="flex items-center justify-center gap-4 border-t border-gray-700 bg-gray-800 px-3 sm:px-6 py-3">
+        <div className="flex items-center justify-center gap-1 border-t border-gray-700 bg-gray-800 px-3 sm:px-6 py-3">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
@@ -1027,9 +1051,21 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           >
             {t("previous")}
           </button>
-          <span className="text-sm text-gray-400">
-            {t("page")} {result.page} {t("of")} {result.totalPages}
-          </span>
+          <div className="flex items-center gap-1 mx-2">
+            {getPageNumbers(page, result.totalPages).map((p, i) =>
+              p === "..." ? (
+                <span key={`ellipsis-${i}`} className="px-1 text-sm text-gray-500">…</span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={`rounded-lg px-3 py-1.5 text-sm ${p === page ? "bg-blue-600 text-white" : "text-gray-300 hover:bg-gray-700"}`}
+                >
+                  {p}
+                </button>
+              )
+            )}
+          </div>
           <button
             onClick={() => setPage((p) => Math.min(result.totalPages, p + 1))}
             disabled={page >= result.totalPages}

@@ -148,6 +148,11 @@ export interface QuizSession {
   questions: QuizQuestion[];
   questionType?: string;
   wordIds?: string[];
+  groupWeights?: Record<string, number>;
+  groupMembership?: Record<string, string[]>;
+  pendingWordIds?: string[];
+  questionTarget?: number;
+  flaggedOnly?: boolean;
 }
 
 export interface PaginatedResult<T> {

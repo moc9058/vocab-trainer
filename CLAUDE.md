@@ -30,6 +30,7 @@ cd backend && npx tsx scripts/unify-chinese-levels.ts
 cd backend && npx tsx scripts/migrate-example-sentences.ts [--dry-run]
 cd backend && npx tsx scripts/migrate-grammar-examples.ts [--dry-run] [--language=<lang>]
 cd backend && npx tsx scripts/fix-word-index-entry.ts
+cd backend && npx tsx scripts/sweep-orphaned-word-index.ts [--language=<lang> | --all] [--dry-run]   # bulk delete/repair orphaned & mislinked word_index entries
 ```
 
 ### Frontend

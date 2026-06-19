@@ -8,7 +8,7 @@ import type { Word, Meaning } from "../types";
 
 interface Props {
   language: string;
-  filters: { topics: string[]; categories: string[]; levels: string[]; groupIds: string[] };
+  filters: { topics: string[]; categories: string[]; levels: string[]; groupIds: string[]; flaggedOnly?: boolean };
   count: number | null;
   onBack: () => void;
 }
@@ -48,6 +48,7 @@ export default function PrintWorksheet({ language, filters, count, onBack }: Pro
       categories: filters.categories,
       levels: filters.levels,
       groupIds: filters.groupIds,
+      ...(filters.flaggedOnly ? { flaggedOnly: true } : {}),
     })
       .then((res) => {
         if (cancelled) return;

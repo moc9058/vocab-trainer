@@ -52,6 +52,12 @@ export default function ExampleSentenceEditor({
   const [existingTerms, setExistingTerms] = useState<Map<string, string>>(new Map());
   const [checkingTerms, setCheckingTerms] = useState(false);
   const [busySegments, setBusySegments] = useState<Set<string>>(new Set());
+  // Terms enqueued via `onQueue` that we keep pinned to the in-progress amber
+  // state until the confirming `checkTerms` round-trip resolves. This bridges
+  // the gap where a chip has left `pendingTerms` (queue finished) but the
+  // debounced `checkTerms` hasn't yet populated `existingTerms` — without it the
+  // chip flashes back to its un-added blue "+ " state for a frame.
+  const [pinnedTerms, setPinnedTerms] = useState<Set<string>>(new Set());
   const [segmentFlags, setSegmentFlags] = useState<Map<string, boolean>>(new Map());
   const [segmentAddError, setSegmentAddError] = useState<string | null>(null);
   const segmentVersionRef = useRef(0);
@@ -118,6 +124,7 @@ export default function ExampleSentenceEditor({
     if (texts.length === 0) {
       setExistingTerms(new Map());
       setCheckingTerms(false);
+      setPinnedTerms((prev) => unpinResolved(prev, new Map(), pendingTerms));
       return;
     }
     setCheckingTerms(true);
@@ -126,7 +133,12 @@ export default function ExampleSentenceEditor({
       checkTerms(language, texts)
         .then(({ existing }) => {
           if (v !== segmentVersionRef.current) return;
-          setExistingTerms(new Map(Object.entries(existing)));
+          const existingMap = new Map(Object.entries(existing));
+          setExistingTerms(existingMap);
+          // Now that we have a definitive answer, drop the pin: terms found in
+          // the DB become green ✓ (existingMap), terms no longer in flight that
+          // weren't found revert to blue "+ " (genuine failure / nothing added).
+          setPinnedTerms((prev) => unpinResolved(prev, existingMap, pendingTerms));
           setCheckingTerms(false);
         })
         .catch(() => {
@@ -134,16 +146,37 @@ export default function ExampleSentenceEditor({
         });
     }, 300);
     return () => clearTimeout(timer);
-  }, [examples, language, refreshSignal]);
+    // `pendingTerms` is a dep so a queue failure (which doesn't bump
+    // `refreshSignal`) still re-runs the check and clears the stale pin.
+  }, [examples, language, refreshSignal, pendingTerms]);
+
+  // A pinned term is "resolved" once it's confirmed in the DB (→ stays green via
+  // existingMap) or is no longer in flight (queue done/failed). Until then it
+  // stays pinned so the chip never falls back to its un-added state.
+  function unpinResolved(
+    prev: Set<string>,
+    existingMap: Map<string, string>,
+    pending: Set<string> | undefined,
+  ): Set<string> {
+    if (prev.size === 0) return prev;
+    const next = new Set(prev);
+    for (const term of prev) {
+      if (existingMap.has(term) || !pending?.has(term)) next.delete(term);
+    }
+    return next.size === prev.size ? prev : next;
+  }
 
   async function handleAddSegment(chipText: string, sentence: string, translation: string) {
-    if (existingTerms.has(chipText) || pendingTerms?.has(chipText)) return;
+    if (existingTerms.has(chipText) || pendingTerms?.has(chipText) || pinnedTerms.has(chipText)) return;
     // Per-chip group choice REPLACES the form-level `selectedGroupIds` for this
     // workflow: each chip carries exactly the group selected in its dropdown
     // (latest-created by default, or "" for no group).
     const chipGroupId = getChipGroupId(chipText);
     const groupIds = chipGroupId ? [chipGroupId] : [];
     if (onQueue) {
+      // Pin immediately so the chip shows amber from the click onward, before
+      // the parent's `pendingTerms` has even updated.
+      setPinnedTerms((prev) => new Set(prev).add(chipText));
       onQueue(chipText, language, {
         term: chipText,
         examples: [{ sentence: sentence.replace(/[\s　]+/g, ""), translation }],
@@ -202,7 +235,7 @@ export default function ExampleSentenceEditor({
   }
 
   function sentenceComplete(sentence: string): boolean {
-    return /[。！？…\.!?]$/.test(sentence.trim());
+    return /[。！？…\.!?"'」』]$/.test(sentence.trim());
   }
 
   const trimmedCurrentTerm = currentTerm?.trim() ?? "";
@@ -215,6 +248,7 @@ export default function ExampleSentenceEditor({
     const s = new Set<string>();
     busySegments.forEach((t) => s.add(t));
     pendingTerms?.forEach((t) => s.add(t));
+    pinnedTerms.forEach((t) => s.add(t));
     return [...s];
   })();
 
@@ -258,7 +292,7 @@ export default function ExampleSentenceEditor({
         // worker without context for the words it's processing.
         const chips = language === "chinese" && !ex.locked ? getChipInfo(ex.sentence) : [];
         const hasInFlightChips = chips.some(
-          (c) => busySegments.has(c.text) || (pendingTerms?.has(c.text) ?? false),
+          (c) => busySegments.has(c.text) || (pendingTerms?.has(c.text) ?? false) || pinnedTerms.has(c.text),
         );
         return (
         <div
@@ -291,7 +325,8 @@ export default function ExampleSentenceEditor({
                 !/^\p{P}+$/u.test(c.text) &&
                 !(trimmedCurrentTerm && c.text === trimmedCurrentTerm) &&
                 !existingTerms.has(c.text) &&
-                !pendingTerms?.has(c.text)
+                !pendingTerms?.has(c.text) &&
+                !pinnedTerms.has(c.text)
             );
             return (
               <div className="mb-1 flex flex-wrap items-start gap-1">
@@ -300,7 +335,7 @@ export default function ExampleSentenceEditor({
                   const isSelf = !isPunct && !!trimmedCurrentTerm && chip.text === trimmedCurrentTerm;
                   const exists = isSelf || (!isPunct && existingTerms.has(chip.text));
                   const busy = busySegments.has(chip.text);
-                  const queued = !isPunct && !isSelf && !exists && !!pendingTerms?.has(chip.text);
+                  const queued = !isPunct && !isSelf && !exists && (!!pendingTerms?.has(chip.text) || pinnedTerms.has(chip.text));
                   // `checking` must NOT apply to a chip already in flight (busy
                   // or queued) — otherwise a freshly typed sibling chip triggers
                   // `checkingTerms` globally and the in-flight chip would morph

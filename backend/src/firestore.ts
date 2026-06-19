@@ -242,7 +242,7 @@ export async function getAllWords(language: string): Promise<Word[]> {
 
 export async function getFilteredWords(
   language: string,
-  filters?: { topics?: string[]; categories?: string[]; levels?: string[]; groupIds?: string[] }
+  filters?: { topics?: string[]; categories?: string[]; levels?: string[]; groupIds?: string[]; flaggedOnly?: boolean }
 ): Promise<Word[]> {
   // Firestore array-contains can only filter on one topic at a time,
   // so we fetch all words and filter client-side for multi-value filters
@@ -253,6 +253,7 @@ export async function getFilteredWords(
   const hasCategoryFilter = filters?.categories && filters.categories.length > 0;
   const hasLevelFilter = filters?.levels && filters.levels.length > 0;
   const hasGroupFilter = filters?.groupIds && filters.groupIds.length > 0;
+  const hasFlaggedFilter = !!filters?.flaggedOnly;
 
   // Group filter: resolve all selected groups and compute union of their wordIds
   let groupWordIdSet: Set<string> | null = null;
@@ -265,10 +266,19 @@ export async function getFilteredWords(
     groupWordIdSet = union;
   }
 
-  if (hasTopicFilter || hasCategoryFilter || hasLevelFilter || hasGroupFilter) {
+  // Flagged filter: restrict the pool to flagged words (AND with the other filters)
+  let flaggedWordIdSet: Set<string> | null = null;
+  if (hasFlaggedFilter) {
+    const flagged = await getFlaggedWords(language);
+    flaggedWordIdSet = new Set(flagged.map((f) => f.wordId));
+  }
+
+  if (hasTopicFilter || hasCategoryFilter || hasLevelFilter || hasGroupFilter || hasFlaggedFilter) {
     results = results.filter((w) => {
       // Group acts as a scope limiter (AND with other filters)
       const matchesGroup = !groupWordIdSet || groupWordIdSet.has(w.id);
+      // Flagged acts as a scope limiter (AND with other filters)
+      const matchesFlagged = !flaggedWordIdSet || flaggedWordIdSet.has(w.id);
       // Level acts as a scope limiter (AND with other filters)
       const matchesLevel = !hasLevelFilter || (!!w.level && filters!.levels!.includes(w.level));
       // Topics and categories are additive (OR with each other)
@@ -276,7 +286,7 @@ export async function getFilteredWords(
         ? true
         : (hasTopicFilter && w.topics.some((t) => filters!.topics!.includes(t))) ||
           (hasCategoryFilter && w.definitions.some((m) => filters!.categories!.includes(m.partOfSpeech)));
-      return matchesGroup && matchesLevel && matchesContent;
+      return matchesGroup && matchesFlagged && matchesLevel && matchesContent;
     });
   }
 
@@ -557,21 +567,24 @@ export async function getNextWordId(language: string): Promise<string> {
   };
 
   const docRef = idMaps.doc(language);
-  const doc = await docRef.get();
+  const prefix = isoMap[language.toLowerCase()] ?? language.slice(0, 2).toLowerCase();
 
-  let nextId: number;
-  let prefix: string;
-
-  if (doc.exists) {
-    const data = doc.data()!;
-    nextId = data.next_id;
-    prefix = isoMap[language.toLowerCase()] ?? language.slice(0, 2).toLowerCase();
-    await docRef.update({ next_id: FieldValue.increment(1) });
-  } else {
-    prefix = isoMap[language.toLowerCase()] ?? language.slice(0, 2).toLowerCase();
-    nextId = 1;
-    await docRef.set({ next_id: 2 });
-  }
+  // Atomic read-modify-write. The smart-add queue runs up to CONCURRENCY adds
+  // in parallel; a plain get()-then-increment() lets two callers read the same
+  // next_id and be handed the SAME word ID. The duplicate then clobbers the
+  // other word's doc on .set(), leaving an orphaned word_index entry that
+  // makes a non-existent word look "green"/existing. The transaction
+  // serializes the increment so every caller gets a distinct ID.
+  const nextId = await db.runTransaction<number>(async (tx) => {
+    const doc = await tx.get(docRef);
+    if (doc.exists) {
+      const current = doc.data()!.next_id as number;
+      tx.update(docRef, { next_id: FieldValue.increment(1) });
+      return current;
+    }
+    tx.set(docRef, { next_id: 2 });
+    return 1;
+  });
 
   return `${prefix}-${String(nextId).padStart(6, "0")}`;
 }
@@ -584,18 +597,21 @@ const ISO_MAP: Record<string, string> = {
 
 export async function getNextExampleId(language: string): Promise<string> {
   const docRef = idMaps.doc(`example_sentences_${language}`);
-  const doc = await docRef.get();
-
-  let nextId: number;
   const prefix = `exs-${ISO_MAP[language.toLowerCase()] ?? language.slice(0, 2).toLowerCase()}`;
 
-  if (doc.exists) {
-    nextId = doc.data()!.next_id;
-    await docRef.update({ next_id: FieldValue.increment(1) });
-  } else {
-    nextId = 1;
-    await docRef.set({ next_id: 2 });
-  }
+  // Atomic read-modify-write — see getNextWordId. Concurrent example creation
+  // (e.g. several queued smart-adds each creating sentences) must not be handed
+  // duplicate example IDs.
+  const nextId = await db.runTransaction<number>(async (tx) => {
+    const doc = await tx.get(docRef);
+    if (doc.exists) {
+      const current = doc.data()!.next_id as number;
+      tx.update(docRef, { next_id: FieldValue.increment(1) });
+      return current;
+    }
+    tx.set(docRef, { next_id: 2 });
+    return 1;
+  });
 
   return `${prefix}-${String(nextId).padStart(6, "0")}`;
 }
@@ -1200,16 +1216,32 @@ async function hydrateWords(rawWords: WordRaw[]): Promise<Word[]> {
 
 // ========== Word Index ==========
 
+// Return true iff the word_index entry still has a backing word doc whose term
+// matches. Guards against orphaned entries (word doc missing) and mislinked
+// entries (the referenced word doc now holds a different term — e.g. after a
+// duplicate-ID collision). Such entries must not be reported as "existing", or
+// callers like check-terms (chip "✓ exists" state) and segment linking would
+// treat a ghost word as real.
+function wordEntryIsLive(
+  entry: WordIndexEntry,
+  wordDoc: FirebaseFirestore.DocumentSnapshot,
+): boolean {
+  return wordDoc.exists && wordDoc.data()!.term === entry.term;
+}
+
 export async function lookupWordByTerm(language: string, term: string): Promise<WordIndexEntry | null> {
   const docId = `${language}_${term}`;
   const doc = await wordIndex.doc(docId).get();
   if (!doc.exists) return null;
   const d = doc.data()!;
-  return { term: d.term, id: d.id, level: d.level, transliteration: d.transliteration ?? d.pinyin };
+  const entry: WordIndexEntry = { term: d.term, id: d.id, level: d.level, transliteration: d.transliteration ?? d.pinyin };
+  const wordDoc = await words.doc(entry.id).get();
+  if (!wordEntryIsLive(entry, wordDoc)) return null;
+  return entry;
 }
 
 export async function lookupWordsByTerms(language: string, terms: string[]): Promise<WordIndexEntry[]> {
-  const results: WordIndexEntry[] = [];
+  const candidates: WordIndexEntry[] = [];
   const CHUNK_SIZE = 100;
 
   for (let i = 0; i < terms.length; i += CHUNK_SIZE) {
@@ -1219,12 +1251,28 @@ export async function lookupWordsByTerms(language: string, terms: string[]): Pro
     for (const doc of docs) {
       if (doc.exists) {
         const d = doc.data()!;
-        results.push({ term: d.term, id: d.id, level: d.level, transliteration: d.transliteration ?? d.pinyin });
+        candidates.push({ term: d.term, id: d.id, level: d.level, transliteration: d.transliteration ?? d.pinyin });
       }
     }
   }
 
-  return results;
+  if (candidates.length === 0) return [];
+
+  // Verify each candidate's backing word doc (see wordEntryIsLive). Batch by
+  // unique id so multiple index entries pointing at the same (clobbered) word
+  // are resolved with a single read each.
+  const uniqueIds = [...new Set(candidates.map((c) => c.id))];
+  const liveById = new Map<string, FirebaseFirestore.DocumentSnapshot>();
+  for (let i = 0; i < uniqueIds.length; i += CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(i, i + CHUNK_SIZE);
+    const wordDocs = await db.getAll(...chunk.map((id) => words.doc(id)));
+    for (const wd of wordDocs) liveById.set(wd.id, wd);
+  }
+
+  return candidates.filter((c) => {
+    const wd = liveById.get(c.id);
+    return wd != null && wordEntryIsLive(c, wd);
+  });
 }
 
 // ========== Progress ==========
@@ -1336,6 +1384,11 @@ function docToSession(doc: FirebaseFirestore.DocumentSnapshot): QuizSession {
     questions: d.questions,
     questionType: d.questionType,
     wordIds: d.wordIds,
+    groupWeights: d.groupWeights,
+    groupMembership: d.groupMembership,
+    pendingWordIds: d.pendingWordIds,
+    questionTarget: d.questionTarget,
+    flaggedOnly: d.flaggedOnly,
   };
 }
 

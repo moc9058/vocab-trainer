@@ -19,7 +19,7 @@ import TranslationView from "./TranslationView";
 import SpeakingWritingView from "./SpeakingWritingView";
 import ExpressionQuizView from "./ExpressionQuizView";
 import ExpressionList from "./ExpressionList";
-import QuizFilterModal from "./QuizFilterModal";
+import QuizFilterModal, { type QuizFilters } from "./QuizFilterModal";
 import PrintWorksheet from "./PrintWorksheet";
 import { getTranslationHistory } from "../api/translation";
 import { getSpeakingWritingSession } from "../api/speaking-writing";
@@ -36,7 +36,7 @@ export default function Dashboard() {
   const subPath = location.pathname.replace(`/${language}`, "") || "/";
   const { t, language: uiLang, setLanguage } = useI18n();
   const { settings } = useSettings();
-  const { enqueue, pendingTerms, queueLength, processingTerms, activeCount, recentResults, clearResults, refreshSignal } = useWordQueue();
+  const { enqueue, enqueueUpdate, pendingTerms, queueLength, processingTerms, activeCount, recentResults, clearResults, refreshSignal } = useWordQueue();
   const { enqueue: enqueueGrammar, enqueueUpdate: enqueueGrammarUpdate, pendingTerms: grammarPendingTerms, processingTerms: grammarProcessingTerms, queueLength: grammarQueueLength, activeCount: grammarActiveCount, recentResults: grammarRecentResults, clearResults: clearGrammarResults, refreshSignal: grammarRefreshSignal } = useGrammarQueue();
   const [visibleToast, setVisibleToast] = useState<{ id: string; term: string; success: boolean; error?: string } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -45,12 +45,7 @@ export default function Dashboard() {
   const [starting, setStarting] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
   const [resumePrompt, setResumePrompt] = useState<QuizSession | null>(null);
-  const [pendingFilters, setPendingFilters] = useState<{
-    topics: string[];
-    categories: string[];
-    levels: string[];
-    groupIds: string[];
-  } | null>(null);
+  const [pendingFilters, setPendingFilters] = useState<QuizFilters | null>(null);
   // Grammar state
   const [activeGrammarQuiz, setActiveGrammarQuiz] = useState<GrammarQuizSession | null>(null);
   const [showGrammarFilterModal, setShowGrammarFilterModal] = useState<string | null>(null);
@@ -140,7 +135,7 @@ export default function Dashboard() {
     setSelectedLanguage(lang);
   }
 
-  async function handleFiltersSelected(filters: { topics: string[]; categories: string[]; levels: string[]; groupIds: string[] }) {
+  async function handleFiltersSelected(filters: QuizFilters) {
     if (starting || !selectedLanguage) return;
     setStarting(true);
     try {
@@ -158,6 +153,8 @@ export default function Dashboard() {
         categories: filters.categories,
         levels: filters.levels,
         groupIds: filters.groupIds,
+        groupWeights: filters.groupWeights,
+        flaggedOnly: filters.flaggedOnly,
       });
       setSelectedLanguage(null);
       setActiveQuiz(session);
@@ -195,6 +192,8 @@ export default function Dashboard() {
         categories: filters.categories,
         levels: filters.levels,
         groupIds: filters.groupIds,
+        groupWeights: filters.groupWeights,
+        flaggedOnly: filters.flaggedOnly,
       });
       setActiveQuiz(session);
       navigate(`/${language}/quiz`);
@@ -211,7 +210,7 @@ export default function Dashboard() {
   }
 
   function handlePrintSelected(
-    filters: { topics: string[]; categories: string[]; levels: string[]; groupIds: string[] },
+    filters: QuizFilters,
     count: number | null,
   ) {
     if (!selectedLanguage) return;
@@ -396,6 +395,7 @@ export default function Dashboard() {
           onStart={handleFiltersSelected}
           onClose={handleFilterClose}
           onPrint={handlePrintSelected}
+          showFlaggedScope
         />
       )}
       {resumePrompt && (
@@ -476,6 +476,7 @@ export default function Dashboard() {
             initialSearch={(location.state as { search?: string } | null)?.search}
             refreshSignal={refreshSignal}
             onQueue={enqueue}
+            onQueueEdit={enqueueUpdate}
             pendingTerms={pendingTerms}
           />
         ) : subPath === "/flagged" ? (
