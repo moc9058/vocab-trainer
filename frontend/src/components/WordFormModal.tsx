@@ -20,10 +20,11 @@ interface Props {
   onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
   onQueueEdit?: (data: Omit<Word, "id"> & { id: string; groupIds: string[] }) => void;
   pendingTerms?: Set<string>;
+  succeededTerms?: Set<string>;
   refreshSignal?: number;
 }
 
-export default function WordFormModal({ language, word, onSave, onClose, onQueue, onQueueEdit, pendingTerms, refreshSignal }: Props) {
+export default function WordFormModal({ language, word, onSave, onClose, onQueue, onQueueEdit, pendingTerms, succeededTerms, refreshSignal }: Props) {
   const { t } = useI18n();
   const [term, setTerm] = useState(word?.term ?? "");
   const [transliteration, setTransliteration] = useState(word?.transliteration ?? "");
@@ -380,6 +381,7 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
             selectedGroupIds={word?.id ? selectedGroupIds : new Set()}
             currentTerm={term}
             pendingTerms={pendingTerms}
+            succeededTerms={succeededTerms}
             refreshSignal={refreshSignal}
             onQueue={onQueue}
             onChipInFlightChange={setChipsInFlight}

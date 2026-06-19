@@ -31,10 +31,11 @@ interface Props {
   /** When provided, grammar edit-mode submits enqueue instead of awaiting. */
   onGrammarUpdateQueue?: GrammarEnqueueUpdate;
   pendingTerms?: Set<string>;
+  succeededTerms?: Set<string>;
   refreshSignal?: number;
 }
 
-export default function GrammarList({ language, onBack, onQueue, onGrammarQueue, onGrammarUpdateQueue, pendingTerms, refreshSignal }: Props) {
+export default function GrammarList({ language, onBack, onQueue, onGrammarQueue, onGrammarUpdateQueue, pendingTerms, succeededTerms, refreshSignal }: Props) {
   const { t } = useI18n();
   const { displayGrammarDefEntries } = useSettings();
   const [items, setItems] = useState<Grammar[]>([]);
@@ -311,6 +312,7 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
           onQueue={onQueue}
           onGrammarQueue={onGrammarQueue}
           pendingTerms={pendingTerms}
+          succeededTerms={succeededTerms}
           refreshSignal={refreshSignal}
         />
       )}
@@ -325,6 +327,7 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
           onQueue={onQueue}
           onGrammarUpdateQueue={onGrammarUpdateQueue}
           pendingTerms={pendingTerms}
+          succeededTerms={succeededTerms}
           refreshSignal={refreshSignal}
         />
       )}

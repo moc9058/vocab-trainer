@@ -30,7 +30,12 @@ interface Props {
   defaultLanguage?: string;
   onJumpToWord?: (wordId: string, term: string) => void;
   onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
+  /** Terms currently queued/processing in the shared word-add queue (amber "⋯"). */
   pendingTerms?: Set<string>;
+  /** Cumulative set of terms the queue has finished adding this session — the
+   *  authoritative "now in DB" signal that flips a chip to green "✓". */
+  succeededTerms?: Set<string>;
+  /** Retained for prop compatibility; chip status no longer needs it. */
   refreshSignal?: number;
 }
 
@@ -54,7 +59,7 @@ const ALL_TOPICS = [
   "History", "Media & News", "Language Fundamentals",
 ] as const;
 
-export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage, onJumpToWord, onQueue, pendingTerms, refreshSignal }: Props) {
+export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage, onJumpToWord, onQueue, pendingTerms, succeededTerms }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const LANG_OPTIONS = useMemo(
@@ -87,13 +92,16 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   const [generatedWords, setGeneratedWords] = useState<Word[]>([]);
   const prevExamplesLengthRef = useRef(0);
 
+  // DB-existence poll result: words present before this session. Replaced
+  // wholesale on each poll; only feeds the green "✓" state for pre-existing words.
   const [existingTerms, setExistingTerms] = useState<Map<string, string>>(new Map());
   const [checkingTerms, setCheckingTerms] = useState(false);
   const [busySegments, setBusySegments] = useState<Set<string>>(new Set());
   const [segmentFlags, setSegmentFlags] = useState<Map<string, boolean>>(new Map());
-  const [queuedSegments, setQueuedSegments] = useState<Set<string>>(new Set());
+  // Terms a *direct-mode* `smartAddWord` (no queue) added this session. Queue-mode
+  // adds are tracked authoritatively by the parent's `succeededTerms`.
+  const [addedTerms, setAddedTerms] = useState<Set<string>>(new Set());
   const [segmentAddError, setSegmentAddError] = useState<string | null>(null);
-  const segmentVersionRef = useRef(0);
   const lastExampleRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -149,71 +157,40 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     if (texts.length === 0) {
       setExistingTerms(new Map());
       setCheckingTerms(false);
-      setQueuedSegments((prev) => {
-        if (prev.size === 0) return prev;
-        const next = new Set(prev);
-        for (const key of prev) {
-          const { chipText } = parseQueuedSegmentKey(key);
-          if (!pendingTerms?.has(chipText)) next.delete(key);
-        }
-        return next.size === prev.size ? prev : next;
-      });
       return;
     }
     setCheckingTerms(true);
-    const v = ++segmentVersionRef.current;
+    // Debounced existence poll. Sole job: mark words already in the DB as green
+    // on open / after edits. Queue-add completion is signalled by `succeededTerms`,
+    // so this needs no `refreshSignal`/`pendingTerms` dep and no version guard —
+    // a `cancelled` flag ignores a stale response after the inputs change.
+    let cancelled = false;
     const timer = setTimeout(() => {
       checkTerms(wordLanguage, texts)
         .then(({ existing }) => {
-          if (v !== segmentVersionRef.current) return;
-          const existingMap = new Map(Object.entries(existing));
-          setExistingTerms(existingMap);
-          // Definitive answer: drop the queued pin only now. A chip found in
-          // the DB becomes green ✓ (existingMap); one no longer in flight that
-          // wasn't found reverts to blue "+ " (genuine failure). Keeping the
-          // pin until this round-trip is what prevents the chip flashing back
-          // to its un-added state in the window after it leaves `pendingTerms`.
-          setQueuedSegments((prev) => {
-            if (prev.size === 0) return prev;
-            const next = new Set(prev);
-            for (const key of prev) {
-              const { chipText } = parseQueuedSegmentKey(key);
-              if (existingMap.has(chipText) || !pendingTerms?.has(chipText)) {
-                next.delete(key);
-              }
-            }
-            return next.size === prev.size ? prev : next;
-          });
+          if (cancelled) return;
+          setExistingTerms(new Map(Object.entries(existing)));
           setCheckingTerms(false);
         })
         .catch(() => {
-          if (v === segmentVersionRef.current) setCheckingTerms(false);
+          if (!cancelled) setCheckingTerms(false);
         });
     }, 300);
-    return () => clearTimeout(timer);
-    // `pendingTerms` is a dep so a queue failure (which doesn't bump
-    // `refreshSignal`) still re-runs the check and clears the stale pin.
-    // NOTE: do NOT add a separate effect that unpins on `pendingTerms` change
-    // alone — that drops the pin the instant the queue finishes, before this
-    // confirming round-trip populates `existingTerms`, which is exactly the
-    // window that makes the chip flash back to its un-added "+ " state.
-  }, [examples, wordLanguage, refreshSignal, pendingTerms]);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [examples, wordLanguage]);
 
-  function getQueuedSegmentKey(chipText: string, sentence: string): string {
-    return `${chipText}\u0000${sentence.replace(/[\s　]+/g, "")}`;
-  }
-
-  function parseQueuedSegmentKey(key: string): { chipText: string; sentence: string } {
-    const [chipText, sentence = ""] = key.split("\u0000");
-    return { chipText, sentence };
+  // True once a chip's word is confirmed in the DB (pre-existing, queue-added,
+  // or direct-added) — the green "✓" state.
+  function isAdded(chipText: string): boolean {
+    return existingTerms.has(chipText) || !!succeededTerms?.has(chipText) || addedTerms.has(chipText);
   }
 
   async function handleAddSegment(chipText: string, sentence: string, translation: string) {
-    const queuedKey = getQueuedSegmentKey(chipText, sentence);
-    if (existingTerms.has(chipText) || pendingTerms?.has(chipText) || queuedSegments.has(queuedKey)) return;
+    if (isAdded(chipText) || pendingTerms?.has(chipText)) return;
     const groupIds = getSelectedGroupIdsPayload();
     if (onQueue) {
-      setQueuedSegments((prev) => new Set(prev).add(queuedKey));
+      // Enqueue; the parent's `pendingTerms` (amber) → `succeededTerms` (green)
+      // drives the chip's state authoritatively.
       onQueue(chipText, wordLanguage, {
         term: chipText,
         examples: [{ sentence: sentence.replace(/[\s　]+/g, ""), translation }],
@@ -222,7 +199,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
       });
       return;
     }
-    segmentVersionRef.current++;
     setBusySegments((prev) => new Set(prev).add(chipText));
     try {
       const { generatedWords: _gw, ...addedWord } = await smartAddWord(wordLanguage, {
@@ -240,6 +216,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
         );
       }
       setExistingTerms((prev) => new Map(prev).set(chipText, addedWord.id));
+      setAddedTerms((prev) => new Set(prev).add(chipText));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setSegmentAddError(msg);
@@ -661,43 +638,41 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                           c.text.trim().length > 0 &&
                           !/^\p{P}+$/u.test(c.text) &&
                           !(term.trim() && c.text === term.trim()) &&
-                          !existingTerms.has(c.text) &&
+                          !isAdded(c.text) &&
                           !pendingTerms?.has(c.text) &&
-                          !queuedSegments.has(getQueuedSegmentKey(c.text, ex.sentence))
+                          !busySegments.has(c.text) &&
+                          !checkingTerms
                       );
                       return chips.map((chip, pi) => {
                         const isPunct = /^\p{P}+$/u.test(chip.text) || chip.text.trim().length === 0;
                         const isSelf  = !isPunct && !!term.trim() && chip.text === term.trim();
-                        const exists  = isSelf || (!isPunct && existingTerms.has(chip.text));
-                        const busy    = busySegments.has(chip.text);
-                        const queued  = !isPunct && !isSelf && !exists && (queuedSegments.has(getQueuedSegmentKey(chip.text, ex.sentence)) || !!pendingTerms?.has(chip.text));
-                        // `checking` must NOT apply to a chip already in flight
-                        // (busy or queued) — otherwise a freshly typed sibling
-                        // triggers `checkingTerms` globally and the in-flight
-                        // chip would morph from its stable "⋯" state.
-                        const checking = !isPunct && !isSelf && !exists && !queued && !busy && checkingTerms;
-                        const inProgress = queued || busy;
+                        // Three authoritative states: added (green ✓) / in-flight
+                        // (amber ⋯) / non-existing (blue +). `inFlight` folds
+                        // queued+processing (`pendingTerms`), a direct add (`busy`),
+                        // and the initial existence poll (`checkingTerms`).
+                        const exists  = isSelf || (!isPunct && isAdded(chip.text));
+                        const inFlight = !isPunct && !isSelf && !exists &&
+                          (!!pendingTerms?.has(chip.text) || busySegments.has(chip.text) || checkingTerms);
                         return (
                           <Fragment key={pi}>
                             <div className="flex flex-col">
                               <button
                                 type="button"
-                                disabled={busy || queued || exists || checking || isPunct}
-                                onClick={() => { if (!exists && !queued && !checking && !isPunct && !busy) handleAddSegment(chip.text, ex.sentence, ex.translation); }}
+                                disabled={isPunct || exists || inFlight}
+                                onClick={() => { if (!isPunct && !exists && !inFlight) handleAddSegment(chip.text, ex.sentence, ex.translation); }}
                                 className={`rounded-full px-2 py-0.5 text-xs transition-colors ${
-                                  isPunct      ? "text-gray-600 cursor-default"
-                                  : isSelf     ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
-                                  : exists     ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
-                                  : inProgress ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
-                                  : checking   ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
+                                  isPunct    ? "text-gray-600 cursor-default"
+                                  : isSelf   ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
+                                  : exists   ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
+                                  : inFlight ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
                                   : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
                                 }`}
                               >
-                                {isPunct || isSelf ? chip.text : exists ? `✓ ${chip.text}` : inProgress ? `⋯ ${chip.text}` : checking ? `⋯ ${chip.text}` : `+ ${chip.text}`}
+                                {isPunct || isSelf ? chip.text : exists ? `✓ ${chip.text}` : inFlight ? `⋯ ${chip.text}` : `+ ${chip.text}`}
                               </button>
                               {anyDeactivated && (
                                 <div className="mt-0.5 h-3.5 flex justify-center items-center">
-                                  {!isPunct && !isSelf && !exists && !inProgress && !checking && (
+                                  {!isPunct && !isSelf && !exists && !inFlight && (
                                     <label
                                       className="flex items-center cursor-pointer"
                                       onClick={(e) => e.stopPropagation()}

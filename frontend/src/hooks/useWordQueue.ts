@@ -47,6 +47,11 @@ export function useWordQueue() {
   const [processing, setProcessing] = useState<QueueItem[]>([]);
   const [recentResults, setRecentResults] = useState<QueueResult[]>([]);
   const [refreshSignal, setRefreshSignal] = useState(0);
+  // Cumulative set of terms whose add/update has succeeded this session. This is
+  // the authoritative "now in the DB" signal consumers (segment chips) use to
+  // flip a word from "generating" → "added" the instant the queue finishes —
+  // no DB re-poll required. Monotonic, so a confirmed chip can never revert.
+  const [succeededTerms, setSucceededTerms] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (queue.length === 0) return;
@@ -64,6 +69,7 @@ export function useWordQueue() {
           setRecentResults((prev) =>
             [{ id: item.id, term: item.term, success: true }, ...prev].slice(0, 5),
           );
+          setSucceededTerms((prev) => new Set(prev).add(item.term));
           setRefreshSignal((s) => s + 1);
         })
         .catch((err: unknown) => {
@@ -119,6 +125,7 @@ export function useWordQueue() {
     enqueueUpdate,
     pendingTerms,
     processingTerms,
+    succeededTerms,
     queueLength: queue.length,
     activeCount: processing.length,
     recentResults,

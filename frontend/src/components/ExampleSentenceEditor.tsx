@@ -28,7 +28,13 @@ interface Props {
    *  change shape. */
   selectedGroupIds?: Set<string>;
   currentTerm?: string;
+  /** Terms currently queued/processing in the shared word-add queue (amber "⋯"). */
   pendingTerms?: Set<string>;
+  /** Cumulative set of terms the queue has finished adding this session — the
+   *  authoritative "now in DB" signal that flips a chip to green "✓". */
+  succeededTerms?: Set<string>;
+  /** Retained for prop compatibility; the chip workflow no longer needs it
+   *  (completion is driven by `succeededTerms`, not a DB re-poll). */
   refreshSignal?: number;
   onQueue?: (term: string, language: string, payload: ExampleSegmentQueuePayload) => void;
   /** Fired whenever the editor has at least one chip mid-`smartAddWord`. Parents
@@ -43,24 +49,23 @@ export default function ExampleSentenceEditor({
   setExamples,
   currentTerm,
   pendingTerms,
-  refreshSignal,
+  succeededTerms,
   onQueue,
   onChipInFlightChange,
 }: Props) {
   const { t } = useI18n();
 
+  // DB-existence poll result: terms that already exist in the DB (words present
+  // before this session). Replaced wholesale on each poll; only feeds the green
+  // "✓" state for pre-existing words.
   const [existingTerms, setExistingTerms] = useState<Map<string, string>>(new Map());
   const [checkingTerms, setCheckingTerms] = useState(false);
   const [busySegments, setBusySegments] = useState<Set<string>>(new Set());
-  // Terms enqueued via `onQueue` that we keep pinned to the in-progress amber
-  // state until the confirming `checkTerms` round-trip resolves. This bridges
-  // the gap where a chip has left `pendingTerms` (queue finished) but the
-  // debounced `checkTerms` hasn't yet populated `existingTerms` — without it the
-  // chip flashes back to its un-added blue "+ " state for a frame.
-  const [pinnedTerms, setPinnedTerms] = useState<Set<string>>(new Set());
+  // Terms a *direct-mode* `smartAddWord` (no queue) has added this session.
+  // Queue-mode adds are tracked authoritatively by the parent's `succeededTerms`.
+  const [addedTerms, setAddedTerms] = useState<Set<string>>(new Set());
   const [segmentFlags, setSegmentFlags] = useState<Map<string, boolean>>(new Map());
   const [segmentAddError, setSegmentAddError] = useState<string | null>(null);
-  const segmentVersionRef = useRef(0);
 
   // Vocab word-groups (sorted latest-first by createdAt). Used to populate the
   // per-chip group selector; the chip workflow always assigns to a *vocab*
@@ -124,59 +129,45 @@ export default function ExampleSentenceEditor({
     if (texts.length === 0) {
       setExistingTerms(new Map());
       setCheckingTerms(false);
-      setPinnedTerms((prev) => unpinResolved(prev, new Map(), pendingTerms));
       return;
     }
     setCheckingTerms(true);
-    const v = ++segmentVersionRef.current;
+    // Debounced existence poll. Sole job: mark words that already exist in the
+    // DB as green on open / after edits. Completion of queued adds is handled
+    // by `succeededTerms`, so this no longer depends on `refreshSignal`/
+    // `pendingTerms` and needs no version guard — a simple `cancelled` flag
+    // ignores a stale in-flight response after the inputs change.
+    let cancelled = false;
     const timer = setTimeout(() => {
       checkTerms(language, texts)
         .then(({ existing }) => {
-          if (v !== segmentVersionRef.current) return;
-          const existingMap = new Map(Object.entries(existing));
-          setExistingTerms(existingMap);
-          // Now that we have a definitive answer, drop the pin: terms found in
-          // the DB become green ✓ (existingMap), terms no longer in flight that
-          // weren't found revert to blue "+ " (genuine failure / nothing added).
-          setPinnedTerms((prev) => unpinResolved(prev, existingMap, pendingTerms));
+          if (cancelled) return;
+          setExistingTerms(new Map(Object.entries(existing)));
           setCheckingTerms(false);
         })
         .catch(() => {
-          if (v === segmentVersionRef.current) setCheckingTerms(false);
+          if (!cancelled) setCheckingTerms(false);
         });
     }, 300);
-    return () => clearTimeout(timer);
-    // `pendingTerms` is a dep so a queue failure (which doesn't bump
-    // `refreshSignal`) still re-runs the check and clears the stale pin.
-  }, [examples, language, refreshSignal, pendingTerms]);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [examples, language]);
 
-  // A pinned term is "resolved" once it's confirmed in the DB (→ stays green via
-  // existingMap) or is no longer in flight (queue done/failed). Until then it
-  // stays pinned so the chip never falls back to its un-added state.
-  function unpinResolved(
-    prev: Set<string>,
-    existingMap: Map<string, string>,
-    pending: Set<string> | undefined,
-  ): Set<string> {
-    if (prev.size === 0) return prev;
-    const next = new Set(prev);
-    for (const term of prev) {
-      if (existingMap.has(term) || !pending?.has(term)) next.delete(term);
-    }
-    return next.size === prev.size ? prev : next;
+  // True once a chip's word is confirmed in the DB (pre-existing, queue-added,
+  // or direct-added) — the green "✓" state.
+  function isAdded(chipText: string): boolean {
+    return existingTerms.has(chipText) || !!succeededTerms?.has(chipText) || addedTerms.has(chipText);
   }
 
   async function handleAddSegment(chipText: string, sentence: string, translation: string) {
-    if (existingTerms.has(chipText) || pendingTerms?.has(chipText) || pinnedTerms.has(chipText)) return;
+    if (isAdded(chipText) || pendingTerms?.has(chipText)) return;
     // Per-chip group choice REPLACES the form-level `selectedGroupIds` for this
     // workflow: each chip carries exactly the group selected in its dropdown
     // (latest-created by default, or "" for no group).
     const chipGroupId = getChipGroupId(chipText);
     const groupIds = chipGroupId ? [chipGroupId] : [];
     if (onQueue) {
-      // Pin immediately so the chip shows amber from the click onward, before
-      // the parent's `pendingTerms` has even updated.
-      setPinnedTerms((prev) => new Set(prev).add(chipText));
+      // Enqueue and let the parent's `pendingTerms` (amber) → `succeededTerms`
+      // (green) drive the chip's state authoritatively.
       onQueue(chipText, language, {
         term: chipText,
         examples: [{ sentence: sentence.replace(/[\s　]+/g, ""), translation }],
@@ -185,7 +176,6 @@ export default function ExampleSentenceEditor({
       });
       return;
     }
-    segmentVersionRef.current++;
     setBusySegments((prev) => new Set(prev).add(chipText));
     try {
       const { generatedWords: _gw, ...addedWord } = await smartAddWord(language, {
@@ -199,7 +189,7 @@ export default function ExampleSentenceEditor({
           groupIds.map((groupId) => modifyGroupMembers(language, groupId, [addedWord.id], "add"))
         );
       }
-      setExistingTerms((prev) => new Map(prev).set(chipText, addedWord.id));
+      setAddedTerms((prev) => new Set(prev).add(chipText));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setSegmentAddError(msg);
@@ -248,7 +238,6 @@ export default function ExampleSentenceEditor({
     const s = new Set<string>();
     busySegments.forEach((t) => s.add(t));
     pendingTerms?.forEach((t) => s.add(t));
-    pinnedTerms.forEach((t) => s.add(t));
     return [...s];
   })();
 
@@ -292,7 +281,7 @@ export default function ExampleSentenceEditor({
         // worker without context for the words it's processing.
         const chips = language === "chinese" && !ex.locked ? getChipInfo(ex.sentence) : [];
         const hasInFlightChips = chips.some(
-          (c) => busySegments.has(c.text) || (pendingTerms?.has(c.text) ?? false) || pinnedTerms.has(c.text),
+          (c) => busySegments.has(c.text) || (pendingTerms?.has(c.text) ?? false),
         );
         return (
         <div
@@ -324,53 +313,48 @@ export default function ExampleSentenceEditor({
                 c.text.trim().length > 0 &&
                 !/^\p{P}+$/u.test(c.text) &&
                 !(trimmedCurrentTerm && c.text === trimmedCurrentTerm) &&
-                !existingTerms.has(c.text) &&
+                !isAdded(c.text) &&
                 !pendingTerms?.has(c.text) &&
-                !pinnedTerms.has(c.text)
+                !busySegments.has(c.text) &&
+                !checkingTerms
             );
             return (
               <div className="mb-1 flex flex-wrap items-start gap-1">
                 {chips.map((chip, pi) => {
                   const isPunct = /^\p{P}+$/u.test(chip.text) || chip.text.trim().length === 0;
                   const isSelf = !isPunct && !!trimmedCurrentTerm && chip.text === trimmedCurrentTerm;
-                  const exists = isSelf || (!isPunct && existingTerms.has(chip.text));
-                  const busy = busySegments.has(chip.text);
-                  const queued = !isPunct && !isSelf && !exists && (!!pendingTerms?.has(chip.text) || pinnedTerms.has(chip.text));
-                  // `checking` must NOT apply to a chip already in flight (busy
-                  // or queued) — otherwise a freshly typed sibling chip triggers
-                  // `checkingTerms` globally and the in-flight chip would morph
-                  // from its stable "⋯" state into the same amber/checking
-                  // style, which reads to the user as a status change.
-                  const checking = !isPunct && !isSelf && !exists && !queued && !busy && checkingTerms;
-                  // `inProgress` collapses queued + busy into one stable visual
-                  // (amber "⋯") so chips currently being added don't flicker as
-                  // the debounced check fires on each keystroke.
-                  const inProgress = queued || busy;
+                  // Three authoritative states: added (green ✓) / in-flight
+                  // (amber ⋯) / non-existing (blue +). `inFlight` folds together
+                  // queued+processing (`pendingTerms`), a direct add (`busy`),
+                  // and the initial existence poll (`checkingTerms`) so an
+                  // indeterminate chip reads as "working" rather than flashing.
+                  const exists = isSelf || (!isPunct && isAdded(chip.text));
+                  const inFlight = !isPunct && !isSelf && !exists &&
+                    (!!pendingTerms?.has(chip.text) || busySegments.has(chip.text) || checkingTerms);
                   return (
                     <Fragment key={pi}>
                       <div className="flex flex-col">
                         <button
                           type="button"
-                          disabled={busy || queued || exists || checking || isPunct}
+                          disabled={isPunct || exists || inFlight}
                           onClick={() => {
-                            if (!exists && !queued && !checking && !isPunct && !busy) {
+                            if (!isPunct && !exists && !inFlight) {
                               handleAddSegment(chip.text, ex.sentence, ex.translation);
                             }
                           }}
                           className={`rounded-full px-2 py-0.5 text-xs transition-colors ${
-                            isPunct      ? "text-gray-600 cursor-default"
-                            : isSelf     ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
-                            : exists     ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
-                            : inProgress ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
-                            : checking   ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
+                            isPunct    ? "text-gray-600 cursor-default"
+                            : isSelf   ? "border border-gray-500/40 bg-gray-800/40 text-gray-500 cursor-default"
+                            : exists   ? "border border-green-500/40 bg-green-900/20 text-green-300 cursor-default"
+                            : inFlight ? "border border-amber-500/40 bg-amber-900/20 text-amber-300 cursor-wait"
                             : "border border-blue-500/40 bg-blue-900/20 text-blue-300 hover:bg-blue-800/40"
                           }`}
                         >
-                          {isPunct || isSelf ? chip.text : exists ? `✓ ${chip.text}` : inProgress ? `⋯ ${chip.text}` : checking ? `⋯ ${chip.text}` : `+ ${chip.text}`}
+                          {isPunct || isSelf ? chip.text : exists ? `✓ ${chip.text}` : inFlight ? `⋯ ${chip.text}` : `+ ${chip.text}`}
                         </button>
                         {anyDeactivated && (
                           <div className="mt-0.5 h-3.5 flex justify-center items-center">
-                            {!isPunct && !isSelf && !exists && !inProgress && !checking && (
+                            {!isPunct && !isSelf && !exists && !inFlight && (
                               <label
                                 className="flex items-center cursor-pointer"
                                 onClick={(e) => e.stopPropagation()}
@@ -392,7 +376,7 @@ export default function ExampleSentenceEditor({
                         )}
                         {anyDeactivated && wordGroups.length > 0 && (
                           <div className="mt-0.5 flex justify-center">
-                            {!isPunct && !isSelf && !exists && !inProgress && !checking ? (
+                            {!isPunct && !isSelf && !exists && !inFlight ? (
                               <select
                                 value={getChipGroupId(chip.text)}
                                 onChange={(e) => setChipGroupId(chip.text, e.target.value)}

@@ -30,6 +30,7 @@ interface Props {
   onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
   onQueueEdit?: (term: string, language: string, wordId: string, updates: Partial<Word>, groupsToAdd: string[], groupsToRemove: string[]) => void;
   pendingTerms?: Set<string>;
+  succeededTerms?: Set<string>;
 }
 
 function getPageNumbers(current: number, total: number): (number | "...")[] {
@@ -44,7 +45,7 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
   return pages;
 }
 
-export default function WordList({ language, onBack, initialExpandId, initialSearch, refreshSignal, onQueue, onQueueEdit, pendingTerms }: Props) {
+export default function WordList({ language, onBack, initialExpandId, initialSearch, refreshSignal, onQueue, onQueueEdit, pendingTerms, succeededTerms }: Props) {
   const { t } = useI18n();
   const currentIsoCode = urlLanguageToIsoCode(language) ?? language;
   const [result, setResult] = useState<PaginatedResult<Word> | null>(null);
@@ -835,6 +836,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                         checkingTerms={expandedId === word.id ? checkingTerms : false}
                         busySegments={expandedId === word.id ? busySegments : new Set()}
                         pendingTerms={pendingTerms}
+                        succeededTerms={succeededTerms}
                         segmentFlags={segmentFlags}
                         onToggleSegmentFlag={(term) => setSegmentFlags((prev) => { const next = new Map(prev); next.set(term, !(prev.get(term) ?? true)); return next; })}
                         wordGroups={sortedGroups}
@@ -900,6 +902,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                           checkingTerms={expandedId === word.id ? checkingTerms : false}
                           busySegments={expandedId === word.id ? busySegments : new Set()}
                           pendingTerms={pendingTerms}
+                          succeededTerms={succeededTerms}
                           segmentFlags={segmentFlags}
                           onToggleSegmentFlag={(term) => setSegmentFlags((prev) => { const next = new Map(prev); next.set(term, !(prev.get(term) ?? true)); return next; })}
                           wordGroups={sortedGroups}
@@ -966,6 +969,9 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
               .catch(() => {});
           }}
           onQueue={onQueue}
+          pendingTerms={pendingTerms}
+          succeededTerms={succeededTerms}
+          refreshSignal={refreshSignal}
           onJumpToWord={(wordId, term) => {
             setShowSmartAdd(false);
             setSearch(term);
@@ -991,6 +997,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           onQueue={onQueue}
           onQueueEdit={onQueueEdit ? handleQueueEditWord : undefined}
           pendingTerms={pendingTerms}
+          succeededTerms={succeededTerms}
           refreshSignal={refreshSignal}
         />
       )}
@@ -1110,6 +1117,7 @@ function WordCard({
   checkingTerms,
   busySegments,
   pendingTerms,
+  succeededTerms,
   segmentFlags,
   onToggleSegmentFlag,
   wordGroups,
@@ -1134,6 +1142,7 @@ function WordCard({
   checkingTerms: boolean;
   busySegments: Set<string>;
   pendingTerms?: Set<string>;
+  succeededTerms?: Set<string>;
   segmentFlags: Map<string, boolean>;
   onToggleSegmentFlag: (term: string) => void;
   wordGroups: WordGroup[];
@@ -1290,7 +1299,7 @@ function WordCard({
                 {(showAllExamples ? word.examples : word.examples.slice(0, 3)).map((ex, i) => {
                   const trans = typeof ex.translation === "string" ? ex.translation : displayTranslation(ex.translation);
                   const segs = (ex.segments ?? []).filter((s) => s.text.trim().length > 0 && !/^\p{P}+$/u.test(s.text));
-                  const anyDeactivated = segs.some((s) => s.text !== word.term && !existingTerms.has(s.text) && !pendingTerms?.has(s.text));
+                  const anyDeactivated = segs.some((s) => s.text !== word.term && !existingTerms.has(s.text) && !succeededTerms?.has(s.text) && !pendingTerms?.has(s.text));
                   const exEntries: [string, string][] = typeof ex.translation === "object" && ex.translation
                     ? displayExEntries(ex.translation).filter(([lang]) => lang !== currentIsoCode)
                     : typeof ex.translation === "string" && ex.translation
@@ -1422,7 +1431,7 @@ function WordCard({
                           <div className="flex flex-wrap gap-1 items-start">
                             {segs.map((seg, j) => {
                               const isSelf = seg.text === word.term;
-                              const exists = isSelf || existingTerms.has(seg.text);
+                              const exists = isSelf || existingTerms.has(seg.text) || !!succeededTerms?.has(seg.text);
                               const queued = !isSelf && !exists && !!pendingTerms?.has(seg.text);
                               const checking = checkingTerms && !isSelf && !exists && !queued;
                               const busy = busySegments.has(seg.text);
@@ -1579,6 +1588,7 @@ function WordRow({
   checkingTerms,
   busySegments,
   pendingTerms,
+  succeededTerms,
   segmentFlags,
   onToggleSegmentFlag,
   wordGroups,
@@ -1603,6 +1613,7 @@ function WordRow({
   checkingTerms: boolean;
   busySegments: Set<string>;
   pendingTerms?: Set<string>;
+  succeededTerms?: Set<string>;
   segmentFlags: Map<string, boolean>;
   onToggleSegmentFlag: (term: string) => void;
   wordGroups: WordGroup[];
@@ -1749,7 +1760,7 @@ function WordRow({
                   {(showAllExamples ? word.examples : word.examples.slice(0, 3)).map((ex, i) => {
                     const trans = typeof ex.translation === "string" ? ex.translation : displayTranslation(ex.translation);
                     const segs = (ex.segments ?? []).filter((s) => s.text.trim().length > 0 && !/^\p{P}+$/u.test(s.text));
-                    const anyDeactivated = segs.some((s) => s.text !== word.term && !existingTerms.has(s.text) && !pendingTerms?.has(s.text));
+                    const anyDeactivated = segs.some((s) => s.text !== word.term && !existingTerms.has(s.text) && !succeededTerms?.has(s.text) && !pendingTerms?.has(s.text));
                     const exEntries: [string, string][] = typeof ex.translation === "object" && ex.translation
                       ? displayExEntries(ex.translation).filter(([lang]) => lang !== currentIsoCode)
                       : typeof ex.translation === "string" && ex.translation
@@ -1880,7 +1891,7 @@ function WordRow({
                             <div className="flex flex-wrap gap-1 items-start">
                               {segs.map((seg, j) => {
                                 const isSelf = seg.text === word.term;
-                                const exists = isSelf || existingTerms.has(seg.text);
+                                const exists = isSelf || existingTerms.has(seg.text) || !!succeededTerms?.has(seg.text);
                                 const queued = !isSelf && !exists && !!pendingTerms?.has(seg.text);
                                 const checking = checkingTerms && !isSelf && !exists && !queued;
                                 const busy = busySegments.has(seg.text);

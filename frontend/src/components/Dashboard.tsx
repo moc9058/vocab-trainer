@@ -36,7 +36,7 @@ export default function Dashboard() {
   const subPath = location.pathname.replace(`/${language}`, "") || "/";
   const { t, language: uiLang, setLanguage } = useI18n();
   const { settings } = useSettings();
-  const { enqueue, enqueueUpdate, pendingTerms, queueLength, processingTerms, activeCount, recentResults, clearResults, refreshSignal } = useWordQueue();
+  const { enqueue, enqueueUpdate, pendingTerms, queueLength, processingTerms, succeededTerms, activeCount, recentResults, clearResults, refreshSignal } = useWordQueue();
   const { enqueue: enqueueGrammar, enqueueUpdate: enqueueGrammarUpdate, pendingTerms: grammarPendingTerms, processingTerms: grammarProcessingTerms, queueLength: grammarQueueLength, activeCount: grammarActiveCount, recentResults: grammarRecentResults, clearResults: clearGrammarResults, refreshSignal: grammarRefreshSignal } = useGrammarQueue();
   const [visibleToast, setVisibleToast] = useState<{ id: string; term: string; success: boolean; error?: string } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -370,6 +370,7 @@ export default function Dashboard() {
           defaultLanguage={language}
           onQueue={enqueue}
           pendingTerms={pendingTerms}
+          succeededTerms={succeededTerms}
           refreshSignal={refreshSignal}
           onJumpToWord={(id, term) => {
             setShowSmartAdd(false);
@@ -386,6 +387,7 @@ export default function Dashboard() {
           onGrammarQueue={enqueueGrammar}
           onGrammarUpdateQueue={enqueueGrammarUpdate}
           pendingTerms={pendingTerms}
+          succeededTerms={succeededTerms}
           refreshSignal={refreshSignal}
         />
       )}
@@ -478,6 +480,7 @@ export default function Dashboard() {
             onQueue={enqueue}
             onQueueEdit={enqueueUpdate}
             pendingTerms={pendingTerms}
+            succeededTerms={succeededTerms}
           />
         ) : subPath === "/flagged" ? (
           <FlaggedReview
@@ -492,6 +495,7 @@ export default function Dashboard() {
             onGrammarQueue={enqueueGrammar}
             onGrammarUpdateQueue={enqueueGrammarUpdate}
             pendingTerms={pendingTerms}
+            succeededTerms={succeededTerms}
             refreshSignal={refreshSignal + grammarRefreshSignal}
           />
         ) : subPath === "/grammar-quiz" ? (

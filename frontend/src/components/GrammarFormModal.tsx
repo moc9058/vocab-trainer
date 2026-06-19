@@ -37,6 +37,7 @@ interface Props {
    *  Modal closes after brief "✓ Queued" flash. */
   onGrammarUpdateQueue?: (statement: string, language: string, grammarId: string, updates: Partial<Grammar>, groupsToAdd: string[], groupsToRemove: string[]) => void;
   pendingTerms?: Set<string>;
+  succeededTerms?: Set<string>;
   refreshSignal?: number;
 }
 
@@ -55,7 +56,7 @@ function InsertButton({ onInsert }: { onInsert: () => void }) {
   );
 }
 
-export default function GrammarFormModal({ language, editItem, onSave, onClose, onQueue, onGrammarQueue, onGrammarUpdateQueue, pendingTerms, refreshSignal }: Props) {
+export default function GrammarFormModal({ language, editItem, onSave, onClose, onQueue, onGrammarQueue, onGrammarUpdateQueue, pendingTerms, succeededTerms, refreshSignal }: Props) {
   const { t } = useI18n();
   const isEdit = !!editItem;
   const isChinese = language === "chinese";
@@ -468,6 +469,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
             onChipInFlightChange={setChipsInFlight}
             onQueue={onQueue}
             pendingTerms={pendingTerms}
+            succeededTerms={succeededTerms}
             refreshSignal={refreshSignal}
           />
 
