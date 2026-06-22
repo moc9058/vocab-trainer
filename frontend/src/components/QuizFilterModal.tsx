@@ -152,7 +152,7 @@ export default function QuizFilterModal({
       onClick={onClose}
     >
       <div
-        className="w-full max-w-3xl rounded-xl bg-gray-800 p-4 sm:p-6 shadow-xl max-h-[85vh] flex flex-col"
+        className="w-full max-w-3xl rounded-xl bg-gray-800 p-4 sm:p-6 shadow-xl max-h-[85dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between gap-2">
@@ -178,9 +178,9 @@ export default function QuizFilterModal({
         {loading ? (
           <p className="text-gray-400">Loading...</p>
         ) : (
-          <div className="flex flex-col md:flex-row flex-1 gap-0 overflow-hidden">
+          <div className="flex flex-col md:flex-row flex-1 gap-0 overflow-y-auto md:overflow-hidden">
             {/* Groups column — always shown, first; each selected group has a weight */}
-            <div className="flex-1 flex flex-col min-w-0 min-h-0">
+            <div className="flex flex-col min-w-0 md:flex-1 md:min-h-0">
               <div className="flex items-center gap-2 mb-2">
                 <h3 className="text-sm font-medium text-gray-300">{t("groups")}</h3>
                 <span className="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded select-none">OR</span>
@@ -196,7 +196,7 @@ export default function QuizFilterModal({
               {allGroups.length === 0 ? (
                 <p className="text-xs text-gray-500 px-2">{t("noGroupsHint")}</p>
               ) : (
-                <ul className="flex-1 overflow-y-auto space-y-1">
+                <ul className="space-y-1 md:flex-1 md:overflow-y-auto">
                   {allGroups.map((group) => (
                     <li key={group.id}>
                       <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
@@ -235,7 +235,7 @@ export default function QuizFilterModal({
             {allLevels.length > 0 && (
               <>
                 <AndDivider />
-                <div className="flex-1 flex flex-col min-w-0 min-h-0">
+                <div className="flex flex-col min-w-0 md:flex-1 md:min-h-0">
                   <div className="flex items-center gap-2 mb-2">
                     <h3 className="text-sm font-medium text-gray-300">{t("levelsColumn")}</h3>
                     <span className="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded select-none">OR</span>
@@ -246,7 +246,7 @@ export default function QuizFilterModal({
                       {selectedLevels.size === allLevels.length ? t("clearAll") : t("selectAll")}
                     </button>
                   </div>
-                  <ul className="flex-1 overflow-y-auto space-y-1">
+                  <ul className="space-y-1 md:flex-1 md:overflow-y-auto">
                     {allLevels.map((level) => (
                       <li key={level}>
                         <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
@@ -269,7 +269,7 @@ export default function QuizFilterModal({
             {allTopics.length > 0 && (
               <>
                 <AndDivider />
-                <div className="flex-1 flex flex-col min-w-0 min-h-0">
+                <div className="flex flex-col min-w-0 md:flex-1 md:min-h-0">
                   <div className="flex items-center gap-2 mb-2">
                     <h3 className="text-sm font-medium text-gray-300">{t("topicsColumn")}</h3>
                     <span className="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded select-none">OR</span>
@@ -280,7 +280,7 @@ export default function QuizFilterModal({
                       {selectedTopics.size === allTopics.length ? t("clearAll") : t("selectAll")}
                     </button>
                   </div>
-                  <ul className="flex-1 overflow-y-auto space-y-1">
+                  <ul className="space-y-1 md:flex-1 md:overflow-y-auto">
                     {allTopics.map((topic) => (
                       <li key={topic}>
                         <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
@@ -303,7 +303,7 @@ export default function QuizFilterModal({
             {allCategories.length > 0 && (
               <>
                 <AndDivider />
-                <div className="flex-1 flex flex-col min-w-0 min-h-0">
+                <div className="flex flex-col min-w-0 md:flex-1 md:min-h-0">
                   <div className="flex items-center gap-2 mb-2">
                     <h3 className="text-sm font-medium text-gray-300">{t("grammarColumn")}</h3>
                     <span className="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded select-none">OR</span>
@@ -314,7 +314,7 @@ export default function QuizFilterModal({
                       {selectedCategories.size === allCategories.length ? t("clearAll") : t("selectAll")}
                     </button>
                   </div>
-                  <ul className="flex-1 overflow-y-auto space-y-1">
+                  <ul className="space-y-1 md:flex-1 md:overflow-y-auto">
                     {allCategories.map((cat) => (
                       <li key={cat}>
                         <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
