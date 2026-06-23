@@ -79,6 +79,7 @@ export interface WordGroup {
   name: string;
   wordIds: string[];
   createdAt: string;
+  order?: number;
 }
 
 export interface PaginatedResult<T> {
@@ -265,4 +266,3 @@ export interface ExpressionQuizSubsession {
   questions: ExpressionQuizQuestion[];
   groupFilter?: string[];
 }
-

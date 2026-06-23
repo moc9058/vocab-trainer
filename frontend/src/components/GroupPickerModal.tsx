@@ -1,6 +1,30 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useI18n } from "../i18n/context";
-import { getGroups, createGroup, modifyGroupMembers, renameGroup, deleteGroup } from "../api/vocab";
+import {
+  getGroups,
+  createGroup,
+  modifyGroupMembers,
+  renameGroup,
+  reorderGroups,
+  deleteGroup,
+} from "../api/vocab";
 import {
   getGrammarGroups,
   createGrammarGroup,
@@ -24,6 +48,43 @@ function memberIds(g: AnyGroup): string[] {
   return (g as WordGroup).wordIds ?? (g as GrammarGroup).grammarIds ?? [];
 }
 
+function SortableGroupRow({
+  id,
+  enabled,
+  children,
+}: {
+  id: string;
+  enabled: boolean;
+  children: ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled: !enabled,
+  });
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={`flex items-center gap-2 rounded ${isDragging ? "z-10 bg-gray-700 shadow-lg" : ""}`}
+    >
+      {enabled && (
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          className="cursor-grab touch-none rounded px-1 py-1 text-gray-500 hover:bg-gray-700 hover:text-gray-300 active:cursor-grabbing"
+          aria-label="Drag to reorder group"
+          title="Drag to reorder"
+        >
+          ⠿
+        </button>
+      )}
+      {children}
+    </li>
+  );
+}
+
 export default function GroupPickerModal({ kind, language, itemIds, onClose, onDone }: Props) {
   const { t } = useI18n();
   const [groups, setGroups] = useState<AnyGroup[]>([]);
@@ -34,9 +95,15 @@ export default function GroupPickerModal({ kind, language, itemIds, onClose, onD
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [confirmedDelete, setConfirmedDelete] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
   const newInputRef = useRef<HTMLInputElement>(null);
 
   const isManageMode = itemIds.length === 0;
+  const canReorder = kind === "word" && isManageMode;
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const api = {
     list: kind === "word" ? getGroups : getGrammarGroups,
@@ -84,9 +151,9 @@ export default function GroupPickerModal({ kind, language, itemIds, onClose, onD
       }
       const next = [...groups, finalGroup];
       setGroups(next);
+      onDone(next);
       setNewName("");
       if (itemIds.length > 0) {
-        onDone(next);
         onClose();
       }
     } finally {
@@ -100,7 +167,9 @@ export default function GroupPickerModal({ kind, language, itemIds, onClose, onD
     setBusy(groupId);
     try {
       const updated = (await api.rename(language, groupId, name)) as AnyGroup;
-      setGroups((prev) => prev.map((g) => (g.id === groupId ? updated : g)));
+      const next = groups.map((g) => (g.id === groupId ? updated : g));
+      setGroups(next);
+      onDone(next);
       setEditingId(null);
     } finally {
       setBusy(null);
@@ -130,6 +199,29 @@ export default function GroupPickerModal({ kind, language, itemIds, onClose, onD
     setConfirmedDelete(null);
   }
 
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!canReorder || !over || active.id === over.id || reordering) return;
+
+    const oldIndex = groups.findIndex((group) => group.id === active.id);
+    const newIndex = groups.findIndex((group) => group.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+
+    const previous = groups;
+    const next = arrayMove(groups, oldIndex, newIndex);
+    setGroups(next);
+    setReordering(true);
+    try {
+      const saved = await reorderGroups(language, next.map((group) => group.id));
+      setGroups(saved);
+      onDone(saved);
+    } catch {
+      setGroups(previous);
+    } finally {
+      setReordering(false);
+    }
+  }
+
   const itemNoun = kind === "word" ? "word" : "grammar";
 
   return (
@@ -155,21 +247,26 @@ export default function GroupPickerModal({ kind, language, itemIds, onClose, onD
         {loading ? (
           <p className="text-sm text-gray-400">Loading…</p>
         ) : (
-          <ul className="mb-4 max-h-56 space-y-1 overflow-y-auto">
-            {groups.length === 0 && (
-              <li className="text-sm text-gray-500 px-1">No groups yet.</li>
-            )}
-            {groups.map((group) => {
-              const ids = memberIds(group);
-              const containedCount = itemIds.filter((id) => ids.includes(id)).length;
-              const allSelectedContained = itemIds.length > 0 && containedCount === itemIds.length;
-              const membershipText =
-                itemIds.length === 1
-                  ? "Already in group"
-                  : `${containedCount}/${itemIds.length} selected already in group`;
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext
+              items={groups.map((group) => group.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <ul className={`mb-4 max-h-56 space-y-1 overflow-y-auto ${reordering ? "opacity-70" : ""}`}>
+                {groups.length === 0 && (
+                  <li className="text-sm text-gray-500 px-1">No groups yet.</li>
+                )}
+                {groups.map((group) => {
+                  const ids = memberIds(group);
+                  const containedCount = itemIds.filter((id) => ids.includes(id)).length;
+                  const allSelectedContained = itemIds.length > 0 && containedCount === itemIds.length;
+                  const membershipText =
+                    itemIds.length === 1
+                      ? "Already in group"
+                      : `${containedCount}/${itemIds.length} selected already in group`;
 
-              return (
-                <li key={group.id} className="flex items-center gap-2">
+                  return (
+                    <SortableGroupRow key={group.id} id={group.id} enabled={canReorder && !reordering}>
                   {editingId === group.id ? (
                     <>
                       <input
@@ -249,10 +346,12 @@ export default function GroupPickerModal({ kind, language, itemIds, onClose, onD
                       )}
                     </>
                   )}
-                </li>
-              );
-            })}
-          </ul>
+                    </SortableGroupRow>
+                  );
+                })}
+              </ul>
+            </SortableContext>
+          </DndContext>
         )}
 
         {/* New group input */}

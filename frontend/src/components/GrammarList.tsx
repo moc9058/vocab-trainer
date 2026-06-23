@@ -341,7 +341,6 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
           onClose={() => setGroupPickerIds(null)}
           onDone={(updated) => {
             setGroups(updated as GrammarGroup[]);
-            setGroupPickerIds(null);
             fetchItems();
           }}
         />

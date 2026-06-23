@@ -402,7 +402,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           {/* Term (required) */}
           <div>
             <label className="mb-1 block text-sm text-gray-400">{t("term")} *</label>
@@ -456,7 +456,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
 
           {/* Groups (optional) */}
           {groups.length > 0 && (
-            <div>
+            <div className="order-2">
               <label className="mb-1 block text-sm text-gray-400">{t("groups")}</label>
               <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-600 bg-gray-700 p-2">
                 {groups.map((group) => {
@@ -488,7 +488,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           )}
 
           {/* Definitions (optional) */}
-          <div>
+          <div className="order-2">
             <div className="mb-1 flex items-center justify-between">
               <label className="text-sm text-gray-400">{t("definition")}</label>
               <button
@@ -540,7 +540,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           </div>
 
           {/* Grammatical Category (optional) */}
-          <div>
+          <div className="order-2">
             <label className="mb-1 block text-sm text-gray-400">{t("category")}</label>
             <select
               value={grammaticalCategory}
@@ -556,7 +556,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
 
           {/* Level (optional, non-English languages with defined levels) */}
           {LEVEL_OPTIONS[wordLanguage] && (
-            <div>
+            <div className="order-2">
               <label className="mb-1 block text-sm text-gray-400">{t("levelsColumn")}</label>
               <select
                 value={level}
@@ -572,7 +572,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           )}
 
           {/* Topics (optional, multi-select) */}
-          <div>
+          <div className="order-2">
             <label className="mb-1 block text-sm text-gray-400">{t("topic")}</label>
             <div className="flex flex-wrap gap-1.5">
               {ALL_TOPICS.map((topic) => {
@@ -597,7 +597,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           </div>
 
           {/* Examples (optional) */}
-          <div>
+          <div className="order-1">
             <div className="mb-1 flex items-center justify-between">
               <label className="text-sm text-gray-400">{t("examples")}</label>
               <button
@@ -748,11 +748,11 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           </div>
 
           {segmentAddError && (
-            <p className="text-xs text-red-400">{segmentAddError}</p>
+            <p className="order-2 text-xs text-red-400">{segmentAddError}</p>
           )}
 
           {/* Flag for review */}
-          <label className="flex items-center gap-2 cursor-pointer">
+          <label className="order-2 flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={flagForReview}
@@ -763,7 +763,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           </label>
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="order-2 flex justify-end gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}

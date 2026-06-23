@@ -33,6 +33,7 @@ import {
   getWordGroups,
   createWordGroup,
   updateWordGroup,
+  reorderWordGroups,
   deleteWordGroup,
   modifyWordGroupMembers,
 } from "../firestore.js";
@@ -1057,6 +1058,30 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       const group = await createWordGroup(language, name.trim());
       reply.code(201);
       return group;
+    }
+  );
+
+  fastify.put<{ Params: { language: string }; Body: { groupIds: string[] } }>(
+    "/:language/groups/order",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["groupIds"],
+          properties: {
+            groupIds: { type: "array", items: { type: "string" } },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { language } = request.params;
+      if (!(await languageExists(language))) return reply.notFound(`Language '${language}' not found`);
+      try {
+        return await reorderWordGroups(language, request.body.groupIds);
+      } catch (error) {
+        return reply.badRequest(error instanceof Error ? error.message : "Invalid group order");
+      }
     }
   );
 

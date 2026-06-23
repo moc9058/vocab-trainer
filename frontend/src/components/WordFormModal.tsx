@@ -218,6 +218,20 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
             />
           </div>
 
+          {/* Examples */}
+          <ExampleSentenceEditor
+            language={language}
+            examples={examples}
+            setExamples={setExamples}
+            selectedGroupIds={word?.id ? selectedGroupIds : new Set()}
+            currentTerm={term}
+            pendingTerms={pendingTerms}
+            succeededTerms={succeededTerms}
+            refreshSignal={refreshSignal}
+            onQueue={onQueue}
+            onChipInFlightChange={setChipsInFlight}
+          />
+
           {/* Groups */}
           {word?.id && groups.length > 0 && (
             <div>
@@ -372,20 +386,6 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
               </div>
             </div>
           )}
-
-          {/* Examples */}
-          <ExampleSentenceEditor
-            language={language}
-            examples={examples}
-            setExamples={setExamples}
-            selectedGroupIds={word?.id ? selectedGroupIds : new Set()}
-            currentTerm={term}
-            pendingTerms={pendingTerms}
-            succeededTerms={succeededTerms}
-            refreshSignal={refreshSignal}
-            onQueue={onQueue}
-            onChipInFlightChange={setChipsInFlight}
-          />
 
           {/* Notes */}
           <div>

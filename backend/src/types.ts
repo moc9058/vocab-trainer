@@ -88,6 +88,7 @@ export interface WordGroup {
   name: string;
   wordIds: string[];
   createdAt: string;
+  order?: number;
 }
 
 export interface VocabFile {

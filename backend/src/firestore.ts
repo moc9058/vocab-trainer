@@ -2306,12 +2306,19 @@ function docToWordGroup(doc: FirebaseFirestore.DocumentSnapshot): WordGroup {
     name: d.name as string,
     wordIds: (d.wordIds ?? []) as string[],
     createdAt: d.createdAt as string,
+    order: typeof d.order === "number" ? d.order : undefined,
   };
 }
 
 export async function getWordGroups(language: string): Promise<WordGroup[]> {
   const snap = await wordGroups.where("language", "==", language).get();
-  return snap.docs.map(docToWordGroup).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return snap.docs.map(docToWordGroup).sort((a, b) => {
+    if (a.order !== undefined || b.order !== undefined) {
+      return (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER)
+        || a.createdAt.localeCompare(b.createdAt);
+    }
+    return a.createdAt.localeCompare(b.createdAt);
+  });
 }
 
 export async function getWordGroup(groupId: string): Promise<WordGroup | null> {
@@ -2320,6 +2327,7 @@ export async function getWordGroup(groupId: string): Promise<WordGroup | null> {
 }
 
 export async function createWordGroup(language: string, name: string): Promise<WordGroup> {
+  const existingGroups = await getWordGroups(language);
   const id = `${language}_${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
   const group: WordGroup = {
     id,
@@ -2327,6 +2335,9 @@ export async function createWordGroup(language: string, name: string): Promise<W
     name,
     wordIds: [],
     createdAt: new Date().toISOString(),
+    ...(existingGroups.some((existingGroup) => existingGroup.order !== undefined)
+      ? { order: existingGroups.length }
+      : {}),
   };
   await wordGroups.doc(id).set(group);
   return group;
@@ -2336,6 +2347,25 @@ export async function updateWordGroup(groupId: string, patch: { name?: string })
   await wordGroups.doc(groupId).update(patch);
   const updated = await wordGroups.doc(groupId).get();
   return docToWordGroup(updated);
+}
+
+export async function reorderWordGroups(language: string, groupIds: string[]): Promise<WordGroup[]> {
+  const groups = await getWordGroups(language);
+  const existingIds = new Set(groups.map((group) => group.id));
+  if (
+    groupIds.length !== groups.length
+    || new Set(groupIds).size !== groupIds.length
+    || groupIds.some((id) => !existingIds.has(id))
+  ) {
+    throw new Error("Group order must contain every group exactly once");
+  }
+
+  const batch = db.batch();
+  groupIds.forEach((id, order) => batch.update(wordGroups.doc(id), { order }));
+  await batch.commit();
+
+  const byId = new Map(groups.map((group) => [group.id, group]));
+  return groupIds.map((id, order) => ({ ...byId.get(id)!, order }));
 }
 
 export async function deleteWordGroup(groupId: string): Promise<void> {
@@ -2368,6 +2398,7 @@ export async function modifyWordGroupMembers(
       name: doc.data()!.name as string,
       wordIds: next,
       createdAt: doc.data()!.createdAt as string,
+      order: typeof doc.data()!.order === "number" ? doc.data()!.order as number : undefined,
     };
   });
 }

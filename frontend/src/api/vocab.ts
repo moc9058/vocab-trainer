@@ -100,6 +100,10 @@ export function renameGroup(language: string, groupId: string, name: string): Pr
   return putJson(`/api/vocab/${encodeURIComponent(language)}/groups/${encodeURIComponent(groupId)}`, { name });
 }
 
+export function reorderGroups(language: string, groupIds: string[]): Promise<WordGroup[]> {
+  return putJson(`/api/vocab/${encodeURIComponent(language)}/groups/order`, { groupIds });
+}
+
 export function deleteGroup(language: string, groupId: string): Promise<void> {
   return deleteRequest(`/api/vocab/${encodeURIComponent(language)}/groups/${encodeURIComponent(groupId)}`);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks, getGroups, modifyGroupMembers } from "../api/vocab";
@@ -304,16 +304,12 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     refreshExistingTerms(word);
   }
 
-  // Groups sorted latest-first by createdAt so the per-chip dropdown can
-  // default to the most recently created group.
-  const sortedGroups = useMemo(
-    () => [...groups].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [groups],
-  );
-  const latestGroupId = sortedGroups[0]?.id ?? "";
+  // The API returns groups in their persisted arranged order. New chips default
+  // to the last group in that order while explicit per-chip choices take priority.
+  const defaultChipGroupId = groups.at(-1)?.id ?? "";
   function getChipGroupId(chipText: string): string {
     const override = chipGroupOverrides.get(chipText);
-    return override !== undefined ? override : latestGroupId;
+    return override !== undefined ? override : defaultChipGroupId;
   }
   function setChipGroupId(chipText: string, groupId: string) {
     setChipGroupOverrides((prev) => {
@@ -839,7 +835,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                         succeededTerms={succeededTerms}
                         segmentFlags={segmentFlags}
                         onToggleSegmentFlag={(term) => setSegmentFlags((prev) => { const next = new Map(prev); next.set(term, !(prev.get(term) ?? true)); return next; })}
-                        wordGroups={sortedGroups}
+                        wordGroups={groups}
                         getChipGroupId={getChipGroupId}
                         setChipGroupId={setChipGroupId}
                         editMode={{
@@ -905,7 +901,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                           succeededTerms={succeededTerms}
                           segmentFlags={segmentFlags}
                           onToggleSegmentFlag={(term) => setSegmentFlags((prev) => { const next = new Map(prev); next.set(term, !(prev.get(term) ?? true)); return next; })}
-                          wordGroups={sortedGroups}
+                          wordGroups={groups}
                           getChipGroupId={getChipGroupId}
                           setChipGroupId={setChipGroupId}
                           editMode={{
@@ -1095,7 +1091,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           onClose={() => setShowGroupPicker(null)}
           onDone={(updatedGroups) => {
             setGroups(updatedGroups as WordGroup[]);
-            setShowGroupPicker(null);
           }}
         />
       )}
