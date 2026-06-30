@@ -4,6 +4,7 @@ import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP } from "../settings/defaults";
 import { answerQuestion, getQuizQuestions } from "../api/quiz";
 import { getFlaggedWordIds } from "../api/flagged";
+import { getGroups } from "../api/vocab";
 import RubyText from "./RubyText";
 import { displayTranslation, type QuizSession, type QuizQuestion } from "../types";
 
@@ -46,6 +47,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [alreadyFlaggedIds, setAlreadyFlaggedIds] = useState<Set<string>>(new Set());
   const [originalTotal] = useState(() => session.wordIds?.length ?? session.questions.length);
+  const [groupNameMap, setGroupNameMap] = useState<Map<string, string>>(new Map());
 
   // Track how many questions have been fetched from the server
   const fetchedCountRef = useRef(0);
@@ -103,12 +105,33 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
       .catch(() => setAlreadyFlaggedIds(new Set()));
   }, [session.language]);
 
+  useEffect(() => {
+    if (!session.groupMembership || Object.keys(session.groupMembership).length === 0) return;
+    getGroups(session.language)
+      .then((groups) => setGroupNameMap(new Map(groups.map((g) => [g.id, g.name]))))
+      .catch(() => {});
+  }, [session.language, session.groupMembership]);
+
   const question = currentIndex < questions.length ? questions[currentIndex] : null;
   const isComplete = currentSession.status === "completed";
   const definitions = question?.definitions ?? [];
   const examples = question?.examples ?? [];
   const visibleDefinitions = showAllDefinitions ? definitions : definitions.slice(0, VISIBLE_ANSWER_ITEMS);
   const visibleExamples = showAllExamples ? examples : examples.slice(0, VISIBLE_ANSWER_ITEMS);
+
+  const groupProgress = useMemo(() => {
+    const membership = currentSession.groupMembership;
+    if (!membership || Object.keys(membership).length === 0) return null;
+    const unansweredWordIds = new Set(
+      questions.filter((q) => q.userCorrect === undefined).map((q) => q.wordId)
+    );
+    return Object.entries(membership).map(([gid, wordIds]) => ({
+      id: gid,
+      name: groupNameMap.get(gid) ?? gid,
+      remaining: wordIds.filter((wid) => unansweredWordIds.has(wid)).length,
+      total: wordIds.length,
+    }));
+  }, [currentSession.groupMembership, questions, groupNameMap]);
 
   function resetExpandedAnswers() {
     setShowAllDefinitions(false);
@@ -249,6 +272,22 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
       <p className="text-sm text-gray-400">
         {currentSession.score.correct} / {originalTotal}
       </p>
+      {groupProgress && (
+        <div className="flex flex-wrap justify-center gap-2">
+          {groupProgress.map((g) => (
+            <span
+              key={g.id}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                g.remaining === 0
+                  ? "bg-green-900/40 text-green-400 border border-green-700/50"
+                  : "bg-gray-700 text-gray-300 border border-gray-600"
+              }`}
+            >
+              {g.name}: {g.remaining}/{g.total}
+            </span>
+          ))}
+        </div>
+      )}
       <h2 className="text-xl sm:text-3xl font-bold text-gray-100">{question!.term}</h2>
 
       {!showingAnswer ? (
