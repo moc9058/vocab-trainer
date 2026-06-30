@@ -3,7 +3,7 @@ import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP } from "../settings/defaults";
 import { answerQuestion, getQuizQuestions } from "../api/quiz";
-import { getFlaggedWordIds } from "../api/flagged";
+import { getFlaggedWordIds, flagWord, unflagWord } from "../api/flagged";
 import { getGroups } from "../api/vocab";
 import RubyText from "./RubyText";
 import { displayTranslation, type QuizSession, type QuizQuestion } from "../types";
@@ -226,12 +226,23 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
       } else if (event.key === "2") {
         event.preventDefault();
         void handleGrade(true);
+      } else if (event.key === "3" && question) {
+        event.preventDefault();
+        if (alreadyFlaggedIds.has(question.wordId)) {
+          unflagWord(currentSession.language, question.wordId).catch(() => {});
+          setAlreadyFlaggedIds((prev) => { const next = new Set(prev); next.delete(question.wordId); return next; });
+          setFlaggedIds((prev) => { const next = new Set(prev); next.delete(question.wordId); return next; });
+        } else {
+          flagWord(currentSession.language, question.wordId).catch(() => {});
+          setAlreadyFlaggedIds((prev) => new Set([...prev, question.wordId]));
+          setFlaggedIds((prev) => new Set([...prev, question.wordId]));
+        }
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [question, showingAnswer, submitting, handleGrade]);
+  }, [question, showingAnswer, submitting, handleGrade, alreadyFlaggedIds, currentSession.language]);
 
   if (loading) {
     return (
