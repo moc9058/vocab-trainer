@@ -96,6 +96,12 @@ cd backend && npx tsx scripts/backfill-missing-segments.ts [--language=<lang>] [
 
 Generates pinyin segments and multi-language translations for example sentences that are missing them. Default chunk size is 50 (segments) / 20 (translations). Use `--dry-run` to preview without writing.
 
+```bash
+cd backend && npx tsx scripts/backfill-empty-example-translations.ts [--language=<lang>] [--dry-run] [--limit=<n>]
+```
+
+LLM-generates translations for `example_sentences` docs whose `translation` is empty or missing one or more target definition languages (e.g. a hand-typed single-language string). Use `--dry-run` to list candidates without calling the LLM or writing.
+
 This will:
 1. Build and push backend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-backend/backend`
 2. Deploy backend to Cloud Run
@@ -257,12 +263,15 @@ vocab-trainer/
 │   │   ├── smoke-test-invariant.ts        # Smoke test for word↔example invariant helpers (concurrency included)
 │   │   ├── validate-invariant-all.ts      # Read-only deep validator: invariant + dangling refs + orphans
 │   │   ├── backfill-hanja-readings.ts     # One-off: generate Korean hanja (simplifiedChar/traditionalChar/hunEum) via LLM MINI
+│   │   ├── backfill-empty-example-translations.ts # One-off: LLM-fill example sentences with empty/partial translations
 │   │   └── export-from-firestore.ts       # Export words, grammar & progress from Firestore to JSON
 │   ├── src/
 │   │   ├── index.ts             # Fastify server entry point
 │   │   ├── types.ts             # Shared TypeScript interfaces
 │   │   ├── firestore.ts         # Google Cloud Firestore persistence layer
 │   │   ├── llm.ts               # OpenAI LLM integration
+│   │   ├── exampleTranslations.ts # Shared missing-translation LLM fallback (vocab/grammar routes + backfill script)
+│   │   ├── quiz-utils.ts        # Shared quiz ordering helpers (shuffle, weightedInterleave, weightedMerge, insertRetryQuestion)
 │   │   └── routes/
 │   │       ├── languages.ts     # /api/languages
 │   │       ├── vocab.ts         # /api/vocab
@@ -272,6 +281,7 @@ vocab-trainer/
 │   │       ├── grammar.ts       # /api/grammar
 │   │       ├── grammar-quiz.ts  # /api/grammar-quiz
 │   │       ├── grammar-progress.ts # /api/grammar-progress
+│   │       ├── combined-quiz.ts # /api/combined-quiz
 │   │       ├── translation.ts  # /api/translation
 │   │       └── speaking-writing.ts # /api/speaking-writing
 │   └── DB/                      # Vocabulary and grammar JSON files
@@ -290,7 +300,8 @@ vocab-trainer/
 │       │   ├── client.ts        # Generic fetch/post/put/delete utilities
 │       │   ├── quiz.ts          # Quiz API wrappers
 │       │   ├── vocab.ts         # Vocabulary API wrappers
-│       │   ├── grammar.ts       # Grammar & grammar quiz API wrappers
+│       │   ├── grammar.ts       # Grammar, grammar settings & grammar quiz API wrappers
+│       │   ├── combined-quiz.ts # Combined word+grammar quiz API wrappers
 │       │   ├── flagged.ts       # Flagged words API wrappers
 │       │   ├── translation.ts   # Translation API wrappers
 │       │   └── speaking-writing.ts # Speaking & writing correction API wrappers
@@ -308,10 +319,13 @@ vocab-trainer/
 │       │   ├── WordFormModal.tsx
 │       │   ├── SmartAddWordModal.tsx  # Smart add word with LLM; queue mode via onQueue prop
 │       │   ├── FlaggedReview.tsx      # Review flagged words
-│       │   ├── GrammarList.tsx        # Browse grammar by chapter/subchapter
+│       │   ├── GrammarList.tsx        # Browse grammar items with groups & search
 │       │   ├── GrammarFilterModal.tsx # Grammar quiz filters
 │       │   ├── GrammarQuizTaking.tsx  # Grammar quiz flashcard UI
-│       │   ├── GrammarFormModal.tsx   # Add/edit grammar component
+│       │   ├── GrammarFormModal.tsx   # Add/edit grammar item
+│       │   ├── StudyQuizModal.tsx     # Unified quiz setup (word / grammar / combined tabs)
+│       │   ├── CombinedQuizFilterModal.tsx # Combined quiz setup (domain + group weights)
+│       │   ├── CombinedQuizTaking.tsx # Combined quiz UI (renders per-question by kind)
 │       │   ├── TranslationView.tsx  # Translation/analysis UI with history
 │       │   ├── SpeakingWritingView.tsx # Speaking & writing correction UI
 │       │   └── EmptyState.tsx
@@ -657,70 +671,67 @@ Removes the flagged status from a word.
 
 ### Grammar
 
-#### `GET /api/grammar/:language/chapters` — List grammar chapters
+#### `GET /api/grammar/settings` — Get grammar-wide settings
 
-**Response:**
-```json
-[
-  {
-    "chapterNumber": 1,
-    "subchapters": [
-      { "subchapterId": "1-1", "subchapterTitle": { "ja": "...", "en": "..." } }
-    ]
-  }
-]
-```
+**Response:** `GrammarSettings` — `{ defaultDefinitionLanguage: string }` (defaults to `{ "defaultDefinitionLanguage": "en" }` when unset). Stored in Firestore doc `config/grammar_settings`; used to seed the description language of new grammar items.
 
-#### `GET /api/grammar/:language/subchapters` — List subchapters
+#### `PUT /api/grammar/settings` — Update grammar-wide settings
 
-| Query Param | Type   | Default | Description                                    |
-| ----------- | ------ | ------- | ---------------------------------------------- |
-| `chapters`  | string | —       | Comma-separated chapter numbers to filter by   |
+**Body:** `{ "defaultDefinitionLanguage": "ko" }`
 
-**Response:** Array of `{ chapterNumber, subchapterId, subchapterTitle }`.
+**Response:** The saved `GrammarSettings`.
 
 #### `GET /api/grammar/:language/items` — List grammar items (with filtering and pagination)
 
 | Query Param  | Type   | Default | Description                                    |
 | ------------ | ------ | ------- | ---------------------------------------------- |
-| `chapter`    | string | —       | Filter by chapter number                       |
-| `subchapter` | string | —       | Filter by subchapter ID                        |
 | `level`      | string | —       | Filter by level                                |
-| `search`     | string | —       | Search term, description, words, or examples   |
+| `search`     | string | —       | Search statement, descriptions, or words       |
+| `groupId`    | string | —       | Filter by grammar group membership             |
 | `page`       | number | 1       | Page number (min 1)                            |
 | `limit`      | number | 50      | Items per page (max 100)                       |
 
-**Response:** `PaginatedResult<GrammarItemDoc>`
+**Response:** `PaginatedResult<Grammar>` — examples are hydrated from the shared `example_sentences` collection via `exampleIds`; translations may be a plain string or a multi-language `Record<string, string>`.
 
-#### `GET /api/grammar/:language/items/:componentId` — Get single grammar item
+#### `GET /api/grammar/:language/items/:grammarId` — Get single grammar item
 
-**Response:** `GrammarItemDoc` object, or `404` if not found.
-
-#### `GET /api/grammar/:language/items/:componentId` — Get single grammar item
-
-**Response:** `GrammarItemDoc` object, or `404` if not found.
+**Response:** `Grammar` object, or `404` if not found.
 
 #### `POST /api/grammar/:language/items` — Add grammar item
 
-**Body:** Grammar item fields (`chapterNumber`, `subchapterId`, `subchapterTitle`, `term` required; `description`, `examples`, `words` optional).
+**Body:** `id`, `statement`, `descriptions` required; `examples`, `words`, `level`, `tags` optional. Incoming `examples` are resolved to `example_sentences` docs (deduplicated with vocab examples by sentence hash).
 
-**Response:** `201` with the created `GrammarItemDoc`.
+**Response:** `201` with the created `Grammar` (including `exampleIds`).
 
-#### `PUT /api/grammar/:language/items/:componentId` — Update grammar item
+#### `POST /api/grammar/:language/smart-add` — Add grammar item with LLM enrichment
 
-**Body:** Partial grammar item fields to update.
+Same body as `POST /items`; the LLM fills `descriptions[].text` for all four definition languages (`en`/`ja`/`ko`/`zh`), keeping user-provided texts.
 
-**Response:** Updated `GrammarItemDoc`.
+**Response:** `201` with the created `Grammar`.
 
-#### `DELETE /api/grammar/:language/items/:componentId` — Delete grammar item
+#### `PUT /api/grammar/:language/items/:grammarId` — Update grammar item
 
-**Response:** `204 No Content`
+**Body:** Partial grammar item fields to update. If `examples` is sent, they are re-resolved to `example_sentences` docs; dropped examples are orphan-deleted only when no other word or grammar item references them.
+
+**Response:** Updated `Grammar`.
+
+#### `DELETE /api/grammar/:language/items/:grammarId` — Delete grammar item
+
+**Response:** `{ deleted: true }`, or `404` if not found.
+
+#### Grammar groups
+
+- `GET /api/grammar/:language/groups` — list groups
+- `POST /api/grammar/:language/groups` — create group (`{ name }`)
+- `PUT /api/grammar/:language/groups/:groupId` — rename group (`{ name }`)
+- `DELETE /api/grammar/:language/groups/:groupId` — delete group
+- `POST /api/grammar/:language/groups/:groupId/grammar` — add/remove members (`{ grammarIds, action: "add" | "remove" }`)
 
 ---
 
 ### Grammar Quiz
 
-One grammar quiz session is stored per language. Supports two modes: `existing` (quiz on existing example sentences) and `llm` (LLM-generated questions). For Chinese, quiz mode is always `llm` — the LLM generates a new Chinese sentence using the grammar term, optional related words, and reference examples as context, then translates it to the user-selected display language. Display language controls which language the prompt sentence is shown in.
+One grammar quiz session is stored per language. Each question shows an example-sentence translation; the user recalls the grammar pattern and self-grades. Questions prefer the item's own `example_sentences` docs (via `exampleIds`), falling back to inline examples for unmigrated items, and to LLM generation only when neither exists.
 
 #### `POST /api/grammar-quiz/start` — Start a grammar quiz session
 
@@ -729,16 +740,13 @@ One grammar quiz session is stored per language. Supports two modes: `existing` 
 {
   "language": "chinese",
   "questionCount": 10,
-  "chapters": [1, 2],
-  "subchapters": ["1-1", "2-3"],
-  "displayLanguage": "ja",
-  "quizMode": "existing"
+  "groupIds": ["group-abc"]
 }
 ```
 
-All fields except `language` are optional. `displayLanguage` defaults to `"ja"` (Japanese). `quizMode` defaults to `"existing"` (ignored for Chinese — always `"llm"`). Supported display languages: `ja` (Japanese), `en` (English), `ko` (Korean).
+All fields except `language` are optional. `groupIds` scopes the question pool to the given grammar groups.
 
-**Response:** `201` with `GrammarQuizSession`.
+**Response:** `201` with `GrammarQuizSession`. Question `exampleTranslation` may be a plain string or a multi-language `Record<string, string>`.
 
 #### `POST /api/grammar-quiz/answer` — Submit a self-graded answer
 
@@ -746,7 +754,7 @@ All fields except `language` are optional. `displayLanguage` defaults to `"ja"` 
 ```json
 {
   "language": "chinese",
-  "componentId": "grammar-001",
+  "grammarId": "grammar-001",
   "correct": true
 }
 ```
@@ -758,6 +766,42 @@ All fields except `language` are optional. `displayLanguage` defaults to `"ja"` 
 Returns the in-progress or completed grammar quiz session, or `404` if none exists.
 
 **Response:** `GrammarQuizSession` object.
+
+---
+
+### Combined Quiz
+
+Merged word + grammar quiz; one session per language, stored in `combined_quiz_sessions`. Each domain is ordered internally by its group weights, then the two streams are merged by `domainWeights` (proportional draw; a weight of 0 excludes that domain).
+
+#### `POST /api/combined-quiz/start` — Start a combined quiz session
+
+**Body:**
+```json
+{
+  "language": "chinese",
+  "domainWeights": { "word": 3, "grammar": 1 },
+  "word": { "groupIds": ["g1"], "groupWeights": { "g1": 2 }, "flaggedOnly": false },
+  "grammar": { "groupIds": ["gg1"], "groupWeights": { "gg1": 1 } }
+}
+```
+
+All fields except `language` are optional. The `word` filter additionally accepts `topics`, `categories`, and `levels` (same semantics as `POST /api/quiz/start`).
+
+**Response:** `201` with `CombinedQuizSession`. Questions are a `kind`-discriminated union: word questions are lightweight `{ kind: "word", wordId, term }` (hydrate via `GET /questions/:language`); grammar questions are stored inline.
+
+#### `GET /api/combined-quiz/questions/:language` — Fetch hydrated questions in batches
+
+Same paged hydration as the word quiz (`offset`/`limit` query params); grammar questions pass through unchanged.
+
+#### `POST /api/combined-quiz/answer` — Submit an answer
+
+**Body:** `{ "language": "...", "kind": "word" | "grammar", "refId": "<wordId | grammarId>", "correct": true, "flagWordIds": [] }` — dispatches to word vs grammar progress; wrong answers re-queue the question into the session tail.
+
+**Response:** `{ session }` — updated session state.
+
+#### `GET /api/combined-quiz/session/language/:language` — Get current combined quiz session
+
+Returns the in-progress or completed session (unanswered tail reweighted per-domain and re-merged), or `404` if none exists.
 
 ---
 
@@ -798,11 +842,12 @@ Runs the two-step pipeline: a structural decomposition (MINI model, source-langu
 {
   "sourceLanguage": "zh",
   "sourceText": "今天天气很好",
-  "targetLanguages": ["en", "ja", "ko"]
+  "targetLanguages": ["en", "ja", "ko"],
+  "context": "casual chat between close friends"
 }
 ```
 
-`sourceLanguage` and entries in `targetLanguages` accept ISO 639-1 codes: `en`, `ja`, `ko`, `zh`.
+`sourceLanguage` and entries in `targetLanguages` accept ISO 639-1 codes: `en`, `ja`, `ko`, `zh`. `context` (optional, max 2000 chars) describes the situation/register of the text — it biases word-sense, tone, politeness/honorific level, and pronoun choices in the translation step, and is saved on the resulting `TranslationEntry.context`.
 
 **Response:** `TranslationEntry` — each result contains a schema-based sentence analysis with per-component breakdown (surface form, reading, base form, part of speech, meaning, explanation). Reading values (furigana/pinyin) are only populated when the source text contains CJK characters.
 ```json
@@ -841,7 +886,7 @@ Runs the two-step pipeline: a structural decomposition (MINI model, source-langu
 
 #### `POST /api/translation/translate-stream` — SSE streaming translate
 
-Same body as `/translate`. Returns an SSE stream so the frontend can render the decomposition and per-language translations as they arrive. Events:
+Same body as `/translate`, plus an optional `decomposition` field: the decomposition JSON string from a previous `decompose-result` event. When it is present and valid for the same text, step 1 is skipped entirely — no `decompose-start`/`decompose-chunk` events are emitted and `decompose-result` echoes the provided value immediately (used by the frontend to make regeneration fast). Returns an SSE stream so the frontend can render the decomposition and per-language translations as they arrive. Events:
 
 - `decompose-start` — `{}`
 - `decompose-chunk` — `{ chunk: string }` — raw JSON token from the decomposition LLM call
@@ -856,14 +901,15 @@ The stream sends `:keep-alive` comments every 15 seconds to defeat proxy idle ti
 
 #### `GET /api/translation/history` — Get translation history
 
-| Query Param | Type   | Default | Description        |
-| ----------- | ------ | ------- | ------------------ |
-| `page`      | number | 1       | Page number        |
-| `limit`     | number | 20      | Items per page     |
+| Query Param | Type   | Default | Description                          |
+| ----------- | ------ | ------- | ------------------------------------ |
+| `page`      | number | 1       | Page number                          |
+| `limit`     | number | 20      | Items per page                       |
+| `language`  | string | —       | Filter by target language (optional) |
 
 **Response:** `{ entries: TranslationEntry[], total: number }`
 
-#### `DELETE /api/translation/history` — Clear all translation history
+#### `DELETE /api/translation/history` — Clear translation history (optional `?language=` filter)
 
 **Response:** `{ ok: true }`
 
@@ -970,22 +1016,25 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 | **QuizFilterModal**     | Multi-panel filter modal shown before starting a word quiz. Covers topics, categories, levels, and word groups (all panels separated by AND dividers). Levels and groups were previously in separate modals and are now consolidated here. Supports "Select All" / "Clear All" per panel. |
 | **GroupPickerModal**    | Modal for managing word group membership. Lets users create, rename, and delete groups, and toggle which groups a set of words belongs to. Used from WordList's "Manage Groups" button and per-word "Add to Group" action. |
 | **WordFormModal**       | Modal for adding or editing a word manually with all fields. For Chinese, uses inline debounced `checkTerms` + `smartAddWord` to show WorldList-style `rounded-full` pill buttons with an amber flag checkbox below each addable segment on space-split example sentences. Accepts optional `onQueue?`, `pendingTerms?`, and `refreshSignal?` props — when `onQueue` is provided, segment chip additions route through the queue (amber "⋯" queued state driven by `pendingTerms`) instead of calling `smartAddWord` directly; `checkTerms` re-runs on `refreshSignal` so chips flip to ✓ after the word commits. |
-| **GrammarList**         | Browse grammar items organized by chapter and subchapter with search, filters, and inline edit/delete. |
-| **GrammarFilterModal**  | Modal to select chapter, subchapter, display language, and quiz mode filters before starting a grammar quiz. Quiz mode selector is hidden for Chinese (always LLM). |
-| **GrammarQuizTaking**   | Grammar quiz flashcard UI — displays a sentence (with grammar term shown for Chinese), reveals the answer, and allows self-grading (correct/incorrect). |
-| **GrammarFormModal**    | Modal for adding or editing grammar components with chapter, subchapter, topic (required), description (optional), terms (optional, individual input per term), and examples (optional). |
-| **TranslationView**    | Translation/analysis UI. Input text, select target languages (EN/JA/KO/ZH), get schema-based sentence decomposition with per-component analysis. Reading column (furigana/pinyin) shown only when source text contains CJK characters. Per-language regenerate buttons during streaming for stuck translations. History persisted to Firestore with previous/next navigation. |
+| **GrammarList**         | Browse grammar items with search, level/group filters, and inline edit/delete. Example translations render per-language (filtered by the grammar definition-language display setting) when stored as multi-language objects. |
+| **GrammarFilterModal**  | Modal to select grammar groups and question count before starting a grammar quiz. |
+| **GrammarQuizTaking**   | Grammar quiz flashcard UI — displays an example-sentence translation (multi-language translations filtered by the grammar definition-language display setting), reveals the answer, and allows self-grading (correct/incorrect). |
+| **GrammarFormModal**    | Modal for adding or editing grammar items with statement (required), descriptions, related words, and examples. New description rows default to the server-persisted grammar default definition language (`GET /api/grammar/settings`, cached across mounts). |
+| **StudyQuizModal**      | Unified quiz setup modal with word / grammar / combined tabs. The combined tab (`CombinedQuizFilterModal`) has word-vs-grammar domain-weight inputs plus per-group weights on both sides; a domain weight of 0 excludes that domain. |
+| **CombinedQuizTaking**  | Combined quiz UI — renders each question by `kind`, reusing the word quiz's paged hydration and the grammar quiz's item-detail cache. |
+| **TranslationView**    | Translation/analysis UI. Input text plus an optional context/situation field (register, politeness, word-sense hints), select the source language (target = active study language), get schema-based sentence decomposition with per-component analysis. Passage translations render live while the response streams; regenerating unchanged text replays the cached decomposition so step 1 is skipped. Reading column (furigana/pinyin) shown only when source text contains CJK characters. Per-language regenerate buttons during streaming for stuck translations. History persisted to Firestore (including the context used) with previous/next navigation. |
 | **SpeakingWritingView** | Text correction UI. Select correction language (EN/JA/KO/ZH), choose speaking or writing mode with use-case context (professional/casual/presentation/interview or academic/social/email/creative), submit text for SSE streaming LLM correction. Displays per-sentence corrections with severity badges (error/improvement/style), and overall feedback. Previous/next navigation between corrections within a session. Sessions persisted to Firestore for resume. |
-| **Home Page (EmptyState)** | Home screen with four sections: Vocabulary (blue), Translation (violet), Speaking & Writing (teal), Grammar (emerald). Checks for in-progress quiz sessions, translation history, and speaking/writing sessions. |
+| **Home Page (EmptyState)** | Home screen sections driven by `sectionOrder` in `settings/defaults.ts` (Vocabulary, Translation, Speaking & Writing, Grammar, Word & Grammar combined quiz). Checks for in-progress word/grammar/combined quiz sessions, translation history, and speaking/writing sessions; the combined quiz buttons are hidden for languages without grammar (English). |
 
 ### API Integration
 
 - **`api/client.ts`** — Generic `fetchJson<T>()`, `postJson<T>()`, `putJson<T>()`, and `deleteRequest()` utilities wrapping the Fetch API. On non-ok responses, the response body is read and included in the thrown error so callers receive the backend's actual message (e.g. "Failed to generate word data") rather than a generic HTTP status string.
 - **`api/quiz.ts`** — `getCurrentSession(language)`, `startQuiz(opts)`, `getQuizQuestions(language, offset, limit)`, and `answerQuestion(opts)`.
 - **`api/vocab.ts`** — `getWords(language, filters?, page?, limit?)`, `getFilters(language)`, `updateWord(language, wordId, updates)`, `deleteWord(language, wordId)`, `checkTerms(language, terms[])`, `smartAddWord(language, data)` (the LLM always generates definitions and example translations in all four supported codes — the client passes only `term`, optional anchor `definitions`, optional `transliteration`/`topics`/`examples`/`level`).
-- **`api/grammar.ts`** — `getGrammarChapters(language)`, `getGrammarItems(language, filters, page, limit)`, `getSubchapters(language, chapters)`, `createGrammarItem(language, item)`, `updateGrammarItem(language, componentId, updates)`, `deleteGrammarItem(language, componentId)`, `startGrammarQuiz(opts)`, `answerGrammarQuestion(opts)`, `getCurrentGrammarSession(language)`, `getGrammarProgress(language)`, `resetGrammarProgress(language)`.
+- **`api/grammar.ts`** — `getGrammarItems(language, filters, page, limit)`, `createGrammarItem(language, item)`, `smartAddGrammarItem(language, item)`, `updateGrammarItem(language, grammarId, updates)`, `deleteGrammarItem(language, grammarId)`, `getGrammarSettings()` / `updateGrammarSettings(defaultDefinitionLanguage)`, group CRUD (`getGrammarGroups`, `createGrammarGroup`, `renameGrammarGroup`, `deleteGrammarGroup`, `modifyGrammarGroupMembers`), `startGrammarQuiz(opts)`, `answerGrammarQuestion(opts)`, `getCurrentGrammarSession(language)`, `getGrammarProgress(language)`, `resetGrammarProgress(language)`.
+- **`api/combined-quiz.ts`** — `startCombinedQuiz(opts)`, `getCombinedQuizQuestions(language, offset, limit)`, `answerCombinedQuestion(opts)`, `getCurrentCombinedSession(language)`.
 - **`api/flagged.ts`** — `getFlaggedWords(language)`, `getFlaggedWordCount(language)`, `flagWord(language, wordId)`, `unflagWord(language, wordId)`.
-- **`api/translation.ts`** — `translate(sourceLanguage, sourceText, targetLanguages)`, `translateStream(sourceLanguage, sourceText, targetLanguages, callbacks, signal?)`, `getTranslationHistory(page, limit)`, `deleteTranslationHistory()`, `deleteTranslationEntryById(id)`.
+- **`api/translation.ts`** — `translate(sourceLanguage, sourceText, targetLanguages, context?)`, `translateStream(sourceLanguage, sourceText, targetLanguages, callbacks, signal?, options?)` (options: `context` situation hint, `decomposition` replay to skip step 1), `getTranslationHistory(page, limit)`, `deleteTranslationHistory()`, `deleteTranslationEntryById(id)`.
 - **`api/speaking-writing.ts`** — `submitCorrection(language, mode, useCase, inputText)`, `submitCorrectionStream(language, mode, useCase, inputText, callbacks, signal?)`, `getSpeakingWritingSession(language)`, `deleteSpeakingWritingSession(language)`.
 - **Dev proxy:** Vite proxies `/api/*` to `http://localhost:3000` so the frontend dev server can reach the backend.
 
@@ -1022,12 +1071,13 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `quiz_sessions`      | One word quiz session per language (keyed by language name)  |
 | `flagged_words`      | Flagged words for review                              |
 | `grammar_chapters`   | Grammar chapter metadata (per language)               |
-| `grammar_items`      | Flattened grammar components (denormalized chapter/subchapter) |
+| `grammar_items`      | Grammar items (statement + multi-language descriptions, `exampleIds` into `example_sentences`) |
 | `grammar_progress`   | Per-component grammar progress                        |
 | `grammar_quiz_sessions` | One grammar quiz session per language              |
-| `translation_history`  | Translation/analysis entries with structured LLM results |
+| `combined_quiz_sessions` | One combined word+grammar quiz session per language (word questions stored slim; re-hydrated via the paged questions endpoint) |
+| `translation_history`  | Translation/analysis entries with structured LLM results (including the optional user context) |
 | `speaking_writing_sessions` | One speaking/writing correction session per language |
-| `config`               | App configuration (`config/llm` for OpenAI API/model settings, `config/speaking_writing` for prompts/schemas/use-cases, `config/translation` for prompts/schemas, `config/vocabulary` for smart-add and segmentation prompts/schemas) |
+| `config`               | App configuration (`config/llm` for OpenAI API/model settings, `config/speaking_writing` for prompts/schemas/use-cases, `config/translation` for prompts/schemas, `config/vocabulary` for smart-add and segmentation prompts/schemas, `config/grammar` for grammar smart-add prompts/schemas, `config/grammar_settings` for the grammar default definition language) |
 | `token_usage`          | Individual LLM call logs with token counts                |
 | `token_usage_daily`    | Daily aggregates by model                                 |
 | `archive_backups`      | Backup word data and grammar backups (chunked subcollections for large files) |

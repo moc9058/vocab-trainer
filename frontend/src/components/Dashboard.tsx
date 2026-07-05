@@ -6,12 +6,14 @@ import { useSettings } from "../settings/context";
 import SettingsModal from "./SettingsModal";
 import { getCurrentSession, startQuiz } from "../api/quiz";
 import { startGrammarQuiz, getCurrentGrammarSession } from "../api/grammar";
+import { startCombinedQuiz, getCurrentCombinedSession } from "../api/combined-quiz";
 import EmptyState from "./EmptyState";
 import QuizTaking from "./QuizTaking";
 import BrowseView from "./BrowseView";
 import FlaggedReview from "./FlaggedReview";
 import GrammarQuizTaking from "./GrammarQuizTaking";
-import StudyQuizModal from "./StudyQuizModal";
+import CombinedQuizTaking from "./CombinedQuizTaking";
+import StudyQuizModal, { type StudyQuizTab } from "./StudyQuizModal";
 import SmartAddWordModal from "./SmartAddWordModal";
 import GrammarFormModal from "./GrammarFormModal";
 import TranslationView from "./TranslationView";
@@ -19,13 +21,14 @@ import SpeakingWritingView from "./SpeakingWritingView";
 import ExpressionQuizView from "./ExpressionQuizView";
 import ExpressionList from "./ExpressionList";
 import type { QuizFilters } from "./QuizFilterModal";
+import type { CombinedQuizFilters } from "./CombinedQuizFilterModal";
 import PrintWorksheet from "./PrintWorksheet";
 import { getTranslationHistory } from "../api/translation";
 import { getSpeakingWritingSession } from "../api/speaking-writing";
 import { urlLanguageToIsoCode } from "../settings/defaults";
 import { useWordQueue } from "../hooks/useWordQueue";
 import { useGrammarQueue } from "../hooks/useGrammarQueue";
-import type { QuizSession, GrammarQuizSession } from "../types";
+import type { QuizSession, GrammarQuizSession, CombinedQuizSession } from "../types";
 
 export default function Dashboard() {
   const { language } = useParams<{ language: string }>();
@@ -42,11 +45,15 @@ export default function Dashboard() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<QuizSession | null>(null);
   const [starting, setStarting] = useState(false);
-  const [studyQuizTab, setStudyQuizTab] = useState<"word" | "grammar" | null>(null);
+  const [studyQuizTab, setStudyQuizTab] = useState<StudyQuizTab | null>(null);
   const [resumePrompt, setResumePrompt] = useState<QuizSession | null>(null);
   const [pendingFilters, setPendingFilters] = useState<QuizFilters | null>(null);
   // Grammar state
   const [activeGrammarQuiz, setActiveGrammarQuiz] = useState<GrammarQuizSession | null>(null);
+  // Combined quiz state
+  const [activeCombinedQuiz, setActiveCombinedQuiz] = useState<CombinedQuizSession | null>(null);
+  const [combinedResumePrompt, setCombinedResumePrompt] = useState<CombinedQuizSession | null>(null);
+  const [pendingCombinedFilters, setPendingCombinedFilters] = useState<CombinedQuizFilters | null>(null);
   // Smart Add Word / Grammar state
   const [showSmartAdd, setShowSmartAdd] = useState(false);
   const [grammarFormLanguage, setGrammarFormLanguage] = useState<string | null>(null);
@@ -74,6 +81,16 @@ export default function Dashboard() {
     if (subPath !== "/grammar-quiz" || activeGrammarQuiz) return;
     getCurrentGrammarSession(language ?? "").then(session => {
       if (session) setActiveGrammarQuiz(session);
+      else navigate(`/${language}`, { replace: true });
+    }).catch(() => navigate(`/${language}`, { replace: true }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subPath, language]);
+
+  // Session recovery: navigate to /:language/combined-quiz → fetch active session if state is empty
+  useEffect(() => {
+    if (subPath !== "/combined-quiz" || activeCombinedQuiz) return;
+    getCurrentCombinedSession(language ?? "").then(session => {
+      if (session) setActiveCombinedQuiz(session);
       else navigate(`/${language}`, { replace: true });
     }).catch(() => navigate(`/${language}`, { replace: true }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -223,6 +240,9 @@ export default function Dashboard() {
     setPendingFilters(null);
     setStarting(false);
     setActiveGrammarQuiz(null);
+    setActiveCombinedQuiz(null);
+    setCombinedResumePrompt(null);
+    setPendingCombinedFilters(null);
     setShowSmartAdd(false);
     setGrammarFormLanguage(null);
     navigate(`/${language}`);
@@ -285,6 +305,70 @@ export default function Dashboard() {
     navigate(`/${language}/grammar`);
   }
 
+  function handleStartCombinedQuiz() {
+    if (!language) return;
+    setStudyQuizTab("combined");
+  }
+
+  async function doStartCombined(filters: CombinedQuizFilters) {
+    if (!language) return;
+    const session = await startCombinedQuiz({
+      language,
+      domainWeights: filters.domainWeights,
+      word: filters.word,
+      grammar: filters.grammar,
+    });
+    setActiveCombinedQuiz(session);
+    navigate(`/${language}/combined-quiz`);
+  }
+
+  async function handleCombinedFiltersSelected(filters: CombinedQuizFilters) {
+    if (starting || !language) return;
+    setStarting(true);
+    try {
+      // Check for existing in-progress combined session
+      const existing = await getCurrentCombinedSession(language);
+      if (existing && existing.status === "in-progress") {
+        setPendingCombinedFilters(filters);
+        setCombinedResumePrompt(existing);
+        return;
+      }
+      setStudyQuizTab(null);
+      await doStartCombined(filters);
+    } catch (err) {
+      console.error("Failed to start combined quiz:", err);
+      alert(String(err));
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  function handleResumeCombined() {
+    if (!combinedResumePrompt) return;
+    setActiveCombinedQuiz(combinedResumePrompt);
+    setCombinedResumePrompt(null);
+    setPendingCombinedFilters(null);
+    setStudyQuizTab(null);
+    setStarting(false);
+    navigate(`/${language}/combined-quiz`);
+  }
+
+  async function handleStartNewCombined() {
+    if (!language || !pendingCombinedFilters) return;
+    const filters = pendingCombinedFilters;
+    setCombinedResumePrompt(null);
+    setStudyQuizTab(null);
+    setPendingCombinedFilters(null);
+    try {
+      await doStartCombined(filters);
+    } catch (err) {
+      console.error("Failed to start combined quiz:", err);
+      alert(String(err));
+    } finally {
+      setStarting(false);
+    }
+  }
+
   function handleStartExpressionQuiz() {
     if (!language) return;
     navigate(`/${language}/speaking-writing`, { state: { mode: "new", subMode: "expression-quiz" } });
@@ -300,7 +384,12 @@ export default function Dashboard() {
   return (
     <div className="flex min-h-screen flex-col bg-gray-900">
       <header className="flex items-center justify-between border-b border-gray-700 bg-gray-800 px-3 sm:px-6 py-3">
-        <h1 className="text-base sm:text-xl font-bold text-gray-100">{t("appTitle")}</h1>
+        <button
+          onClick={goHome}
+          className="text-base sm:text-xl font-bold text-gray-100 hover:text-gray-300 transition-colors"
+        >
+          {t("appTitle")}
+        </button>
         <div className="flex items-center gap-2">
           <div className="flex rounded-lg border border-gray-600 overflow-hidden">
             {settings.languageOrder
@@ -374,7 +463,7 @@ export default function Dashboard() {
           refreshSignal={refreshSignal}
         />
       )}
-      {studyQuizTab && !resumePrompt && language && (
+      {studyQuizTab && !resumePrompt && !combinedResumePrompt && language && (
         <StudyQuizModal
           language={language}
           initialTab={studyQuizTab}
@@ -382,7 +471,32 @@ export default function Dashboard() {
           onStartWord={handleFiltersSelected}
           onPrintWord={handlePrintSelected}
           onStartGrammar={handleGrammarFiltersSelected}
+          onStartCombined={handleCombinedFiltersSelected}
         />
+      )}
+      {combinedResumePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm rounded-xl bg-gray-800 p-6 shadow-lg">
+            <p className="mb-4 text-gray-300">{t("existingCombinedQuizFound")}</p>
+            <p className="mb-4 text-lg font-semibold text-indigo-400">
+              {combinedResumePrompt.score.correct} / {combinedResumePrompt.initialTotal ?? combinedResumePrompt.questions.length}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleResumeCombined}
+                className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-500"
+              >
+                {t("resumeQuiz")}
+              </button>
+              <button
+                onClick={handleStartNewCombined}
+                className="flex-1 rounded-lg bg-gray-700 px-4 py-2 text-gray-300 hover:bg-gray-600"
+              >
+                {t("startNewQuiz")}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {resumePrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -488,6 +602,19 @@ export default function Dashboard() {
               <span className="text-gray-400">Loading quiz…</span>
             </div>
           )
+        ) : subPath === "/combined-quiz" ? (
+          activeCombinedQuiz ? (
+            <CombinedQuizTaking
+              session={activeCombinedQuiz}
+              onComplete={() => { setActiveCombinedQuiz(null); navigate(`/${language}`); }}
+              onBrowse={handleBrowse}
+              onStartNew={handleStartCombinedQuiz}
+            />
+          ) : (
+            <div className="flex items-center justify-center p-8">
+              <span className="text-gray-400">Loading quiz…</span>
+            </div>
+          )
         ) : subPath === "/print-worksheet" ? (
           (() => {
             const st = (location.state as {
@@ -529,6 +656,8 @@ export default function Dashboard() {
             language={language ?? ""}
             onResume={(session) => { setActiveQuiz(session); navigate(`/${language}/quiz`); }}
             onResumeGrammar={(session) => { setActiveGrammarQuiz(session); navigate(`/${language}/grammar-quiz`); }}
+            onResumeCombined={(session) => { setActiveCombinedQuiz(session); navigate(`/${language}/combined-quiz`); }}
+            onCombinedQuiz={handleStartCombinedQuiz}
             onStartNew={handleStartQuiz}
             onBrowse={handleBrowse}
             onFlaggedReview={handleFlaggedReview}

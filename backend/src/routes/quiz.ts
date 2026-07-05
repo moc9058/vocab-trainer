@@ -13,6 +13,7 @@ import {
   getWordGroup,
 } from "../firestore.js";
 import type { QuizSession, QuizQuestion, Word, WordProgress } from "../types.js";
+import { shuffle, weightedInterleave, insertRetryQuestion } from "../quiz-utils.js";
 
 const quizRoutes: FastifyPluginAsync = async (fastify) => {
   // Start quiz session
@@ -321,31 +322,6 @@ function randomSample(words: Word[], count: number): Word[] {
   return shuffle(words).slice(0, count);
 }
 
-// Weighted interleave: repeatedly pick a bucket with probability proportional to its
-// weight (among buckets that still have items), then take a random item from it. Used to
-// order the quiz by group weight. Buckets with weight <= 0 or no items are skipped.
-function weightedInterleave<T>(buckets: { weight: number; items: T[] }[]): T[] {
-  const pools = buckets
-    .filter((b) => b.weight > 0 && b.items.length > 0)
-    .map((b) => ({ weight: b.weight, items: shuffle(b.items) }));
-  const order: T[] = [];
-  while (pools.some((p) => p.items.length > 0)) {
-    const active = pools.filter((p) => p.items.length > 0);
-    const total = active.reduce((sum, p) => sum + p.weight, 0);
-    let r = Math.random() * total;
-    let chosen = active[active.length - 1];
-    for (const p of active) {
-      r -= p.weight;
-      if (r <= 0) {
-        chosen = p;
-        break;
-      }
-    }
-    order.push(chosen.items.pop()!);
-  }
-  return order;
-}
-
 // Assign each pooled word to exactly one of the selected groups — the first group (in
 // groupIds order) whose membership contains it — so weighted draws have well-defined
 // denominators and each word appears once.
@@ -391,29 +367,6 @@ function reweightUnanswered(unanswered: QuizQuestion[], session: QuizSession): Q
     if (!covered.has(q.wordId)) ordered.push(q);
   }
   return ordered;
-}
-
-function insertRetryQuestion(
-  questions: QuizQuestion[],
-  retryQuestion: QuizQuestion,
-  answeredIndex: number
-): void {
-  // Insert the retry copy at a random position within the remaining tail so it does not
-  // always appear next. Unlike a full tail reshuffle, this preserves the existing order of
-  // the rest of the tail — important for keeping a weighted (grouped) quiz's ordering intact.
-  const tailStart = answeredIndex + 1;
-  const tailLen = questions.length - tailStart;
-  const pos = tailStart + Math.floor(Math.random() * (tailLen + 1));
-  questions.splice(pos, 0, retryQuestion);
-}
-
-function shuffle<T>(items: T[]): T[] {
-  const shuffled = [...items];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const randomIndex = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[i]];
-  }
-  return shuffled;
 }
 
 export default quizRoutes;

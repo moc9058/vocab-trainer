@@ -342,22 +342,18 @@ Allowed topics: ${TOPICS.join(", ")}`;
 
 interface PreparedQuestion {
   sentence: string;
-  translation: string;
+  translation: string | Record<string, string>;
   transliteration?: string;
 }
 
-async function prepareQuestion(item: Grammar): Promise<PreparedQuestion> {
+// Also used by routes/combined-quiz.ts to build grammar questions.
+export async function prepareQuestion(item: Grammar): Promise<PreparedQuestion> {
   // Prefer hydrating from the normalized example_sentences collection.
   if (item.exampleIds && item.exampleIds.length > 0) {
     const docs = await getExampleSentencesByIds(item.exampleIds);
     if (docs.length > 0) {
       const es = docs[Math.floor(Math.random() * docs.length)];
-      // Grammar translations are stored as a plain string; coerce defensively
-      // in case a doc dedup-shared with vocab carries a multi-lang object.
-      const translation = typeof es.translation === "string"
-        ? es.translation
-        : Object.values(es.translation ?? {})[0] ?? "";
-      return { sentence: es.sentence, translation };
+      return { sentence: es.sentence, translation: es.translation };
     }
   }
 

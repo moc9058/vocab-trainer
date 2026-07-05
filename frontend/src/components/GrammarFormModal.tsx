@@ -10,11 +10,17 @@ import {
 import { ALL_KNOWN_LANGUAGES } from "../settings/defaults";
 import { LEVEL_OPTIONS } from "../constants/levels";
 import ExampleSentenceEditor, { type ExampleFormState } from "./ExampleSentenceEditor";
-import type { Grammar, GrammarGroup, Meaning } from "../types";
+import { displayTranslation, type Grammar, type GrammarGroup, type Meaning } from "../types";
 import type { smartAddWord } from "../api/vocab";
 
 type SmartAddPayload = Parameters<typeof smartAddWord>[1];
 type GrammarPayload = Omit<Grammar, "language">;
+
+// Cached across mounts so the 2nd+ "Add Grammar" within a session initializes
+// with the correct language immediately — otherwise every fresh mount re-fetches
+// getGrammarSettings() and has a race window where a user typing quickly can
+// beat the fetch, leaving the description stuck on the "en" placeholder.
+let cachedDefaultDescLang: string | null = null;
 
 interface DescriptionFormState {
   partOfSpeech: string;
@@ -63,6 +69,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
   const isChinese = language === "chinese";
 
   const [statement, setStatement] = useState(editItem?.statement ?? "");
+  const [defaultDescLang, setDefaultDescLang] = useState(() => cachedDefaultDescLang ?? "en");
   const [descriptions, setDescriptions] = useState<DescriptionFormState[]>(() => {
     if (editItem?.descriptions && editItem.descriptions.length > 0) {
       return editItem.descriptions.map((m) => ({
@@ -71,13 +78,13 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
         pinyinsRaw: m.pinyins?.join(", ") ?? "",
       }));
     }
-    return [{ partOfSpeech: "", translations: [{ lang: "en", text: "" }], pinyinsRaw: "" }];
+    return [{ partOfSpeech: "", translations: [{ lang: cachedDefaultDescLang ?? "en", text: "" }], pinyinsRaw: "" }];
   });
   const [wordsList, setWordsList] = useState<string[]>(editItem?.words ?? []);
   const [examples, setExamples] = useState<ExampleFormState[]>(
     editItem?.examples?.map((ex) => ({
       sentence: ex.sentence,
-      translation: ex.translation,
+      translation: displayTranslation(ex.translation),
       originalTranslation: ex.translation ?? "",
       locked: false,
     })) ?? [{ sentence: "", translation: "", originalTranslation: "", locked: false }]
@@ -95,21 +102,20 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
   // Used to lock Cancel + backdrop click so we don't drop the modal while a
   // word is being half-created.
   const [chipsInFlight, setChipsInFlight] = useState(false);
-  const [defaultDescLang, setDefaultDescLang] = useState("en");
 
-  // Server-persisted default definition language (Settings > Grammar). Patch the
-  // pristine initial row in place once loaded — it's always seeded as "en" before
-  // this resolves, and edit-mode items already have real language keys we must
-  // not touch.
+  // Server-persisted default definition language (Settings > Grammar), cached across
+  // mounts (see `cachedDefaultDescLang`). Re-fetch on every mount to stay current, and
+  // patch the pristine initial row in place if it's still untouched — covers the very
+  // first mount in a session, before the cache is warm.
   useEffect(() => {
     getGrammarSettings()
       .then((s) => {
+        cachedDefaultDescLang = s.defaultDefinitionLanguage;
         setDefaultDescLang(s.defaultDefinitionLanguage);
         if (editItem) return;
         setDescriptions((prev) =>
           prev.length === 1 &&
           prev[0].translations.length === 1 &&
-          prev[0].translations[0].lang === "en" &&
           prev[0].translations[0].text === ""
             ? [{ ...prev[0], translations: [{ ...prev[0].translations[0], lang: s.defaultDefinitionLanguage }] }]
             : prev
@@ -179,7 +185,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
 
   function resetForm() {
     setStatement("");
-    setDescriptions([{ partOfSpeech: "", translations: [{ lang: "en", text: "" }], pinyinsRaw: "" }]);
+    setDescriptions([{ partOfSpeech: "", translations: [{ lang: defaultDescLang, text: "" }], pinyinsRaw: "" }]);
     setExamples([{ sentence: "", translation: "", originalTranslation: "", locked: false }]);
     setWordsList([]);
     setLevel("");
@@ -203,17 +209,23 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
         .filter((ex) => ex.sentence.trim())
         .map((ex) => {
           const trimmed = ex.sentence.trim();
+          // If the user hasn't changed the translation display value, round-trip the
+          // original (possibly multi-lang) translation object so we don't flatten it.
+          const resolvedTranslation: string | Record<string, string> =
+            ex.translation === displayTranslation(ex.originalTranslation)
+              ? ex.originalTranslation
+              : ex.translation.trim();
           if (isChinese) {
             const sentence = trimmed.replace(/[\s　]+/g, "");
             if (/[\s　]/.test(trimmed)) {
               const splits = trimmed.match(/[\p{Script=Han}a-zA-Z]+/gu) ?? [];
               if (splits.length >= 2) {
-                return { sentence, translation: ex.translation.trim(), userSplits: splits };
+                return { sentence, translation: resolvedTranslation, userSplits: splits };
               }
             }
-            return { sentence, translation: ex.translation.trim() };
+            return { sentence, translation: resolvedTranslation };
           }
-          return { sentence: trimmed, translation: ex.translation.trim() };
+          return { sentence: trimmed, translation: resolvedTranslation };
         });
       const wordsArr = wordsList.map((w) => w.trim()).filter(Boolean);
       const tagsArr = tags.trim() ? tags.split(",").map((s) => s.trim()).filter(Boolean) : [];

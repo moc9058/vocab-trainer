@@ -17,6 +17,7 @@ import type {
   GrammarGroup,
   GrammarProgress,
   GrammarQuizSession,
+  CombinedQuizSession,
   TranslationEntry,
   TranslationResult,
   SpeakingWritingSession,
@@ -1436,10 +1437,6 @@ const grammarQuizSessions = db.collection("grammar_quiz_sessions");
  * Hydrate a Grammar's `examples` field from the normalized `example_sentences`
  * collection using its `exampleIds`. Preserves the existing inline `examples`
  * if the doc hasn't been migrated yet (transitional fallback).
- *
- * Grammar example translations are stored as plain strings, but a dedup-shared
- * doc may carry a multi-lang object (because vocab uses Record<string,string>).
- * We coerce defensively at the boundary so frontend rendering stays simple.
  */
 async function hydrateGrammarItems(items: Grammar[]): Promise<Grammar[]> {
   const allIds = new Set<string>();
@@ -1457,12 +1454,9 @@ async function hydrateGrammarItems(items: Grammar[]): Promise<Grammar[]> {
       .map((exId) => {
         const es = byId.get(exId);
         if (!es) return null;
-        const translation = typeof es.translation === "string"
-          ? es.translation
-          : Object.values(es.translation ?? {})[0] ?? "";
-        return { sentence: es.sentence, translation, ...(es.segments ? { segments: es.segments } : {}) };
+        return { sentence: es.sentence, translation: es.translation, ...(es.segments ? { segments: es.segments } : {}) };
       })
-      .filter((ex): ex is { sentence: string; translation: string } => ex !== null);
+      .filter((ex): ex is { sentence: string; translation: string | Record<string, string> } => ex !== null);
     return { ...it, examples };
   });
 }
@@ -1824,6 +1818,63 @@ export async function saveGrammarQuizSession(session: GrammarQuizSession): Promi
   delete data.sessionId;
   const clean = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
   await grammarQuizSessions.doc(session.language).set(clean);
+}
+
+// ========== Combined Quiz Sessions (words + grammar, keyed by language) ==========
+
+const combinedQuizSessions = db.collection("combined_quiz_sessions");
+
+/** Strip heavy word data — persist only what the paged hydration endpoint can't rebuild. */
+function slimCombinedQuestions(questions: CombinedQuizSession["questions"]) {
+  return questions.map((q) =>
+    q.kind === "word"
+      ? {
+          kind: "word",
+          wordId: q.wordId,
+          term: q.term,
+          ...(q.userCorrect !== undefined ? { userCorrect: q.userCorrect } : {}),
+        }
+      : {
+          kind: "grammar",
+          grammarId: q.grammarId,
+          exampleSentence: q.exampleSentence,
+          exampleTranslation: q.exampleTranslation,
+          ...(q.exampleTransliteration ? { exampleTransliteration: q.exampleTransliteration } : {}),
+          ...(q.userCorrect !== undefined ? { userCorrect: q.userCorrect } : {}),
+        }
+  );
+}
+
+export async function getCombinedQuizSession(language: string): Promise<CombinedQuizSession | null> {
+  const doc = await combinedQuizSessions.doc(language).get();
+  if (!doc.exists) return null;
+  const d = doc.data()!;
+  return {
+    sessionId: doc.id,
+    language: d.language,
+    startedAt: d.startedAt,
+    completedAt: d.completedAt,
+    status: d.status,
+    score: d.score,
+    questions: d.questions,
+    domainWeights: d.domainWeights,
+    initialTotal: d.initialTotal,
+    wordGroupWeights: d.wordGroupWeights,
+    wordGroupMembership: d.wordGroupMembership,
+    grammarGroupWeights: d.grammarGroupWeights,
+    grammarGroupMembership: d.grammarGroupMembership,
+    flaggedOnly: d.flaggedOnly,
+  };
+}
+
+export async function saveCombinedQuizSession(session: CombinedQuizSession): Promise<void> {
+  const data: Record<string, unknown> = {
+    ...session,
+    questions: slimCombinedQuestions(session.questions),
+  };
+  delete data.sessionId;
+  const clean = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
+  await combinedQuizSessions.doc(session.language).set(clean);
 }
 
 // ========== Translation History ==========

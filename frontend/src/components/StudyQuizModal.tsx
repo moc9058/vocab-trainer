@@ -2,14 +2,18 @@ import { useState } from "react";
 import { useI18n } from "../i18n/context";
 import QuizFilterModal, { type QuizFilters } from "./QuizFilterModal";
 import GrammarFilterModal from "./GrammarFilterModal";
+import CombinedQuizFilterModal, { type CombinedQuizFilters } from "./CombinedQuizFilterModal";
+
+export type StudyQuizTab = "word" | "grammar" | "combined";
 
 interface Props {
   language: string;
-  initialTab: "word" | "grammar";
+  initialTab: StudyQuizTab;
   onClose: () => void;
   onStartWord: (filters: QuizFilters) => void;
   onPrintWord?: (filters: QuizFilters, count: number | null) => void;
   onStartGrammar: (filters: { groupIds: string[] }) => void;
+  onStartCombined: (filters: CombinedQuizFilters) => void;
 }
 
 export default function StudyQuizModal({
@@ -19,9 +23,10 @@ export default function StudyQuizModal({
   onStartWord,
   onPrintWord,
   onStartGrammar,
+  onStartCombined,
 }: Props) {
   const { t } = useI18n();
-  const [tab, setTab] = useState<"word" | "grammar">(initialTab);
+  const [tab, setTab] = useState<StudyQuizTab>(initialTab);
 
   return (
     <>
@@ -42,6 +47,14 @@ export default function StudyQuizModal({
         >
           {t("sectionGrammar")}
         </button>
+        <button
+          onClick={() => setTab("combined")}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
+            tab === "combined" ? "bg-indigo-600 text-white" : "text-gray-400 hover:text-gray-200"
+          }`}
+        >
+          {t("combinedQuiz")}
+        </button>
       </div>
       {tab === "word" ? (
         <QuizFilterModal
@@ -51,10 +64,16 @@ export default function StudyQuizModal({
           onPrint={onPrintWord}
           showFlaggedScope
         />
-      ) : (
+      ) : tab === "grammar" ? (
         <GrammarFilterModal
           language={language}
           onStart={onStartGrammar}
+          onClose={onClose}
+        />
+      ) : (
+        <CombinedQuizFilterModal
+          language={language}
+          onStart={onStartCombined}
           onClose={onClose}
         />
       )}

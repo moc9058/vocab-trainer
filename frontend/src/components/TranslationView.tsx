@@ -24,6 +24,7 @@ export default function TranslationView({ mode, language }: Props) {
   const [historyIndex, setHistoryIndex] = useState(0);
   const [phase, setPhase] = useState<"input" | "loading" | "results">("input");
   const [inputText, setInputText] = useState("");
+  const [contextText, setContextText] = useState("");
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(() => {
     const src = settings.defaultTranslationSourceLanguage;
     if (src && src !== language) return [src];
@@ -40,6 +41,10 @@ export default function TranslationView({ mode, language }: Props) {
   const abortRef = useRef<AbortController | null>(null);
   const lastInputRef = useRef("");
   const lastSourceLangRef = useRef<string>(language);
+  const lastContextRef = useRef("");
+  // Decomposition of the last decomposed text — replayed to the server on
+  // regenerate so step 1 (the blocking decompose LLM call) is skipped.
+  const lastDecompositionRef = useRef<{ text: string; sourceLang: string; decomposition: string } | null>(null);
   const lastLangsRef = useRef<string[]>([]);
   const doneRef = useRef(false);
   const needsCleanupRef = useRef(mode === "new");
@@ -85,9 +90,19 @@ export default function TranslationView({ mode, language }: Props) {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    lastInputRef.current = inputText.trim();
-    lastSourceLangRef.current = language;
+    const trimmedInput = inputText.trim();
+    const sourceLang = selectedLanguages[0];
+    lastInputRef.current = trimmedInput;
+    lastSourceLangRef.current = sourceLang;
+    lastContextRef.current = contextText.trim();
     lastLangsRef.current = getTargetLanguages();
+    // Same text + source language as the last decompose → replay the cached
+    // decomposition and skip step 1 server-side.
+    const cached = lastDecompositionRef.current;
+    const reusableDecomposition =
+      cached && cached.text === trimmedInput && cached.sourceLang === sourceLang
+        ? cached.decomposition
+        : undefined;
     doneRef.current = false;
     setError(null);
     setPhase("loading");
@@ -103,11 +118,12 @@ export default function TranslationView({ mode, language }: Props) {
     }
 
     try {
-      await translateStream(selectedLanguages[0], inputText.trim(), getTargetLanguages(), {
+      await translateStream(sourceLang, trimmedInput, getTargetLanguages(), {
         onDecomposeChunk(chunk) {
           setDecomposeChunks((prev) => prev + chunk);
         },
-        onDecomposeResult() {
+        onDecomposeResult(decomposition) {
+          lastDecompositionRef.current = { text: trimmedInput, sourceLang, decomposition };
           setDecomposeComplete(true);
         },
         onStart(language) {
@@ -155,7 +171,10 @@ export default function TranslationView({ mode, language }: Props) {
           setStreamingChunks(new Map());
           setDecomposeChunks("");
         },
-      }, controller.signal);
+      }, controller.signal, {
+        context: lastContextRef.current,
+        decomposition: reusableDecomposition,
+      });
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error("Translation failed:", err);
@@ -178,6 +197,7 @@ export default function TranslationView({ mode, language }: Props) {
       id: `local-${Date.now()}`,
       sourceLanguage: lastSourceLangRef.current,
       sourceText: lastInputRef.current,
+      ...(lastContextRef.current ? { context: lastContextRef.current } : {}),
       targetLanguages: langs,
       results,
       createdAt: new Date().toISOString(),
@@ -231,7 +251,15 @@ export default function TranslationView({ mode, language }: Props) {
             return next;
           });
         },
-      }, controller.signal);
+      }, controller.signal, {
+        context: lastContextRef.current,
+        decomposition:
+          lastDecompositionRef.current &&
+          lastDecompositionRef.current.text === lastInputRef.current &&
+          lastDecompositionRef.current.sourceLang === lastSourceLangRef.current
+            ? lastDecompositionRef.current.decomposition
+            : undefined,
+      });
     } catch (err) {
       if (controller.signal.aborted) return;
       console.error(`Regenerate ${lang} failed:`, err);
@@ -252,6 +280,7 @@ export default function TranslationView({ mode, language }: Props) {
   function handleRegenerateTranslation() {
     if (!currentEntry) return;
     setInputText(currentEntry.sourceText);
+    setContextText(currentEntry.context ?? "");
     setSelectedLanguages([currentEntry.sourceLanguage]);
     setPhase("input");
     setError(null);
@@ -315,6 +344,18 @@ export default function TranslationView({ mode, language }: Props) {
         />
 
         <div>
+          <p className="mb-2 text-sm font-medium text-gray-400">{t("contextLabel")}</p>
+          <textarea
+            value={contextText}
+            onChange={(e) => setContextText(e.target.value)}
+            placeholder={t("contextPlaceholder")}
+            maxLength={2000}
+            className="w-full rounded-lg border border-gray-600 bg-gray-800 px-4 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 resize-y"
+            rows={2}
+          />
+        </div>
+
+        <div>
           <p className="mb-2 text-sm font-medium text-gray-400">{t("sourceLanguageLabel")}</p>
           <div className="flex flex-wrap gap-2">
             {KNOWN_LANGUAGES.filter((lang) => lang.code !== language).map((lang) => (
@@ -350,6 +391,9 @@ export default function TranslationView({ mode, language }: Props) {
 
   // ===== LOADING PHASE =====
   if (phase === "loading") {
+    // Sentences decomposed so far — each sentence object in the stream carries
+    // exactly one "text" key (components use surface/baseForm instead).
+    const decomposedSentenceCount = (decomposeChunks.match(/"text"\s*:/g) ?? []).length;
     return (
       <div className="mx-auto max-w-2xl p-4 sm:p-6 space-y-4">
         <h2 className="text-lg font-bold text-gray-100">{t("translating")}</h2>
@@ -386,13 +430,9 @@ export default function TranslationView({ mode, language }: Props) {
               )}
               <p className="text-xs text-violet-400 font-semibold">
                 {decomposeComplete ? t("decompositionComplete") : t("analyzingStructure")}
+                {!decomposeComplete && decomposedSentenceCount > 0 && ` (${decomposedSentenceCount})`}
               </p>
             </div>
-            {decomposeChunks && !decomposeComplete && (
-              <p className="text-sm text-gray-400 font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
-                {decomposeChunks.slice(-500)}
-              </p>
-            )}
           </div>
         )}
 
@@ -422,18 +462,28 @@ export default function TranslationView({ mode, language }: Props) {
           }
 
           if (isStreaming) {
-            // Actively streaming
+            // Actively streaming — `passages` is the first key in the response,
+            // so finished translations can be shown while the (much longer)
+            // per-component explanations are still generating.
+            const partialPassages = chunks ? extractStreamingPassages(chunks) : [];
             return (
               <div key={lang} className="rounded-lg bg-gray-800/60 p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <div className="h-3 w-3 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
                   <p className="text-xs text-violet-400 font-semibold">{label}</p>
                 </div>
-                {chunks && (
+                {partialPassages.length > 0 ? (
+                  <div className="space-y-2">
+                    {partialPassages.map((p, i) => (
+                      <p key={i} className="text-sm text-gray-200">{p.translation}</p>
+                    ))}
+                    <p className="text-xs text-gray-500">{t("generatingExplanations")}</p>
+                  </div>
+                ) : chunks ? (
                   <p className="text-sm text-gray-400 font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto">
                     {chunks.slice(-500)}
                   </p>
-                )}
+                ) : null}
                 <button
                   onClick={() => handleRegenerateLang(lang)}
                   className="mt-2 rounded-md border border-gray-600 px-3 py-1 text-xs text-gray-400 hover:bg-gray-700 transition-colors"
@@ -531,6 +581,11 @@ export default function TranslationView({ mode, language }: Props) {
         </div>
       )}
 
+      {/* Context used for this translation */}
+      {currentEntry.context && (
+        <p className="text-xs italic text-gray-500">{currentEntry.context}</p>
+      )}
+
       {/* Result content */}
       {result && (
         <div className="space-y-4">
@@ -556,6 +611,51 @@ export default function TranslationView({ mode, language }: Props) {
 }
 
 const CJK_REGEX = /[\u3000-\u9fff\uf900-\ufaff]/;
+
+/**
+ * Pull completed passage objects out of a partially-streamed translate
+ * response. `passages` is the first property of the response JSON, so its
+ * entries complete long before the chunk/component tail; each balanced
+ * `{...}` inside the array is parsed individually and shown immediately.
+ */
+function extractStreamingPassages(buffer: string): TranslationPassage[] {
+  const keyIdx = buffer.indexOf('"passages"');
+  if (keyIdx === -1) return [];
+  const arrStart = buffer.indexOf("[", keyIdx);
+  if (arrStart === -1) return [];
+
+  const passages: TranslationPassage[] = [];
+  let depth = 0;
+  let objStart = -1;
+  let inString = false;
+  let escaped = false;
+  for (let i = arrStart + 1; i < buffer.length; i++) {
+    const ch = buffer[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === "{") {
+      if (depth === 0) objStart = i;
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+      if (depth === 0 && objStart !== -1) {
+        try {
+          const obj = JSON.parse(buffer.slice(objStart, i + 1));
+          if (typeof obj?.translation === "string") passages.push(obj as TranslationPassage);
+        } catch { /* malformed \u2014 skip */ }
+        objStart = -1;
+      }
+    } else if (ch === "]" && depth === 0) {
+      break; // passages array closed \u2014 the rest is chunks/components
+    }
+  }
+  return passages;
+}
 
 function ComponentTable({ components, showReading }: { components: import("../types").AnalysisComponent[]; showReading: boolean }) {
   return (

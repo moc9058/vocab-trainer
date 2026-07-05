@@ -20,8 +20,47 @@ function langName(code: string): string {
   return LANGUAGE_NAMES[code] ?? code;
 }
 
-function buildTranslateSystemPrompt(basePrompt: string, sourceLang: string, targetLang: string): string {
-  return `${basePrompt}\n\nSource language: ${langName(sourceLang)}\nTarget language: ${langName(targetLang)}\n\nApproach: First determine a natural, idiomatic translation for each sentence as a whole. Then, using that sentence translation as context, write explanations for each chunk and component. Component explanations are supplementary notes — they do not need to compose or sum up to the sentence translation.`;
+function buildTranslateSystemPrompt(basePrompt: string, sourceLang: string, targetLang: string, context?: string): string {
+  let prompt = `${basePrompt}\n\nSource language: ${langName(sourceLang)}\nTarget language: ${langName(targetLang)}\n\nApproach: First determine a natural, idiomatic translation for each sentence as a whole. Then, using that sentence translation as context, write explanations for each chunk and component. Component explanations are supplementary notes — they do not need to compose or sum up to the sentence translation.`;
+  // Context goes LAST so the static prompt prefix stays byte-identical across
+  // requests (OpenAI automatic prompt caching keys on the prefix).
+  if (context && context.trim()) {
+    prompt += `\n\nUser-provided context/situation (describes the circumstances of the text; it is NOT text to translate): ${context.trim()}\nReflect this context in register, politeness/honorific level, pronoun choice, tone, and word-sense disambiguation — in the passage translations, chunk meanings, and component explanations.`;
+  }
+  return prompt;
+}
+
+/**
+ * Assign positional sentence/chunk/component IDs when missing. The slim
+ * decompose schema omits IDs (they are fully derivable from position) — the
+ * server owns them. Decompositions from the previous schema (or replayed by
+ * the client) already carry IDs and pass through unchanged.
+ */
+function ensureDecompositionIds(decomposition: string): string {
+  const parsed = JSON.parse(decomposition) as SentenceAnalysisResult;
+  parsed.sentences.forEach((sentence, si) => {
+    sentence.sentenceId ||= `s${si + 1}`;
+    (sentence.chunks ?? []).forEach((chunk, ci) => {
+      chunk.chunkId ||= `${sentence.sentenceId}c${ci + 1}`;
+      (chunk.components ?? []).forEach((comp, pi) => {
+        comp.componentId ||= `${chunk.chunkId}p${pi + 1}`;
+      });
+    });
+  });
+  return JSON.stringify(parsed);
+}
+
+/** Parse a client-replayed decomposition; returns null if unusable. */
+function validateProvidedDecomposition(decomposition: string | undefined): string | null {
+  if (typeof decomposition !== "string" || !decomposition.trim()) return null;
+  try {
+    const parsed = JSON.parse(decomposition) as SentenceAnalysisResult;
+    if (!Array.isArray(parsed?.sentences) || parsed.sentences.length === 0) return null;
+    if (!parsed.sentences.every((s) => typeof s?.text === "string" && s.text.length > 0)) return null;
+    return ensureDecompositionIds(decomposition);
+  } catch {
+    return null;
+  }
 }
 
 interface SlimTranslationResponse {
@@ -99,7 +138,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
 
   // POST /translate — run two-step translation (non-streaming)
   fastify.post<{
-    Body: { sourceLanguage: string; sourceText: string; targetLanguages: string[] };
+    Body: { sourceLanguage: string; sourceText: string; targetLanguages: string[]; context?: string };
   }>("/translate", {
     schema: {
       body: {
@@ -109,17 +148,18 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
           sourceLanguage: { type: "string", minLength: 1 },
           sourceText: { type: "string", minLength: 1 },
           targetLanguages: { type: "array", items: { type: "string" }, minItems: 1 },
+          context: { type: "string", maxLength: 2000 },
         },
       },
     },
   }, async (request) => {
-    const { sourceLanguage, sourceText, targetLanguages } = request.body;
+    const { sourceLanguage, sourceText, targetLanguages, context } = request.body;
 
     // Step 1: decompose using source-language-specific prompt (MINI model — structural only)
     const decomposePrompt = decomposePrompts[sourceLanguage];
     if (!decomposePrompt) throw new Error(`Unsupported source language: ${sourceLanguage}`);
     const decomposeRaw = await callLLMWithSchema(decomposePrompt, sourceText, decomposeSchema, "translation/decompose");
-    const decomposition = stripMarkdownFences(decomposeRaw);
+    const decomposition = ensureDecompositionIds(stripMarkdownFences(decomposeRaw));
 
     // Step 2: translate in parallel
     const slimInput = buildSlimInput(decomposition);
@@ -128,7 +168,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
         const prompt = translatePrompts[lang];
         if (!prompt) throw new Error(`Unsupported language: ${lang}`);
         const slimRaw = await callLLMFullWithSchema(
-          buildTranslateSystemPrompt(prompt, sourceLanguage, lang),
+          buildTranslateSystemPrompt(prompt, sourceLanguage, lang, context),
           slimInput,
           translateSchema,
           "translation/translate"
@@ -148,6 +188,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
     const entry = await saveTranslationEntry({
       sourceLanguage,
       sourceText,
+      ...(context?.trim() ? { context: context.trim() } : {}),
       targetLanguages,
       results: translationResults,
       createdAt: new Date().toISOString(),
@@ -156,9 +197,11 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
     return entry;
   });
 
-  // POST /translate-stream — SSE streaming two-step translation
+  // POST /translate-stream — SSE streaming two-step translation.
+  // `context` biases register/tone; `decomposition` replays a decomposition the
+  // client already received (regenerate) so step 1 is skipped entirely.
   fastify.post<{
-    Body: { sourceLanguage: string; sourceText: string; targetLanguages: string[] };
+    Body: { sourceLanguage: string; sourceText: string; targetLanguages: string[]; context?: string; decomposition?: string };
   }>("/translate-stream", {
     schema: {
       body: {
@@ -168,11 +211,13 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
           sourceLanguage: { type: "string", minLength: 1 },
           sourceText: { type: "string", minLength: 1 },
           targetLanguages: { type: "array", items: { type: "string" }, minItems: 1 },
+          context: { type: "string", maxLength: 2000 },
+          decomposition: { type: "string" },
         },
       },
     },
   }, async (request, reply) => {
-    const { sourceLanguage, sourceText, targetLanguages } = request.body;
+    const { sourceLanguage, sourceText, targetLanguages, context } = request.body;
 
     // Disable socket timeout for long-running SSE streams
     request.raw.socket.setTimeout(0);
@@ -196,22 +241,26 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      // Step 1: decompose with streaming using source-language-specific prompt
-      const decomposePrompt = decomposePrompts[sourceLanguage];
-      if (!decomposePrompt) {
-        sendEvent("error", { message: `Unsupported source language: ${sourceLanguage}` });
-        reply.raw.end();
-        return;
+      // Step 1: decompose — or reuse the client-replayed decomposition
+      // (regenerate on unchanged text) and skip the LLM call entirely.
+      let decomposition = validateProvidedDecomposition(request.body.decomposition);
+      if (!decomposition) {
+        const decomposePrompt = decomposePrompts[sourceLanguage];
+        if (!decomposePrompt) {
+          sendEvent("error", { message: `Unsupported source language: ${sourceLanguage}` });
+          reply.raw.end();
+          return;
+        }
+        sendEvent("decompose-start", {});
+        const decomposeRaw = await streamLLMWithSchema(
+          decomposePrompt,
+          sourceText,
+          decomposeSchema,
+          (chunk) => sendEvent("decompose-chunk", { chunk }),
+          "translation/decompose-stream"
+        );
+        decomposition = ensureDecompositionIds(stripMarkdownFences(decomposeRaw));
       }
-      sendEvent("decompose-start", {});
-      const decomposeRaw = await streamLLMWithSchema(
-        decomposePrompt,
-        sourceText,
-        decomposeSchema,
-        (chunk) => sendEvent("decompose-chunk", { chunk }),
-        "translation/decompose-stream"
-      );
-      const decomposition = stripMarkdownFences(decomposeRaw);
       sendEvent("decompose-result", { decomposition });
 
       // Step 2: translate each language in parallel
@@ -225,7 +274,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
           const prompt = translatePrompts[lang];
           if (!prompt) throw new Error(`Unsupported language: ${lang}`);
           const raw = await streamLLMFullWithSchema(
-            buildTranslateSystemPrompt(prompt, sourceLanguage, lang),
+            buildTranslateSystemPrompt(prompt, sourceLanguage, lang, context),
             slimInput,
             translateSchema,
             (chunk) => sendEvent("chunk", { language: lang, chunk }),
@@ -251,6 +300,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
       const entryData = {
         sourceLanguage,
         sourceText,
+        ...(context?.trim() ? { context: context.trim() } : {}),
         targetLanguages,
         results: translationResults,
         createdAt: new Date().toISOString(),

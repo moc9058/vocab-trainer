@@ -94,7 +94,7 @@ export interface PaginatedResult<T> {
 
 export interface GrammarExample {
   sentence: string;
-  translation: string;
+  translation: string | Record<string, string>;
   transliteration?: string;
   segments?: { text: string; transliteration?: string; id?: string }[];
   /** Input-only: user-specified segment splits (spaces in sentence field), never persisted. */
@@ -129,7 +129,7 @@ export interface GrammarGroup {
 export interface GrammarQuizQuestion {
   grammarId: string;
   exampleSentence: string;
-  exampleTranslation: string;
+  exampleTranslation: string | Record<string, string>;
   exampleTransliteration?: string;
   userCorrect?: boolean;
 }
@@ -143,6 +143,42 @@ export interface GrammarQuizSession {
   score: QuizScore;
   questions: GrammarQuizQuestion[];
   groupFilter?: string[];
+}
+
+// ========== Combined Quiz (words + grammar) ==========
+
+export interface CombinedQuizWordQuestion extends QuizQuestion {
+  kind: "word";
+}
+
+export interface CombinedQuizGrammarQuestion extends GrammarQuizQuestion {
+  kind: "grammar";
+}
+
+export type CombinedQuizQuestion = CombinedQuizWordQuestion | CombinedQuizGrammarQuestion;
+
+// How often word questions are drawn vs grammar questions (proportional, like group weights).
+export interface CombinedDomainWeights {
+  word: number;
+  grammar: number;
+}
+
+export interface CombinedQuizSession {
+  sessionId: string;
+  language: string;
+  startedAt: string;
+  completedAt?: string;
+  status: "in-progress" | "completed";
+  score: QuizScore;
+  questions: CombinedQuizQuestion[];
+  domainWeights: CombinedDomainWeights;
+  // Question count at start — retry re-queues grow `questions`, so the UI shows X / initialTotal.
+  initialTotal: number;
+  wordGroupWeights?: Record<string, number>;
+  wordGroupMembership?: Record<string, string[]>;
+  grammarGroupWeights?: Record<string, number>;
+  grammarGroupMembership?: Record<string, string[]>;
+  flaggedOnly?: boolean;
 }
 
 // ========== Translation ==========
@@ -192,6 +228,8 @@ export interface TranslationEntry {
   id: string;
   sourceLanguage: string;
   sourceText: string;
+  /** Optional user-provided situation/register hint reflected in translations. */
+  context?: string;
   targetLanguages: string[];
   results: TranslationResult[];
   createdAt: string;

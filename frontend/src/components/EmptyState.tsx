@@ -4,12 +4,15 @@ import { useSettings } from "../settings/context";
 import { urlLanguageToIsoCode } from "../settings/defaults";
 import { getCurrentSession } from "../api/quiz";
 import { getCurrentGrammarSession } from "../api/grammar";
-import type { QuizSession, GrammarQuizSession } from "../types";
+import { getCurrentCombinedSession } from "../api/combined-quiz";
+import type { QuizSession, GrammarQuizSession, CombinedQuizSession } from "../types";
 
 interface Props {
   language: string;
   onResume: (session: QuizSession) => void;
   onResumeGrammar: (session: GrammarQuizSession) => void;
+  onResumeCombined: (session: CombinedQuizSession) => void;
+  onCombinedQuiz: () => void;
   onStartNew: () => void;
   onBrowse: () => void;
   onFlaggedReview: () => void;
@@ -28,7 +31,7 @@ interface Props {
   onAddExpression: () => void;
 }
 
-export default function EmptyState({ language, onResume, onResumeGrammar, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onBrowseExpressions, onAddExpression }: Props) {
+export default function EmptyState({ language, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onBrowseExpressions, onAddExpression }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const isoCode = urlLanguageToIsoCode(language) ?? language;
@@ -36,6 +39,7 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onStar
   const sectionOrder: string[] = (settings.sectionOrder ?? ["word-grammar", "speaking-writing", "translation"]).filter(s => s !== "expressions");
   const [vocabSession, setVocabSession] = useState<QuizSession | null>(null);
   const [grammarSession, setGrammarSession] = useState<GrammarQuizSession | null>(null);
+  const [combinedSession, setCombinedSession] = useState<CombinedQuizSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [wordGrammarTab, setWordGrammarTab] = useState<"word" | "grammar">("word");
 
@@ -47,13 +51,15 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onStar
     let cancelled = false;
     (async () => {
       try {
-        const [vocabResult, grammarResult] = await Promise.all([
+        const [vocabResult, grammarResult, combinedResult] = await Promise.all([
           getCurrentSession(language),
           getCurrentGrammarSession(language),
+          getCurrentCombinedSession(language),
         ]);
         if (!cancelled) {
           setVocabSession(vocabResult && vocabResult.status === "in-progress" ? vocabResult : null);
           setGrammarSession(grammarResult && grammarResult.status === "in-progress" ? grammarResult : null);
+          setCombinedSession(combinedResult && combinedResult.status === "in-progress" ? combinedResult : null);
         }
       } catch {
         // ignore
@@ -75,6 +81,28 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onStar
               <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">
                 {t("sectionWordGrammar")}
               </h3>
+              {/* Combined quiz spans both domains, so it sits above the word/grammar tabs. */}
+              {showGrammar && (
+                <div className="mb-3 space-y-2">
+                  {!loading && combinedSession && (
+                    <button
+                      onClick={() => onResumeCombined(combinedSession)}
+                      className="w-full rounded-lg border border-indigo-700 bg-indigo-900/30 px-4 py-3 text-left hover:border-indigo-500 hover:bg-indigo-800/40 transition-colors"
+                    >
+                      <p className="font-semibold text-sm text-indigo-300">{t("resumeCombinedQuiz")}</p>
+                      <p className="mt-0.5 text-xs text-indigo-400">
+                        {combinedSession.score.correct} / {combinedSession.initialTotal ?? combinedSession.questions.length} {t("questionsAnswered")}
+                      </p>
+                    </button>
+                  )}
+                  <button
+                    onClick={onCombinedQuiz}
+                    className="w-full rounded-lg bg-indigo-600 px-5 py-3 text-center font-medium text-white hover:bg-indigo-500 transition-colors"
+                  >
+                    {t("combinedQuiz")}
+                  </button>
+                </div>
+              )}
               {showGrammar && (
                 <div className="mb-3 flex gap-1 rounded-lg bg-gray-900/60 p-1">
                   <button

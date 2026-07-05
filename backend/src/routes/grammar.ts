@@ -26,7 +26,7 @@ import { callLLMWithSchema, stripMarkdownFences, fillSegmentPinyin } from "../ll
 import type { Grammar, GrammarExample, Meaning, ExampleSentence, GrammarSettings } from "../types.js";
 import {
   ALL_DEFINITION_LANGUAGES,
-  translationIsEmpty,
+  needsMoreTranslations,
   generateMissingExampleTranslations,
   type MissingTranslationItem,
 } from "../exampleTranslations.js";
@@ -114,7 +114,7 @@ async function resolveExamplesToIds(
         await updateExampleSentence(existing.id, { segments: segs });
         await reconcileExampleSegmentRefs(existing.id, existing.segments, segs);
       }
-      if (translationIsEmpty(existing.translation)) {
+      if (needsMoreTranslations(existing.translation, language)) {
         needsTranslation.push({ exampleId: existing.id, sentence: existing.sentence });
       }
       exampleIds.push(existing.id);
@@ -133,7 +133,7 @@ async function resolveExamplesToIds(
     if (segs) {
       await reconcileExampleSegmentRefs(exId, [], segs);
     }
-    if (translationIsEmpty(ex.translation)) {
+    if (needsMoreTranslations(ex.translation, language)) {
       needsTranslation.push({ exampleId: exId, sentence: ex.sentence });
     }
     exampleIds.push(exId);

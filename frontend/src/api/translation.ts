@@ -4,12 +4,14 @@ import type { TranslationEntry, TranslationResult } from "../types";
 export async function translate(
   sourceLanguage: string,
   sourceText: string,
-  targetLanguages: string[]
+  targetLanguages: string[],
+  context?: string
 ): Promise<TranslationEntry> {
   return postJson<TranslationEntry>("/api/translation/translate", {
     sourceLanguage,
     sourceText,
     targetLanguages,
+    ...(context?.trim() ? { context: context.trim() } : {}),
   });
 }
 
@@ -24,17 +26,31 @@ export interface TranslateStreamCallbacks {
   onError?: (error: Error) => void;
 }
 
+export interface TranslateStreamOptions {
+  /** Optional situation/register hint appended to the translate prompt. */
+  context?: string;
+  /** Decomposition JSON from a previous run of the same text — skips step 1 server-side. */
+  decomposition?: string;
+}
+
 export async function translateStream(
   sourceLanguage: string,
   sourceText: string,
   targetLanguages: string[],
   callbacks: TranslateStreamCallbacks,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: TranslateStreamOptions
 ): Promise<void> {
   const res = await fetch("/api/translation/translate-stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sourceLanguage, sourceText, targetLanguages }),
+    body: JSON.stringify({
+      sourceLanguage,
+      sourceText,
+      targetLanguages,
+      ...(options?.context?.trim() ? { context: options.context.trim() } : {}),
+      ...(options?.decomposition ? { decomposition: options.decomposition } : {}),
+    }),
     signal,
   });
 

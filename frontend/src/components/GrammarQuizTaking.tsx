@@ -13,7 +13,7 @@ interface Props {
 
 export default function GrammarQuizTaking({ session, onComplete, onStartNew }: Props) {
   const { t } = useI18n();
-  const { displayDefEntries } = useSettings();
+  const { displayDefEntries, displayGrammarDefEntries } = useSettings();
   const [currentSession, setCurrentSession] = useState(session);
   const [currentIndex, setCurrentIndex] = useState(() => {
     const idx = session.questions.findIndex((q) => q.userCorrect === undefined);
@@ -95,7 +95,16 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
 
       {/* Question: translated sentence (user must recall the grammar pattern) */}
       <div className="w-full max-w-lg rounded-lg bg-gray-800 border border-gray-700 p-6 text-center">
-        <p className="text-xl text-gray-100">{question!.exampleTranslation}</p>
+        {typeof question!.exampleTranslation === "string" ? (
+          <p className="text-xl text-gray-100">{question!.exampleTranslation}</p>
+        ) : (
+          displayGrammarDefEntries(question!.exampleTranslation).map(([lang, text]) => (
+            <p key={lang} className="text-xl text-gray-100">
+              <span className="mr-2 text-xs font-medium uppercase text-gray-500">{lang}</span>
+              {text}
+            </p>
+          ))
+        )}
       </div>
 
       {!showingAnswer ? (

@@ -33,7 +33,6 @@ Do not add commentary.
 
 ## Sentences
 - Split input into sentences
-- sentenceId format: s1, s2, s3, ...
 - text: the exact sentence text
 
 ## Sentence Boundary Rules
@@ -45,7 +44,6 @@ Do not add commentary.
 
 ## Chunks
 - Split each sentence into meaningful learner-friendly units
-- chunkId format: s1c1, s1c2, s2c1, ...
 - Prefer natural groupings over fine-grained parsing
 - Do not over-split
 
@@ -73,7 +71,6 @@ Avoid:
 
 ## Components
 - Split each chunk into components
-- componentId format: s1c1p1, s1c1p2, s1c2p1, ...
 - A component is the smallest contiguous non-punctuation learning unit by default
 - Default splitting should usually correspond to orthographic words
 - A component may be larger than a word or smaller than a word only when the rules below allow it

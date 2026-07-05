@@ -1,9 +1,12 @@
 /**
  * One-off backfill: LLM-generate translations for example_sentences docs whose
- * `translation` is empty ("", {}, all-empty values, or missing).
+ * `translation` is empty ("", {}, all-empty values, or missing), OR is missing
+ * one or more of the target definition languages for its source language (e.g.
+ * a hand-typed single-language string, or a Record missing ja/ko/zh).
  *
  * These docs were created by chip adds / grammar saves before the routes gained
- * the missing-translation fallback (see src/exampleTranslations.ts).
+ * the missing-translation fallback (see src/exampleTranslations.ts), or were
+ * saved with only one language filled in by a manual translation field.
  *
  * Usage:
  *   cd backend && npx tsx scripts/backfill-empty-example-translations.ts [options]
@@ -16,7 +19,7 @@
 
 import { Firestore } from "@google-cloud/firestore";
 import {
-  translationIsEmpty,
+  needsMoreTranslations,
   generateMissingExampleTranslations,
 } from "../src/exampleTranslations.js";
 import type { ExampleSentence } from "../src/types.js";
@@ -53,10 +56,10 @@ async function main() {
   let emptyCount = 0;
   for (const doc of snap.docs) {
     const d = doc.data() as ExampleSentence;
-    if (!translationIsEmpty(d.translation)) continue;
+    const lang = d.language ?? "unknown";
+    if (!needsMoreTranslations(d.translation, lang)) continue;
     emptyCount++;
     if (limit !== undefined && emptyCount > limit) break;
-    const lang = d.language ?? "unknown";
     if (!byLanguage.has(lang)) byLanguage.set(lang, []);
     byLanguage.get(lang)!.push({ exampleId: doc.id, sentence: d.sentence });
     console.log(`  [${lang}] ${doc.id}: "${d.sentence}"`);

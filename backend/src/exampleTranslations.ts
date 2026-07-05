@@ -31,6 +31,27 @@ export function translationIsEmpty(
   return values.length === 0 || values.every((v) => typeof v !== "string" || v.trim() === "");
 }
 
+/**
+ * True when a stored/incoming translation is missing any of the target
+ * definition languages for `language` (all of `ALL_DEFINITION_LANGUAGES`
+ * except the sentence's own language). Unlike `translationIsEmpty`, this
+ * also flags a non-empty single-language string or a partially-filled
+ * Record as needing more work — the case a hand-typed single-field
+ * translation always falls into.
+ */
+export function needsMoreTranslations(
+  translation: ExampleSentence["translation"] | undefined,
+  language: string,
+): boolean {
+  if (translationIsEmpty(translation) || translation == null) return true;
+  const sourceLangCode = LANGUAGE_TO_ISO[language];
+  const requiredLangs = (ALL_DEFINITION_LANGUAGES as readonly string[]).filter(
+    (l) => l !== sourceLangCode
+  );
+  if (typeof translation === "string") return requiredLangs.length > 0;
+  return requiredLangs.some((l) => !translation[l] || translation[l].trim() === "");
+}
+
 export interface MissingTranslationItem {
   exampleId: string;
   sentence: string;

@@ -101,7 +101,16 @@ function GrammarDetail({ item, onEdit, onDelete, onAddToGroup, onRemoveFromGroup
               {ex.transliteration && (
                 <p className="text-xs text-gray-400">{ex.transliteration}</p>
               )}
-              <p className="text-xs text-gray-400">{ex.translation}</p>
+              {typeof ex.translation === "string" ? (
+                <p className="text-xs text-gray-400">{ex.translation}</p>
+              ) : (
+                displayGrammarDefEntries(ex.translation).map(([lang, text]) => (
+                  <p key={lang} className="text-xs text-gray-400">
+                    <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>
+                    {text}
+                  </p>
+                ))
+              )}
             </div>
           ))}
         </div>
