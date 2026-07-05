@@ -114,6 +114,10 @@ export interface Grammar {
   tags?: string[];
 }
 
+export interface GrammarSettings {
+  defaultDefinitionLanguage: string;
+}
+
 export interface GrammarGroup {
   id: string;
   language: string;

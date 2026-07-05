@@ -3,6 +3,7 @@ import type {
   Grammar,
   GrammarGroup,
   GrammarQuizSession,
+  GrammarSettings,
   PaginatedResult,
   Word,
 } from "../types";
@@ -51,6 +52,16 @@ export function deleteGrammarItem(language: string, grammarId: string): Promise<
   return deleteRequest(
     `/api/grammar/${encodeURIComponent(language)}/items/${encodeURIComponent(grammarId)}`
   );
+}
+
+// ----- Settings -----
+
+export function getGrammarSettings(): Promise<GrammarSettings> {
+  return fetchJson("/api/grammar/settings");
+}
+
+export function updateGrammarSettings(defaultDefinitionLanguage: string): Promise<GrammarSettings> {
+  return putJson("/api/grammar/settings", { defaultDefinitionLanguage });
 }
 
 // ----- Grammar Groups -----

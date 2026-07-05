@@ -23,6 +23,7 @@ import type {
   TokenUsageRecord,
   TokenUsageDailySummary,
   TokenCostConfig,
+  GrammarSettings,
   WordGroup,
   Expression,
   ExpressionGroup,
@@ -2294,6 +2295,16 @@ export async function getGrammarConfig(): Promise<{
     smartAddSchema: d.smartAddSchema,
     smartAddPrompts: d.smartAddPrompts,
   };
+}
+
+export async function getGrammarSettings(): Promise<GrammarSettings | null> {
+  const doc = await db.collection("config").doc("grammar_settings").get();
+  if (!doc.exists) return null;
+  return doc.data() as GrammarSettings;
+}
+
+export async function setGrammarSettings(settings: GrammarSettings): Promise<void> {
+  await db.collection("config").doc("grammar_settings").set(settings);
 }
 
 // ========== Word Groups ==========

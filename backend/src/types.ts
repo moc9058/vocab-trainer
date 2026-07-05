@@ -395,6 +395,10 @@ export interface TokenCostConfig {
   updatedAt: string;
 }
 
+export interface GrammarSettings {
+  defaultDefinitionLanguage: string;
+}
+
 export interface UsageMetricsSummary {
   period: { from: string; to: string };
   byModel: Record<string, {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   DndContext,
   closestCenter,
@@ -19,6 +19,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { DEFAULT_SETTINGS, LANG_LABEL_MAP } from "../settings/defaults";
+import { getGrammarSettings, updateGrammarSettings } from "../api/grammar";
 import { uiLanguages, type TranslationKey } from "../i18n/translations";
 
 interface Props {
@@ -116,6 +117,14 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
   const [sectionOrder, setSectionOrder] = useState<string[]>(
     (settings.sectionOrder ?? DEFAULT_SETTINGS.sectionOrder).filter(k => k in SECTION_LABEL_KEYS)
   );
+  // Server-persisted (not localStorage) — shared across devices.
+  const [defaultGrammarDefLang, setDefaultGrammarDefLang] = useState<string>("en");
+
+  useEffect(() => {
+    getGrammarSettings()
+      .then((s) => setDefaultGrammarDefLang(s.defaultDefinitionLanguage))
+      .catch(() => {});
+  }, []);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -154,7 +163,7 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
     setter(next);
   }
 
-  function handleSave() {
+  async function handleSave() {
     const targetLangs = order.filter((c) => defaultTranslationTargets.has(c) && c !== defaultTranslationSource);
     updateSettings({
       languageOrder: order,
@@ -174,6 +183,11 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
       printDefinitionLanguage: printDefLang,
       sectionOrder,
     });
+    try {
+      await updateGrammarSettings(defaultGrammarDefLang);
+    } catch {
+      // best-effort — local settings are already saved above
+    }
     onClose();
   }
 
@@ -191,6 +205,7 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
     setDisplayGrammarDefLangs(new Set(DEFAULT_SETTINGS.displayGrammarDefinitionLanguages));
     setPrintDefLang(DEFAULT_SETTINGS.printDefinitionLanguage);
     setSectionOrder([...DEFAULT_SETTINGS.sectionOrder]);
+    setDefaultGrammarDefLang("en");
   }
 
   const supportedUiLanguages = new Set(uiLanguages as readonly string[]);
@@ -331,6 +346,19 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
                 </label>
               ))}
             </div>
+          </section>
+          <section className="mt-4">
+            <h4 className="mb-2 text-sm font-medium text-gray-300">{t("settingsDefaultGrammarDefLang")}</h4>
+            <select
+              value={defaultGrammarDefLang}
+              onChange={(e) => setDefaultGrammarDefLang(e.target.value)}
+              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+            >
+              {order.map((code) => (
+                <option key={code} value={code}>{LANG_LABEL_MAP[code] ?? code}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-gray-400">{t("settingsDefaultGrammarDefLangHelp")}</p>
           </section>
         </div>
 

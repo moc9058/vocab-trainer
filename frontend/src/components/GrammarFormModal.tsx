@@ -5,6 +5,7 @@ import {
   updateGrammarItem,
   getGrammarGroups,
   modifyGrammarGroupMembers,
+  getGrammarSettings,
 } from "../api/grammar";
 import { ALL_KNOWN_LANGUAGES } from "../settings/defaults";
 import { LEVEL_OPTIONS } from "../constants/levels";
@@ -94,6 +95,29 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
   // Used to lock Cancel + backdrop click so we don't drop the modal while a
   // word is being half-created.
   const [chipsInFlight, setChipsInFlight] = useState(false);
+  const [defaultDescLang, setDefaultDescLang] = useState("en");
+
+  // Server-persisted default definition language (Settings > Grammar). Patch the
+  // pristine initial row in place once loaded — it's always seeded as "en" before
+  // this resolves, and edit-mode items already have real language keys we must
+  // not touch.
+  useEffect(() => {
+    getGrammarSettings()
+      .then((s) => {
+        setDefaultDescLang(s.defaultDefinitionLanguage);
+        if (editItem) return;
+        setDescriptions((prev) =>
+          prev.length === 1 &&
+          prev[0].translations.length === 1 &&
+          prev[0].translations[0].lang === "en" &&
+          prev[0].translations[0].text === ""
+            ? [{ ...prev[0], translations: [{ ...prev[0].translations[0], lang: s.defaultDefinitionLanguage }] }]
+            : prev
+        );
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!editItem?.id) {
@@ -341,7 +365,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
                 onClick={() =>
                   setDescriptions([
                     ...descriptions,
-                    { partOfSpeech: "", translations: [{ lang: "en", text: "" }], pinyinsRaw: "" },
+                    { partOfSpeech: "", translations: [{ lang: defaultDescLang, text: "" }], pinyinsRaw: "" },
                   ])
                 }
                 className="text-xs text-blue-400 hover:text-blue-300"
@@ -412,7 +436,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
                   type="button"
                   onClick={() =>
                     updateDescription(di, {
-                      translations: [...desc.translations, { lang: "en", text: "" }],
+                      translations: [...desc.translations, { lang: defaultDescLang, text: "" }],
                     })
                   }
                   className="mt-1 text-xs text-blue-400 hover:text-blue-300"

@@ -11,6 +11,8 @@ import {
   deleteGrammarGroup,
   modifyGrammarGroupMembers,
   getGrammarConfig,
+  getGrammarSettings,
+  setGrammarSettings,
   addExampleSentence,
   findExampleByText,
   getNextExampleId,
@@ -21,7 +23,7 @@ import {
   lookupWordsByTerms,
 } from "../firestore.js";
 import { callLLMWithSchema, stripMarkdownFences, fillSegmentPinyin } from "../llm.js";
-import type { Grammar, GrammarExample, Meaning, ExampleSentence } from "../types.js";
+import type { Grammar, GrammarExample, Meaning, ExampleSentence, GrammarSettings } from "../types.js";
 import {
   ALL_DEFINITION_LANGUAGES,
   translationIsEmpty,
@@ -147,6 +149,35 @@ async function resolveExamplesToIds(
 
 const grammarRoutes: FastifyPluginAsync = async (fastify) => {
   const grammarConfig = await getGrammarConfig();
+
+  // GET /settings — get grammar-wide settings
+  fastify.get("/settings", async () => {
+    const settings = await getGrammarSettings();
+    return settings ?? { defaultDefinitionLanguage: "en" };
+  });
+
+  // PUT /settings — update grammar-wide settings
+  fastify.put<{ Body: GrammarSettings }>(
+    "/settings",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["defaultDefinitionLanguage"],
+          properties: {
+            defaultDefinitionLanguage: { type: "string" },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const settings: GrammarSettings = {
+        defaultDefinitionLanguage: request.body.defaultDefinitionLanguage,
+      };
+      await setGrammarSettings(settings);
+      return settings;
+    }
+  );
 
   // List grammar items with filters & pagination
   fastify.get<{
