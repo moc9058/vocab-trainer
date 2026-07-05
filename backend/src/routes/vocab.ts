@@ -40,6 +40,13 @@ import {
 import type { Word, Example, ExampleSentence } from "../types.js";
 import { TOPICS } from "../types.js";
 import { callLLMWithSchema, stripMarkdownFences, validateWord, segmentBatch, fillSegmentPinyin, type Segment } from "../llm.js";
+import {
+  ALL_DEFINITION_LANGUAGES,
+  LANGUAGE_TO_ISO,
+  translationIsEmpty,
+  generateMissingExampleTranslations,
+  type MissingTranslationItem,
+} from "../exampleTranslations.js";
 
 const LEVEL_OPTIONS: Record<string, string[]> = {
   chinese: ["HSK1-4", "HSK5", "HSK6", "HSK7-9", "Advanced"],
@@ -76,21 +83,6 @@ function normalizeLevel(language: string, level: string): string {
   if (language === "chinese") return CHINESE_LEVEL_NORMALIZE[level] ?? level;
   return level;
 }
-
-// All supported definition / example-translation languages. The LLM is asked to
-// generate every entry in all four; the frontend display settings then control
-// which subset the user sees.
-const ALL_DEFINITION_LANGUAGES = ["en", "ja", "ko", "zh"] as const;
-
-// Map our internal full language names to the ISO codes used in
-// definition / example-translation Records. Languages outside this map
-// (custom user languages) have no source-language entry to strip.
-const LANGUAGE_TO_ISO: Record<string, string> = {
-  chinese: "zh",
-  english: "en",
-  japanese: "ja",
-  korean: "ko",
-};
 
 const ALLOWED_LANGUAGES = new Set(Object.keys(LANGUAGE_TO_ISO));
 
@@ -264,8 +256,13 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         ? body.definitions : null;
       userInput.topics = (body.topics && body.topics.length > 0)
         ? body.topics : null;
+      // Empty translations (chip adds send `""`) become null so the LLM
+      // treats them as missing and generates them, instead of echoing "".
       userInput.examples = (body.examples && body.examples.length > 0)
-        ? body.examples.map(({ sentence, translation }) => ({ sentence, translation })) : null;
+        ? body.examples.map(({ sentence, translation }) => ({
+            sentence,
+            translation: translationIsEmpty(translation as Example["translation"]) ? null : translation,
+          })) : null;
       if (langLevels) {
         userInput.level = body.level || null;
       }
@@ -439,6 +436,9 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         examplesWithSegments.map((ex) => findExampleByText(language, ex.sentence))
       );
       const exampleIds: string[] = [];
+      // Docs whose final stored translation is still empty after the merge —
+      // e.g. the LLM echoed the user's empty string. Same fallback as PUT.
+      const needsTranslation: MissingTranslationItem[] = [];
       for (let i = 0; i < examplesWithSegments.length; i++) {
         const ex = examplesWithSegments[i];
         const existing = existingLookups[i];
@@ -484,6 +484,9 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
               await reconcileExampleSegmentRefs(existing.id, existing.segments, updates.segments);
             }
           }
+          if (translationIsEmpty(updates.translation ?? existing.translation)) {
+            needsTranslation.push({ exampleId: existing.id, sentence: ex.sentence });
+          }
           exampleIds.push(existing.id);
         } else {
           const exId = await getNextExampleId(language);
@@ -496,7 +499,24 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
           };
           await addExampleSentence(es);
           await reconcileExampleSegmentRefs(exId, [], ex.segments);
+          if (translationIsEmpty(ex.translation)) {
+            needsTranslation.push({ exampleId: exId, sentence: ex.sentence });
+          }
           exampleIds.push(exId);
+        }
+      }
+
+      // Fallback: generate translations the merge left empty, and mirror them
+      // into the word's inline examples so the stored word doc matches.
+      if (needsTranslation.length > 0) {
+        const generated = await generateMissingExampleTranslations(language, needsTranslation, {
+          log: fastify.log,
+        });
+        for (let i = 0; i < examplesWithSegments.length; i++) {
+          const trans = generated.get(exampleIds[i]);
+          if (trans && translationIsEmpty(examplesWithSegments[i].translation)) {
+            examplesWithSegments[i].translation = trans;
+          }
         }
       }
 
@@ -568,7 +588,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
           userSplits?: string[];
         }> = [];
         // Examples (new or existing) that have no translation and need LLM generation.
-        const needsTranslation: Array<{ exampleId: string; sentence: string }> = [];
+        const needsTranslation: MissingTranslationItem[] = [];
 
         for (const ex of body.examples) {
           // Only treat segments as "being edited" if the frontend explicitly
@@ -634,17 +654,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             }
             // If neither the stored nor the incoming translation has content, queue
             // this example for LLM translation generation (same as the brand-new path).
-            const targetHasTrans =
-              target.translation != null &&
-              (typeof target.translation === "string"
-                ? (target.translation as string).trim() !== ""
-                : Object.keys(target.translation as Record<string, string>).length > 0);
-            const exHasTrans =
-              ex.translation != null &&
-              (typeof ex.translation === "string"
-                ? (ex.translation as string).trim() !== ""
-                : Object.keys(ex.translation as Record<string, string>).length > 0);
-            if (!targetHasTrans && !exHasTrans) {
+            if (translationIsEmpty(target.translation) && translationIsEmpty(ex.translation)) {
               needsTranslation.push({ exampleId: target.id, sentence: target.sentence });
             }
             if (hasIncomingSegs) {
@@ -706,13 +716,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             await reconcileExampleSegmentRefs(newId, [], ex.segments);
             newExampleIds.push(newId);
             // Queue for LLM translation if the frontend sent no translation.
-            const exTranslation = ex.translation;
-            const hasTrans =
-              exTranslation != null &&
-              (typeof exTranslation === "string"
-                ? exTranslation.trim() !== ""
-                : Object.keys(exTranslation).length > 0);
-            if (!hasTrans) {
+            if (translationIsEmpty(ex.translation)) {
               needsTranslation.push({ exampleId: newId, sentence: ex.sentence });
             }
             if (isChinese && !hasIncomingSegs) {
@@ -793,49 +797,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
 
         // --- Generate missing translations (brand-new or existing without translation) ---
         if (needsTranslation.length > 0) {
-          const sourceLangCode = LANGUAGE_TO_ISO[language];
-          const translLangs = (ALL_DEFINITION_LANGUAGES as readonly string[]).filter(
-            (l) => l !== sourceLangCode
-          );
-          if (translLangs.length > 0) {
-            const langSpec = translLangs.map((l) => `"${l}": "..."`).join(", ");
-            const translSchema = {
-              name: "example_translations",
-              strict: true,
-              schema: {
-                type: "object",
-                properties: {
-                  translations: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: Object.fromEntries(translLangs.map((l) => [l, { type: "string" }])),
-                      required: translLangs,
-                      additionalProperties: false,
-                    },
-                  },
-                },
-                required: ["translations"],
-                additionalProperties: false,
-              },
-            };
-            const systemPrompt = `You are a translation assistant. For each input sentence, provide a translation object with keys: { ${langSpec} }. Return an array with one object per sentence, in the same order as the input.`;
-            const userPrompt = JSON.stringify(needsTranslation.map((n) => n.sentence));
-            try {
-              const raw = await callLLMWithSchema(systemPrompt, userPrompt, translSchema, "vocab/translate-examples");
-              const result = JSON.parse(stripMarkdownFences(raw)) as { translations: Record<string, string>[] };
-              const translArr = result.translations ?? [];
-              for (let ti = 0; ti < needsTranslation.length; ti++) {
-                const trans = translArr[ti];
-                if (trans && Object.keys(trans).length > 0) {
-                  await updateExampleSentence(needsTranslation[ti].exampleId, { translation: trans });
-                }
-              }
-            } catch (err) {
-              fastify.log.error({ err }, "Failed to generate example translations");
-              // Non-fatal: examples are saved, just without translations
-            }
-          }
+          await generateMissingExampleTranslations(language, needsTranslation, { log: fastify.log });
         }
 
         // Examples the user removed outright or renamed out from under this

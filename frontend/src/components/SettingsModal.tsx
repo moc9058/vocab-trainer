@@ -59,10 +59,9 @@ function SortableItem({ id }: { id: string }) {
 }
 
 const SECTION_LABEL_KEYS: Record<string, string> = {
-  vocabulary: "sectionVocabulary",
+  "word-grammar": "sectionWordGrammar",
   "speaking-writing": "sectionSpeakingWriting",
   translation: "sectionTranslation",
-  grammar: "sectionGrammar",
 };
 
 function SortableSection({ id, label }: { id: string; label: string }) {
@@ -115,7 +114,7 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
   );
   const [printDefLang, setPrintDefLang] = useState<string>(settings.printDefinitionLanguage);
   const [sectionOrder, setSectionOrder] = useState<string[]>(
-    (settings.sectionOrder ?? ["vocabulary", "speaking-writing", "translation", "grammar"]).filter(k => k in SECTION_LABEL_KEYS)
+    (settings.sectionOrder ?? DEFAULT_SETTINGS.sectionOrder).filter(k => k in SECTION_LABEL_KEYS)
   );
 
   const sensors = useSensors(

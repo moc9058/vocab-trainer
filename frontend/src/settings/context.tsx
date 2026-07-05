@@ -45,6 +45,27 @@ function loadSettings(): AppSettings {
       }
       delete parsed.defaultDefinitionLanguages;
       delete parsed.defaultExampleTranslationLanguages;
+      // Legacy field migration: separate "vocabulary"/"grammar" home sections merged
+      // into one "word-grammar" section — collapse both into a single entry at the
+      // position of whichever came first.
+      if (Array.isArray(parsed.sectionOrder)) {
+        const sectionOrder = parsed.sectionOrder as string[];
+        if (sectionOrder.includes("vocabulary") || sectionOrder.includes("grammar")) {
+          const merged: string[] = [];
+          let inserted = false;
+          for (const key of sectionOrder) {
+            if (key === "vocabulary" || key === "grammar") {
+              if (!inserted) {
+                merged.push("word-grammar");
+                inserted = true;
+              }
+            } else {
+              merged.push(key);
+            }
+          }
+          parsed.sectionOrder = merged;
+        }
+      }
       return { ...DEFAULT_SETTINGS, ...parsed } as AppSettings;
     }
   } catch { /* ignore */ }

@@ -33,10 +33,11 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onStar
   const { settings } = useSettings();
   const isoCode = urlLanguageToIsoCode(language) ?? language;
   const showGrammar = isoCode !== "en";
-  const sectionOrder: string[] = (settings.sectionOrder ?? ["vocabulary", "speaking-writing", "translation", "grammar"]).filter(s => s !== "expressions");
+  const sectionOrder: string[] = (settings.sectionOrder ?? ["word-grammar", "speaking-writing", "translation"]).filter(s => s !== "expressions");
   const [vocabSession, setVocabSession] = useState<QuizSession | null>(null);
   const [grammarSession, setGrammarSession] = useState<GrammarQuizSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [wordGrammarTab, setWordGrammarTab] = useState<"word" | "grammar">("word");
 
   useEffect(() => {
     if (!language) {
@@ -68,51 +69,108 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onStar
       <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("welcome")}</h2>
 
       <div className="w-full max-w-lg space-y-6">
-        {sectionOrder.filter((s) => showGrammar || s !== "grammar").map((section) => {
-          if (section === "vocabulary") return (
-            <section key="vocabulary" className="rounded-xl bg-gray-800/60 p-4 sm:p-5">
+        {sectionOrder.map((section) => {
+          if (section === "word-grammar") return (
+            <section key="word-grammar" className="rounded-xl bg-gray-800/60 p-4 sm:p-5">
               <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">
-                {t("sectionVocabulary")}
+                {t("sectionWordGrammar")}
               </h3>
-              {!loading && vocabSession && (
-                <div className="mb-3">
+              {showGrammar && (
+                <div className="mb-3 flex gap-1 rounded-lg bg-gray-900/60 p-1">
                   <button
-                    onClick={() => onResume(vocabSession)}
-                    className="w-full rounded-lg border border-blue-700 bg-blue-900/30 px-4 py-3 text-left hover:border-blue-500 hover:bg-blue-800/40 transition-colors"
+                    onClick={() => setWordGrammarTab("word")}
+                    className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${wordGrammarTab === "word" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-200"}`}
                   >
-                    <p className="font-semibold text-sm text-blue-300">{t("resumePreviousQuiz")}</p>
-                    <p className="mt-0.5 text-xs text-blue-400">
-                      {vocabSession.score.correct} / {vocabSession.wordIds?.length ?? vocabSession.questions.length} {t("questionsAnswered")}
-                    </p>
+                    {t("sectionVocabulary")}
+                  </button>
+                  <button
+                    onClick={() => setWordGrammarTab("grammar")}
+                    className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${wordGrammarTab === "grammar" ? "bg-emerald-600 text-white" : "text-gray-400 hover:text-gray-200"}`}
+                  >
+                    {t("sectionGrammar")}
                   </button>
                 </div>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  onClick={onStartNew}
-                  className="sm:col-span-2 rounded-lg bg-blue-600 px-5 py-3 text-center font-medium text-white hover:bg-blue-500 transition-colors"
-                >
-                  {t("startWordQuiz")}
-                </button>
-                <button
-                  onClick={onBrowse}
-                  className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  {t("browseWords")}
-                </button>
-                <button
-                  onClick={onAddWord}
-                  className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  {t("smartAddWord")}
-                </button>
-                <button
-                  onClick={onFlaggedReview}
-                  className="sm:col-span-2 rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  {t("reviewFlagged")}
-                </button>
-              </div>
+              {(!showGrammar || wordGrammarTab === "word") && (
+                <>
+                  {!loading && vocabSession && (
+                    <div className="mb-3">
+                      <button
+                        onClick={() => onResume(vocabSession)}
+                        className="w-full rounded-lg border border-blue-700 bg-blue-900/30 px-4 py-3 text-left hover:border-blue-500 hover:bg-blue-800/40 transition-colors"
+                      >
+                        <p className="font-semibold text-sm text-blue-300">{t("resumePreviousQuiz")}</p>
+                        <p className="mt-0.5 text-xs text-blue-400">
+                          {vocabSession.score.correct} / {vocabSession.wordIds?.length ?? vocabSession.questions.length} {t("questionsAnswered")}
+                        </p>
+                      </button>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      onClick={onStartNew}
+                      className="sm:col-span-2 rounded-lg bg-blue-600 px-5 py-3 text-center font-medium text-white hover:bg-blue-500 transition-colors"
+                    >
+                      {t("startWordQuiz")}
+                    </button>
+                    <button
+                      onClick={onBrowse}
+                      className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                    >
+                      {t("browseWords")}
+                    </button>
+                    <button
+                      onClick={onAddWord}
+                      className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                    >
+                      {t("smartAddWord")}
+                    </button>
+                    <button
+                      onClick={onFlaggedReview}
+                      className="sm:col-span-2 rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                    >
+                      {t("reviewFlagged")}
+                    </button>
+                  </div>
+                </>
+              )}
+              {showGrammar && wordGrammarTab === "grammar" && (
+                <>
+                  {!loading && grammarSession && (
+                    <div className="mb-3">
+                      <button
+                        onClick={() => onResumeGrammar(grammarSession)}
+                        className="w-full rounded-lg border border-emerald-700 bg-emerald-900/30 px-4 py-3 text-left hover:border-emerald-500 hover:bg-emerald-800/40 transition-colors"
+                      >
+                        <p className="font-semibold text-sm text-emerald-300">{t("resumePreviousQuiz")}</p>
+                        <p className="mt-0.5 text-xs text-emerald-400">
+                          {grammarSession.score.correct} / {grammarSession.questions.length} {t("questionsAnswered")}
+                        </p>
+                      </button>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      onClick={onGrammarQuiz}
+                      className="sm:col-span-2 rounded-lg bg-emerald-600 px-5 py-3 text-center font-medium text-white hover:bg-emerald-500 transition-colors"
+                    >
+                      {t("grammarQuiz")}
+                    </button>
+                    <button
+                      onClick={onBrowseGrammar}
+                      className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                    >
+                      {t("browseGrammar")}
+                    </button>
+                    <button
+                      onClick={onAddGrammar}
+                      className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+                    >
+                      {t("addGrammar")}
+                    </button>
+                  </div>
+                </>
+              )}
             </section>
           );
           if (section === "speaking-writing") return (
@@ -183,46 +241,6 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onStar
               >
                 {t("startTranslation")}
               </button>
-            </section>
-          );
-          if (section === "grammar") return (
-            <section key="grammar" className="rounded-xl bg-gray-800/60 p-4 sm:p-5">
-              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-400">
-                {t("sectionGrammar")}
-              </h3>
-              {!loading && grammarSession && (
-                <div className="mb-3">
-                  <button
-                    onClick={() => onResumeGrammar(grammarSession)}
-                    className="w-full rounded-lg border border-emerald-700 bg-emerald-900/30 px-4 py-3 text-left hover:border-emerald-500 hover:bg-emerald-800/40 transition-colors"
-                  >
-                    <p className="font-semibold text-sm text-emerald-300">{t("resumePreviousQuiz")}</p>
-                    <p className="mt-0.5 text-xs text-emerald-400">
-                      {grammarSession.score.correct} / {grammarSession.questions.length} {t("questionsAnswered")}
-                    </p>
-                  </button>
-                </div>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  onClick={onGrammarQuiz}
-                  className="sm:col-span-2 rounded-lg bg-emerald-600 px-5 py-3 text-center font-medium text-white hover:bg-emerald-500 transition-colors"
-                >
-                  {t("grammarQuiz")}
-                </button>
-                <button
-                  onClick={onBrowseGrammar}
-                  className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  {t("browseGrammar")}
-                </button>
-                <button
-                  onClick={onAddGrammar}
-                  className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                >
-                  {t("addGrammar")}
-                </button>
-              </div>
             </section>
           );
           return null;

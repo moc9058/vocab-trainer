@@ -21,6 +21,6 @@ export interface AppSettings {
   displayGrammarDefinitionLanguages: string[];
   /** ISO code of the definition language printed in the worksheet answer key. */
   printDefinitionLanguage: string;
-  /** Order of the main dashboard sections: vocabulary, speaking-writing, translation, grammar. */
+  /** Order of the main dashboard sections: word-grammar, speaking-writing, translation. */
   sectionOrder: string[];
 }

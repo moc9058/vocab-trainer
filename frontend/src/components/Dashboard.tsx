@@ -8,18 +8,17 @@ import { getCurrentSession, startQuiz } from "../api/quiz";
 import { startGrammarQuiz, getCurrentGrammarSession } from "../api/grammar";
 import EmptyState from "./EmptyState";
 import QuizTaking from "./QuizTaking";
-import WordList from "./WordList";
+import BrowseView from "./BrowseView";
 import FlaggedReview from "./FlaggedReview";
-import GrammarList from "./GrammarList";
 import GrammarQuizTaking from "./GrammarQuizTaking";
-import GrammarFilterModal from "./GrammarFilterModal";
+import StudyQuizModal from "./StudyQuizModal";
 import SmartAddWordModal from "./SmartAddWordModal";
 import GrammarFormModal from "./GrammarFormModal";
 import TranslationView from "./TranslationView";
 import SpeakingWritingView from "./SpeakingWritingView";
 import ExpressionQuizView from "./ExpressionQuizView";
 import ExpressionList from "./ExpressionList";
-import QuizFilterModal, { type QuizFilters } from "./QuizFilterModal";
+import type { QuizFilters } from "./QuizFilterModal";
 import PrintWorksheet from "./PrintWorksheet";
 import { getTranslationHistory } from "../api/translation";
 import { getSpeakingWritingSession } from "../api/speaking-writing";
@@ -43,12 +42,11 @@ export default function Dashboard() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [activeQuiz, setActiveQuiz] = useState<QuizSession | null>(null);
   const [starting, setStarting] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState<string | null>(null);
+  const [studyQuizTab, setStudyQuizTab] = useState<"word" | "grammar" | null>(null);
   const [resumePrompt, setResumePrompt] = useState<QuizSession | null>(null);
   const [pendingFilters, setPendingFilters] = useState<QuizFilters | null>(null);
   // Grammar state
   const [activeGrammarQuiz, setActiveGrammarQuiz] = useState<GrammarQuizSession | null>(null);
-  const [showGrammarFilterModal, setShowGrammarFilterModal] = useState<string | null>(null);
   // Smart Add Word / Grammar state
   const [showSmartAdd, setShowSmartAdd] = useState(false);
   const [grammarFormLanguage, setGrammarFormLanguage] = useState<string | null>(null);
@@ -131,16 +129,12 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grammarRecentResults]);
 
-  function handleLanguageSelected(lang: string) {
-    setSelectedLanguage(lang);
-  }
-
   async function handleFiltersSelected(filters: QuizFilters) {
-    if (starting || !selectedLanguage) return;
+    if (starting || !language) return;
     setStarting(true);
     try {
       // Check for existing in-progress session
-      const existing = await getCurrentSession(selectedLanguage);
+      const existing = await getCurrentSession(language);
       if (existing && existing.status === "in-progress") {
         setPendingFilters(filters);
         setResumePrompt(existing);
@@ -148,7 +142,7 @@ export default function Dashboard() {
       }
       // No existing session — start new
       const session = await startQuiz({
-        language: selectedLanguage,
+        language,
         topics: filters.topics,
         categories: filters.categories,
         levels: filters.levels,
@@ -156,7 +150,7 @@ export default function Dashboard() {
         groupWeights: filters.groupWeights,
         flaggedOnly: filters.flaggedOnly,
       });
-      setSelectedLanguage(null);
+      setStudyQuizTab(null);
       setActiveQuiz(session);
       navigate(`/${language}/quiz`);
     } catch (err) {
@@ -172,22 +166,21 @@ export default function Dashboard() {
       setActiveQuiz(resumePrompt);
       setResumePrompt(null);
       setPendingFilters(null);
-      setSelectedLanguage(null);
+      setStudyQuizTab(null);
       setStarting(false);
       navigate(`/${language}/quiz`);
     }
   }
 
   async function handleStartNew() {
-    if (!selectedLanguage || !pendingFilters) return;
-    const lang = selectedLanguage;
+    if (!language || !pendingFilters) return;
     const filters = pendingFilters;
     setResumePrompt(null);
-    setSelectedLanguage(null);
+    setStudyQuizTab(null);
     setPendingFilters(null);
     try {
       const session = await startQuiz({
-        language: lang,
+        language,
         topics: filters.topics,
         categories: filters.categories,
         levels: filters.levels,
@@ -206,17 +199,16 @@ export default function Dashboard() {
   }
 
   function handleFilterClose() {
-    setSelectedLanguage(null);
+    setStudyQuizTab(null);
   }
 
   function handlePrintSelected(
     filters: QuizFilters,
     count: number | null,
   ) {
-    if (!selectedLanguage) return;
-    const lang = selectedLanguage;
-    setSelectedLanguage(null);
-    navigate(`/${language}/print-worksheet`, { state: { filters, count, sampleLanguage: lang } });
+    if (!language) return;
+    setStudyQuizTab(null);
+    navigate(`/${language}/print-worksheet`, { state: { filters, count, sampleLanguage: language } });
   }
 
   function handleQuizComplete() {
@@ -226,12 +218,11 @@ export default function Dashboard() {
 
   function goHome() {
     setActiveQuiz(null);
-    setSelectedLanguage(null);
+    setStudyQuizTab(null);
     setResumePrompt(null);
     setPendingFilters(null);
     setStarting(false);
     setActiveGrammarQuiz(null);
-    setShowGrammarFilterModal(null);
     setShowSmartAdd(false);
     setGrammarFormLanguage(null);
     navigate(`/${language}`);
@@ -248,7 +239,7 @@ export default function Dashboard() {
 
   async function handleStartQuiz() {
     if (!language) return;
-    handleLanguageSelected(language);
+    setStudyQuizTab("word");
   }
 
   function handleFlaggedReview() {
@@ -263,23 +254,22 @@ export default function Dashboard() {
 
   function handleStartGrammarQuiz() {
     if (!language) return;
-    setShowGrammarFilterModal(language);
+    setStudyQuizTab("grammar");
   }
 
   async function handleGrammarFiltersSelected(filters: { groupIds: string[] }) {
-    const lang = showGrammarFilterModal;
-    if (!lang) return;
-    setShowGrammarFilterModal(null);
+    if (!language) return;
+    setStudyQuizTab(null);
     try {
       // Check for existing in-progress session
-      const existing = await getCurrentGrammarSession(lang);
+      const existing = await getCurrentGrammarSession(language);
       if (existing && existing.status === "in-progress") {
         setActiveGrammarQuiz(existing);
         navigate(`/${language}/grammar-quiz`);
         return;
       }
       const session = await startGrammarQuiz({
-        language: lang,
+        language,
         groupIds: filters.groupIds.length > 0 ? filters.groupIds : undefined,
       });
       setActiveGrammarQuiz(session);
@@ -305,7 +295,7 @@ export default function Dashboard() {
     navigate(`/${language}/expressions`);
   }
 
-  const showBackButton = (subPath !== "/" && subPath !== "") || !!(selectedLanguage || showGrammarFilterModal || showSmartAdd || grammarFormLanguage);
+  const showBackButton = (subPath !== "/" && subPath !== "") || !!(studyQuizTab || showSmartAdd || grammarFormLanguage);
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-900">
@@ -356,13 +346,6 @@ export default function Dashboard() {
       {showSettingsModal && (
         <SettingsModal onClose={() => setShowSettingsModal(false)} currentLanguageCode={isoCode} />
       )}
-      {showGrammarFilterModal && (
-        <GrammarFilterModal
-          language={showGrammarFilterModal}
-          onStart={handleGrammarFiltersSelected}
-          onClose={() => setShowGrammarFilterModal(null)}
-        />
-      )}
       {showSmartAdd && (
         <SmartAddWordModal
           onSave={() => {}}
@@ -391,13 +374,14 @@ export default function Dashboard() {
           refreshSignal={refreshSignal}
         />
       )}
-      {selectedLanguage && !resumePrompt && (
-        <QuizFilterModal
-          language={selectedLanguage}
-          onStart={handleFiltersSelected}
+      {studyQuizTab && !resumePrompt && language && (
+        <StudyQuizModal
+          language={language}
+          initialTab={studyQuizTab}
           onClose={handleFilterClose}
-          onPrint={handlePrintSelected}
-          showFlaggedScope
+          onStartWord={handleFiltersSelected}
+          onPrintWord={handlePrintSelected}
+          onStartGrammar={handleGrammarFiltersSelected}
         />
       )}
       {resumePrompt && (
@@ -470,15 +454,20 @@ export default function Dashboard() {
               <span className="text-gray-400">Loading quiz…</span>
             </div>
           )
-        ) : subPath === "/browse" ? (
-          <WordList
+        ) : subPath === "/browse" || subPath === "/grammar" ? (
+          <BrowseView
             language={language ?? ""}
+            initialTab={subPath === "/grammar" ? "grammar" : "word"}
+            onTabChange={(tab) => navigate(`/${language}/${tab === "grammar" ? "grammar" : "browse"}`, { replace: true })}
             onBack={() => navigate(`/${language}`)}
             initialExpandId={(location.state as { expandId?: string } | null)?.expandId}
             initialSearch={(location.state as { search?: string } | null)?.search}
             refreshSignal={refreshSignal}
+            grammarRefreshSignal={grammarRefreshSignal}
             onQueue={enqueue}
             onQueueEdit={enqueueUpdate}
+            onGrammarQueue={enqueueGrammar}
+            onGrammarUpdateQueue={enqueueGrammarUpdate}
             pendingTerms={pendingTerms}
             succeededTerms={succeededTerms}
           />
@@ -486,17 +475,6 @@ export default function Dashboard() {
           <FlaggedReview
             language={language ?? ""}
             onBack={() => navigate(`/${language}`)}
-          />
-        ) : subPath === "/grammar" ? (
-          <GrammarList
-            language={language ?? ""}
-            onBack={() => navigate(`/${language}`)}
-            onQueue={enqueue}
-            onGrammarQueue={enqueueGrammar}
-            onGrammarUpdateQueue={enqueueGrammarUpdate}
-            pendingTerms={pendingTerms}
-            succeededTerms={succeededTerms}
-            refreshSignal={refreshSignal + grammarRefreshSignal}
           />
         ) : subPath === "/grammar-quiz" ? (
           activeGrammarQuiz ? (

@@ -108,6 +108,7 @@ const translations = {
     showGrammarAnswer: "Show Answer",
     sectionVocabulary: "Vocabulary",
     sectionGrammar: "Grammar",
+    sectionWordGrammar: "Word & Grammar",
     // Smart Add
     smartAddWord: "Add Word",
     addingWord: "Adding word...",
@@ -345,6 +346,7 @@ const translations = {
     showGrammarAnswer: "答えを見る",
     sectionVocabulary: "単語",
     sectionGrammar: "文法",
+    sectionWordGrammar: "単語＆文法",
     // Smart Add
     smartAddWord: "単語を追加",
     addingWord: "単語を追加中...",
@@ -582,6 +584,7 @@ const translations = {
     showGrammarAnswer: "정답 보기",
     sectionVocabulary: "단어",
     sectionGrammar: "문법",
+    sectionWordGrammar: "단어 & 문법",
     // Smart Add
     smartAddWord: "단어 추가",
     addingWord: "단어 추가 중...",

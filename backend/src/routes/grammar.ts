@@ -22,10 +22,14 @@ import {
 } from "../firestore.js";
 import { callLLMWithSchema, stripMarkdownFences, fillSegmentPinyin } from "../llm.js";
 import type { Grammar, GrammarExample, Meaning, ExampleSentence } from "../types.js";
+import {
+  ALL_DEFINITION_LANGUAGES,
+  translationIsEmpty,
+  generateMissingExampleTranslations,
+  type MissingTranslationItem,
+} from "../exampleTranslations.js";
 
 type ExampleSegment = { text: string; transliteration?: string; id?: string };
-
-const ALL_DEFINITION_LANGUAGES = ["en", "ja", "ko", "zh"] as const;
 
 function fillPlaceholders(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
@@ -93,6 +97,9 @@ async function resolveExamplesToIds(
 
   // Phase 3: create or reuse each example doc; thread in segments where present.
   const exampleIds: string[] = [];
+  // Docs whose stored translation is empty (grammar saves historically wrote
+  // "" verbatim) — LLM-filled after the loop, same fallback as the vocab routes.
+  const needsTranslation: MissingTranslationItem[] = [];
   for (let i = 0; i < examples.length; i++) {
     const ex = examples[i];
     const existing = lookups[i];
@@ -104,6 +111,9 @@ async function resolveExamplesToIds(
       if (segs && (!existing.segments || existing.segments.length === 0)) {
         await updateExampleSentence(existing.id, { segments: segs });
         await reconcileExampleSegmentRefs(existing.id, existing.segments, segs);
+      }
+      if (translationIsEmpty(existing.translation)) {
+        needsTranslation.push({ exampleId: existing.id, sentence: existing.sentence });
       }
       exampleIds.push(existing.id);
       continue;
@@ -121,7 +131,16 @@ async function resolveExamplesToIds(
     if (segs) {
       await reconcileExampleSegmentRefs(exId, [], segs);
     }
+    if (translationIsEmpty(ex.translation)) {
+      needsTranslation.push({ exampleId: exId, sentence: ex.sentence });
+    }
     exampleIds.push(exId);
+  }
+
+  if (needsTranslation.length > 0) {
+    await generateMissingExampleTranslations(language, needsTranslation, {
+      route: "grammar/translate-examples",
+    });
   }
   return exampleIds;
 }
