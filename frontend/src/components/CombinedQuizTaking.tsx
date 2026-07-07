@@ -3,6 +3,8 @@ import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP } from "../settings/defaults";
 import { answerCombinedQuestion, getCombinedQuizQuestions } from "../api/combined-quiz";
+import { getGroups } from "../api/vocab";
+import { getGrammarGroups } from "../api/grammar";
 import { getFlaggedWordIds, flagWord, unflagWord } from "../api/flagged";
 import { fetchJson } from "../api/client";
 import RubyText from "./RubyText";
@@ -57,6 +59,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [alreadyFlaggedIds, setAlreadyFlaggedIds] = useState<Set<string>>(new Set());
   const [grammarCache, setGrammarCache] = useState<Map<string, Grammar>>(new Map());
+  const [groupNameMap, setGroupNameMap] = useState<Map<string, string>>(new Map());
   const [originalTotal] = useState(() => session.initialTotal ?? session.questions.length);
 
   const fetchedCountRef = useRef(0);
@@ -113,6 +116,23 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       .catch(() => setAlreadyFlaggedIds(new Set()));
   }, [session.language]);
 
+  // Fetch group names for the per-group progress badges (word + grammar groups).
+  useEffect(() => {
+    const hasWordGroups =
+      session.wordGroupMembership && Object.keys(session.wordGroupMembership).length > 0;
+    const hasGrammarGroups =
+      session.grammarGroupMembership && Object.keys(session.grammarGroupMembership).length > 0;
+    if (!hasWordGroups && !hasGrammarGroups) return;
+    Promise.all([
+      hasWordGroups ? getGroups(session.language).catch(() => []) : Promise.resolve([]),
+      hasGrammarGroups ? getGrammarGroups(session.language).catch(() => []) : Promise.resolve([]),
+    ]).then(([wordGroups, grammarGroups]) => {
+      setGroupNameMap(
+        new Map([...wordGroups, ...grammarGroups].map((g) => [g.id, g.name]))
+      );
+    });
+  }, [session.language, session.wordGroupMembership, session.grammarGroupMembership]);
+
   // Fetch grammar item details (statement/descriptions) for the current + next few
   // grammar questions so the answer reveal is instant.
   useEffect(() => {
@@ -142,6 +162,57 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const examples = wordQuestion?.examples ?? [];
   const visibleDefinitions = showAllDefinitions ? definitions : definitions.slice(0, VISIBLE_ANSWER_ITEMS);
   const visibleExamples = showAllExamples ? examples : examples.slice(0, VISIBLE_ANSWER_ITEMS);
+
+  // Per-domain progress (Vocabulary vs Grammar): remaining unique items / total unique items.
+  const domainProgress = useMemo(() => {
+    const stats = {
+      word: { remaining: new Set<string>(), total: new Set<string>() },
+      grammar: { remaining: new Set<string>(), total: new Set<string>() },
+    };
+    for (const q of questions) {
+      const refId = q.kind === "word" ? q.wordId : q.grammarId;
+      stats[q.kind].total.add(refId);
+      if (q.userCorrect === undefined) stats[q.kind].remaining.add(refId);
+    }
+    return (["word", "grammar"] as const)
+      .map((kind) => ({
+        kind,
+        label: kind === "word" ? t("sectionVocabulary") : t("sectionGrammar"),
+        remaining: stats[kind].remaining.size,
+        total: stats[kind].total.size,
+      }))
+      .filter((d) => d.total > 0);
+  }, [questions, t]);
+
+  // Per-group progress for word groups and grammar groups combined.
+  const groupProgress = useMemo(() => {
+    const wordMembership = currentSession.wordGroupMembership;
+    const grammarMembership = currentSession.grammarGroupMembership;
+    const unansweredWordIds = new Set(
+      questions.filter((q) => q.kind === "word" && q.userCorrect === undefined).map((q) => (q as { wordId: string }).wordId)
+    );
+    const unansweredGrammarIds = new Set(
+      questions.filter((q) => q.kind === "grammar" && q.userCorrect === undefined).map((q) => (q as { grammarId: string }).grammarId)
+    );
+    const rows: { id: string; name: string; remaining: number; total: number }[] = [];
+    for (const [gid, ids] of Object.entries(wordMembership ?? {})) {
+      rows.push({
+        id: gid,
+        name: groupNameMap.get(gid) ?? gid,
+        remaining: ids.filter((id) => unansweredWordIds.has(id)).length,
+        total: ids.length,
+      });
+    }
+    for (const [gid, ids] of Object.entries(grammarMembership ?? {})) {
+      rows.push({
+        id: gid,
+        name: groupNameMap.get(gid) ?? gid,
+        remaining: ids.filter((id) => unansweredGrammarIds.has(id)).length,
+        total: ids.length,
+      });
+    }
+    return rows.length > 0 ? rows : null;
+  }, [currentSession.wordGroupMembership, currentSession.grammarGroupMembership, questions, groupNameMap]);
 
   function resetExpandedAnswers() {
     setShowAllDefinitions(false);
@@ -295,6 +366,42 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       <p className="text-sm text-gray-400">
         {currentSession.score.correct} / {originalTotal}
       </p>
+
+      {/* Per-domain progress (Vocabulary vs Grammar) */}
+      {domainProgress.length > 0 && (
+        <div className="flex flex-wrap justify-center gap-2">
+          {domainProgress.map((d) => (
+            <span
+              key={d.kind}
+              className={`rounded-full px-3 py-1 text-xs font-medium border ${
+                d.kind === "word"
+                  ? "bg-blue-900/40 text-blue-300 border-blue-700/50"
+                  : "bg-emerald-900/40 text-emerald-300 border-emerald-700/50"
+              }`}
+            >
+              {d.label}: {d.remaining}/{d.total}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Per-group progress (word + grammar groups) */}
+      {groupProgress && (
+        <div className="flex flex-wrap justify-center gap-2">
+          {groupProgress.map((g) => (
+            <span
+              key={g.id}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                g.remaining === 0
+                  ? "bg-green-900/40 text-green-400 border border-green-700/50"
+                  : "bg-gray-700 text-gray-300 border border-gray-600"
+              }`}
+            >
+              {g.name}: {g.remaining}/{g.total}
+            </span>
+          ))}
+        </div>
+      )}
 
       {/* Question type badge */}
       <span

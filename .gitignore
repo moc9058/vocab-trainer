@@ -20,6 +20,9 @@ Thumbs.db
 backend/data
 backend/logs/
 
+# Local test assets (OCR fixtures, etc.)
+test/
+
 # .claude
 .claude/*
 .claude/settings.json
