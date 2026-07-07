@@ -5,6 +5,10 @@ import {
   addGrammar,
   updateGrammar,
   deleteGrammarItem,
+  getGrammarDrafts,
+  getGrammarDraft,
+  addGrammarDrafts,
+  deleteGrammarDraft,
   getGrammarGroups,
   createGrammarGroup,
   updateGrammarGroup,
@@ -23,7 +27,7 @@ import {
   lookupWordsByTerms,
 } from "../firestore.js";
 import { callLLMWithSchema, stripMarkdownFences, fillSegmentPinyin } from "../llm.js";
-import type { Grammar, GrammarExample, Meaning, ExampleSentence, GrammarSettings } from "../types.js";
+import type { Grammar, GrammarDraft, GrammarExample, Meaning, ExampleSentence, GrammarSettings } from "../types.js";
 import {
   ALL_DEFINITION_LANGUAGES,
   needsMoreTranslations,
@@ -372,6 +376,80 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const deleted = await deleteGrammarItem(request.params.grammarId);
       if (!deleted) return reply.notFound("Grammar item not found");
+      return { deleted: true };
+    }
+  );
+
+  // ----- Grammar Drafts -----
+  // Staging area for the local OCR tool: raw uploads reviewed in the grammar
+  // UI, then promoted to real items via smart-add. No LLM calls here.
+
+  fastify.get<{ Params: { language: string } }>(
+    "/:language/drafts",
+    async (request) => {
+      return await getGrammarDrafts(request.params.language);
+    }
+  );
+
+  fastify.post<{
+    Params: { language: string };
+    Body: { drafts: Array<Omit<GrammarDraft, "language" | "id" | "createdAt">> };
+  }>(
+    "/:language/drafts",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["drafts"],
+          properties: {
+            drafts: {
+              type: "array",
+              minItems: 1,
+              items: {
+                type: "object",
+                required: ["statement", "descriptions"],
+                properties: {
+                  statement: { type: "string" },
+                  descriptions: { type: "array" },
+                  examples: { type: "array" },
+                  level: { type: "string" },
+                  tags: { type: "array", items: { type: "string" } },
+                  sourceImage: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { language } = request.params;
+      const now = new Date().toISOString();
+      const drafts: GrammarDraft[] = request.body.drafts.map((d) => ({
+        ...d,
+        language,
+        createdAt: now,
+        id: `draft-${language}-${Date.now()}${Math.random().toString(36).slice(2, 8)}`,
+      }));
+      await addGrammarDrafts(drafts);
+      return reply.status(201).send({ created: drafts.length, drafts });
+    }
+  );
+
+  fastify.get<{ Params: { language: string; draftId: string } }>(
+    "/:language/drafts/:draftId",
+    async (request, reply) => {
+      const draft = await getGrammarDraft(request.params.draftId);
+      if (!draft) return reply.notFound("Grammar draft not found");
+      return draft;
+    }
+  );
+
+  fastify.delete<{ Params: { language: string; draftId: string } }>(
+    "/:language/drafts/:draftId",
+    async (request, reply) => {
+      const deleted = await deleteGrammarDraft(request.params.draftId);
+      if (!deleted) return reply.notFound("Grammar draft not found");
       return { deleted: true };
     }
   );

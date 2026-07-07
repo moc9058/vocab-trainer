@@ -114,6 +114,20 @@ export interface Grammar {
   tags?: string[];
 }
 
+export interface GrammarDraft {
+  id: string;
+  language: string;
+  statement: string;
+  descriptions: Meaning[];
+  /** Inline raw examples — drafts are NOT normalized into example_sentences. */
+  examples?: GrammarExample[];
+  level?: string;
+  tags?: string[];
+  /** Original upload filename, for traceability. */
+  sourceImage?: string;
+  createdAt: string;
+}
+
 export interface GrammarSettings {
   defaultDefinitionLanguage: string;
 }

@@ -1,6 +1,7 @@
 import { fetchJson, postJson, putJson, deleteRequest } from "./client";
 import type {
   Grammar,
+  GrammarDraft,
   GrammarGroup,
   GrammarQuizSession,
   GrammarSettings,
@@ -51,6 +52,18 @@ export function updateGrammarItem(
 export function deleteGrammarItem(language: string, grammarId: string): Promise<void> {
   return deleteRequest(
     `/api/grammar/${encodeURIComponent(language)}/items/${encodeURIComponent(grammarId)}`
+  );
+}
+
+// ----- Grammar Drafts -----
+
+export function getGrammarDrafts(language: string): Promise<GrammarDraft[]> {
+  return fetchJson(`/api/grammar/${encodeURIComponent(language)}/drafts`);
+}
+
+export function deleteGrammarDraft(language: string, draftId: string): Promise<void> {
+  return deleteRequest(
+    `/api/grammar/${encodeURIComponent(language)}/drafts/${encodeURIComponent(draftId)}`
   );
 }
 

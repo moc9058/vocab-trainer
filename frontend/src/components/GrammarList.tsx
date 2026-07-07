@@ -6,9 +6,11 @@ import {
   deleteGrammarItem,
   getGrammarGroups,
   modifyGrammarGroupMembers,
+  getGrammarDrafts,
+  deleteGrammarDraft,
 } from "../api/grammar";
 import { LEVEL_OPTIONS } from "../constants/levels";
-import type { Grammar, GrammarGroup } from "../types";
+import type { Grammar, GrammarDraft, GrammarGroup } from "../types";
 import GrammarFormModal from "./GrammarFormModal";
 import GroupPickerModal from "./GroupPickerModal";
 import RubyText from "./RubyText";
@@ -238,6 +240,10 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [drafts, setDrafts] = useState<GrammarDraft[]>([]);
+  const [draftsOpen, setDraftsOpen] = useState(true);
+  const [reviewingDraft, setReviewingDraft] = useState<GrammarDraft | null>(null);
+  const [discardingDraftId, setDiscardingDraftId] = useState<string | null>(null);
 
   const levelOptions = LEVEL_OPTIONS[language];
 
@@ -270,6 +276,26 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
   useEffect(() => {
     fetchItems();
   }, [fetchItems]);
+
+  const fetchDrafts = useCallback(() => {
+    getGrammarDrafts(language)
+      .then(setDrafts)
+      .catch(() => setDrafts([]));
+  }, [language, refreshSignal]);
+
+  useEffect(() => {
+    fetchDrafts();
+  }, [fetchDrafts]);
+
+  async function handleDiscardDraft(draftId: string) {
+    try {
+      await deleteGrammarDraft(language, draftId);
+    } catch {
+      // draft may already be gone; refresh either way
+    }
+    setDiscardingDraftId(null);
+    fetchDrafts();
+  }
 
   async function handleDelete(grammarId: string) {
     try {
@@ -402,6 +428,55 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
         onChange={(e) => { setSearch(e.target.value); setPage(1); }}
         className="mb-4 w-full rounded-lg border border-gray-600 bg-gray-800 px-4 py-2 text-sm text-gray-100 placeholder-gray-500"
       />
+
+      {/* OCR drafts panel */}
+      {drafts.length > 0 && (
+        <div className="mb-4 rounded-lg border border-amber-700/60 bg-amber-950/30">
+          <button
+            onClick={() => setDraftsOpen((o) => !o)}
+            className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-amber-200"
+          >
+            <span>
+              {t("grammarDrafts")} ({drafts.length})
+            </span>
+            <span className="text-xs">{draftsOpen ? "▾" : "▸"}</span>
+          </button>
+          {draftsOpen && (
+            <div className="space-y-2 px-3 pb-3">
+              {drafts.map((draft) => {
+                const firstDesc = Object.values(draft.descriptions?.[0]?.text ?? {})[0] ?? "";
+                return (
+                  <div
+                    key={draft.id}
+                    className="flex items-center gap-3 rounded border border-gray-700 bg-gray-800/80 px-3 py-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm text-gray-100">{draft.statement}</p>
+                      <p className="truncate text-xs text-gray-400">{firstDesc}</p>
+                      <p className="text-xs text-gray-500">
+                        {draft.sourceImage ? `${draft.sourceImage} · ` : ""}
+                        {draft.createdAt ? new Date(draft.createdAt).toLocaleDateString() : ""}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setReviewingDraft(draft)}
+                      className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500"
+                    >
+                      {t("reviewDraft")}
+                    </button>
+                    <button
+                      onClick={() => setDiscardingDraftId(draft.id)}
+                      className="rounded bg-red-900/60 px-3 py-1.5 text-xs text-red-200 hover:bg-red-800/60"
+                    >
+                      {t("discardDraft")}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Bulk action bar */}
       {selectedIds.size > 0 && (
@@ -550,6 +625,57 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
           succeededTerms={succeededTerms}
           refreshSignal={refreshSignal}
         />
+      )}
+
+      {/* Draft review modal — create mode with prefill. Deliberately does NOT
+          pass onGrammarQueue: queue-mode submits never fire onSave, so we'd
+          lose the delete-draft-on-successful-save signal. Without it the modal
+          awaits smartAddGrammarItem directly and onSave fires only on success. */}
+      {reviewingDraft && (
+        <GrammarFormModal
+          language={language}
+          initialItem={{
+            statement: reviewingDraft.statement,
+            descriptions: reviewingDraft.descriptions,
+            examples: reviewingDraft.examples,
+            level: reviewingDraft.level,
+            tags: reviewingDraft.tags,
+          }}
+          onSave={async () => {
+            await deleteGrammarDraft(language, reviewingDraft.id).catch(() => {});
+            setReviewingDraft(null);
+            fetchDrafts();
+            fetchItems();
+          }}
+          onClose={() => setReviewingDraft(null)}
+          onQueue={onQueue}
+          pendingTerms={pendingTerms}
+          succeededTerms={succeededTerms}
+          refreshSignal={refreshSignal}
+        />
+      )}
+
+      {/* Discard draft confirmation dialog */}
+      {discardingDraftId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setDiscardingDraftId(null)}>
+          <div className="rounded-xl bg-gray-800 p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <p className="mb-4 text-sm text-gray-200">{t("discardDraftConfirm")}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDiscardingDraftId(null)}
+                className="rounded-lg border border-gray-600 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
+              >
+                {t("cancel")}
+              </button>
+              <button
+                onClick={() => handleDiscardDraft(discardingDraftId)}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-500"
+              >
+                {t("discardDraft")}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Group picker modal */}

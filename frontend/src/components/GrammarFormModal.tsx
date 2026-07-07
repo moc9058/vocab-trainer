@@ -43,6 +43,9 @@ interface Props {
   /** When provided, edit-mode submits enqueue instead of awaiting directly.
    *  Modal closes after brief "✓ Queued" flash. */
   onGrammarUpdateQueue?: (statement: string, language: string, grammarId: string, updates: Partial<Grammar>, groupsToAdd: string[], groupsToRemove: string[]) => void;
+  /** Prefill for CREATE mode (e.g. reviewing an OCR draft). Ignored when `editItem` is set —
+   *  the submit still goes through the smart-add create path. */
+  initialItem?: Partial<Omit<Grammar, "language">>;
   pendingTerms?: Set<string>;
   succeededTerms?: Set<string>;
   refreshSignal?: number;
@@ -63,16 +66,17 @@ function InsertButton({ onInsert }: { onInsert: () => void }) {
   );
 }
 
-export default function GrammarFormModal({ language, editItem, onSave, onClose, onQueue, onGrammarQueue, onGrammarUpdateQueue, pendingTerms, succeededTerms, refreshSignal }: Props) {
+export default function GrammarFormModal({ language, editItem, onSave, onClose, onQueue, onGrammarQueue, onGrammarUpdateQueue, initialItem, pendingTerms, succeededTerms, refreshSignal }: Props) {
   const { t } = useI18n();
   const isEdit = !!editItem;
   const isChinese = language === "chinese";
+  const prefill = editItem ?? initialItem;
 
-  const [statement, setStatement] = useState(editItem?.statement ?? "");
+  const [statement, setStatement] = useState(prefill?.statement ?? "");
   const [defaultDescLang, setDefaultDescLang] = useState(() => cachedDefaultDescLang ?? "en");
   const [descriptions, setDescriptions] = useState<DescriptionFormState[]>(() => {
-    if (editItem?.descriptions && editItem.descriptions.length > 0) {
-      return editItem.descriptions.map((m) => ({
+    if (prefill?.descriptions && prefill.descriptions.length > 0) {
+      return prefill.descriptions.map((m) => ({
         partOfSpeech: m.partOfSpeech,
         translations: Object.entries(m.text || {}).map(([lang, text]) => ({ lang, text })),
         pinyinsRaw: m.pinyins?.join(", ") ?? "",
@@ -80,17 +84,17 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
     }
     return [{ partOfSpeech: "", translations: [{ lang: cachedDefaultDescLang ?? "en", text: "" }], pinyinsRaw: "" }];
   });
-  const [wordsList, setWordsList] = useState<string[]>(editItem?.words ?? []);
+  const [wordsList, setWordsList] = useState<string[]>(prefill?.words ?? []);
   const [examples, setExamples] = useState<ExampleFormState[]>(
-    editItem?.examples?.map((ex) => ({
+    prefill?.examples?.map((ex) => ({
       sentence: ex.sentence,
       translation: displayTranslation(ex.translation),
       originalTranslation: ex.translation ?? "",
       locked: false,
     })) ?? [{ sentence: "", translation: "", originalTranslation: "", locked: false }]
   );
-  const [level, setLevel] = useState(editItem?.level ?? "");
-  const [tags, setTags] = useState(editItem?.tags?.join(", ") ?? "");
+  const [level, setLevel] = useState(prefill?.level ?? "");
+  const [tags, setTags] = useState(prefill?.tags?.join(", ") ?? "");
 
   const [groups, setGroups] = useState<GrammarGroup[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
