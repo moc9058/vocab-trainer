@@ -3,8 +3,8 @@ import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP, urlLanguageToIsoCode } from "../settings/defaults";
 import { LEVEL_OPTIONS } from "../constants/levels";
-import { smartAddWord, lookupWord, checkTerms, getGroups, modifyGroupMembers } from "../api/vocab";
-import { displayTranslation, type Word, type WordGroup } from "../types";
+import { smartAddWord, lookupWord, checkTerms, getGroups, createGroup, modifyGroupMembers } from "../api/vocab";
+import { displayTranslation, type Word, type WordDraft, type WordGroup } from "../types";
 
 interface Prefill {
   term: string;
@@ -37,9 +37,32 @@ interface Props {
   succeededTerms?: Set<string>;
   /** Retained for prop compatibility; chip status no longer needs it. */
   refreshSignal?: number;
+  /** Prefill for reviewing an uploaded word draft. The submit still goes
+   *  through the normal smart-add path. */
+  initialItem?: Pick<WordDraft, "term" | "transliteration" | "definitions" | "examples" | "level" | "topics">;
+  /** Word-group NAMES (from a draft's `groups`): existing ones are preselected;
+   *  missing ones are created and joined on the direct (non-queue) save path. */
+  initialGroups?: string[];
 }
 
 // LANG_OPTIONS is now derived from settings in the component
+
+/** Re-insert spaces into a draft sentence at its `segments` boundaries so the
+ *  Chinese chip workflow (which derives chips from spaces) picks them up. Falls
+ *  back to the raw sentence when the splits don't match it. */
+function spaceSentenceBySplits(sentence: string, splits?: string[]): string {
+  if (!splits || splits.length < 2) return sentence;
+  let out = "";
+  let cursor = 0;
+  for (const split of splits) {
+    const idx = sentence.indexOf(split, cursor);
+    if (idx === -1) return sentence;
+    out += sentence.slice(cursor, idx) + split + " ";
+    cursor = idx + split.length;
+  }
+  out += sentence.slice(cursor);
+  return out.trimEnd();
+}
 
 const CATEGORIES = [
   "noun", "verb", "adjective", "adverb", "preposition", "conjunction",
@@ -59,7 +82,7 @@ const ALL_TOPICS = [
   "History", "Media & News", "Language Fundamentals",
 ] as const;
 
-export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage, onJumpToWord, onQueue, pendingTerms, succeededTerms }: Props) {
+export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage, onJumpToWord, onQueue, pendingTerms, succeededTerms, initialItem, initialGroups }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const LANG_OPTIONS = useMemo(
@@ -68,19 +91,30 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   );
   const wordLanguage = prefill?.language || defaultLanguage || "english";
   const currentIsoCode = urlLanguageToIsoCode(wordLanguage) ?? "";
-  const [term, setTerm] = useState(prefill?.term ?? "");
-  const [transliteration, setTransliteration] = useState("");
+  const [term, setTerm] = useState(prefill?.term ?? initialItem?.term ?? "");
+  const [transliteration, setTransliteration] = useState(initialItem?.transliteration ?? "");
   const [definitions, setDefinitions] = useState<{ langSelect: string; text: string }[]>(() => {
+    const draftDef = initialItem?.definitions?.[0];
+    if (draftDef && Object.keys(draftDef.text || {}).length > 0) {
+      return Object.entries(draftDef.text).map(([lang, text]) => ({ langSelect: lang, text }));
+    }
     const langSelect = settings.languageOrder[0] ?? "en";
     return [{ langSelect, text: "" }];
   });
-  const [grammaticalCategory, setGrammaticalCategory] = useState("");
-  const [level, setLevel] = useState("");
-  const [topics, setTopics] = useState<string[]>([]);
+  const [grammaticalCategory, setGrammaticalCategory] = useState(initialItem?.definitions?.[0]?.partOfSpeech ?? "");
+  const [level, setLevel] = useState(initialItem?.level ?? "");
+  const [topics, setTopics] = useState<string[]>(initialItem?.topics ?? []);
   const [groups, setGroups] = useState<WordGroup[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>(
-    prefill?.example ? [prefill.example] : [{ sentence: "", translation: "" }],
+    prefill?.example
+      ? [prefill.example]
+      : initialItem?.examples && initialItem.examples.length > 0
+        ? initialItem.examples.map((ex) => ({
+            sentence: wordLanguage === "chinese" ? spaceSentenceBySplits(ex.sentence, ex.segments) : ex.sentence,
+            translation: ex.translation ?? "",
+          }))
+        : [{ sentence: "", translation: "" }],
   );
   const [flagForReview, setFlagForReview] = useState(true);
   const [checking, setChecking] = useState(false);
@@ -116,10 +150,18 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     getGroups(wordLanguage)
       .then((loadedGroups) => {
         setGroups(loadedGroups);
+        if (initialGroups && initialGroups.length > 0) {
+          // Draft review: preselect the draft's group names that already exist.
+          // Missing names are created + joined on save.
+          const names = new Set(initialGroups.map((n) => n.trim()).filter(Boolean));
+          setSelectedGroupIds(new Set(loadedGroups.filter((g) => names.has(g.name)).map((g) => g.id)));
+          return;
+        }
         const latestGroup = loadedGroups.at(-1);
         setSelectedGroupIds(latestGroup ? new Set([latestGroup.id]) : new Set());
       })
       .catch(() => setGroups([]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wordLanguage]);
 
   useEffect(() => {
@@ -348,6 +390,18 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           prev.map((group) => updatedGroups.find((updated) => updated.id === group.id) ?? group)
         );
       }
+      // Draft review: any of the draft's group names that don't exist yet are
+      // created here and the new word joined (existing names were preselected
+      // above and handled through the normal groupIds path).
+      if (initialGroups && initialGroups.length > 0) {
+        const knownNames = new Set(groups.map((g) => g.name));
+        const missing = [...new Set(initialGroups.map((n) => n.trim()).filter(Boolean))]
+          .filter((name) => !knownNames.has(name));
+        for (const name of missing) {
+          const created = await createGroup(language, name);
+          await modifyGroupMembers(language, created.id, [word.id], "add");
+        }
+      }
       setSuccess(true);
       setGeneratedWords(gw ?? []);
       onSave(word);
@@ -515,8 +569,8 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                   ))}
                 </select>
-                <input
-                  type="text"
+                <textarea
+                  rows={2}
                   value={def.text}
                   onChange={(e) => {
                     const next = [...definitions];
@@ -524,7 +578,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                     setDefinitions(next);
                   }}
                   placeholder="LLM will generate if empty"
-                  className="flex-1 rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-400 focus:outline-none"
+                  className="flex-1 resize-y rounded-lg border border-gray-600 bg-gray-700 px-2 py-1.5 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-400 focus:outline-none"
                 />
                 {definitions.length > 1 && (
                   <button
@@ -548,6 +602,9 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
               className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
             >
               <option value="">-- LLM will generate --</option>
+              {grammaticalCategory && !(CATEGORIES as readonly string[]).includes(grammaticalCategory) && (
+                <option value={grammaticalCategory}>{grammaticalCategory}</option>
+              )}
               {CATEGORIES.map((cat) => (
                 <option key={cat} value={cat}>{cat}</option>
               ))}
@@ -564,6 +621,9 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                 className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
               >
                 <option value="">-- LLM will assign --</option>
+                {level && !LEVEL_OPTIONS[wordLanguage].includes(level) && (
+                  <option value={level}>{level}</option>
+                )}
                 {LEVEL_OPTIONS[wordLanguage].map((lv) => (
                   <option key={lv} value={lv}>{lv}</option>
                 ))}

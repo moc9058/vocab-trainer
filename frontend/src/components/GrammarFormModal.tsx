@@ -4,6 +4,7 @@ import {
   smartAddGrammarItem,
   updateGrammarItem,
   getGrammarGroups,
+  createGrammarGroup,
   modifyGrammarGroupMembers,
   getGrammarSettings,
 } from "../api/grammar";
@@ -46,6 +47,10 @@ interface Props {
   /** Prefill for CREATE mode (e.g. reviewing an OCR draft). Ignored when `editItem` is set —
    *  the submit still goes through the smart-add create path. */
   initialItem?: Partial<Omit<Grammar, "language">>;
+  /** CREATE mode only: grammar-group NAMES the new item should be added to on
+   *  successful save. Missing groups are created. Only applied on the direct
+   *  (non-queue) create path — the queue path never learns the created id. */
+  initialGroups?: string[];
   pendingTerms?: Set<string>;
   succeededTerms?: Set<string>;
   refreshSignal?: number;
@@ -66,7 +71,7 @@ function InsertButton({ onInsert }: { onInsert: () => void }) {
   );
 }
 
-export default function GrammarFormModal({ language, editItem, onSave, onClose, onQueue, onGrammarQueue, onGrammarUpdateQueue, initialItem, pendingTerms, succeededTerms, refreshSignal }: Props) {
+export default function GrammarFormModal({ language, editItem, onSave, onClose, onQueue, onGrammarQueue, onGrammarUpdateQueue, initialItem, initialGroups, pendingTerms, succeededTerms, refreshSignal }: Props) {
   const { t } = useI18n();
   const isEdit = !!editItem;
   const isChinese = language === "chinese";
@@ -287,6 +292,19 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
           level: level.trim() || undefined,
           tags: tagsArr.length > 0 ? tagsArr : undefined,
         });
+      }
+
+      // Create mode: attach the new item to the requested group names (from a
+      // draft's `groups`), creating any that don't exist yet.
+      if (!isEdit && initialGroups && initialGroups.length > 0) {
+        const existing = await getGrammarGroups(language);
+        const names = new Set(initialGroups.map((n) => n.trim()).filter(Boolean));
+        for (const name of names) {
+          const group =
+            existing.find((g) => g.name === name) ??
+            (await createGrammarGroup(language, name));
+          await modifyGrammarGroupMembers(language, group.id, [saved.id], "add");
+        }
       }
 
       // Diff group membership and sync (edit mode only — new items have no existing groups).

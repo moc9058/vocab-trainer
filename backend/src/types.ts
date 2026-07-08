@@ -91,6 +91,27 @@ export interface WordGroup {
   order?: number;
 }
 
+export interface WordDraft {
+  id: string;
+  language: string;
+  term: string;
+  transliteration?: string;
+  /** Usually one language only — smart-add fills the rest when the draft is promoted. */
+  definitions?: Meaning[];
+  /** Inline raw examples — drafts are NOT normalized into example_sentences.
+   *  `segments` carries the chip segmentation (Chinese): segment TEXTS in
+   *  sentence order (plain strings, unlike Example.segments objects). Becomes
+   *  smart-add's `userSplits` on promotion. */
+  examples?: { sentence: string; translation: string; segments?: string[] }[];
+  level?: string;
+  topics?: string[];
+  /** Target word-group NAMES (not IDs) — resolved (and auto-created) when the draft is promoted. */
+  groups?: string[];
+  /** Original upload filename, for traceability. */
+  sourceImage?: string;
+  createdAt: string;
+}
+
 export interface VocabFile {
   language?: string;
   words: Word[];
@@ -197,6 +218,8 @@ export interface GrammarDraft {
   examples?: GrammarExample[];
   level?: string;
   tags?: string[];
+  /** Target grammar-group NAMES (not IDs) — resolved (and auto-created) when the draft is promoted. */
+  groups?: string[];
   /** Original upload filename, for traceability. */
   sourceImage?: string;
   createdAt: string;

@@ -1,5 +1,5 @@
 import { fetchJson, postJson, putJson, deleteRequest } from "./client";
-import type { Word, Meaning, PaginatedResult, WordGroup } from "../types";
+import type { Word, WordDraft, Meaning, PaginatedResult, WordGroup } from "../types";
 
 interface WordFilters {
   search?: string;
@@ -86,6 +86,25 @@ export function smartAddWord(
 
 export function syncSegmentLinks(language: string, exampleIds: string[]): Promise<void> {
   return postJson(`/api/vocab/${encodeURIComponent(language)}/sync-segment-links`, { exampleIds });
+}
+
+// ----- Word Drafts -----
+
+export function getWordDrafts(language: string): Promise<WordDraft[]> {
+  return fetchJson(`/api/vocab/${encodeURIComponent(language)}/drafts`);
+}
+
+export function uploadWordDrafts(
+  language: string,
+  drafts: Array<Omit<WordDraft, "id" | "language" | "createdAt">>
+): Promise<{ created: number; drafts: WordDraft[] }> {
+  return postJson(`/api/vocab/${encodeURIComponent(language)}/drafts`, { drafts });
+}
+
+export function deleteWordDraft(language: string, draftId: string): Promise<void> {
+  return deleteRequest(
+    `/api/vocab/${encodeURIComponent(language)}/drafts/${encodeURIComponent(draftId)}`
+  );
 }
 
 export function getGroups(language: string): Promise<WordGroup[]> {

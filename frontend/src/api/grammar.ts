@@ -61,6 +61,13 @@ export function getGrammarDrafts(language: string): Promise<GrammarDraft[]> {
   return fetchJson(`/api/grammar/${encodeURIComponent(language)}/drafts`);
 }
 
+export function uploadGrammarDrafts(
+  language: string,
+  drafts: Array<Omit<GrammarDraft, "id" | "language" | "createdAt">>
+): Promise<{ created: number; drafts: GrammarDraft[] }> {
+  return postJson(`/api/grammar/${encodeURIComponent(language)}/drafts`, { drafts });
+}
+
 export function deleteGrammarDraft(language: string, draftId: string): Promise<void> {
   return deleteRequest(
     `/api/grammar/${encodeURIComponent(language)}/drafts/${encodeURIComponent(draftId)}`

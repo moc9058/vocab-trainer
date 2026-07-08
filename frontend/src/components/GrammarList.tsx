@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import {
@@ -8,6 +8,7 @@ import {
   modifyGrammarGroupMembers,
   getGrammarDrafts,
   deleteGrammarDraft,
+  uploadGrammarDrafts,
 } from "../api/grammar";
 import { LEVEL_OPTIONS } from "../constants/levels";
 import type { Grammar, GrammarDraft, GrammarGroup } from "../types";
@@ -244,6 +245,9 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
   const [draftsOpen, setDraftsOpen] = useState(true);
   const [reviewingDraft, setReviewingDraft] = useState<GrammarDraft | null>(null);
   const [discardingDraftId, setDiscardingDraftId] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<{ ok: boolean; message: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const jsonFileInputRef = useRef<HTMLInputElement>(null);
 
   const levelOptions = LEVEL_OPTIONS[language];
 
@@ -286,6 +290,53 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
   useEffect(() => {
     fetchDrafts();
   }, [fetchDrafts]);
+
+  // See docs/draft-json-format.md for the accepted file format (kind: "grammar-drafts").
+  async function handleDraftsJsonFile(file: File) {
+    setUploading(true);
+    setUploadStatus(null);
+    try {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(await file.text());
+      } catch {
+        throw new Error(t("draftsJsonInvalid"));
+      }
+      const obj = parsed as Record<string, unknown>;
+      if (!obj || typeof obj !== "object" || !Array.isArray(obj.drafts) || obj.drafts.length === 0) {
+        throw new Error(t("draftsJsonInvalid"));
+      }
+      if (obj.kind !== undefined && obj.kind !== "grammar-drafts") {
+        throw new Error(t("draftsJsonInvalid"));
+      }
+      if (obj.language !== language) {
+        throw new Error(`${t("draftsJsonLanguageMismatch")} (${String(obj.language)} ≠ ${language})`);
+      }
+      const payload = (obj.drafts as Record<string, unknown>[]).map((d, i) => {
+        if (typeof d.statement !== "string" || !d.statement.trim() ||
+            !Array.isArray(d.descriptions) || d.descriptions.length === 0) {
+          throw new Error(`${t("draftsJsonInvalid")} (drafts[${i}])`);
+        }
+        return {
+          statement: d.statement.trim(),
+          descriptions: d.descriptions as GrammarDraft["descriptions"],
+          ...(Array.isArray(d.examples) ? { examples: d.examples as GrammarDraft["examples"] } : {}),
+          ...(typeof d.level === "string" && d.level ? { level: d.level } : {}),
+          ...(Array.isArray(d.tags) ? { tags: d.tags as string[] } : {}),
+          ...(Array.isArray(d.groups) ? { groups: (d.groups as string[]).filter((g) => typeof g === "string" && g.trim()) } : {}),
+          ...(typeof d.sourceImage === "string" && d.sourceImage ? { sourceImage: d.sourceImage } : {}),
+        };
+      });
+      const result = await uploadGrammarDrafts(language, payload);
+      setUploadStatus({ ok: true, message: `${result.created} ${t("draftsUploaded")}` });
+      setDraftsOpen(true);
+      fetchDrafts();
+    } catch (e) {
+      setUploadStatus({ ok: false, message: e instanceof Error ? e.message : t("draftsJsonInvalid") });
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function handleDiscardDraft(draftId: string) {
     try {
@@ -378,6 +429,24 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
             {t("addGrammar")}
           </button>
           <button
+            disabled={uploading}
+            onClick={() => jsonFileInputRef.current?.click()}
+            className="rounded-lg border border-gray-600 px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-50"
+          >
+            {uploading ? "..." : t("uploadDraftsJson")}
+          </button>
+          <input
+            ref={jsonFileInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) handleDraftsJsonFile(file);
+            }}
+          />
+          <button
             onClick={onBack}
             className="rounded-lg border border-gray-600 px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
           >
@@ -385,6 +454,12 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
           </button>
         </div>
       </div>
+
+      {uploadStatus && (
+        <p className={`mb-3 text-sm ${uploadStatus.ok ? "text-green-400" : "text-red-400"}`}>
+          {uploadStatus.message}
+        </p>
+      )}
 
       {/* Group + level filters */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -454,6 +529,7 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
                       <p className="truncate text-sm text-gray-100">{draft.statement}</p>
                       <p className="truncate text-xs text-gray-400">{firstDesc}</p>
                       <p className="text-xs text-gray-500">
+                        {draft.groups && draft.groups.length > 0 ? `${draft.groups.join(", ")} · ` : ""}
                         {draft.sourceImage ? `${draft.sourceImage} · ` : ""}
                         {draft.createdAt ? new Date(draft.createdAt).toLocaleDateString() : ""}
                       </p>
@@ -641,6 +717,7 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
             level: reviewingDraft.level,
             tags: reviewingDraft.tags,
           }}
+          initialGroups={reviewingDraft.groups}
           onSave={async () => {
             await deleteGrammarDraft(language, reviewingDraft.id).catch(() => {});
             setReviewingDraft(null);

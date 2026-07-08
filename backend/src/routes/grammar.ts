@@ -414,6 +414,7 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
                   examples: { type: "array" },
                   level: { type: "string" },
                   tags: { type: "array", items: { type: "string" } },
+                  groups: { type: "array", items: { type: "string" } },
                   sourceImage: { type: "string" },
                 },
               },

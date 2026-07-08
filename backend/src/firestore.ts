@@ -15,6 +15,7 @@ import type {
   Topic,
   Grammar,
   GrammarDraft,
+  WordDraft,
   GrammarGroup,
   GrammarProgress,
   GrammarQuizSession,
@@ -1662,6 +1663,39 @@ export async function deleteGrammarItem(grammarId: string): Promise<boolean> {
   }
 
   await grammarItems.doc(grammarId).delete();
+  return true;
+}
+
+// ========== Word Drafts ==========
+
+const wordDrafts = db.collection("word_drafts");
+
+export async function getWordDrafts(language: string): Promise<WordDraft[]> {
+  const snap = await wordDrafts.where("language", "==", language).get();
+  const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as WordDraft));
+  // In-memory sort avoids a composite index on language + createdAt.
+  return items.sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
+}
+
+export async function getWordDraft(draftId: string): Promise<WordDraft | null> {
+  const doc = await wordDrafts.doc(draftId).get();
+  if (!doc.exists) return null;
+  return { id: doc.id, ...doc.data() } as WordDraft;
+}
+
+export async function addWordDrafts(drafts: WordDraft[]): Promise<void> {
+  const batch = db.batch();
+  for (const draft of drafts) {
+    const { id, ...data } = draft;
+    batch.set(wordDrafts.doc(id), data);
+  }
+  await batch.commit();
+}
+
+export async function deleteWordDraft(draftId: string): Promise<boolean> {
+  const doc = await wordDrafts.doc(draftId).get();
+  if (!doc.exists) return false;
+  await wordDrafts.doc(draftId).delete();
   return true;
 }
 

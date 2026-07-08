@@ -1,13 +1,13 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks, getGroups, modifyGroupMembers } from "../api/vocab";
+import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks, getGroups, modifyGroupMembers, getWordDrafts, uploadWordDrafts, deleteWordDraft } from "../api/vocab";
 import GroupPickerModal from "./GroupPickerModal";
 import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
 import SmartAddWordModal from "./SmartAddWordModal";
-import { displayTranslation, type Word, type PaginatedResult, type WordGroup } from "../types";
+import { displayTranslation, type Word, type WordDraft, type PaginatedResult, type WordGroup } from "../types";
 import { urlLanguageToIsoCode } from "../settings/defaults";
 
 type SmartAddPayload = {
@@ -94,6 +94,80 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const pendingEditIdRef = useRef<string | null>(null);
   const [segmentAddError, setSegmentAddError] = useState<string | null>(null);
   const segmentErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [drafts, setDrafts] = useState<WordDraft[]>([]);
+  const [draftsOpen, setDraftsOpen] = useState(true);
+  const [reviewingDraft, setReviewingDraft] = useState<WordDraft | null>(null);
+  const [discardingDraftId, setDiscardingDraftId] = useState<string | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<{ ok: boolean; message: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const jsonFileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchDrafts = useCallback(() => {
+    getWordDrafts(language)
+      .then(setDrafts)
+      .catch(() => setDrafts([]));
+  }, [language]);
+
+  useEffect(() => {
+    fetchDrafts();
+  }, [fetchDrafts]);
+
+  // See docs/draft-json-format.md for the accepted file format (kind: "word-drafts").
+  async function handleDraftsJsonFile(file: File) {
+    setUploading(true);
+    setUploadStatus(null);
+    try {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(await file.text());
+      } catch {
+        throw new Error(t("draftsJsonInvalid"));
+      }
+      const obj = parsed as Record<string, unknown>;
+      if (!obj || typeof obj !== "object" || !Array.isArray(obj.drafts) || obj.drafts.length === 0) {
+        throw new Error(t("draftsJsonInvalid"));
+      }
+      if (obj.kind !== undefined && obj.kind !== "word-drafts") {
+        throw new Error(t("draftsJsonInvalid"));
+      }
+      if (obj.language !== language) {
+        throw new Error(`${t("draftsJsonLanguageMismatch")} (${String(obj.language)} ≠ ${language})`);
+      }
+      const payload = (obj.drafts as Record<string, unknown>[]).map((d, i) => {
+        if (typeof d.term !== "string" || !d.term.trim()) {
+          throw new Error(`${t("draftsJsonInvalid")} (drafts[${i}])`);
+        }
+        return {
+          term: d.term.trim(),
+          ...(typeof d.transliteration === "string" && d.transliteration ? { transliteration: d.transliteration } : {}),
+          ...(Array.isArray(d.definitions) ? { definitions: d.definitions as WordDraft["definitions"] } : {}),
+          ...(Array.isArray(d.examples) ? { examples: d.examples as WordDraft["examples"] } : {}),
+          ...(typeof d.level === "string" && d.level ? { level: d.level } : {}),
+          ...(Array.isArray(d.topics) ? { topics: d.topics as string[] } : {}),
+          ...(Array.isArray(d.groups) ? { groups: (d.groups as string[]).filter((g) => typeof g === "string" && g.trim()) } : {}),
+          ...(typeof d.sourceImage === "string" && d.sourceImage ? { sourceImage: d.sourceImage } : {}),
+        };
+      });
+      const result = await uploadWordDrafts(language, payload);
+      setUploadStatus({ ok: true, message: `${result.created} ${t("draftsUploaded")}` });
+      setDraftsOpen(true);
+      fetchDrafts();
+    } catch (e) {
+      setUploadStatus({ ok: false, message: e instanceof Error ? e.message : t("draftsJsonInvalid") });
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleDiscardDraft(draftId: string) {
+    try {
+      await deleteWordDraft(language, draftId);
+    } catch {
+      // draft may already be gone; refresh either way
+    }
+    setDiscardingDraftId(null);
+    fetchDrafts();
+  }
 
   // Expand and scroll to initialExpandId once the first fetch completes, then run
   // the activation check so segment buttons reflect current DB state immediately.
@@ -675,7 +749,30 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           >
             + {t("addWord")}
           </button>
+          <button
+            disabled={uploading}
+            onClick={() => jsonFileInputRef.current?.click()}
+            className="rounded-lg border border-gray-600 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-50"
+          >
+            {uploading ? "..." : t("uploadDraftsJson")}
+          </button>
+          <input
+            ref={jsonFileInputRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) handleDraftsJsonFile(file);
+            }}
+          />
         </div>
+        {uploadStatus && (
+          <p className={`mb-2 text-sm ${uploadStatus.ok ? "text-green-400" : "text-red-400"}`}>
+            {uploadStatus.message}
+          </p>
+        )}
 
         {/* Search & Filters */}
         <div className="flex flex-col sm:flex-row flex-wrap gap-2">
@@ -792,6 +889,60 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
 
       {/* Word List */}
       <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4">
+        {/* Uploaded drafts panel */}
+        {drafts.length > 0 && (
+          <div className="mb-4 rounded-lg border border-amber-700/60 bg-amber-950/30">
+            <button
+              onClick={() => setDraftsOpen((o) => !o)}
+              className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-amber-200"
+            >
+              <span>
+                {t("wordDrafts")} ({drafts.length})
+              </span>
+              <span className="text-xs">{draftsOpen ? "▾" : "▸"}</span>
+            </button>
+            {draftsOpen && (
+              <div className="space-y-2 px-3 pb-3">
+                {drafts.map((draft) => {
+                  const firstDef = Object.values(draft.definitions?.[0]?.text ?? {})[0] ?? "";
+                  return (
+                    <div
+                      key={draft.id}
+                      className="flex items-center gap-3 rounded border border-gray-700 bg-gray-800/80 px-3 py-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm text-gray-100">
+                          {draft.term}
+                          {draft.transliteration && (
+                            <span className="ml-1 text-xs text-gray-400">({draft.transliteration})</span>
+                          )}
+                        </p>
+                        <p className="truncate text-xs text-gray-400">{firstDef}</p>
+                        <p className="text-xs text-gray-500">
+                          {draft.groups && draft.groups.length > 0 ? `${draft.groups.join(", ")} · ` : ""}
+                          {draft.sourceImage ? `${draft.sourceImage} · ` : ""}
+                          {draft.createdAt ? new Date(draft.createdAt).toLocaleDateString() : ""}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setReviewingDraft(draft)}
+                        className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500"
+                      >
+                        {t("reviewDraft")}
+                      </button>
+                      <button
+                        onClick={() => setDiscardingDraftId(draft.id)}
+                        className="rounded bg-red-900/60 px-3 py-1.5 text-xs text-red-200 hover:bg-red-800/60"
+                      >
+                        {t("discardDraft")}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         {loading ? (
           <p className="text-gray-400">Loading...</p>
         ) : error ? (
@@ -983,6 +1134,67 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           }}
           onClose={() => setShowSmartAdd(false)}
         />
+      )}
+      {/* Draft review modal — smart-add create mode with prefill. Deliberately
+          does NOT pass onQueue: queue-mode submits never fire onSave, which is
+          the delete-draft-on-successful-save signal. The modal awaits
+          smartAddWord directly and closes itself afterwards. */}
+      {reviewingDraft && (
+        <SmartAddWordModal
+          defaultLanguage={language}
+          initialItem={{
+            term: reviewingDraft.term,
+            transliteration: reviewingDraft.transliteration,
+            definitions: reviewingDraft.definitions,
+            examples: reviewingDraft.examples,
+            level: reviewingDraft.level,
+            topics: reviewingDraft.topics,
+          }}
+          initialGroups={reviewingDraft.groups}
+          onSave={() => {
+            deleteWordDraft(language, reviewingDraft.id)
+              .catch(() => {})
+              .finally(() => fetchDrafts());
+            silentRefreshRef.current = true;
+            fetchData();
+            getGroups(language).then(setGroups).catch(() => {});
+            getFlaggedWords(language)
+              .then(({ words: fw }) => setFlaggedIds(new Set(fw.map((w) => w.id))))
+              .catch(() => {});
+          }}
+          onJumpToWord={(wordId, term) => {
+            setReviewingDraft(null);
+            setSearch(term);
+            setDebouncedSearch(term);
+            setPage(1);
+            setExpandedId(wordId);
+            scrollToExpandedRef.current = true;
+            pendingEditIdRef.current = wordId;
+          }}
+          onClose={() => setReviewingDraft(null)}
+        />
+      )}
+      {/* Discard draft confirmation dialog */}
+      {discardingDraftId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setDiscardingDraftId(null)}>
+          <div className="rounded-xl bg-gray-800 p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <p className="mb-4 text-sm text-gray-200">{t("discardDraftConfirm")}</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setDiscardingDraftId(null)}
+                className="rounded-lg border border-gray-600 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700"
+              >
+                {t("cancel")}
+              </button>
+              <button
+                onClick={() => handleDiscardDraft(discardingDraftId)}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-500"
+              >
+                {t("discardDraft")}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {editingWord && (
         <WordFormModal
@@ -1264,7 +1476,7 @@ function WordCard({
                     })()}
                     <div className="mt-1 space-y-0.5">
                       {displayDefEntries(m.text || {}).filter(([lang]) => lang !== currentIsoCode).map(([lang, def]) => (
-                        <p key={lang} className="text-sm text-gray-300">
+                        <p key={lang} className="whitespace-pre-line text-sm text-gray-300">
                           <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>
                           {def}
                         </p>
@@ -1725,7 +1937,7 @@ function WordRow({
                       })()}
                       <div className="mt-1 space-y-0.5">
                         {displayDefEntries(m.text || {}).filter(([lang]) => lang !== currentIsoCode).map(([lang, def]) => (
-                          <p key={lang} className="text-sm text-gray-300">
+                          <p key={lang} className="whitespace-pre-line text-sm text-gray-300">
                             <span className="mr-1.5 text-xs font-medium uppercase text-gray-500">{lang}</span>
                             {def}
                           </p>

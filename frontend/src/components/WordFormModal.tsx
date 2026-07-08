@@ -315,12 +315,12 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
                       placeholder={t("definitionLanguage")}
                       className="w-20 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
                     />
-                    <input
-                      type="text"
+                    <textarea
+                      rows={2}
                       value={tr.text}
                       onChange={(e) => updateTranslation(mi, ti, { text: e.target.value })}
                       placeholder={t("definitionText")}
-                      className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                      className="flex-1 resize-y rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
                     />
                     {meaning.translations.length > 1 && (
                       <button

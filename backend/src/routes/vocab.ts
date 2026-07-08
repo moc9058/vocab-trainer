@@ -30,6 +30,10 @@ import {
   deleteExampleSentences,
   removeFromAppearsInIds,
   isExampleReferencedByAny,
+  getWordDrafts,
+  getWordDraft,
+  addWordDrafts,
+  deleteWordDraft,
   getWordGroups,
   createWordGroup,
   updateWordGroup,
@@ -37,7 +41,7 @@ import {
   deleteWordGroup,
   modifyWordGroupMembers,
 } from "../firestore.js";
-import type { Word, Example, ExampleSentence } from "../types.js";
+import type { Word, WordDraft, Example, ExampleSentence } from "../types.js";
 import { TOPICS } from "../types.js";
 import { callLLMWithSchema, stripMarkdownFences, validateWord, segmentBatch, fillSegmentPinyin, type Segment } from "../llm.js";
 import {
@@ -988,6 +992,83 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       const existing: Record<string, string> = {};
       for (const m of matches) existing[m.term] = m.id;
       return { existing };
+    }
+  );
+
+  // ----- Word Drafts -----
+  // Staging area for bulk JSON uploads (and the local OCR tool): raw uploads
+  // reviewed in the word UI, then promoted to real words via smart-add. No LLM
+  // calls here — mirrors the grammar_drafts flow.
+
+  fastify.get<{ Params: { language: string } }>(
+    "/:language/drafts",
+    async (request) => {
+      return await getWordDrafts(request.params.language);
+    }
+  );
+
+  fastify.post<{
+    Params: { language: string };
+    Body: { drafts: Array<Omit<WordDraft, "language" | "id" | "createdAt">> };
+  }>(
+    "/:language/drafts",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["drafts"],
+          properties: {
+            drafts: {
+              type: "array",
+              minItems: 1,
+              items: {
+                type: "object",
+                required: ["term"],
+                properties: {
+                  term: { type: "string", minLength: 1 },
+                  transliteration: { type: "string" },
+                  definitions: { type: "array" },
+                  examples: { type: "array" },
+                  level: { type: "string" },
+                  topics: { type: "array", items: { type: "string" } },
+                  groups: { type: "array", items: { type: "string" } },
+                  sourceImage: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { language } = request.params;
+      const now = new Date().toISOString();
+      const drafts: WordDraft[] = request.body.drafts.map((d) => ({
+        ...d,
+        language,
+        createdAt: now,
+        id: `draft-${language}-${Date.now()}${Math.random().toString(36).slice(2, 8)}`,
+      }));
+      await addWordDrafts(drafts);
+      return reply.status(201).send({ created: drafts.length, drafts });
+    }
+  );
+
+  fastify.get<{ Params: { language: string; draftId: string } }>(
+    "/:language/drafts/:draftId",
+    async (request, reply) => {
+      const draft = await getWordDraft(request.params.draftId);
+      if (!draft) return reply.notFound("Word draft not found");
+      return draft;
+    }
+  );
+
+  fastify.delete<{ Params: { language: string; draftId: string } }>(
+    "/:language/drafts/:draftId",
+    async (request, reply) => {
+      const deleted = await deleteWordDraft(request.params.draftId);
+      if (!deleted) return reply.notFound("Word draft not found");
+      return { deleted: true };
     }
   );
 
