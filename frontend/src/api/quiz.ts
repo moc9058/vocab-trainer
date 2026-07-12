@@ -1,4 +1,4 @@
-import { fetchJson, postJson } from "./client";
+import { fetchJson, postJson, putJson } from "./client";
 import type { QuizSession, QuizQuestion, Word } from "../types";
 
 export async function getCurrentSession(language: string): Promise<QuizSession | null> {
@@ -41,6 +41,18 @@ export function sampleWords(opts: {
   flaggedOnly?: boolean;
 }): Promise<{ words: Word[] }> {
   return postJson<{ words: Word[] }>("/api/quiz/sample", opts);
+}
+
+// Mid-session weight change: server reorders the unanswered tail and returns
+// the full session in the new order.
+export function updateQuizWeights(
+  language: string,
+  groupWeights: Record<string, number>
+): Promise<QuizSession> {
+  return putJson(
+    `/api/quiz/session/language/${encodeURIComponent(language)}/weights`,
+    { groupWeights }
+  );
 }
 
 export function answerQuestion(opts: {

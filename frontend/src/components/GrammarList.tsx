@@ -7,6 +7,7 @@ import {
   getGrammarGroups,
   modifyGrammarGroupMembers,
   getGrammarDrafts,
+  updateGrammarDraft,
   deleteGrammarDraft,
   uploadGrammarDrafts,
 } from "../api/grammar";
@@ -36,6 +37,12 @@ interface Props {
   onGrammarUpdateQueue?: GrammarEnqueueUpdate;
   pendingTerms?: Set<string>;
   succeededTerms?: Set<string>;
+  /** Grammar queue's pending statements — marks drafts whose registration is
+   *  in flight (Review/Discard disabled until the queue retires the draft). */
+  grammarPendingTerms?: Set<string>;
+  /** Grammar queue's pending draft IDs — the precise in-flight marker
+   *  (statement matching is the legacy fallback). */
+  grammarPendingDraftIds?: Set<string>;
   refreshSignal?: number;
 }
 
@@ -167,6 +174,9 @@ function GrammarCard(props: ItemProps) {
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <p className="text-sm font-medium text-gray-100 truncate">{item.statement}</p>
+              {item.transliteration && (
+                <p className="text-xs text-gray-500 truncate">{item.transliteration}</p>
+              )}
               {(item.level || item.descriptions?.[0]?.partOfSpeech) && (
                 <p className="text-xs text-gray-400">
                   {item.descriptions?.[0]?.partOfSpeech ?? ""}
@@ -206,7 +216,10 @@ function GrammarRow(props: ItemProps) {
             className="accent-red-500"
           />
         </td>
-        <td className="py-2 pr-4 text-sm text-gray-100">{item.statement}</td>
+        <td className="py-2 pr-4 text-sm text-gray-100">
+          {item.statement}
+          {item.transliteration && <span className="ml-2 text-xs text-gray-500">{item.transliteration}</span>}
+        </td>
         <td className="py-2 pr-4 text-sm text-gray-300">{item.descriptions?.[0]?.partOfSpeech ?? ""}</td>
         <td className="py-2 pr-4 text-sm text-gray-300">{item.level ?? ""}</td>
         <td className="py-2 text-sm text-gray-400">{item.tags?.join(", ") ?? ""}</td>
@@ -222,7 +235,7 @@ function GrammarRow(props: ItemProps) {
   );
 }
 
-export default function GrammarList({ language, onBack, onQueue, onGrammarQueue, onGrammarUpdateQueue, pendingTerms, succeededTerms, refreshSignal }: Props) {
+export default function GrammarList({ language, onBack, onQueue, onGrammarQueue, onGrammarUpdateQueue, pendingTerms, succeededTerms, grammarPendingTerms, grammarPendingDraftIds, refreshSignal }: Props) {
   const { t } = useI18n();
   const { displayGrammarDefEntries } = useSettings();
   const [items, setItems] = useState<Grammar[]>([]);
@@ -520,6 +533,8 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
             <div className="space-y-2 px-3 pb-3">
               {drafts.map((draft) => {
                 const firstDesc = Object.values(draft.descriptions?.[0]?.text ?? {})[0] ?? "";
+                const registering =
+                  (grammarPendingDraftIds?.has(draft.id) || grammarPendingTerms?.has(draft.statement)) ?? false;
                 return (
                   <div
                     key={draft.id}
@@ -527,6 +542,9 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-gray-100">{draft.statement}</p>
+                      {draft.transliteration && (
+                        <p className="truncate text-xs text-gray-500">{draft.transliteration}</p>
+                      )}
                       <p className="truncate text-xs text-gray-400">{firstDesc}</p>
                       <p className="text-xs text-gray-500">
                         {draft.groups && draft.groups.length > 0 ? `${draft.groups.join(", ")} · ` : ""}
@@ -534,18 +552,27 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
                         {draft.createdAt ? new Date(draft.createdAt).toLocaleDateString() : ""}
                       </p>
                     </div>
-                    <button
-                      onClick={() => setReviewingDraft(draft)}
-                      className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500"
-                    >
-                      {t("reviewDraft")}
-                    </button>
-                    <button
-                      onClick={() => setDiscardingDraftId(draft.id)}
-                      className="rounded bg-red-900/60 px-3 py-1.5 text-xs text-red-200 hover:bg-red-800/60"
-                    >
-                      {t("discardDraft")}
-                    </button>
+                    {registering ? (
+                      <span className="flex items-center gap-1 rounded border border-amber-400/60 bg-amber-900/40 px-3 py-1.5 text-xs text-amber-100">
+                        <span className="animate-spin inline-block">⟳</span>
+                        {t("registering")}
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setReviewingDraft(draft)}
+                          className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500"
+                        >
+                          {t("reviewDraft")}
+                        </button>
+                        <button
+                          onClick={() => setDiscardingDraftId(draft.id)}
+                          className="rounded bg-red-900/60 px-3 py-1.5 text-xs text-red-200 hover:bg-red-800/60"
+                        >
+                          {t("discardDraft")}
+                        </button>
+                      </>
+                    )}
                   </div>
                 );
               })}
@@ -703,21 +730,40 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
         />
       )}
 
-      {/* Draft review modal — create mode with prefill. Deliberately does NOT
-          pass onGrammarQueue: queue-mode submits never fire onSave, so we'd
-          lose the delete-draft-on-successful-save signal. Without it the modal
-          awaits smartAddGrammarItem directly and onSave fires only on success. */}
+      {/* Draft review modal — create mode with prefill.
+          onDraftSave (the "Save Draft" button / Enter) writes edits back to the
+          draft; the explicit "Register" button enqueues into the shared grammar
+          queue (groupNames + draftId ride along so the QUEUE attaches groups and
+          deletes the draft on success) and the modal closes immediately so the
+          next draft can be reviewed. Without onGrammarQueue the modal falls back
+          to awaiting smartAddGrammarItem directly, where onSave — firing only on
+          success — is the delete-draft signal. */}
       {reviewingDraft && (
         <GrammarFormModal
           language={language}
           initialItem={{
             statement: reviewingDraft.statement,
+            transliteration: reviewingDraft.transliteration,
             descriptions: reviewingDraft.descriptions,
             examples: reviewingDraft.examples,
             level: reviewingDraft.level,
             tags: reviewingDraft.tags,
           }}
           initialGroups={reviewingDraft.groups}
+          onGrammarQueue={
+            onGrammarQueue
+              ? (statement, lang, payload) =>
+                  onGrammarQueue(statement, lang, payload, {
+                    groupNames: reviewingDraft.groups,
+                    draftId: reviewingDraft.id,
+                  })
+              : undefined
+          }
+          onDraftSave={async (updates) => {
+            await updateGrammarDraft(language, reviewingDraft.id, updates);
+            setReviewingDraft(null);
+            fetchDrafts();
+          }}
           onSave={async () => {
             await deleteGrammarDraft(language, reviewingDraft.id).catch(() => {});
             setReviewingDraft(null);

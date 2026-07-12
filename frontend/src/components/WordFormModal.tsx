@@ -3,6 +3,7 @@ import { useI18n } from "../i18n/context";
 import { getFilters, smartAddWord, getGroups } from "../api/vocab";
 import { displayTranslation, type Word, type Meaning, type WordGroup } from "../types";
 import ExampleSentenceEditor, { type ExampleFormState } from "./ExampleSentenceEditor";
+import PinyinInput from "./PinyinInput";
 
 interface MeaningFormState {
   partOfSpeech: string;
@@ -210,12 +211,20 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
           {/* Transliteration */}
           <div>
             <label className="mb-1 block text-sm text-gray-400">{t("transliteration")}</label>
-            <input
-              type="text"
-              value={transliteration}
-              onChange={(e) => setTransliteration(e.target.value)}
-              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-            />
+            {language === "chinese" ? (
+              <PinyinInput
+                value={transliteration}
+                onChange={setTransliteration}
+                className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+              />
+            ) : (
+              <input
+                type="text"
+                value={transliteration}
+                onChange={(e) => setTransliteration(e.target.value)}
+                className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+              />
+            )}
           </div>
 
           {/* Examples */}
@@ -298,13 +307,14 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
                   )}
                 </div>
                 {language === "chinese" && (
-                  <input
-                    type="text"
-                    value={meaning.pinyinsRaw ?? ""}
-                    onChange={(e) => updateMeaning(mi, { pinyinsRaw: e.target.value })}
-                    placeholder="Pinyin(s), comma-separated (e.g. hǎo, hào)"
-                    className="mb-2 w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                  />
+                  <div className="mb-2">
+                    <PinyinInput
+                      value={meaning.pinyinsRaw ?? ""}
+                      onChange={(v) => updateMeaning(mi, { pinyinsRaw: v })}
+                      placeholder="Pinyin(s), comma-separated (e.g. hǎo, hào)"
+                      className="w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                    />
+                  </div>
                 )}
                 {meaning.translations.map((tr, ti) => (
                   <div key={ti} className="mb-1 flex gap-2">

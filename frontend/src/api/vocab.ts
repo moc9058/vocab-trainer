@@ -101,6 +101,17 @@ export function uploadWordDrafts(
   return postJson(`/api/vocab/${encodeURIComponent(language)}/drafts`, { drafts });
 }
 
+export function updateWordDraft(
+  language: string,
+  draftId: string,
+  updates: Partial<Omit<WordDraft, "id" | "language" | "createdAt">>
+): Promise<WordDraft> {
+  return putJson(
+    `/api/vocab/${encodeURIComponent(language)}/drafts/${encodeURIComponent(draftId)}`,
+    updates
+  );
+}
+
 export function deleteWordDraft(language: string, draftId: string): Promise<void> {
   return deleteRequest(
     `/api/vocab/${encodeURIComponent(language)}/drafts/${encodeURIComponent(draftId)}`

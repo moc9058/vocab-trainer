@@ -16,7 +16,6 @@ import {
   addExampleSentence,
   findExampleByText,
   linkWordToExistingExamples,
-  getExampleSentencesByIds,
 } from "../firestore.js";
 import type {
   Grammar,
@@ -75,28 +74,12 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       const count = questionCount ? Math.min(questionCount, pool.length) : Math.min(10, pool.length);
       const selected = weightedSample(pool, count, progressMap);
 
-      // Prepare questions
-      const questions: GrammarQuizQuestion[] = [];
-      for (const item of selected) {
-        try {
-          const prepared = await prepareQuestion(item);
-          questions.push({
-            grammarId: item.id,
-            exampleSentence: prepared.sentence,
-            exampleTranslation: prepared.translation,
-            ...(prepared.transliteration ? { exampleTransliteration: prepared.transliteration } : {}),
-          });
-        } catch (err) {
-          fastify.log.error({ err, grammarId: item.id }, "Failed to prepare grammar question");
-          const fallback = item.examples?.[0];
-          questions.push({
-            grammarId: item.id,
-            exampleSentence: fallback?.sentence ?? item.statement,
-            exampleTranslation: fallback?.translation ?? "",
-            ...(fallback?.transliteration ? { exampleTransliteration: fallback.transliteration } : {}),
-          });
-        }
-      }
+      // The question is the grammar element itself; descriptions/examples are
+      // fetched by the client on answer reveal.
+      const questions: GrammarQuizQuestion[] = selected.map((item) => ({
+        grammarId: item.id,
+        statement: item.statement,
+      }));
 
       const session: GrammarQuizSession = {
         sessionId: language,
@@ -152,11 +135,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
         if (item) {
           session.questions.push({
             grammarId,
-            exampleSentence: question.exampleSentence,
-            exampleTranslation: question.exampleTranslation,
-            ...(question.exampleTransliteration
-              ? { exampleTransliteration: question.exampleTransliteration }
-              : {}),
+            statement: question.statement ?? item.statement,
           });
           session.score.total++;
         }
@@ -339,70 +318,6 @@ Allowed topics: ${TOPICS.join(", ")}`;
     }
   );
 };
-
-interface PreparedQuestion {
-  sentence: string;
-  translation: string | Record<string, string>;
-  transliteration?: string;
-}
-
-// Also used by routes/combined-quiz.ts to build grammar questions.
-export async function prepareQuestion(item: Grammar): Promise<PreparedQuestion> {
-  // Prefer hydrating from the normalized example_sentences collection.
-  if (item.exampleIds && item.exampleIds.length > 0) {
-    const docs = await getExampleSentencesByIds(item.exampleIds);
-    if (docs.length > 0) {
-      const es = docs[Math.floor(Math.random() * docs.length)];
-      return { sentence: es.sentence, translation: es.translation };
-    }
-  }
-
-  // Transitional fallback for pre-migration docs that still hold inline examples.
-  if (item.examples && item.examples.length > 0) {
-    const ex = item.examples[Math.floor(Math.random() * item.examples.length)];
-    return {
-      sentence: ex.sentence,
-      translation: ex.translation,
-      ...(ex.transliteration ? { transliteration: ex.transliteration } : {}),
-    };
-  }
-
-  // No examples — synthesize one with the LLM, mirroring the user's first description text language.
-  const descriptionDump = (item.descriptions ?? [])
-    .map((d) => {
-      const texts = Object.entries(d.text ?? {})
-        .map(([lang, t]) => `${lang}: ${t}`)
-        .join(" | ");
-      return d.partOfSpeech ? `[${d.partOfSpeech}] ${texts}` : texts;
-    })
-    .filter(Boolean)
-    .join("\n");
-
-  const parts: string[] = [
-    `Grammar statement: ${item.statement}`,
-  ];
-  if (descriptionDump) parts.push(`Descriptions:\n${descriptionDump}`);
-  if (item.words && item.words.length > 0) {
-    parts.push(`Related words/terms: ${item.words.join(", ")}`);
-  }
-  parts.push(
-    ``,
-    `Generate a NEW example sentence demonstrating this grammar point, and provide its translation.`,
-    `Return JSON: { "sentence": "...", "translation": "..." }`,
-  );
-
-  const raw = await callLLM(
-    "You are a grammar example generator. Return valid JSON only.",
-    parts.join("\n"),
-    "grammar-quiz/generate-sentence"
-  );
-
-  const parsed = JSON.parse(stripMarkdownFences(raw));
-  return {
-    sentence: parsed.sentence ?? item.statement,
-    translation: parsed.translation ?? "",
-  };
-}
 
 function weightedSample(
   items: Grammar[],

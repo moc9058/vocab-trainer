@@ -11,11 +11,13 @@ import {
 import { ALL_KNOWN_LANGUAGES } from "../settings/defaults";
 import { LEVEL_OPTIONS } from "../constants/levels";
 import ExampleSentenceEditor, { type ExampleFormState } from "./ExampleSentenceEditor";
-import { displayTranslation, type Grammar, type GrammarGroup, type Meaning } from "../types";
+import PinyinInput from "./PinyinInput";
+import { displayTranslation, type Grammar, type GrammarDraft, type GrammarGroup, type Meaning } from "../types";
 import type { smartAddWord } from "../api/vocab";
 
 type SmartAddPayload = Parameters<typeof smartAddWord>[1];
 type GrammarPayload = Omit<Grammar, "language">;
+type DraftSavePayload = Partial<Omit<GrammarDraft, "id" | "language" | "createdAt">>;
 
 // Cached across mounts so the 2nd+ "Add Grammar" within a session initializes
 // with the correct language immediately — otherwise every fresh mount re-fetches
@@ -51,6 +53,11 @@ interface Props {
    *  successful save. Missing groups are created. Only applied on the direct
    *  (non-queue) create path — the queue path never learns the created id. */
   initialGroups?: string[];
+  /** Draft review mode: when provided, the primary "Save Draft" button (and
+   *  Enter) writes the edits back to the draft via this callback WITHOUT
+   *  promoting, and a separate "Register" button runs the normal create path.
+   *  The callback should throw on failure so the modal can surface the error. */
+  onDraftSave?: (updates: DraftSavePayload) => Promise<void> | void;
   pendingTerms?: Set<string>;
   succeededTerms?: Set<string>;
   refreshSignal?: number;
@@ -71,13 +78,14 @@ function InsertButton({ onInsert }: { onInsert: () => void }) {
   );
 }
 
-export default function GrammarFormModal({ language, editItem, onSave, onClose, onQueue, onGrammarQueue, onGrammarUpdateQueue, initialItem, initialGroups, pendingTerms, succeededTerms, refreshSignal }: Props) {
+export default function GrammarFormModal({ language, editItem, onSave, onClose, onQueue, onGrammarQueue, onGrammarUpdateQueue, initialItem, initialGroups, onDraftSave, pendingTerms, succeededTerms, refreshSignal }: Props) {
   const { t } = useI18n();
   const isEdit = !!editItem;
   const isChinese = language === "chinese";
   const prefill = editItem ?? initialItem;
 
   const [statement, setStatement] = useState(prefill?.statement ?? "");
+  const [transliteration, setTransliteration] = useState(prefill?.transliteration ?? "");
   const [defaultDescLang, setDefaultDescLang] = useState(() => cachedDefaultDescLang ?? "en");
   const [descriptions, setDescriptions] = useState<DescriptionFormState[]>(() => {
     if (prefill?.descriptions && prefill.descriptions.length > 0) {
@@ -194,6 +202,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
 
   function resetForm() {
     setStatement("");
+    setTransliteration("");
     setDescriptions([{ partOfSpeech: "", translations: [{ lang: defaultDescLang, text: "" }], pinyinsRaw: "" }]);
     setExamples([{ sentence: "", translation: "", originalTranslation: "", locked: false }]);
     setWordsList([]);
@@ -202,8 +211,47 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
     setError("");
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  // Save the current form state back to the draft (no promotion, no LLM).
+  // Chinese sentences keep their user-typed spaces so the chip segmentation
+  // survives the round-trip and is re-applied when the draft is registered.
+  async function handleDraftSave(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!onDraftSave || !statement.trim()) return;
+    const descs = buildDescriptions();
+    if (descs.length === 0) {
+      setError("At least one description with text is required.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      const draftExamples = examples
+        .filter((ex) => ex.sentence.trim())
+        .map((ex) => ({
+          sentence: ex.sentence.trim(),
+          translation:
+            ex.translation === displayTranslation(ex.originalTranslation)
+              ? ex.originalTranslation
+              : ex.translation.trim(),
+        }));
+      const tagsArr = tags.trim() ? tags.split(",").map((s) => s.trim()).filter(Boolean) : [];
+      await onDraftSave({
+        statement: statement.trim(),
+        transliteration: transliteration.trim(),
+        descriptions: descs,
+        examples: draftExamples,
+        level: level.trim(),
+        tags: tagsArr,
+      });
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSubmit(e?: React.FormEvent) {
+    e?.preventDefault();
     if (!statement.trim()) return;
     const descs = buildDescriptions();
     if (descs.length === 0) {
@@ -244,6 +292,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
         onGrammarQueue(statement.trim(), language, {
           id,
           statement: statement.trim(),
+          transliteration: transliteration.trim() || undefined,
           descriptions: descs,
           examples: filteredExamples.length > 0 ? filteredExamples : undefined,
           words: wordsArr.length > 0 ? wordsArr : undefined,
@@ -252,12 +301,16 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
         });
         setSaving(false);
         setQueued(true);
-        setTimeout(() => { setQueued(false); resetForm(); }, 900);
+        // Draft review: close so the user can move on to the next draft
+        // (the queue deletes the draft itself on success). Plain queue-mode
+        // adds instead reset the form for rapid consecutive entry.
+        setTimeout(() => { setQueued(false); if (onDraftSave) onClose(); else resetForm(); }, 900);
         return;
       }
 
       const updates = {
         statement: statement.trim(),
+        transliteration: transliteration.trim() || undefined,
         descriptions: descs,
         examples: filteredExamples.length > 0 ? filteredExamples : undefined,
         words: wordsArr.length > 0 ? wordsArr : undefined,
@@ -286,6 +339,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
         saved = await smartAddGrammarItem(language, {
           id,
           statement: statement.trim(),
+          transliteration: transliteration.trim() || undefined,
           descriptions: descs,
           examples: filteredExamples.length > 0 ? filteredExamples : undefined,
           words: wordsArr.length > 0 ? wordsArr : undefined,
@@ -343,7 +397,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
 
         {error && <p className="mb-3 text-sm text-red-400">{error}</p>}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={onDraftSave ? handleDraftSave : handleSubmit} className="space-y-4">
           {/* Statement */}
           <div>
             <label className="mb-1 block text-sm text-gray-400">{t("grammarStatement")} *</label>
@@ -356,6 +410,19 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
               className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-400 focus:outline-none"
             />
           </div>
+
+          {/* Statement pinyin (Chinese only) — Chinese characters romanized, rest kept as-is */}
+          {isChinese && (
+            <div>
+              <label className="mb-1 block text-sm text-gray-400">{t("grammarTransliteration")}</label>
+              <PinyinInput
+                value={transliteration}
+                onChange={setTransliteration}
+                placeholder="e.g. neng(/keyi)+v"
+                className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-400 focus:outline-none"
+              />
+            </div>
+          )}
 
           {/* Groups (edit mode only) */}
           {isEdit && groups.length > 0 && (
@@ -421,13 +488,14 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
                   )}
                 </div>
                 {isChinese && (
-                  <input
-                    type="text"
-                    value={desc.pinyinsRaw ?? ""}
-                    onChange={(e) => updateDescription(di, { pinyinsRaw: e.target.value })}
-                    placeholder="Pinyin(s), comma-separated"
-                    className="mb-2 w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                  />
+                  <div className="mb-2">
+                    <PinyinInput
+                      value={desc.pinyinsRaw ?? ""}
+                      onChange={(v) => updateDescription(di, { pinyinsRaw: v })}
+                      placeholder="Pinyin(s), comma-separated"
+                      className="w-full rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+                    />
+                  </div>
                 )}
                 {desc.translations.map((tr, ti) => (
                   <div key={ti} className="mb-1 flex gap-2">
@@ -583,8 +651,19 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
               disabled={saving || queued || !statement.trim()}
               className={`rounded-lg px-4 py-2 text-sm text-white disabled:opacity-50 ${queued ? "bg-green-600 hover:bg-green-500" : "bg-blue-600 hover:bg-blue-500"}`}
             >
-              {saving ? "..." : queued ? "✓ Queued" : t("save")}
+              {saving ? "..." : queued ? "✓ Queued" : onDraftSave ? t("saveDraft") : t("save")}
             </button>
+            {/* Draft review mode: promotion is a separate, explicit action. */}
+            {onDraftSave && (
+              <button
+                type="button"
+                onClick={() => handleSubmit()}
+                disabled={saving || queued || !statement.trim()}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-500 disabled:opacity-50"
+              >
+                {queued ? "✓ Queued" : saving ? "..." : t("registerGrammar")}
+              </button>
+            )}
           </div>
         </form>
       </div>

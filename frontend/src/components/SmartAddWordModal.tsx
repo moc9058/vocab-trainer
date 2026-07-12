@@ -23,13 +23,17 @@ type SmartAddPayload = {
   groupIds?: string[];
 };
 
+type WordDraftSavePayload = Partial<Omit<WordDraft, "id" | "language" | "createdAt">>;
+
 interface Props {
   onSave: (word: Word) => void;
   onClose: () => void;
   prefill?: Prefill;
   defaultLanguage?: string;
   onJumpToWord?: (wordId: string, term: string) => void;
-  onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
+  /** Shared word queue. The main submit passes `opts` (draft registration:
+   *  missing group names + draftId); segment-chip adds never do. */
+  onQueue?: (term: string, language: string, payload: SmartAddPayload, opts?: { groupNames?: string[]; draftId?: string }) => void;
   /** Terms currently queued/processing in the shared word-add queue (amber "⋯"). */
   pendingTerms?: Set<string>;
   /** Cumulative set of terms the queue has finished adding this session — the
@@ -41,8 +45,18 @@ interface Props {
    *  through the normal smart-add path. */
   initialItem?: Pick<WordDraft, "term" | "transliteration" | "definitions" | "examples" | "level" | "topics">;
   /** Word-group NAMES (from a draft's `groups`): existing ones are preselected;
-   *  missing ones are created and joined on the direct (non-queue) save path. */
+   *  missing ones are created and joined on save (directly on the non-queue
+   *  path; via the queue worker's `groupNames` on the queue path). */
   initialGroups?: string[];
+  /** Draft review: the draft under review. Queue-mode registration threads it
+   *  through so the queue deletes the draft only after full success, and the
+   *  modal closes right after enqueueing. */
+  draftId?: string;
+  /** Draft review: when provided, the primary "Save Draft" button (and Enter)
+   *  writes the edits back to the draft WITHOUT promoting, and a separate
+   *  "Register" button runs the normal smart-add path. Should throw on failure
+   *  so the modal can surface the error. */
+  onDraftSave?: (updates: WordDraftSavePayload) => Promise<void> | void;
 }
 
 // LANG_OPTIONS is now derived from settings in the component
@@ -82,7 +96,7 @@ const ALL_TOPICS = [
   "History", "Media & News", "Language Fundamentals",
 ] as const;
 
-export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage, onJumpToWord, onQueue, pendingTerms, succeededTerms, initialItem, initialGroups }: Props) {
+export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage, onJumpToWord, onQueue, pendingTerms, succeededTerms, initialItem, initialGroups, draftId, onDraftSave }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const LANG_OPTIONS = useMemo(
@@ -354,8 +368,48 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     setError("");
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  // Save the current form state back to the draft (no promotion, no LLM).
+  // Chinese chip splits are stored as `segments` (plain segment texts) so the
+  // segmentation survives the round-trip to the next review.
+  async function handleDraftSave(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!onDraftSave || !term.trim() || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const p = buildPayload();
+      const draftExamples = examples
+        .filter((ex) => ex.sentence.trim())
+        .map((ex) => {
+          if (wordLanguage === "chinese") {
+            const splits = /[\s　]/.test(ex.sentence)
+              ? (ex.sentence.match(/[\p{Script=Han}a-zA-Z]+/gu) ?? [])
+              : [];
+            return {
+              sentence: ex.sentence.replace(/[\s　]+/g, ""),
+              translation: ex.translation,
+              ...(splits.length >= 2 ? { segments: splits } : {}),
+            };
+          }
+          return { sentence: ex.sentence.trim(), translation: ex.translation };
+        });
+      await onDraftSave({
+        term: p.term,
+        transliteration: transliteration.trim(),
+        definitions: p.definitions ?? [],
+        examples: draftExamples,
+        level: level || "",
+        topics,
+      });
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSubmit(e?: React.FormEvent) {
+    e?.preventDefault();
     if (!term.trim() || saving || queued || pendingTerms?.has(term.trim())) return;
 
     const language = wordLanguage;
@@ -363,13 +417,32 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
 
     const payload = buildPayload();
 
-    // Queue mode: enqueue immediately and reset form for next word
+    // Queue mode: enqueue immediately. Draft review closes so the user can move
+    // on to the next draft (the queue deletes the draft itself on success, and
+    // creates any missing draft groups via `groupNames`); plain queue-mode adds
+    // instead reset the form for rapid consecutive entry.
     if (onQueue) {
-      onQueue(term.trim(), language, payload);
+      const missingNames = initialGroups
+        ? [...new Set(initialGroups.map((n) => n.trim()).filter(Boolean))].filter(
+            (name) => !groups.some((g) => g.name === name)
+          )
+        : [];
+      onQueue(
+        term.trim(),
+        language,
+        payload,
+        missingNames.length > 0 || draftId
+          ? {
+              ...(missingNames.length > 0 ? { groupNames: missingNames } : {}),
+              ...(draftId ? { draftId } : {}),
+            }
+          : undefined
+      );
       setQueued(true);
       setTimeout(() => {
         setQueued(false);
-        resetForm();
+        if (draftId) onClose();
+        else resetForm();
       }, 900);
       return;
     }
@@ -456,7 +529,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={onDraftSave ? handleDraftSave : handleSubmit} className="flex flex-col gap-4">
           {/* Term (required) */}
           <div>
             <label className="mb-1 block text-sm text-gray-400">{t("term")} *</label>
@@ -837,8 +910,19 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
               disabled={saving || queued || !term.trim() || !!pendingTerms?.has(term.trim())}
               className={`rounded-lg px-4 py-2 text-sm text-white disabled:opacity-50 ${queued ? "bg-green-600 hover:bg-green-500" : "bg-blue-600 hover:bg-blue-500"}`}
             >
-              {saving ? t("addingWord") : queued ? "✓ Queued" : t("save")}
+              {saving ? t("addingWord") : queued ? "✓ Queued" : onDraftSave ? t("saveDraft") : t("save")}
             </button>
+            {/* Draft review mode: promotion is a separate, explicit action. */}
+            {onDraftSave && (
+              <button
+                type="button"
+                onClick={() => handleSubmit()}
+                disabled={saving || queued || !term.trim() || !!pendingTerms?.has(term.trim())}
+                className="rounded-lg bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-500 disabled:opacity-50"
+              >
+                {queued ? "✓ Queued" : saving ? "..." : t("registerWord")}
+              </button>
+            )}
           </div>
         </form>
       </div>

@@ -3,6 +3,7 @@ import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { answerGrammarQuestion } from "../api/grammar";
 import { fetchJson } from "../api/client";
+import RubyText from "./RubyText";
 import type { GrammarQuizSession, Grammar } from "../types";
 
 interface Props {
@@ -93,19 +94,10 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
         {currentSession.score.correct} / {originalTotal}
       </p>
 
-      {/* Question: translated sentence (user must recall the grammar pattern) */}
-      <div className="w-full max-w-lg rounded-lg bg-gray-800 border border-gray-700 p-6 text-center">
-        {typeof question!.exampleTranslation === "string" ? (
-          <p className="text-xl text-gray-100">{question!.exampleTranslation}</p>
-        ) : (
-          displayGrammarDefEntries(question!.exampleTranslation).map(([lang, text]) => (
-            <p key={lang} className="text-xl text-gray-100">
-              <span className="mr-2 text-xs font-medium uppercase text-gray-500">{lang}</span>
-              {text}
-            </p>
-          ))
-        )}
-      </div>
+      {/* Question: the grammar element itself (user must recall its meaning/usage) */}
+      <h2 className="max-w-lg text-center text-xl sm:text-3xl font-bold text-gray-100">
+        {question!.statement || grammar?.statement}
+      </h2>
 
       {!showingAnswer ? (
         <button
@@ -116,18 +108,9 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
         </button>
       ) : (
         <>
-          {/* Reveal: original sentence */}
-          <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4 text-center">
-            <p className="text-2xl text-green-400">{question!.exampleSentence}</p>
-            {question!.exampleTransliteration && (
-              <p className="mt-1 text-sm text-gray-400">{question!.exampleTransliteration}</p>
-            )}
-          </div>
-
-          {/* Grammar statement + descriptions */}
+          {/* Reveal: descriptions */}
           {grammar && (
             <div className="w-full max-w-lg rounded-lg bg-gray-800 border border-gray-600 p-4">
-              <p className="mb-2 text-base font-medium text-blue-400">{grammar.statement}</p>
               {grammar.descriptions?.map((d, di) => {
                 const entries = displayDefEntries(d.text || {});
                 const rows = entries.length > 0 ? entries : Object.entries(d.text || {});
@@ -147,6 +130,33 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Registered examples (if any) */}
+          {grammar && grammar.examples && grammar.examples.length > 0 && (
+            <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
+              <p className="mb-2 text-sm font-medium text-gray-400">{t("examples")}</p>
+              {grammar.examples.map((ex, i) => (
+                <div key={i} className="mb-2 last:mb-0">
+                  <p className="text-lg text-gray-100">
+                    <RubyText text={ex.sentence} segments={ex.segments} />
+                  </p>
+                  {ex.transliteration && (
+                    <p className="text-sm text-gray-500">{ex.transliteration}</p>
+                  )}
+                  {typeof ex.translation === "string" ? (
+                    ex.translation && <p className="text-sm text-gray-400">{ex.translation}</p>
+                  ) : (
+                    displayGrammarDefEntries(ex.translation).map(([lang, text]) => (
+                      <p key={lang} className="text-sm text-gray-400">
+                        <span className="mr-1 text-xs font-medium uppercase text-gray-500">{lang}</span>
+                        {text}
+                      </p>
+                    ))
+                  )}
+                </div>
+              ))}
             </div>
           )}
 

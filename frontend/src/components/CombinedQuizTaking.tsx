@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP } from "../settings/defaults";
-import { answerCombinedQuestion, getCombinedQuizQuestions } from "../api/combined-quiz";
+import { answerCombinedQuestion, getCombinedQuizQuestions, updateCombinedQuizWeights } from "../api/combined-quiz";
 import { getGroups } from "../api/vocab";
 import { getGrammarGroups } from "../api/grammar";
 import { getFlaggedWordIds, flagWord, unflagWord } from "../api/flagged";
@@ -61,6 +61,11 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const [grammarCache, setGrammarCache] = useState<Map<string, Grammar>>(new Map());
   const [groupNameMap, setGroupNameMap] = useState<Map<string, string>>(new Map());
   const [originalTotal] = useState(() => session.initialTotal ?? session.questions.length);
+  const [weightsOpen, setWeightsOpen] = useState(false);
+  const [domainDraft, setDomainDraft] = useState<{ word: number; grammar: number }>({ word: 1, grammar: 1 });
+  const [wordWeightDraft, setWordWeightDraft] = useState<Record<string, number>>({});
+  const [grammarWeightDraft, setGrammarWeightDraft] = useState<Record<string, number>>({});
+  const [applyingWeights, setApplyingWeights] = useState(false);
 
   const fetchedCountRef = useRef(0);
   const fetchQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -219,6 +224,65 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     setShowAllExamples(false);
   }
 
+  function openWeightsPanel() {
+    setDomainDraft({
+      word: currentSession.domainWeights?.word ?? 1,
+      grammar: currentSession.domainWeights?.grammar ?? 1,
+    });
+    setWordWeightDraft(
+      Object.fromEntries(
+        Object.keys(currentSession.wordGroupMembership ?? {}).map((gid) => [
+          gid,
+          currentSession.wordGroupWeights?.[gid] ?? 1,
+        ])
+      )
+    );
+    setGrammarWeightDraft(
+      Object.fromEntries(
+        Object.keys(currentSession.grammarGroupMembership ?? {}).map((gid) => [
+          gid,
+          currentSession.grammarGroupWeights?.[gid] ?? 1,
+        ])
+      )
+    );
+    setWeightsOpen(true);
+  }
+
+  // Apply new domain/group weights mid-session: the server reorders the
+  // unanswered tail and returns the full session; re-sync local order and jump
+  // to the first unanswered question of the new order.
+  async function applyWeights() {
+    if (applyingWeights) return;
+    if (domainDraft.word <= 0 && domainDraft.grammar <= 0) return;
+    setApplyingWeights(true);
+    try {
+      const updated = await updateCombinedQuizWeights(currentSession.language, {
+        domainWeights: domainDraft,
+        ...(Object.keys(wordWeightDraft).length > 0 ? { wordGroupWeights: wordWeightDraft } : {}),
+        ...(Object.keys(grammarWeightDraft).length > 0 ? { grammarGroupWeights: grammarWeightDraft } : {}),
+      });
+      const hydratedByKey = new Map(questions.map((q) => [questionKey(q), q]));
+      setQuestions(
+        updated.questions.map((q) => ({
+          ...hydratedByKey.get(questionKey(q)),
+          ...q,
+        }) as CombinedQuizQuestion)
+      );
+      setCurrentSession(updated);
+      totalQuestionsRef.current = updated.questions.length;
+      const firstUnanswered = updated.questions.findIndex((q) => q.userCorrect === undefined);
+      setCurrentIndex(firstUnanswered === -1 ? updated.questions.length : firstUnanswered);
+      setShowingAnswer(false);
+      resetExpandedAnswers();
+      setFlaggedIds(new Set());
+      setWeightsOpen(false);
+    } catch {
+      // Keep the panel open so the user can retry.
+    } finally {
+      setApplyingWeights(false);
+    }
+  }
+
   function revealAnswer() {
     if (!question) return;
     resetExpandedAnswers();
@@ -293,6 +357,9 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      // Ignore shortcuts while typing in a form control (e.g. the weights panel).
+      const target = event.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
       if (!showingAnswer) {
         if (question && !event.repeat && (event.key === " " || event.code === "Space")) {
           event.preventDefault();
@@ -369,7 +436,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
       {/* Per-domain progress (Vocabulary vs Grammar) */}
       {domainProgress.length > 0 && (
-        <div className="flex flex-wrap justify-center gap-2">
+        <div className="flex flex-wrap justify-center gap-2 items-center">
           {domainProgress.map((d) => (
             <span
               key={d.kind}
@@ -382,6 +449,91 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
               {d.label}: {d.remaining}/{d.total}
             </span>
           ))}
+          <button
+            onClick={() => (weightsOpen ? setWeightsOpen(false) : openWeightsPanel())}
+            className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1 text-xs text-gray-300 hover:bg-gray-700"
+          >
+            ⚖ {t("adjustWeights")}
+          </button>
+        </div>
+      )}
+
+      {/* Mid-session domain + group weight editor */}
+      {weightsOpen && (
+        <div className="w-full max-w-lg rounded-lg border border-gray-600 bg-gray-800 p-4 space-y-2">
+          <p className="text-sm font-medium text-gray-300">{t("adjustWeights")}</p>
+          {(["word", "grammar"] as const).map((kind) => (
+            <label key={kind} className="flex items-center gap-2 text-sm">
+              <span
+                className={`flex-1 min-w-0 truncate font-medium ${
+                  kind === "word" ? "text-blue-300" : "text-emerald-300"
+                }`}
+              >
+                {kind === "word" ? t("sectionVocabulary") : t("sectionGrammar")}
+              </span>
+              <input
+                type="number"
+                min={0}
+                value={domainDraft[kind]}
+                title={t("groupWeightHint")}
+                aria-label={t("groupWeight")}
+                onChange={(e) => {
+                  const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                  setDomainDraft((prev) => ({ ...prev, [kind]: v }));
+                }}
+                className="w-16 shrink-0 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:border-blue-400 focus:outline-none"
+              />
+            </label>
+          ))}
+          {Object.keys(currentSession.wordGroupMembership ?? {}).map((gid) => (
+            <label key={`w-${gid}`} className="flex items-center gap-2 text-sm text-gray-300">
+              <span className="flex-1 min-w-0 truncate pl-4">{groupNameMap.get(gid) ?? gid}</span>
+              <input
+                type="number"
+                min={0}
+                value={wordWeightDraft[gid] ?? 1}
+                title={t("groupWeightHint")}
+                aria-label={t("groupWeight")}
+                onChange={(e) => {
+                  const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                  setWordWeightDraft((prev) => ({ ...prev, [gid]: v }));
+                }}
+                className="w-16 shrink-0 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:border-blue-400 focus:outline-none"
+              />
+            </label>
+          ))}
+          {Object.keys(currentSession.grammarGroupMembership ?? {}).map((gid) => (
+            <label key={`g-${gid}`} className="flex items-center gap-2 text-sm text-gray-300">
+              <span className="flex-1 min-w-0 truncate pl-4">{groupNameMap.get(gid) ?? gid}</span>
+              <input
+                type="number"
+                min={0}
+                value={grammarWeightDraft[gid] ?? 1}
+                title={t("groupWeightHint")}
+                aria-label={t("groupWeight")}
+                onChange={(e) => {
+                  const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                  setGrammarWeightDraft((prev) => ({ ...prev, [gid]: v }));
+                }}
+                className="w-16 shrink-0 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:border-blue-400 focus:outline-none"
+              />
+            </label>
+          ))}
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              onClick={() => setWeightsOpen(false)}
+              className="rounded-lg border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700"
+            >
+              {t("cancel")}
+            </button>
+            <button
+              onClick={applyWeights}
+              disabled={applyingWeights || (domainDraft.word <= 0 && domainDraft.grammar <= 0)}
+              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500 disabled:opacity-50"
+            >
+              {applyingWeights ? "..." : t("applyWeights")}
+            </button>
+          </div>
         </div>
       )}
 
@@ -417,19 +569,10 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       {wordQuestion ? (
         <h2 className="text-xl sm:text-3xl font-bold text-gray-100">{wordQuestion.term}</h2>
       ) : (
-        // Grammar prompt: translated sentence — user must recall the pattern
-        <div className="w-full max-w-lg rounded-lg bg-gray-800 border border-gray-700 p-6 text-center">
-          {typeof grammarQuestion!.exampleTranslation === "string" ? (
-            <p className="text-xl text-gray-100">{grammarQuestion!.exampleTranslation}</p>
-          ) : (
-            displayGrammarDefEntries(grammarQuestion!.exampleTranslation).map(([lang, text]) => (
-              <p key={lang} className="text-xl text-gray-100">
-                <span className="mr-2 text-xs font-medium uppercase text-gray-500">{lang}</span>
-                {text}
-              </p>
-            ))
-          )}
-        </div>
+        // Grammar prompt: the grammar element itself — descriptions revealed on answer
+        <h2 className="max-w-lg text-center text-xl sm:text-3xl font-bold text-gray-100">
+          {grammarQuestion!.statement || grammarItem?.statement}
+        </h2>
       )}
 
       {!showingAnswer ? (
@@ -577,18 +720,9 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         </>
       ) : (
         <>
-          {/* Grammar reveal: original sentence */}
-          <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4 text-center">
-            <p className="text-2xl text-green-400">{grammarQuestion!.exampleSentence}</p>
-            {grammarQuestion!.exampleTransliteration && (
-              <p className="mt-1 text-sm text-gray-400">{grammarQuestion!.exampleTransliteration}</p>
-            )}
-          </div>
-
-          {/* Grammar statement + descriptions */}
+          {/* Grammar reveal: descriptions */}
           {grammarItem && (
             <div className="w-full max-w-lg rounded-lg bg-gray-800 border border-gray-600 p-4">
-              <p className="mb-2 text-base font-medium text-blue-400">{grammarItem.statement}</p>
               {grammarItem.descriptions?.map((d, di) => {
                 const entries = displayDefEntries(d.text || {});
                 const rows = entries.length > 0 ? entries : Object.entries(d.text || {});
@@ -608,6 +742,33 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Registered examples (if any) */}
+          {grammarItem && grammarItem.examples && grammarItem.examples.length > 0 && (
+            <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
+              <p className="mb-2 text-sm font-medium text-gray-400">{t("examples")}</p>
+              {grammarItem.examples.map((ex, i) => (
+                <div key={i} className="mb-2 last:mb-0">
+                  <p className="text-lg text-gray-100">
+                    <RubyText text={ex.sentence} segments={ex.segments} />
+                  </p>
+                  {ex.transliteration && (
+                    <p className="text-sm text-gray-500">{ex.transliteration}</p>
+                  )}
+                  {typeof ex.translation === "string" ? (
+                    ex.translation && <p className="text-sm text-gray-400">{ex.translation}</p>
+                  ) : (
+                    displayGrammarDefEntries(ex.translation).map(([lang, text]) => (
+                      <p key={lang} className="text-sm text-gray-400">
+                        <span className="mr-1 text-xs font-medium uppercase text-gray-500">{lang}</span>
+                        {text}
+                      </p>
+                    ))
+                  )}
+                </div>
+              ))}
             </div>
           )}
 

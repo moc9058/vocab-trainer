@@ -7,6 +7,7 @@ import {
   deleteGrammarItem,
   getGrammarDrafts,
   getGrammarDraft,
+  updateGrammarDraft,
   addGrammarDrafts,
   deleteGrammarDraft,
   getGrammarGroups,
@@ -226,6 +227,7 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
           properties: {
             id: { type: "string" },
             statement: { type: "string" },
+            transliteration: { type: "string" },
             descriptions: { type: "array" },
             examples: { type: "array" },
             exampleIds: { type: "array", items: { type: "string" } },
@@ -263,6 +265,7 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
           properties: {
             id: { type: "string" },
             statement: { type: "string" },
+            transliteration: { type: "string" },
             descriptions: { type: "array" },
             examples: { type: "array" },
             exampleIds: { type: "array", items: { type: "string" } },
@@ -410,6 +413,7 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
                 required: ["statement", "descriptions"],
                 properties: {
                   statement: { type: "string" },
+                  transliteration: { type: "string" },
                   descriptions: { type: "array" },
                   examples: { type: "array" },
                   level: { type: "string" },
@@ -426,11 +430,14 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { language } = request.params;
       const now = new Date().toISOString();
-      const drafts: GrammarDraft[] = request.body.drafts.map((d) => ({
+      const ts = Date.now();
+      const drafts: GrammarDraft[] = request.body.drafts.map((d, i) => ({
         ...d,
         language,
         createdAt: now,
-        id: `draft-${language}-${Date.now()}${Math.random().toString(36).slice(2, 8)}`,
+        // ts (13-digit epoch, lexically = chronologically sortable) + zero-padded
+        // index preserves upload order within a batch; see getGrammarDrafts sort.
+        id: `draft-${language}-${ts}-${String(i).padStart(4, "0")}-${Math.random().toString(36).slice(2, 8)}`,
       }));
       await addGrammarDrafts(drafts);
       return reply.status(201).send({ created: drafts.length, drafts });
@@ -443,6 +450,38 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
       const draft = await getGrammarDraft(request.params.draftId);
       if (!draft) return reply.notFound("Grammar draft not found");
       return draft;
+    }
+  );
+
+  // Save review edits back to the draft without promoting it. Arrays/strings
+  // replace wholesale (send `examples: []` to clear); identity fields
+  // (language/createdAt) and omitted fields are preserved.
+  fastify.put<{
+    Params: { language: string; draftId: string };
+    Body: Partial<Omit<GrammarDraft, "id" | "language" | "createdAt">>;
+  }>(
+    "/:language/drafts/:draftId",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            statement: { type: "string" },
+            transliteration: { type: "string" },
+            descriptions: { type: "array" },
+            examples: { type: "array" },
+            level: { type: "string" },
+            tags: { type: "array", items: { type: "string" } },
+            groups: { type: "array", items: { type: "string" } },
+            sourceImage: { type: "string" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const updated = await updateGrammarDraft(request.params.draftId, request.body);
+      if (!updated) return reply.notFound("Grammar draft not found");
+      return updated;
     }
   );
 

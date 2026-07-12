@@ -316,6 +316,44 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       return session;
     }
   );
+
+  // Adjust per-group weights mid-session: store the new weights and reorder the
+  // unanswered tail with them. Returns the full session (stored questions are
+  // hydrated) so the client can re-sync its local order.
+  fastify.put<{
+    Params: { language: string };
+    Body: { groupWeights: Record<string, number> };
+  }>(
+    "/session/language/:language/weights",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["groupWeights"],
+          properties: {
+            groupWeights: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const session = await getQuizSessionByLanguage(request.params.language);
+      if (!session) return reply.notFound("No session found for this language");
+      if (session.status === "completed") return reply.badRequest("Session already completed");
+
+      session.groupWeights = { ...session.groupWeights, ...request.body.groupWeights };
+      const answered: QuizQuestion[] = [];
+      const unanswered: QuizQuestion[] = [];
+      for (const q of session.questions) {
+        if (q.userCorrect !== undefined) answered.push(q);
+        else unanswered.push(q);
+      }
+      session.questions = [...answered, ...reweightUnanswered(unanswered, session)];
+      await updateQuizSession(session);
+
+      return session;
+    }
+  );
 };
 
 function randomSample(words: Word[], count: number): Word[] {

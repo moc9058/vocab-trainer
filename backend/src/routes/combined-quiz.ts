@@ -24,11 +24,6 @@ import type {
   WordProgress,
 } from "../types.js";
 import { shuffle, weightedInterleave, weightedMerge, insertRetryQuestion } from "../quiz-utils.js";
-import { prepareQuestion } from "./grammar-quiz.js";
-
-// Cap on concurrent grammar-question preparation. Most items hydrate from Firestore
-// example docs; the bound mainly protects the LLM fallback path for example-less items.
-const PREPARE_CONCURRENCY = 5;
 
 interface WordFilterBody {
   topics?: string[];
@@ -162,28 +157,13 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
         } else {
           ordered = shuffle(pool);
         }
-        grammarQuestions = await mapWithConcurrency(ordered, PREPARE_CONCURRENCY, async (item) => {
-          try {
-            const prepared = await prepareQuestion(item);
-            return {
-              kind: "grammar" as const,
-              grammarId: item.id,
-              exampleSentence: prepared.sentence,
-              exampleTranslation: prepared.translation,
-              ...(prepared.transliteration ? { exampleTransliteration: prepared.transliteration } : {}),
-            };
-          } catch (err) {
-            fastify.log.error({ err, grammarId: item.id }, "Failed to prepare combined grammar question");
-            const fallback = item.examples?.[0];
-            return {
-              kind: "grammar" as const,
-              grammarId: item.id,
-              exampleSentence: fallback?.sentence ?? item.statement,
-              exampleTranslation: fallback?.translation ?? "",
-              ...(fallback?.transliteration ? { exampleTransliteration: fallback.transliteration } : {}),
-            };
-          }
-        });
+        // The question is the grammar element itself; descriptions/examples are
+        // fetched by the client on answer reveal.
+        grammarQuestions = ordered.map((item) => ({
+          kind: "grammar" as const,
+          grammarId: item.id,
+          statement: item.statement,
+        }));
       }
 
       if (wordQuestions.length === 0 && grammarQuestions.length === 0) {
@@ -214,7 +194,7 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
       await saveCombinedQuizSession(session);
       // Lightweight response: word questions carry only {kind, wordId, term}; the client
       // pages GET /questions/:language for definitions/examples. Grammar questions are small
-      // (sentence + translation) and returned as-is.
+      // (grammarId + statement) and returned as-is.
       return reply.status(201).send({
         ...session,
         questions: session.questions.map((q) =>
@@ -336,11 +316,7 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
             : {
                 kind: "grammar",
                 grammarId: question.grammarId,
-                exampleSentence: question.exampleSentence,
-                exampleTranslation: question.exampleTranslation,
-                ...(question.exampleTransliteration
-                  ? { exampleTransliteration: question.exampleTransliteration }
-                  : {}),
+                statement: question.statement,
               };
         insertRetryQuestion(session.questions, retry, session.questions.indexOf(question));
         session.score.total++;
@@ -396,41 +372,106 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
       const session = await getCombinedQuizSession(request.params.language);
       if (!session) return reply.notFound("No combined quiz session found for this language");
 
-      const answered: CombinedQuizQuestion[] = [];
-      const unanswered: CombinedQuizQuestion[] = [];
-      for (const q of session.questions) {
-        if (q.userCorrect !== undefined) answered.push(q);
-        else unanswered.push(q);
+      reorderUnansweredTail(session);
+      await saveCombinedQuizSession(session);
+
+      return session;
+    }
+  );
+
+  // Adjust domain and/or per-group weights mid-session: store the new weights and
+  // reorder the unanswered tail with them. Returns the full session so the client
+  // can re-sync its local order.
+  fastify.put<{
+    Params: { language: string };
+    Body: {
+      domainWeights?: { word?: number; grammar?: number };
+      wordGroupWeights?: Record<string, number>;
+      grammarGroupWeights?: Record<string, number>;
+    };
+  }>(
+    "/session/language/:language/weights",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            domainWeights: {
+              type: "object",
+              properties: {
+                word: { type: "number", minimum: 0 },
+                grammar: { type: "number", minimum: 0 },
+              },
+            },
+            wordGroupWeights: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
+            grammarGroupWeights: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const session = await getCombinedQuizSession(request.params.language);
+      if (!session) return reply.notFound("No combined quiz session found for this language");
+      if (session.status === "completed") return reply.badRequest("Session already completed");
+
+      const { domainWeights, wordGroupWeights, grammarGroupWeights } = request.body;
+      if (domainWeights) {
+        const wordWeight = Math.max(0, domainWeights.word ?? session.domainWeights?.word ?? 1);
+        const grammarWeight = Math.max(0, domainWeights.grammar ?? session.domainWeights?.grammar ?? 1);
+        if (wordWeight <= 0 && grammarWeight <= 0) {
+          return reply.badRequest("At least one of the word/grammar weights must be positive");
+        }
+        session.domainWeights = { word: wordWeight, grammar: grammarWeight };
+      }
+      if (wordGroupWeights) {
+        session.wordGroupWeights = { ...session.wordGroupWeights, ...wordGroupWeights };
+      }
+      if (grammarGroupWeights) {
+        session.grammarGroupWeights = { ...session.grammarGroupWeights, ...grammarGroupWeights };
       }
 
-      const wordTail = reweightDomain(
-        unanswered.filter((q): q is CombinedQuizWordQuestion => q.kind === "word"),
-        session.wordGroupMembership,
-        session.wordGroupWeights,
-        (q) => q.wordId
-      );
-      const grammarTail = reweightDomain(
-        unanswered.filter((q): q is CombinedQuizGrammarQuestion => q.kind === "grammar"),
-        session.grammarGroupMembership,
-        session.grammarGroupWeights,
-        (q) => q.grammarId
-      );
-      const merged = weightedMerge<CombinedQuizQuestion>([
-        { weight: session.domainWeights?.word ?? 1, items: wordTail },
-        { weight: session.domainWeights?.grammar ?? 1, items: grammarTail },
-      ]);
-      // weightedMerge drops zero-weight buckets; never lose questions on resume.
-      const covered = new Set(merged);
-      for (const q of unanswered) {
-        if (!covered.has(q)) merged.push(q);
-      }
-      session.questions = [...answered, ...merged];
+      reorderUnansweredTail(session);
       await saveCombinedQuizSession(session);
 
       return session;
     }
   );
 };
+
+// Reorder the unanswered tail by the session's current domain + group weights,
+// keeping answered questions in place. Shared by resume (GET session) and the
+// mid-session weight update (PUT weights).
+function reorderUnansweredTail(session: CombinedQuizSession): void {
+  const answered: CombinedQuizQuestion[] = [];
+  const unanswered: CombinedQuizQuestion[] = [];
+  for (const q of session.questions) {
+    if (q.userCorrect !== undefined) answered.push(q);
+    else unanswered.push(q);
+  }
+
+  const wordTail = reweightDomain(
+    unanswered.filter((q): q is CombinedQuizWordQuestion => q.kind === "word"),
+    session.wordGroupMembership,
+    session.wordGroupWeights,
+    (q) => q.wordId
+  );
+  const grammarTail = reweightDomain(
+    unanswered.filter((q): q is CombinedQuizGrammarQuestion => q.kind === "grammar"),
+    session.grammarGroupMembership,
+    session.grammarGroupWeights,
+    (q) => q.grammarId
+  );
+  const merged = weightedMerge<CombinedQuizQuestion>([
+    { weight: session.domainWeights?.word ?? 1, items: wordTail },
+    { weight: session.domainWeights?.grammar ?? 1, items: grammarTail },
+  ]);
+  // weightedMerge drops zero-weight buckets; never lose questions.
+  const covered = new Set(merged);
+  for (const q of unanswered) {
+    if (!covered.has(q)) merged.push(q);
+  }
+  session.questions = [...answered, ...merged];
+}
 
 // Assign each pooled word to exactly one selected group (first group in groupIds order that
 // contains it) — mirrors buildGroupMembership in routes/quiz.ts.
@@ -504,23 +545,6 @@ function reweightDomain<T extends object>(
     if (!covered.has(q)) ordered.push(q);
   }
   return ordered;
-}
-
-async function mapWithConcurrency<T, R>(
-  items: T[],
-  limit: number,
-  fn: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let next = 0;
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await fn(items[i]);
-    }
-  });
-  await Promise.all(workers);
-  return results;
 }
 
 export default combinedQuizRoutes;

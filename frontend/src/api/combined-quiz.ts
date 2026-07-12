@@ -1,4 +1,4 @@
-import { fetchJson, postJson } from "./client";
+import { fetchJson, postJson, putJson } from "./client";
 import type { CombinedQuizQuestion, CombinedQuizSession } from "../types";
 
 export async function getCurrentCombinedSession(
@@ -39,6 +39,22 @@ export function getCombinedQuizQuestions(
 ): Promise<{ questions: CombinedQuizQuestion[]; total: number }> {
   return fetchJson(
     `/api/combined-quiz/questions/${encodeURIComponent(language)}?offset=${offset}&limit=${limit}`
+  );
+}
+
+// Mid-session weight change: server reorders the unanswered tail and returns
+// the full session in the new order.
+export function updateCombinedQuizWeights(
+  language: string,
+  weights: {
+    domainWeights?: { word: number; grammar: number };
+    wordGroupWeights?: Record<string, number>;
+    grammarGroupWeights?: Record<string, number>;
+  }
+): Promise<CombinedQuizSession> {
+  return putJson(
+    `/api/combined-quiz/session/language/${encodeURIComponent(language)}/weights`,
+    weights
   );
 }
 

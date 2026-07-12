@@ -200,6 +200,8 @@ export interface Grammar {
   id: string;
   language: string;
   statement: string;
+  /** Pinyin of `statement`, Chinese characters only (Chinese language). */
+  transliteration?: string;
   descriptions: Meaning[];
   /** @deprecated Use `exampleIds` + the `example_sentences` collection. Kept as a transitional fallback until all docs are migrated. */
   examples?: GrammarExample[];
@@ -213,6 +215,8 @@ export interface GrammarDraft {
   id: string;
   language: string;
   statement: string;
+  /** Pinyin of `statement`, Chinese characters only (Chinese language). */
+  transliteration?: string;
   descriptions: Meaning[];
   /** Inline raw examples — drafts are NOT normalized into example_sentences. */
   examples?: GrammarExample[];
@@ -243,9 +247,8 @@ export interface GrammarProgress {
 
 export interface GrammarQuizQuestion {
   grammarId: string;
-  exampleSentence: string;
-  exampleTranslation: string | Record<string, string>;
-  exampleTransliteration?: string;
+  /** The grammar element shown as-is as the question; descriptions are revealed on answer. */
+  statement: string;
   userCorrect?: boolean;
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks, getGroups, modifyGroupMembers, getWordDrafts, uploadWordDrafts, deleteWordDraft } from "../api/vocab";
+import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks, getGroups, modifyGroupMembers, getWordDrafts, uploadWordDrafts, updateWordDraft, deleteWordDraft } from "../api/vocab";
 import GroupPickerModal from "./GroupPickerModal";
 import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
@@ -27,10 +27,13 @@ interface Props {
   initialExpandId?: string;
   initialSearch?: string;
   refreshSignal?: number;
-  onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
+  onQueue?: (term: string, language: string, payload: SmartAddPayload, opts?: { groupNames?: string[]; draftId?: string }) => void;
   onQueueEdit?: (term: string, language: string, wordId: string, updates: Partial<Word>, groupsToAdd: string[], groupsToRemove: string[]) => void;
   pendingTerms?: Set<string>;
   succeededTerms?: Set<string>;
+  /** Word queue's pending draft IDs — marks drafts whose registration is in
+   *  flight (Review/Discard disabled until the queue retires the draft). */
+  pendingDraftIds?: Set<string>;
 }
 
 function getPageNumbers(current: number, total: number): (number | "...")[] {
@@ -45,7 +48,7 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
   return pages;
 }
 
-export default function WordList({ language, onBack, initialExpandId, initialSearch, refreshSignal, onQueue, onQueueEdit, pendingTerms, succeededTerms }: Props) {
+export default function WordList({ language, onBack, initialExpandId, initialSearch, refreshSignal, onQueue, onQueueEdit, pendingTerms, succeededTerms, pendingDraftIds }: Props) {
   const { t } = useI18n();
   const currentIsoCode = urlLanguageToIsoCode(language) ?? language;
   const [result, setResult] = useState<PaginatedResult<Word> | null>(null);
@@ -102,11 +105,13 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const [uploading, setUploading] = useState(false);
   const jsonFileInputRef = useRef<HTMLInputElement>(null);
 
+  // refreshSignal keeps the panel in sync with the queue: successful
+  // registrations delete their draft, failed queue adds rescue into a new one.
   const fetchDrafts = useCallback(() => {
     getWordDrafts(language)
       .then(setDrafts)
       .catch(() => setDrafts([]));
-  }, [language]);
+  }, [language, refreshSignal]);
 
   useEffect(() => {
     fetchDrafts();
@@ -905,6 +910,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
               <div className="space-y-2 px-3 pb-3">
                 {drafts.map((draft) => {
                   const firstDef = Object.values(draft.definitions?.[0]?.text ?? {})[0] ?? "";
+                  const registering = pendingDraftIds?.has(draft.id) ?? false;
                   return (
                     <div
                       key={draft.id}
@@ -924,18 +930,27 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                           {draft.createdAt ? new Date(draft.createdAt).toLocaleDateString() : ""}
                         </p>
                       </div>
-                      <button
-                        onClick={() => setReviewingDraft(draft)}
-                        className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500"
-                      >
-                        {t("reviewDraft")}
-                      </button>
-                      <button
-                        onClick={() => setDiscardingDraftId(draft.id)}
-                        className="rounded bg-red-900/60 px-3 py-1.5 text-xs text-red-200 hover:bg-red-800/60"
-                      >
-                        {t("discardDraft")}
-                      </button>
+                      {registering ? (
+                        <span className="flex items-center gap-1 rounded border border-amber-400/60 bg-amber-900/40 px-3 py-1.5 text-xs text-amber-100">
+                          <span className="animate-spin inline-block">⟳</span>
+                          {t("registering")}
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => setReviewingDraft(draft)}
+                            className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500"
+                          >
+                            {t("reviewDraft")}
+                          </button>
+                          <button
+                            onClick={() => setDiscardingDraftId(draft.id)}
+                            className="rounded bg-red-900/60 px-3 py-1.5 text-xs text-red-200 hover:bg-red-800/60"
+                          >
+                            {t("discardDraft")}
+                          </button>
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -1135,10 +1150,14 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           onClose={() => setShowSmartAdd(false)}
         />
       )}
-      {/* Draft review modal — smart-add create mode with prefill. Deliberately
-          does NOT pass onQueue: queue-mode submits never fire onSave, which is
-          the delete-draft-on-successful-save signal. The modal awaits
-          smartAddWord directly and closes itself afterwards. */}
+      {/* Draft review modal — create mode with prefill.
+          onDraftSave (the "Save Draft" button / Enter) writes edits back to the
+          draft; the explicit "Register" button enqueues into the shared word
+          queue (missing group names + draftId ride along so the QUEUE attaches
+          groups and deletes the draft on success) and the modal closes
+          immediately so the next draft can be reviewed. Without onQueue the
+          modal falls back to awaiting smartAddWord directly, where onSave —
+          firing only on success — is the delete-draft signal. */}
       {reviewingDraft && (
         <SmartAddWordModal
           defaultLanguage={language}
@@ -1151,6 +1170,16 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
             topics: reviewingDraft.topics,
           }}
           initialGroups={reviewingDraft.groups}
+          draftId={reviewingDraft.id}
+          onQueue={onQueue}
+          pendingTerms={pendingTerms}
+          succeededTerms={succeededTerms}
+          refreshSignal={refreshSignal}
+          onDraftSave={async (updates) => {
+            await updateWordDraft(language, reviewingDraft.id, updates);
+            setReviewingDraft(null);
+            fetchDrafts();
+          }}
           onSave={() => {
             deleteWordDraft(language, reviewingDraft.id)
               .catch(() => {})

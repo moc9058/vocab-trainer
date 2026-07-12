@@ -1674,7 +1674,11 @@ export async function getWordDrafts(language: string): Promise<WordDraft[]> {
   const snap = await wordDrafts.where("language", "==", language).get();
   const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as WordDraft));
   // In-memory sort avoids a composite index on language + createdAt.
-  return items.sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
+  // Tiebreak by id: within one upload all drafts share createdAt, and the id
+  // encodes ts + zero-padded index (see POST handler), so this keeps upload order.
+  return items.sort(
+    (a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? "") || a.id.localeCompare(b.id)
+  );
 }
 
 export async function getWordDraft(draftId: string): Promise<WordDraft | null> {
@@ -1692,6 +1696,19 @@ export async function addWordDrafts(drafts: WordDraft[]): Promise<void> {
   await batch.commit();
 }
 
+export async function updateWordDraft(
+  draftId: string,
+  updates: Partial<Omit<WordDraft, "id" | "language" | "createdAt">>
+): Promise<WordDraft | null> {
+  const ref = wordDrafts.doc(draftId);
+  const doc = await ref.get();
+  if (!doc.exists) return null;
+  const clean = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
+  await ref.set(clean, { merge: true });
+  const after = await ref.get();
+  return { id: after.id, ...after.data() } as WordDraft;
+}
+
 export async function deleteWordDraft(draftId: string): Promise<boolean> {
   const doc = await wordDrafts.doc(draftId).get();
   if (!doc.exists) return false;
@@ -1707,7 +1724,11 @@ export async function getGrammarDrafts(language: string): Promise<GrammarDraft[]
   const snap = await grammarDrafts.where("language", "==", language).get();
   const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as GrammarDraft));
   // In-memory sort avoids a composite index on language + createdAt.
-  return items.sort((a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? ""));
+  // Tiebreak by id: within one upload all drafts share createdAt, and the id
+  // encodes ts + zero-padded index (see POST handler), so this keeps upload order.
+  return items.sort(
+    (a, b) => (a.createdAt ?? "").localeCompare(b.createdAt ?? "") || a.id.localeCompare(b.id)
+  );
 }
 
 export async function getGrammarDraft(draftId: string): Promise<GrammarDraft | null> {
@@ -1723,6 +1744,19 @@ export async function addGrammarDrafts(drafts: GrammarDraft[]): Promise<void> {
     batch.set(grammarDrafts.doc(id), data);
   }
   await batch.commit();
+}
+
+export async function updateGrammarDraft(
+  draftId: string,
+  updates: Partial<Omit<GrammarDraft, "id" | "language" | "createdAt">>
+): Promise<GrammarDraft | null> {
+  const ref = grammarDrafts.doc(draftId);
+  const doc = await ref.get();
+  if (!doc.exists) return null;
+  const clean = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
+  await ref.set(clean, { merge: true });
+  const after = await ref.get();
+  return { id: after.id, ...after.data() } as GrammarDraft;
 }
 
 export async function deleteGrammarDraft(draftId: string): Promise<boolean> {
@@ -1905,9 +1939,7 @@ function slimCombinedQuestions(questions: CombinedQuizSession["questions"]) {
       : {
           kind: "grammar",
           grammarId: q.grammarId,
-          exampleSentence: q.exampleSentence,
-          exampleTranslation: q.exampleTranslation,
-          ...(q.exampleTransliteration ? { exampleTransliteration: q.exampleTransliteration } : {}),
+          statement: q.statement,
           ...(q.userCorrect !== undefined ? { userCorrect: q.userCorrect } : {}),
         }
   );

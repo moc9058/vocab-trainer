@@ -33,6 +33,7 @@ import {
   getWordDrafts,
   getWordDraft,
   addWordDrafts,
+  updateWordDraft,
   deleteWordDraft,
   getWordGroups,
   createWordGroup,
@@ -1043,11 +1044,14 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { language } = request.params;
       const now = new Date().toISOString();
-      const drafts: WordDraft[] = request.body.drafts.map((d) => ({
+      const ts = Date.now();
+      const drafts: WordDraft[] = request.body.drafts.map((d, i) => ({
         ...d,
         language,
         createdAt: now,
-        id: `draft-${language}-${Date.now()}${Math.random().toString(36).slice(2, 8)}`,
+        // ts (13-digit epoch, lexically = chronologically sortable) + zero-padded
+        // index preserves upload order within a batch; see getWordDrafts sort.
+        id: `draft-${language}-${ts}-${String(i).padStart(4, "0")}-${Math.random().toString(36).slice(2, 8)}`,
       }));
       await addWordDrafts(drafts);
       return reply.status(201).send({ created: drafts.length, drafts });
@@ -1060,6 +1064,38 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       const draft = await getWordDraft(request.params.draftId);
       if (!draft) return reply.notFound("Word draft not found");
       return draft;
+    }
+  );
+
+  // Save review edits back to the draft without promoting it. Arrays/strings
+  // replace wholesale (send `examples: []` to clear); identity fields
+  // (language/createdAt) and omitted fields are preserved.
+  fastify.put<{
+    Params: { language: string; draftId: string };
+    Body: Partial<Omit<WordDraft, "id" | "language" | "createdAt">>;
+  }>(
+    "/:language/drafts/:draftId",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            term: { type: "string" },
+            transliteration: { type: "string" },
+            definitions: { type: "array" },
+            examples: { type: "array" },
+            level: { type: "string" },
+            topics: { type: "array", items: { type: "string" } },
+            groups: { type: "array", items: { type: "string" } },
+            sourceImage: { type: "string" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const updated = await updateWordDraft(request.params.draftId, request.body);
+      if (!updated) return reply.notFound("Word draft not found");
+      return updated;
     }
   );
 

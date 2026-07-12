@@ -1,8 +1,25 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { modifyGroupMembers, smartAddWord, updateWord } from "../api/vocab";
-import type { Word } from "../types";
+import {
+  modifyGroupMembers,
+  smartAddWord,
+  updateWord,
+  getGroups,
+  createGroup,
+  uploadWordDrafts,
+  deleteWordDraft,
+} from "../api/vocab";
+import type { Word, WordDraft } from "../types";
 
 type SmartAddPayload = Parameters<typeof smartAddWord>[1];
+
+/** Extra work a `create` item performs after a successful smart-add — used by
+ *  draft registration so the review modal can close immediately. */
+export interface WordCreateOptions {
+  /** Group NAMES to attach the new word to; missing groups are created. */
+  groupNames?: string[];
+  /** Draft to delete once the word (and its groups) are fully registered. */
+  draftId?: string;
+}
 
 // Maximum concurrent queue item executions. Higher = faster bulk adds,
 // but raises the risk that two parallel adds touching the same example
@@ -12,7 +29,7 @@ type SmartAddPayload = Parameters<typeof smartAddWord>[1];
 const CONCURRENCY = 4;
 
 type QueueItem =
-  | { id: string; type: "create"; term: string; language: string; payload: SmartAddPayload }
+  | { id: string; type: "create"; term: string; language: string; payload: SmartAddPayload; groupNames?: string[]; draftId?: string }
   | { id: string; type: "update"; term: string; language: string; wordId: string; updates: Partial<Word>; groupsToAdd: string[]; groupsToRemove: string[] };
 
 export interface QueueResult {
@@ -20,6 +37,19 @@ export interface QueueResult {
   term: string;
   success: boolean;
   error?: string;
+}
+
+// Serializes group-by-NAME resolution across the parallel workers: two queued
+// drafts sharing a brand-new group name would otherwise both miss the lookup
+// and each create a duplicate group.
+let groupOpsChain: Promise<void> = Promise.resolve();
+function withGroupLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = groupOpsChain.then(fn);
+  groupOpsChain = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
 }
 
 async function processItem(item: QueueItem): Promise<void> {
@@ -33,6 +63,23 @@ async function processItem(item: QueueItem): Promise<void> {
         ),
       );
     }
+    if (item.groupNames && item.groupNames.length > 0) {
+      const names = [...new Set(item.groupNames.map((n) => n.trim()).filter(Boolean))];
+      await withGroupLock(async () => {
+        const existing = await getGroups(item.language);
+        for (const name of names) {
+          const group =
+            existing.find((g) => g.name === name) ??
+            (await createGroup(item.language, name));
+          await modifyGroupMembers(item.language, group.id, [word.id], "add");
+        }
+      });
+    }
+    // Retire the source draft only after the word and its groups all succeeded,
+    // so a failed registration keeps the draft available for another attempt.
+    if (item.draftId) {
+      await deleteWordDraft(item.language, item.draftId);
+    }
   } else {
     await updateWord(item.language, item.wordId, item.updates);
     await Promise.all([
@@ -40,6 +87,50 @@ async function processItem(item: QueueItem): Promise<void> {
       ...item.groupsToRemove.map((gid) => modifyGroupMembers(item.language, gid, [item.wordId], "remove")),
     ]);
   }
+}
+
+// A failed create would silently lose the user's input (segment-chip adds have
+// no other record), so it is preserved as a word draft for review/retry. Draft
+// examples carry the chip segmentation as `segments` (plain segment texts) so
+// the review modal restores the splits. Draft-originated items never reach
+// this: their source draft is only deleted on success and thus still exists.
+async function saveFailedCreateAsDraft(
+  item: Extract<QueueItem, { type: "create" }>,
+): Promise<void> {
+  const p = item.payload;
+  let groupNames = item.groupNames ?? [];
+  const groupIds = p.groupIds ?? [];
+  if (groupIds.length > 0) {
+    try {
+      const groups = await getGroups(item.language);
+      const nameById = new Map(groups.map((g) => [g.id, g.name]));
+      groupNames = [
+        ...groupNames,
+        ...groupIds.map((id) => nameById.get(id)).filter((n): n is string => !!n),
+      ];
+    } catch {
+      // Groups are best-effort on the rescue path — keep the draft itself.
+    }
+  }
+  const names = [...new Set(groupNames.map((n) => n.trim()).filter(Boolean))];
+  const draft: Omit<WordDraft, "id" | "language" | "createdAt"> = {
+    term: p.term,
+    ...(p.transliteration ? { transliteration: p.transliteration } : {}),
+    ...(p.definitions?.length ? { definitions: p.definitions } : {}),
+    ...(p.examples?.length
+      ? {
+          examples: p.examples.map((ex) => ({
+            sentence: ex.sentence,
+            translation: ex.translation,
+            ...(ex.userSplits && ex.userSplits.length >= 2 ? { segments: ex.userSplits } : {}),
+          })),
+        }
+      : {}),
+    ...(p.level ? { level: p.level } : {}),
+    ...(p.topics?.length ? { topics: p.topics } : {}),
+    ...(names.length ? { groups: names } : {}),
+  };
+  await uploadWordDrafts(item.language, [draft]);
 }
 
 export function useWordQueue() {
@@ -76,6 +167,13 @@ export function useWordQueue() {
           setRecentResults((prev) =>
             [{ id: item.id, term: item.term, success: false, error: String(err) }, ...prev].slice(0, 5),
           );
+          // Rescue failed creates into a draft — except 409 duplicates (the word
+          // is already in the DB) and draft-originated items (draft still exists).
+          if (item.type === "create" && !item.draftId && !String(err).includes("409")) {
+            saveFailedCreateAsDraft(item)
+              .then(() => setRefreshSignal((s) => s + 1))
+              .catch(() => {});
+          }
         })
         .finally(() => {
           setProcessing((prev) => prev.filter((p) => p.id !== item.id));
@@ -84,10 +182,10 @@ export function useWordQueue() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [processing, queue]);
 
-  const enqueue = useCallback((term: string, language: string, payload: SmartAddPayload) => {
+  const enqueue = useCallback((term: string, language: string, payload: SmartAddPayload, opts?: WordCreateOptions) => {
     setQueue((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), type: "create", term, language, payload },
+      { id: crypto.randomUUID(), type: "create", term, language, payload, ...(opts ?? {}) },
     ]);
   }, []);
 
@@ -120,12 +218,24 @@ export function useWordQueue() {
     return s;
   }, [processing]);
 
+  // Draft IDs whose registration is queued or in flight — drives the
+  // "Registering…" badge on draft rows. Clears on success (draft deleted) AND
+  // on failure (draft kept, actions re-enabled for another attempt).
+  const pendingDraftIds = useMemo(() => {
+    const s = new Set<string>();
+    for (const item of [...processing, ...queue]) {
+      if (item.type === "create" && item.draftId) s.add(item.draftId);
+    }
+    return s;
+  }, [processing, queue]);
+
   return {
     enqueue,
     enqueueUpdate,
     pendingTerms,
     processingTerms,
     succeededTerms,
+    pendingDraftIds,
     queueLength: queue.length,
     activeCount: processing.length,
     recentResults,

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP } from "../settings/defaults";
-import { answerQuestion, getQuizQuestions } from "../api/quiz";
+import { answerQuestion, getQuizQuestions, updateQuizWeights } from "../api/quiz";
 import { getFlaggedWordIds, flagWord, unflagWord } from "../api/flagged";
 import { getGroups } from "../api/vocab";
 import RubyText from "./RubyText";
@@ -48,6 +48,9 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   const [alreadyFlaggedIds, setAlreadyFlaggedIds] = useState<Set<string>>(new Set());
   const [originalTotal] = useState(() => session.wordIds?.length ?? session.questions.length);
   const [groupNameMap, setGroupNameMap] = useState<Map<string, string>>(new Map());
+  const [weightsOpen, setWeightsOpen] = useState(false);
+  const [weightDraft, setWeightDraft] = useState<Record<string, number>>({});
+  const [applyingWeights, setApplyingWeights] = useState(false);
 
   // Track how many questions have been fetched from the server
   const fetchedCountRef = useRef(0);
@@ -138,6 +141,41 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     setShowAllExamples(false);
   }
 
+  function openWeightsPanel() {
+    const membership = currentSession.groupMembership ?? {};
+    setWeightDraft(
+      Object.fromEntries(
+        Object.keys(membership).map((gid) => [gid, currentSession.groupWeights?.[gid] ?? 1])
+      )
+    );
+    setWeightsOpen(true);
+  }
+
+  // Apply new group weights mid-session: the server reorders the unanswered
+  // tail and returns the full session; re-sync local order and jump to the
+  // first unanswered question of the new order.
+  async function applyWeights() {
+    if (applyingWeights) return;
+    setApplyingWeights(true);
+    try {
+      const updated = await updateQuizWeights(currentSession.language, weightDraft);
+      const hydratedByWordId = new Map(questions.map((q) => [q.wordId, q]));
+      setQuestions(updated.questions.map((q) => ({ ...hydratedByWordId.get(q.wordId), ...q })));
+      setCurrentSession(updated);
+      totalQuestionsRef.current = updated.questions.length;
+      const firstUnanswered = updated.questions.findIndex((q) => q.userCorrect === undefined);
+      setCurrentIndex(firstUnanswered === -1 ? updated.questions.length : firstUnanswered);
+      setShowingAnswer(false);
+      resetExpandedAnswers();
+      setFlaggedIds(new Set());
+      setWeightsOpen(false);
+    } catch {
+      // Keep the panel open so the user can retry.
+    } finally {
+      setApplyingWeights(false);
+    }
+  }
+
   function revealAnswer() {
     if (!question) return;
     resetExpandedAnswers();
@@ -211,6 +249,9 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      // Ignore shortcuts while typing in a form control (e.g. the weights panel).
+      const target = event.target as HTMLElement | null;
+      if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
       if (!showingAnswer) {
         if (question && !event.repeat && (event.key === " " || event.code === "Space")) {
           event.preventDefault();
@@ -284,7 +325,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
         {currentSession.score.correct} / {originalTotal}
       </p>
       {groupProgress && (
-        <div className="flex flex-wrap justify-center gap-2">
+        <div className="flex flex-wrap justify-center gap-2 items-center">
           {groupProgress.map((g) => (
             <span
               key={g.id}
@@ -297,6 +338,51 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
               {g.name}: {g.remaining}/{g.total}
             </span>
           ))}
+          <button
+            onClick={() => (weightsOpen ? setWeightsOpen(false) : openWeightsPanel())}
+            className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1 text-xs text-gray-300 hover:bg-gray-700"
+          >
+            ⚖ {t("adjustWeights")}
+          </button>
+        </div>
+      )}
+
+      {/* Mid-session group weight editor */}
+      {weightsOpen && (
+        <div className="w-full max-w-lg rounded-lg border border-gray-600 bg-gray-800 p-4 space-y-2">
+          <p className="text-sm font-medium text-gray-300">{t("adjustWeights")}</p>
+          {Object.keys(currentSession.groupMembership ?? {}).map((gid) => (
+            <label key={gid} className="flex items-center gap-2 text-sm text-gray-300">
+              <span className="flex-1 min-w-0 truncate">{groupNameMap.get(gid) ?? gid}</span>
+              <input
+                type="number"
+                min={0}
+                value={weightDraft[gid] ?? 1}
+                title={t("groupWeightHint")}
+                aria-label={t("groupWeight")}
+                onChange={(e) => {
+                  const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                  setWeightDraft((prev) => ({ ...prev, [gid]: v }));
+                }}
+                className="w-16 shrink-0 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:border-blue-400 focus:outline-none"
+              />
+            </label>
+          ))}
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              onClick={() => setWeightsOpen(false)}
+              className="rounded-lg border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700"
+            >
+              {t("cancel")}
+            </button>
+            <button
+              onClick={applyWeights}
+              disabled={applyingWeights}
+              className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-500 disabled:opacity-50"
+            >
+              {applyingWeights ? "..." : t("applyWeights")}
+            </button>
+          </div>
         </div>
       )}
       <h2 className="text-xl sm:text-3xl font-bold text-gray-100">{question!.term}</h2>

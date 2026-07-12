@@ -25,6 +25,9 @@ interface Props {
   onGrammarUpdateQueue: GrammarEnqueueUpdate;
   pendingTerms: Set<string>;
   succeededTerms: Set<string>;
+  pendingDraftIds: Set<string>;
+  grammarPendingTerms: Set<string>;
+  grammarPendingDraftIds: Set<string>;
 }
 
 export default function BrowseView({
@@ -42,6 +45,9 @@ export default function BrowseView({
   onGrammarUpdateQueue,
   pendingTerms,
   succeededTerms,
+  pendingDraftIds,
+  grammarPendingTerms,
+  grammarPendingDraftIds,
 }: Props) {
   const { t } = useI18n();
   const [tab, setTab] = useState<"word" | "grammar">(initialTab);
@@ -84,6 +90,7 @@ export default function BrowseView({
             onQueueEdit={onQueueEdit}
             pendingTerms={pendingTerms}
             succeededTerms={succeededTerms}
+            pendingDraftIds={pendingDraftIds}
           />
         ) : (
           <GrammarList
@@ -94,6 +101,8 @@ export default function BrowseView({
             onGrammarUpdateQueue={onGrammarUpdateQueue}
             pendingTerms={pendingTerms}
             succeededTerms={succeededTerms}
+            grammarPendingTerms={grammarPendingTerms}
+            grammarPendingDraftIds={grammarPendingDraftIds}
             refreshSignal={refreshSignal + grammarRefreshSignal}
           />
         )}
