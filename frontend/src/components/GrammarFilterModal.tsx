@@ -5,7 +5,7 @@ import type { GrammarGroup } from "../types";
 
 interface Props {
   language: string;
-  onStart: (filters: { groupIds: string[] }) => void;
+  onStart: (filters: { groupIds: string[]; groupWeights: Record<string, number> }) => void;
   onClose: () => void;
 }
 
@@ -13,6 +13,7 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
   const { t } = useI18n();
   const [groups, setGroups] = useState<GrammarGroup[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
+  const [groupWeights, setGroupWeights] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,6 +22,7 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
         setGroups(gs);
         // Pre-select all groups by default (mirrors word quiz filter)
         setSelectedGroupIds(new Set(gs.map((g) => g.id)));
+        setGroupWeights(Object.fromEntries(gs.map((g) => [g.id, 1])));
       })
       .catch(() => setGroups([]))
       .finally(() => setLoading(false));
@@ -85,7 +87,22 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
                         className="accent-blue-600"
                       />
                       <span className="flex-1">{g.name}</span>
-                      <span className="text-xs text-gray-500">{g.grammarIds.length}</span>
+                      {selectedGroupIds.has(g.id) && (
+                        <input
+                          type="number"
+                          min={1}
+                          value={groupWeights[g.id] ?? 1}
+                          title={t("groupWeightHint")}
+                          aria-label={t("groupWeight")}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => {
+                            const v = Math.max(1, Math.floor(Number(e.target.value) || 1));
+                            setGroupWeights((prev) => ({ ...prev, [g.id]: v }));
+                          }}
+                          className="w-12 shrink-0 rounded border border-gray-600 bg-gray-700 px-1 py-0.5 text-xs text-gray-100 focus:border-blue-400 focus:outline-none"
+                        />
+                      )}
+                      <span className="text-xs text-gray-500 shrink-0 w-8 text-right">{g.grammarIds.length}</span>
                     </label>
                   ))}
                 </div>
@@ -106,6 +123,9 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
               onStart({
                 // No groups selected = quiz the entire pool (server-side default behavior).
                 groupIds: [...selectedGroupIds],
+                groupWeights: Object.fromEntries(
+                  [...selectedGroupIds].map((id) => [id, groupWeights[id] ?? 1])
+                ),
               })
             }
             disabled={loading}

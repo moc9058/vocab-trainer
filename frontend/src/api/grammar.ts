@@ -140,8 +140,21 @@ export function startGrammarQuiz(opts: {
   language: string;
   questionCount?: number;
   groupIds?: string[];
+  groupWeights?: Record<string, number>;
 }): Promise<GrammarQuizSession> {
   return postJson("/api/grammar-quiz/start", opts);
+}
+
+// Mid-session weight change: server reorders the unanswered tail and returns
+// the full session in the new order.
+export function updateGrammarQuizWeights(
+  language: string,
+  groupWeights: Record<string, number>
+): Promise<GrammarQuizSession> {
+  return putJson(
+    `/api/grammar-quiz/session/language/${encodeURIComponent(language)}/weights`,
+    { groupWeights }
+  );
 }
 
 export function answerGrammarQuestion(opts: {

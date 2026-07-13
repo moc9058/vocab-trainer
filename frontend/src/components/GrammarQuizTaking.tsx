@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { answerGrammarQuestion } from "../api/grammar";
+import { answerGrammarQuestion, getGrammarGroups, updateGrammarQuizWeights } from "../api/grammar";
 import { fetchJson } from "../api/client";
 import RubyText from "./RubyText";
 import type { GrammarQuizSession, Grammar } from "../types";
@@ -26,6 +26,10 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
   const [originalTotal] = useState(
     session.questions.filter((q) => q.userCorrect === undefined).length || session.questions.length
   );
+  const [groupNameMap, setGroupNameMap] = useState<Map<string, string>>(new Map());
+  const [weightsOpen, setWeightsOpen] = useState(false);
+  const [weightDraft, setWeightDraft] = useState<Record<string, number>>({});
+  const [applyingWeights, setApplyingWeights] = useState(false);
 
   // Fetch grammar item details for showing statement/descriptions on answer reveal
   useEffect(() => {
@@ -43,10 +47,60 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
     }
   }, [session.questions, session.language]);
 
+  useEffect(() => {
+    if (!session.groupMembership || Object.keys(session.groupMembership).length === 0) return;
+    getGrammarGroups(session.language)
+      .then((groups) => setGroupNameMap(new Map(groups.map((g) => [g.id, g.name]))))
+      .catch(() => {});
+  }, [session.language, session.groupMembership]);
+
   const question =
     currentIndex < currentSession.questions.length ? currentSession.questions[currentIndex] : null;
   const isComplete = currentSession.status === "completed";
   const grammar = question ? grammarCache.get(question.grammarId) : null;
+
+  const groupProgress = useMemo(() => {
+    const membership = currentSession.groupMembership;
+    if (!membership || Object.keys(membership).length === 0) return null;
+    const unansweredIds = new Set(
+      currentSession.questions.filter((q) => q.userCorrect === undefined).map((q) => q.grammarId)
+    );
+    return Object.entries(membership).map(([gid, ids]) => ({
+      id: gid,
+      name: groupNameMap.get(gid) ?? gid,
+      remaining: ids.filter((id) => unansweredIds.has(id)).length,
+      total: ids.length,
+    }));
+  }, [currentSession.groupMembership, currentSession.questions, groupNameMap]);
+
+  function openWeightsPanel() {
+    const membership = currentSession.groupMembership ?? {};
+    setWeightDraft(
+      Object.fromEntries(
+        Object.keys(membership).map((gid) => [gid, currentSession.groupWeights?.[gid] ?? 1])
+      )
+    );
+    setWeightsOpen(true);
+  }
+
+  // Apply new group weights mid-session: the server reorders the unanswered tail and
+  // returns the full session; jump to the first unanswered question of the new order.
+  async function applyWeights() {
+    if (applyingWeights) return;
+    setApplyingWeights(true);
+    try {
+      const updated = await updateGrammarQuizWeights(currentSession.language, weightDraft);
+      setCurrentSession(updated);
+      const firstUnanswered = updated.questions.findIndex((q) => q.userCorrect === undefined);
+      setCurrentIndex(firstUnanswered === -1 ? updated.questions.length : firstUnanswered);
+      setShowingAnswer(false);
+      setWeightsOpen(false);
+    } catch {
+      // Keep the panel open so the user can retry.
+    } finally {
+      setApplyingWeights(false);
+    }
+  }
 
   async function handleGrade(correct: boolean) {
     if (!question || submitting) return;
@@ -93,6 +147,68 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
       <p className="text-sm text-gray-400">
         {currentSession.score.correct} / {originalTotal}
       </p>
+
+      {groupProgress && (
+        <div className="flex flex-wrap justify-center gap-2 items-center">
+          {groupProgress.map((g) => (
+            <span
+              key={g.id}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                g.remaining === 0
+                  ? "bg-green-900/40 text-green-400 border border-green-700/50"
+                  : "bg-gray-700 text-gray-300 border border-gray-600"
+              }`}
+            >
+              {g.name}: {g.remaining}/{g.total}
+            </span>
+          ))}
+          <button
+            onClick={() => (weightsOpen ? setWeightsOpen(false) : openWeightsPanel())}
+            className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1 text-xs text-gray-300 hover:bg-gray-700"
+          >
+            ⚖ {t("adjustWeights")}
+          </button>
+        </div>
+      )}
+
+      {/* Mid-session group weight editor */}
+      {weightsOpen && (
+        <div className="w-full max-w-lg rounded-lg border border-gray-600 bg-gray-800 p-4 space-y-2">
+          <p className="text-sm font-medium text-gray-300">{t("adjustWeights")}</p>
+          {Object.keys(currentSession.groupMembership ?? {}).map((gid) => (
+            <label key={gid} className="flex items-center gap-2 text-sm text-gray-300">
+              <span className="flex-1 min-w-0 truncate">{groupNameMap.get(gid) ?? gid}</span>
+              <input
+                type="number"
+                min={0}
+                value={weightDraft[gid] ?? 1}
+                title={t("groupWeightHint")}
+                aria-label={t("groupWeight")}
+                onChange={(e) => {
+                  const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                  setWeightDraft((prev) => ({ ...prev, [gid]: v }));
+                }}
+                className="w-16 shrink-0 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:border-blue-400 focus:outline-none"
+              />
+            </label>
+          ))}
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              onClick={() => setWeightsOpen(false)}
+              className="rounded-lg border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700"
+            >
+              {t("cancel")}
+            </button>
+            <button
+              onClick={applyWeights}
+              disabled={applyingWeights}
+              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {applyingWeights ? "..." : t("applyWeights")}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Question: the grammar element itself (user must recall its meaning/usage) */}
       <h2 className="max-w-lg text-center text-xl sm:text-3xl font-bold text-gray-100">

@@ -261,6 +261,8 @@ export interface GrammarQuizSession {
   score: QuizScore;
   questions: GrammarQuizQuestion[];
   groupFilter?: string[];
+  groupWeights?: Record<string, number>;
+  groupMembership?: Record<string, string[]>;
 }
 
 // ========== Combined Quiz (words + grammar) ==========

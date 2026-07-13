@@ -277,7 +277,7 @@ export default function Dashboard() {
     setStudyQuizTab("grammar");
   }
 
-  async function handleGrammarFiltersSelected(filters: { groupIds: string[] }) {
+  async function handleGrammarFiltersSelected(filters: { groupIds: string[]; groupWeights: Record<string, number> }) {
     if (!language) return;
     setStudyQuizTab(null);
     try {
@@ -291,6 +291,7 @@ export default function Dashboard() {
       const session = await startGrammarQuiz({
         language,
         groupIds: filters.groupIds.length > 0 ? filters.groupIds : undefined,
+        groupWeights: filters.groupIds.length > 0 ? filters.groupWeights : undefined,
       });
       setActiveGrammarQuiz(session);
       navigate(`/${language}/grammar-quiz`);

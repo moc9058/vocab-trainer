@@ -19,6 +19,7 @@ import {
 } from "../firestore.js";
 import type {
   Grammar,
+  GrammarGroup,
   GrammarQuizSession,
   GrammarQuizQuestion,
   GrammarProgress,
@@ -28,6 +29,7 @@ import type {
 } from "../types.js";
 import { TOPICS } from "../types.js";
 import { callLLM, stripMarkdownFences } from "../llm.js";
+import { weightedInterleave } from "../quiz-utils.js";
 
 const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
   // Start grammar quiz
@@ -36,6 +38,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       language: string;
       questionCount?: number;
       groupIds?: string[];
+      groupWeights?: Record<string, number>;
     };
   }>(
     "/start",
@@ -48,17 +51,19 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
             language: { type: "string" },
             questionCount: { type: "number", minimum: 1 },
             groupIds: { type: "array", items: { type: "string" } },
+            groupWeights: { type: "object", additionalProperties: { type: "number" } },
           },
         },
       },
     },
     async (request, reply) => {
-      const { language, questionCount, groupIds } = request.body;
+      const { language, questionCount, groupIds, groupWeights } = request.body;
 
       let pool = await getAllGrammarItems(language);
 
+      let groupDocs: (GrammarGroup | null)[] = [];
       if (groupIds && groupIds.length > 0) {
-        const groupDocs = await Promise.all(groupIds.map((id) => getGrammarGroup(id)));
+        groupDocs = await Promise.all(groupIds.map((id) => getGrammarGroup(id)));
         const union = new Set<string>();
         for (const g of groupDocs) {
           if (g) for (const gid of g.grammarIds) union.add(gid);
@@ -72,7 +77,26 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
 
       const progressMap = await getGrammarProgressForLanguage(language);
       const count = questionCount ? Math.min(questionCount, pool.length) : Math.min(10, pool.length);
-      const selected = weightedSample(pool, count, progressMap);
+
+      // When groups are selected, order the pool by a weighted interleave (mirrors the
+      // word quiz): each next item's group is drawn proportionally to its weight (default
+      // 1), then a random item from it. Otherwise fall back to the existing spaced-repetition
+      // sampling (unseen / overdue / low-accuracy items weighted higher).
+      let selected: Grammar[];
+      let groupMembership: Record<string, string[]> | undefined;
+      if (groupIds && groupIds.length > 0) {
+        const membership = buildGrammarGroupMembership(groupIds, groupDocs, pool);
+        const buckets = groupIds.map((id) => ({
+          weight: groupWeights?.[id] ?? 1,
+          items: membership[id] ?? [],
+        }));
+        selected = weightedInterleave(buckets).slice(0, count);
+        groupMembership = Object.fromEntries(
+          Object.entries(membership).map(([id, items]) => [id, items.map((i) => i.id)])
+        );
+      } else {
+        selected = weightedSample(pool, count, progressMap);
+      }
 
       // The question is the grammar element itself; descriptions/examples are
       // fetched by the client on answer reveal.
@@ -89,6 +113,8 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
         score: { correct: 0, total: questions.length },
         questions,
         ...(groupIds && groupIds.length > 0 ? { groupFilter: groupIds } : {}),
+        ...(groupWeights ? { groupWeights } : {}),
+        ...(groupMembership ? { groupMembership } : {}),
       };
 
       await saveGrammarQuizSession(session);
@@ -172,6 +198,44 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const session = await getGrammarQuizSession(request.params.language);
       if (!session) return reply.notFound("No grammar quiz session found");
+      return session;
+    }
+  );
+
+  // Adjust per-group weights mid-session: store the new weights and reorder the
+  // unanswered tail with them. Returns the full session so the client can re-sync
+  // its local order.
+  fastify.put<{
+    Params: { language: string };
+    Body: { groupWeights: Record<string, number> };
+  }>(
+    "/session/language/:language/weights",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["groupWeights"],
+          properties: {
+            groupWeights: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const session = await getGrammarQuizSession(request.params.language);
+      if (!session) return reply.notFound("No grammar quiz session found");
+      if (session.status === "completed") return reply.badRequest("Session already completed");
+
+      session.groupWeights = { ...session.groupWeights, ...request.body.groupWeights };
+      const answered: GrammarQuizQuestion[] = [];
+      const unanswered: GrammarQuizQuestion[] = [];
+      for (const q of session.questions) {
+        if (q.userCorrect !== undefined) answered.push(q);
+        else unanswered.push(q);
+      }
+      session.questions = [...answered, ...reweightUnansweredGrammar(unanswered, session)];
+      await saveGrammarQuizSession(session);
+
       return session;
     }
   );
@@ -356,6 +420,57 @@ function weightedSample(
   }
 
   return selected;
+}
+
+// Assign each pooled item to exactly one of the selected groups — the first group (in
+// groupIds order) whose membership contains it — so weighted draws have well-defined
+// denominators and each item appears once. Mirrors quiz.ts's buildGroupMembership.
+function buildGrammarGroupMembership(
+  groupIds: string[],
+  groupDocs: (GrammarGroup | null)[],
+  pool: Grammar[]
+): Record<string, Grammar[]> {
+  const itemById = new Map(pool.map((item) => [item.id, item]));
+  const assigned = new Set<string>();
+  const membership: Record<string, Grammar[]> = {};
+  for (const id of groupIds) membership[id] = [];
+  for (const g of groupDocs) {
+    if (!g) continue;
+    for (const gid of g.grammarIds) {
+      if (itemById.has(gid) && !assigned.has(gid)) {
+        assigned.add(gid);
+        membership[g.id].push(itemById.get(gid)!);
+      }
+    }
+  }
+  return membership;
+}
+
+// Re-order the unanswered tail by the session's current per-group weights. Ungrouped
+// sessions (no stored membership) are left in their existing order — unlike the word
+// quiz, an ungrouped grammar session's order already reflects spaced-repetition weight
+// (see weightedSample), so there is no uniform-shuffle fallback to apply here.
+function reweightUnansweredGrammar(
+  unanswered: GrammarQuizQuestion[],
+  session: GrammarQuizSession
+): GrammarQuizQuestion[] {
+  const membership = session.groupMembership;
+  if (!membership || Object.keys(membership).length === 0) {
+    return unanswered;
+  }
+  const byGrammarId = new Map<string, GrammarQuizQuestion>();
+  for (const q of unanswered) byGrammarId.set(q.grammarId, q);
+  const buckets = Object.entries(membership).map(([gid, ids]) => ({
+    weight: session.groupWeights?.[gid] ?? 1,
+    items: ids.filter((id) => byGrammarId.has(id)).map((id) => byGrammarId.get(id)!),
+  }));
+  const ordered = weightedInterleave(buckets);
+  // Append any unanswered question not covered by the stored membership.
+  const covered = new Set(ordered.map((q) => q.grammarId));
+  for (const q of unanswered) {
+    if (!covered.has(q.grammarId)) ordered.push(q);
+  }
+  return ordered;
 }
 
 export default grammarQuizRoutes;

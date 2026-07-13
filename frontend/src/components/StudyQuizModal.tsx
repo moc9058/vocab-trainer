@@ -12,7 +12,7 @@ interface Props {
   onClose: () => void;
   onStartWord: (filters: QuizFilters) => void;
   onPrintWord?: (filters: QuizFilters, count: number | null) => void;
-  onStartGrammar: (filters: { groupIds: string[] }) => void;
+  onStartGrammar: (filters: { groupIds: string[]; groupWeights: Record<string, number> }) => void;
   onStartCombined: (filters: CombinedQuizFilters) => void;
 }
 

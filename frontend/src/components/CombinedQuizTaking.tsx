@@ -199,10 +199,11 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     const unansweredGrammarIds = new Set(
       questions.filter((q) => q.kind === "grammar" && q.userCorrect === undefined).map((q) => (q as { grammarId: string }).grammarId)
     );
-    const rows: { id: string; name: string; remaining: number; total: number }[] = [];
+    const rows: { id: string; kind: "word" | "grammar"; name: string; remaining: number; total: number }[] = [];
     for (const [gid, ids] of Object.entries(wordMembership ?? {})) {
       rows.push({
         id: gid,
+        kind: "word",
         name: groupNameMap.get(gid) ?? gid,
         remaining: ids.filter((id) => unansweredWordIds.has(id)).length,
         total: ids.length,
@@ -211,6 +212,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     for (const [gid, ids] of Object.entries(grammarMembership ?? {})) {
       rows.push({
         id: gid,
+        kind: "grammar",
         name: groupNameMap.get(gid) ?? gid,
         remaining: ids.filter((id) => unansweredGrammarIds.has(id)).length,
         total: ids.length,
@@ -485,40 +487,60 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
               />
             </label>
           ))}
-          {Object.keys(currentSession.wordGroupMembership ?? {}).map((gid) => (
-            <label key={`w-${gid}`} className="flex items-center gap-2 text-sm text-gray-300">
-              <span className="flex-1 min-w-0 truncate pl-4">{groupNameMap.get(gid) ?? gid}</span>
-              <input
-                type="number"
-                min={0}
-                value={wordWeightDraft[gid] ?? 1}
-                title={t("groupWeightHint")}
-                aria-label={t("groupWeight")}
-                onChange={(e) => {
-                  const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
-                  setWordWeightDraft((prev) => ({ ...prev, [gid]: v }));
-                }}
-                className="w-16 shrink-0 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:border-blue-400 focus:outline-none"
-              />
-            </label>
-          ))}
-          {Object.keys(currentSession.grammarGroupMembership ?? {}).map((gid) => (
-            <label key={`g-${gid}`} className="flex items-center gap-2 text-sm text-gray-300">
-              <span className="flex-1 min-w-0 truncate pl-4">{groupNameMap.get(gid) ?? gid}</span>
-              <input
-                type="number"
-                min={0}
-                value={grammarWeightDraft[gid] ?? 1}
-                title={t("groupWeightHint")}
-                aria-label={t("groupWeight")}
-                onChange={(e) => {
-                  const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
-                  setGrammarWeightDraft((prev) => ({ ...prev, [gid]: v }));
-                }}
-                className="w-16 shrink-0 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:border-blue-400 focus:outline-none"
-              />
-            </label>
-          ))}
+          {Object.keys(currentSession.wordGroupMembership ?? {}).length > 0 && (
+            <details className="rounded border border-blue-900/50 bg-gray-900/40 px-2 py-1" open>
+              <summary className="cursor-pointer text-xs font-semibold text-blue-300 select-none">
+                {t("sectionVocabulary")} {t("groups")} (
+                {Object.keys(currentSession.wordGroupMembership ?? {}).length})
+              </summary>
+              <div className="mt-1 space-y-1">
+                {Object.keys(currentSession.wordGroupMembership ?? {}).map((gid) => (
+                  <label key={`w-${gid}`} className="flex items-center gap-2 text-sm text-gray-300">
+                    <span className="flex-1 min-w-0 truncate pl-4">{groupNameMap.get(gid) ?? gid}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={wordWeightDraft[gid] ?? 1}
+                      title={t("groupWeightHint")}
+                      aria-label={t("groupWeight")}
+                      onChange={(e) => {
+                        const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                        setWordWeightDraft((prev) => ({ ...prev, [gid]: v }));
+                      }}
+                      className="w-16 shrink-0 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:border-blue-400 focus:outline-none"
+                    />
+                  </label>
+                ))}
+              </div>
+            </details>
+          )}
+          {Object.keys(currentSession.grammarGroupMembership ?? {}).length > 0 && (
+            <details className="rounded border border-emerald-900/50 bg-gray-900/40 px-2 py-1" open>
+              <summary className="cursor-pointer text-xs font-semibold text-emerald-300 select-none">
+                {t("sectionGrammar")} {t("grammarGroups")} (
+                {Object.keys(currentSession.grammarGroupMembership ?? {}).length})
+              </summary>
+              <div className="mt-1 space-y-1">
+                {Object.keys(currentSession.grammarGroupMembership ?? {}).map((gid) => (
+                  <label key={`g-${gid}`} className="flex items-center gap-2 text-sm text-gray-300">
+                    <span className="flex-1 min-w-0 truncate pl-4">{groupNameMap.get(gid) ?? gid}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={grammarWeightDraft[gid] ?? 1}
+                      title={t("groupWeightHint")}
+                      aria-label={t("groupWeight")}
+                      onChange={(e) => {
+                        const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                        setGrammarWeightDraft((prev) => ({ ...prev, [gid]: v }));
+                      }}
+                      className="w-16 shrink-0 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:border-emerald-400 focus:outline-none"
+                    />
+                  </label>
+                ))}
+              </div>
+            </details>
+          )}
           <div className="flex justify-end gap-2 pt-1">
             <button
               onClick={() => setWeightsOpen(false)}
@@ -537,21 +559,38 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         </div>
       )}
 
-      {/* Per-group progress (word + grammar groups) */}
+      {/* Per-group progress (word + grammar groups shown as separately labeled rows) */}
       {groupProgress && (
-        <div className="flex flex-wrap justify-center gap-2">
-          {groupProgress.map((g) => (
-            <span
-              key={g.id}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
-                g.remaining === 0
-                  ? "bg-green-900/40 text-green-400 border border-green-700/50"
-                  : "bg-gray-700 text-gray-300 border border-gray-600"
-              }`}
-            >
-              {g.name}: {g.remaining}/{g.total}
-            </span>
-          ))}
+        <div className="flex flex-col items-center gap-1.5">
+          {(["word", "grammar"] as const).map((kind) => {
+            const rows = groupProgress.filter((g) => g.kind === kind);
+            if (rows.length === 0) return null;
+            return (
+              <div key={kind} className="flex flex-wrap items-center justify-center gap-2">
+                <span
+                  className={`text-xs font-semibold ${
+                    kind === "word" ? "text-blue-300" : "text-emerald-300"
+                  }`}
+                >
+                  {kind === "word" ? t("sectionVocabulary") : t("sectionGrammar")}:
+                </span>
+                {rows.map((g) => (
+                  <span
+                    key={g.id}
+                    className={`rounded-full px-3 py-1 text-xs font-medium border ${
+                      g.remaining === 0
+                        ? "bg-green-900/40 text-green-400 border-green-700/50"
+                        : kind === "word"
+                          ? "bg-blue-900/20 text-gray-300 border-blue-700/50"
+                          : "bg-emerald-900/20 text-gray-300 border-emerald-700/50"
+                    }`}
+                  >
+                    {g.name}: {g.remaining}/{g.total}
+                  </span>
+                ))}
+              </div>
+            );
+          })}
         </div>
       )}
 
