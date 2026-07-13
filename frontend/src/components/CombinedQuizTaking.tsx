@@ -7,6 +7,7 @@ import { getGroups } from "../api/vocab";
 import { getGrammarGroups } from "../api/grammar";
 import { getFlaggedWordIds, flagWord, unflagWord } from "../api/flagged";
 import { fetchJson } from "../api/client";
+import { isWeightValid, parseWeightInput } from "../utils/weightInput";
 import RubyText from "./RubyText";
 import type {
   CombinedQuizSession,
@@ -62,9 +63,10 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const [groupNameMap, setGroupNameMap] = useState<Map<string, string>>(new Map());
   const [originalTotal] = useState(() => session.initialTotal ?? session.questions.length);
   const [weightsOpen, setWeightsOpen] = useState(false);
-  const [domainDraft, setDomainDraft] = useState<{ word: number; grammar: number }>({ word: 1, grammar: 1 });
-  const [wordWeightDraft, setWordWeightDraft] = useState<Record<string, number>>({});
-  const [grammarWeightDraft, setGrammarWeightDraft] = useState<Record<string, number>>({});
+  const [groupsOpen, setGroupsOpen] = useState(false);
+  const [domainDraft, setDomainDraft] = useState<{ word: string; grammar: string }>({ word: "1", grammar: "1" });
+  const [wordWeightDraft, setWordWeightDraft] = useState<Record<string, string>>({});
+  const [grammarWeightDraft, setGrammarWeightDraft] = useState<Record<string, string>>({});
   const [applyingWeights, setApplyingWeights] = useState(false);
 
   const fetchedCountRef = useRef(0);
@@ -228,14 +230,14 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
   function openWeightsPanel() {
     setDomainDraft({
-      word: currentSession.domainWeights?.word ?? 1,
-      grammar: currentSession.domainWeights?.grammar ?? 1,
+      word: String(currentSession.domainWeights?.word ?? 1),
+      grammar: String(currentSession.domainWeights?.grammar ?? 1),
     });
     setWordWeightDraft(
       Object.fromEntries(
         Object.keys(currentSession.wordGroupMembership ?? {}).map((gid) => [
           gid,
-          currentSession.wordGroupWeights?.[gid] ?? 1,
+          String(currentSession.wordGroupWeights?.[gid] ?? 1),
         ])
       )
     );
@@ -243,25 +245,45 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       Object.fromEntries(
         Object.keys(currentSession.grammarGroupMembership ?? {}).map((gid) => [
           gid,
-          currentSession.grammarGroupWeights?.[gid] ?? 1,
+          String(currentSession.grammarGroupWeights?.[gid] ?? 1),
         ])
       )
     );
     setWeightsOpen(true);
   }
 
+  const domainDraftWordNum = parseWeightInput(domainDraft.word);
+  const domainDraftGrammarNum = parseWeightInput(domainDraft.grammar);
+  const hasInvalidDomainDraft = domainDraftWordNum === null || domainDraftGrammarNum === null;
+  const hasInvalidWordWeightDraft = Object.keys(wordWeightDraft).some((gid) => !isWeightValid(wordWeightDraft[gid], 0));
+  const hasInvalidGrammarWeightDraft = Object.keys(grammarWeightDraft).some((gid) => !isWeightValid(grammarWeightDraft[gid], 0));
+  const canApplyWeights =
+    !hasInvalidDomainDraft &&
+    !hasInvalidWordWeightDraft &&
+    !hasInvalidGrammarWeightDraft &&
+    !((domainDraftWordNum ?? 0) <= 0 && (domainDraftGrammarNum ?? 0) <= 0);
+
   // Apply new domain/group weights mid-session: the server reorders the
   // unanswered tail and returns the full session; re-sync local order and jump
   // to the first unanswered question of the new order.
   async function applyWeights() {
-    if (applyingWeights) return;
-    if (domainDraft.word <= 0 && domainDraft.grammar <= 0) return;
+    if (applyingWeights || !canApplyWeights) return;
     setApplyingWeights(true);
     try {
+      const domainWeights = {
+        word: Math.max(0, Math.floor(domainDraftWordNum ?? 0)),
+        grammar: Math.max(0, Math.floor(domainDraftGrammarNum ?? 0)),
+      };
+      const wordGroupWeights = Object.fromEntries(
+        Object.entries(wordWeightDraft).map(([gid, v]) => [gid, Math.max(0, Math.floor(parseWeightInput(v) ?? 0))])
+      );
+      const grammarGroupWeights = Object.fromEntries(
+        Object.entries(grammarWeightDraft).map(([gid, v]) => [gid, Math.max(0, Math.floor(parseWeightInput(v) ?? 0))])
+      );
       const updated = await updateCombinedQuizWeights(currentSession.language, {
-        domainWeights: domainDraft,
-        ...(Object.keys(wordWeightDraft).length > 0 ? { wordGroupWeights: wordWeightDraft } : {}),
-        ...(Object.keys(grammarWeightDraft).length > 0 ? { grammarGroupWeights: grammarWeightDraft } : {}),
+        domainWeights,
+        ...(Object.keys(wordGroupWeights).length > 0 ? { wordGroupWeights } : {}),
+        ...(Object.keys(grammarGroupWeights).length > 0 ? { grammarGroupWeights } : {}),
       });
       const hydratedByKey = new Map(questions.map((q) => [questionKey(q), q]));
       setQuestions(
@@ -451,6 +473,19 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
               {d.label}: {d.remaining}/{d.total}
             </span>
           ))}
+          {groupProgress && (
+            <button
+              onClick={() => setGroupsOpen((v) => !v)}
+              aria-pressed={groupsOpen}
+              className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                groupsOpen
+                  ? "border-gray-400 bg-gray-700 text-gray-100"
+                  : "border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700"
+              }`}
+            >
+              🏷 {t("groups")}
+            </button>
+          )}
           <button
             onClick={() => (weightsOpen ? setWeightsOpen(false) : openWeightsPanel())}
             className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1 text-xs text-gray-300 hover:bg-gray-700"
@@ -464,82 +499,115 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       {weightsOpen && (
         <div className="w-full max-w-lg rounded-lg border border-gray-600 bg-gray-800 p-4 space-y-2">
           <p className="text-sm font-medium text-gray-300">{t("adjustWeights")}</p>
-          {(["word", "grammar"] as const).map((kind) => (
-            <label key={kind} className="flex items-center gap-2 text-sm">
-              <span
-                className={`flex-1 min-w-0 truncate font-medium ${
-                  kind === "word" ? "text-blue-300" : "text-emerald-300"
-                }`}
-              >
-                {kind === "word" ? t("sectionVocabulary") : t("sectionGrammar")}
-              </span>
+
+          {/* Word domain: its own weight, directly followed by its own groups */}
+          <div className="rounded border border-blue-900/50 bg-gray-900/30 p-2 space-y-1">
+            <label className="flex items-center gap-2 text-sm">
+              <span className="flex-1 min-w-0 truncate font-medium text-blue-300">{t("sectionVocabulary")}</span>
               <input
                 type="number"
                 min={0}
-                value={domainDraft[kind]}
+                value={domainDraft.word}
                 title={t("groupWeightHint")}
                 aria-label={t("groupWeight")}
                 onChange={(e) => {
-                  const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
-                  setDomainDraft((prev) => ({ ...prev, [kind]: v }));
+                  setDomainDraft((prev) => ({ ...prev, word: e.target.value }));
                 }}
-                className="w-16 shrink-0 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:border-blue-400 focus:outline-none"
+                className={`w-16 shrink-0 rounded border bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:outline-none ${
+                  parseWeightInput(domainDraft.word) === null
+                    ? "border-red-500 focus:border-red-400"
+                    : "border-gray-600 focus:border-blue-400"
+                }`}
               />
             </label>
-          ))}
-          {Object.keys(currentSession.wordGroupMembership ?? {}).length > 0 && (
-            <details className="rounded border border-blue-900/50 bg-gray-900/40 px-2 py-1" open>
-              <summary className="cursor-pointer text-xs font-semibold text-blue-300 select-none">
-                {t("sectionVocabulary")} {t("groups")} (
-                {Object.keys(currentSession.wordGroupMembership ?? {}).length})
-              </summary>
-              <div className="mt-1 space-y-1">
-                {Object.keys(currentSession.wordGroupMembership ?? {}).map((gid) => (
-                  <label key={`w-${gid}`} className="flex items-center gap-2 text-sm text-gray-300">
-                    <span className="flex-1 min-w-0 truncate pl-4">{groupNameMap.get(gid) ?? gid}</span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={wordWeightDraft[gid] ?? 1}
-                      title={t("groupWeightHint")}
-                      aria-label={t("groupWeight")}
-                      onChange={(e) => {
-                        const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
-                        setWordWeightDraft((prev) => ({ ...prev, [gid]: v }));
-                      }}
-                      className="w-16 shrink-0 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:border-blue-400 focus:outline-none"
-                    />
-                  </label>
-                ))}
-              </div>
-            </details>
-          )}
-          {Object.keys(currentSession.grammarGroupMembership ?? {}).length > 0 && (
-            <details className="rounded border border-emerald-900/50 bg-gray-900/40 px-2 py-1" open>
-              <summary className="cursor-pointer text-xs font-semibold text-emerald-300 select-none">
-                {t("sectionGrammar")} {t("grammarGroups")} (
-                {Object.keys(currentSession.grammarGroupMembership ?? {}).length})
-              </summary>
-              <div className="mt-1 space-y-1">
-                {Object.keys(currentSession.grammarGroupMembership ?? {}).map((gid) => (
-                  <label key={`g-${gid}`} className="flex items-center gap-2 text-sm text-gray-300">
-                    <span className="flex-1 min-w-0 truncate pl-4">{groupNameMap.get(gid) ?? gid}</span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={grammarWeightDraft[gid] ?? 1}
-                      title={t("groupWeightHint")}
-                      aria-label={t("groupWeight")}
-                      onChange={(e) => {
-                        const v = Math.max(0, Math.floor(Number(e.target.value) || 0));
-                        setGrammarWeightDraft((prev) => ({ ...prev, [gid]: v }));
-                      }}
-                      className="w-16 shrink-0 rounded border border-gray-600 bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:border-emerald-400 focus:outline-none"
-                    />
-                  </label>
-                ))}
-              </div>
-            </details>
+            {Object.keys(currentSession.wordGroupMembership ?? {}).length > 0 && (
+              <details open>
+                <summary className="cursor-pointer text-xs font-semibold text-blue-300 select-none">
+                  {t("groups")} (
+                  {Object.keys(currentSession.wordGroupMembership ?? {}).length})
+                </summary>
+                <div className="mt-1 space-y-1">
+                  {Object.keys(currentSession.wordGroupMembership ?? {}).map((gid) => {
+                    const invalid = !isWeightValid(wordWeightDraft[gid], 0);
+                    return (
+                      <label key={`w-${gid}`} className="flex items-center gap-2 text-sm text-gray-300">
+                        <span className="flex-1 min-w-0 truncate pl-4">{groupNameMap.get(gid) ?? gid}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={wordWeightDraft[gid] ?? "1"}
+                          title={t("groupWeightHint")}
+                          aria-label={t("groupWeight")}
+                          onChange={(e) => {
+                            setWordWeightDraft((prev) => ({ ...prev, [gid]: e.target.value }));
+                          }}
+                          className={`w-16 shrink-0 rounded border bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:outline-none ${
+                            invalid ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-blue-400"
+                          }`}
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              </details>
+            )}
+          </div>
+
+          {/* Grammar domain: its own weight, directly followed by its own groups */}
+          <div className="rounded border border-emerald-900/50 bg-gray-900/30 p-2 space-y-1">
+            <label className="flex items-center gap-2 text-sm">
+              <span className="flex-1 min-w-0 truncate font-medium text-emerald-300">{t("sectionGrammar")}</span>
+              <input
+                type="number"
+                min={0}
+                value={domainDraft.grammar}
+                title={t("groupWeightHint")}
+                aria-label={t("groupWeight")}
+                onChange={(e) => {
+                  setDomainDraft((prev) => ({ ...prev, grammar: e.target.value }));
+                }}
+                className={`w-16 shrink-0 rounded border bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:outline-none ${
+                  parseWeightInput(domainDraft.grammar) === null
+                    ? "border-red-500 focus:border-red-400"
+                    : "border-gray-600 focus:border-emerald-400"
+                }`}
+              />
+            </label>
+            {Object.keys(currentSession.grammarGroupMembership ?? {}).length > 0 && (
+              <details open>
+                <summary className="cursor-pointer text-xs font-semibold text-emerald-300 select-none">
+                  {t("grammarGroups")} (
+                  {Object.keys(currentSession.grammarGroupMembership ?? {}).length})
+                </summary>
+                <div className="mt-1 space-y-1">
+                {Object.keys(currentSession.grammarGroupMembership ?? {}).map((gid) => {
+                  const invalid = !isWeightValid(grammarWeightDraft[gid], 0);
+                  return (
+                    <label key={`g-${gid}`} className="flex items-center gap-2 text-sm text-gray-300">
+                      <span className="flex-1 min-w-0 truncate pl-4">{groupNameMap.get(gid) ?? gid}</span>
+                      <input
+                        type="number"
+                        min={0}
+                        value={grammarWeightDraft[gid] ?? "1"}
+                        title={t("groupWeightHint")}
+                        aria-label={t("groupWeight")}
+                        onChange={(e) => {
+                          setGrammarWeightDraft((prev) => ({ ...prev, [gid]: e.target.value }));
+                        }}
+                        className={`w-16 shrink-0 rounded border bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:outline-none ${
+                          invalid ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-emerald-400"
+                        }`}
+                      />
+                    </label>
+                  );
+                })}
+                </div>
+              </details>
+            )}
+          </div>
+
+          {!canApplyWeights && (
+            <p className="text-xs text-red-400">{t("groupWeightRequiredHint")}</p>
           )}
           <div className="flex justify-end gap-2 pt-1">
             <button
@@ -550,7 +618,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             </button>
             <button
               onClick={applyWeights}
-              disabled={applyingWeights || (domainDraft.word <= 0 && domainDraft.grammar <= 0)}
+              disabled={applyingWeights || !canApplyWeights}
               className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500 disabled:opacity-50"
             >
               {applyingWeights ? "..." : t("applyWeights")}
@@ -559,8 +627,9 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         </div>
       )}
 
-      {/* Per-group progress (word + grammar groups shown as separately labeled rows) */}
-      {groupProgress && (
+      {/* Per-group progress (word + grammar groups shown as separately labeled rows) — collapsed by
+          default and toggled via the 🏷 Groups button since a large group count clutters the screen. */}
+      {groupsOpen && groupProgress && (
         <div className="flex flex-col items-center gap-1.5">
           {(["word", "grammar"] as const).map((kind) => {
             const rows = groupProgress.filter((g) => g.kind === kind);
