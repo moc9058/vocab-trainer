@@ -56,6 +56,12 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
       .catch(() => {});
   }, [session.language, session.groupMembership]);
 
+  // Mobile: the page scrolls when an answer is tall (min-h-full container), so
+  // reset to the top on each new question — otherwise the term stays off-screen.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [currentIndex]);
+
   const question =
     currentIndex < currentSession.questions.length ? currentSession.questions[currentIndex] : null;
   const isComplete = currentSession.status === "completed";
@@ -129,7 +135,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
   if (isComplete || (!question && currentIndex >= currentSession.questions.length)) {
     const { correct } = currentSession.score;
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+      <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("congratulations")}</h2>
         <p className="text-2xl sm:text-4xl font-semibold text-emerald-400">
           {correct} / {originalTotal}
@@ -150,7 +156,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
   }
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+    <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
       <p className="text-sm text-gray-400">
         {currentSession.score.correct} / {originalTotal}
       </p>
@@ -312,18 +318,18 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
           )}
 
           {/* Self-grade buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
+          <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
             <button
               disabled={submitting}
               onClick={() => handleGrade(true)}
-              className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+              className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-3 sm:py-2 text-white hover:bg-green-700 disabled:opacity-50"
             >
               {t("iWasCorrect")}
             </button>
             <button
               disabled={submitting}
               onClick={() => handleGrade(false)}
-              className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+              className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-3 sm:py-2 text-white hover:bg-red-700 disabled:opacity-50"
             >
               {t("iWasWrong")}
             </button>

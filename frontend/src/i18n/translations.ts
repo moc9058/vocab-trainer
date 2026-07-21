@@ -120,6 +120,8 @@ const translations = {
     existingCombinedQuizFound: "You have an in-progress combined quiz for this language. Resume or start a new one?",
     domainWeightHint: "Weights set how often word vs. grammar questions appear (e.g. 3 : 1).",
     noGrammarGroupsHint: "No grammar groups yet — all grammar items will be included.",
+    wordGroupsToggle: "Word Groups",
+    grammarGroupsToggle: "Grammar Groups",
     // Smart Add
     smartAddWord: "Add Word",
     addingWord: "Adding word...",
@@ -388,6 +390,8 @@ const translations = {
     existingCombinedQuizFound: "この言語で進行中の総合クイズがあります。再開しますか、新しく始めますか？",
     domainWeightHint: "重みで単語と文法の出題比率を設定します（例: 3 : 1）。",
     noGrammarGroupsHint: "文法グループがまだありません — すべての文法項目が対象になります。",
+    wordGroupsToggle: "単語グループ",
+    grammarGroupsToggle: "文法グループ",
     // Smart Add
     smartAddWord: "単語を追加",
     addingWord: "単語を追加中...",
@@ -656,6 +660,8 @@ const translations = {
     existingCombinedQuizFound: "진행 중인 통합 퀴즈가 있습니다. 이어서 하시겠습니까, 새로 시작하시겠습니까?",
     domainWeightHint: "가중치로 단어와 문법 문제의 출제 비율을 설정합니다 (예: 3 : 1).",
     noGrammarGroupsHint: "문법 그룹이 아직 없습니다 — 모든 문법 항목이 포함됩니다.",
+    wordGroupsToggle: "단어 그룹",
+    grammarGroupsToggle: "문법 그룹",
     // Smart Add
     smartAddWord: "단어 추가",
     addingWord: "단어 추가 중...",

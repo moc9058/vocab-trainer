@@ -292,9 +292,16 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [question, showingAnswer, submitting, handleGrade, alreadyFlaggedIds, currentSession.language]);
 
+  // On mobile the whole page scrolls (see min-h-full container note below), so
+  // reset scroll to the top when a new question appears — otherwise the user
+  // stays scrolled at the previous answer's grade buttons and misses the term.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [currentIndex]);
+
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex min-h-full items-center justify-center">
         <p className="text-gray-400">Loading questions...</p>
       </div>
     );
@@ -303,7 +310,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   if (isComplete || (!question && currentIndex >= questions.length)) {
     const { correct } = currentSession.score;
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+      <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("congratulations")}</h2>
         <p className="text-2xl sm:text-4xl font-semibold text-blue-400">
           {correct} / {originalTotal}
@@ -327,7 +334,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   }
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+    <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
       <p className="text-sm text-gray-400">
         {currentSession.score.correct} / {originalTotal}
       </p>
@@ -420,7 +427,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
           </div>
         </div>
       )}
-      <h2 className="text-xl sm:text-3xl font-bold text-gray-100">{question!.term}</h2>
+      <h2 className="max-w-full break-words px-2 text-center text-xl sm:text-3xl font-bold text-gray-100">{question!.term}</h2>
 
       {!showingAnswer ? (
         <button
@@ -548,18 +555,18 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
             )}
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
+          <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
             <button
               disabled={submitting}
               onClick={() => handleGrade(false)}
-              className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+              className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-3 sm:py-2 text-white hover:bg-red-700 disabled:opacity-50"
             >
               {t("iWasWrong")}
             </button>
             <button
               disabled={submitting}
               onClick={() => handleGrade(true)}
-              className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+              className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-3 sm:py-2 text-white hover:bg-green-700 disabled:opacity-50"
             >
               {t("iWasCorrect")}
             </button>

@@ -63,7 +63,8 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const [groupNameMap, setGroupNameMap] = useState<Map<string, string>>(new Map());
   const [originalTotal] = useState(() => session.initialTotal ?? session.questions.length);
   const [weightsOpen, setWeightsOpen] = useState(false);
-  const [groupsOpen, setGroupsOpen] = useState(false);
+  const [wordGroupsOpen, setWordGroupsOpen] = useState(false);
+  const [grammarGroupsOpen, setGrammarGroupsOpen] = useState(false);
   const [domainDraft, setDomainDraft] = useState<{ word: string; grammar: string }>({ word: "1", grammar: "1" });
   const [wordWeightDraft, setWordWeightDraft] = useState<Record<string, string>>({});
   const [grammarWeightDraft, setGrammarWeightDraft] = useState<Record<string, string>>({});
@@ -159,6 +160,12 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentIndex, questions, session.language]);
 
+  // Mobile: the page scrolls when an answer is tall (min-h-full container), so
+  // reset to the top on each new question — otherwise the prompt stays off-screen.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [currentIndex]);
+
   const question = currentIndex < questions.length ? questions[currentIndex] : null;
   const isComplete = currentSession.status === "completed";
   const wordQuestion = question?.kind === "word" ? question : null;
@@ -222,6 +229,9 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     }
     return rows.length > 0 ? rows : null;
   }, [currentSession.wordGroupMembership, currentSession.grammarGroupMembership, questions, groupNameMap]);
+
+  const hasWordGroups = groupProgress?.some((g) => g.kind === "word") ?? false;
+  const hasGrammarGroups = groupProgress?.some((g) => g.kind === "grammar") ?? false;
 
   function resetExpandedAnswers() {
     setShowAllDefinitions(false);
@@ -420,7 +430,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex min-h-full items-center justify-center">
         <p className="text-gray-400">Loading questions...</p>
       </div>
     );
@@ -429,7 +439,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   if (isComplete || (!question && currentIndex >= questions.length)) {
     const { correct } = currentSession.score;
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+      <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
         <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("congratulations")}</h2>
         <p className="text-2xl sm:text-4xl font-semibold text-indigo-400">
           {correct} / {originalTotal}
@@ -453,7 +463,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   }
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+    <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
       <p className="text-sm text-gray-400">
         {currentSession.score.correct} / {originalTotal}
       </p>
@@ -473,17 +483,30 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
               {d.label}: {d.remaining}/{d.total}
             </span>
           ))}
-          {groupProgress && (
+          {hasWordGroups && (
             <button
-              onClick={() => setGroupsOpen((v) => !v)}
-              aria-pressed={groupsOpen}
-              className={`rounded-full border px-3 py-1 text-xs font-medium ${
-                groupsOpen
-                  ? "border-gray-400 bg-gray-700 text-gray-100"
-                  : "border-gray-600 bg-gray-800 text-gray-300 hover:bg-gray-700"
+              onClick={() => setWordGroupsOpen((v) => !v)}
+              aria-pressed={wordGroupsOpen}
+              className={`rounded-full border px-3 py-1 text-xs font-medium text-blue-200 ${
+                wordGroupsOpen
+                  ? "border-blue-400 bg-blue-700/60"
+                  : "border-blue-800/70 bg-blue-900/30 hover:bg-blue-900/50"
               }`}
             >
-              🏷 {t("groups")}
+              📘 {t("wordGroupsToggle")}
+            </button>
+          )}
+          {hasGrammarGroups && (
+            <button
+              onClick={() => setGrammarGroupsOpen((v) => !v)}
+              aria-pressed={grammarGroupsOpen}
+              className={`rounded-full border px-3 py-1 text-xs font-medium text-emerald-200 ${
+                grammarGroupsOpen
+                  ? "border-emerald-400 bg-emerald-700/60"
+                  : "border-emerald-800/70 bg-emerald-900/30 hover:bg-emerald-900/50"
+              }`}
+            >
+              🏷 {t("grammarGroupsToggle")}
             </button>
           )}
           <button
@@ -627,11 +650,14 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         </div>
       )}
 
-      {/* Per-group progress (word + grammar groups shown as separately labeled rows) — collapsed by
-          default and toggled via the 🏷 Groups button since a large group count clutters the screen. */}
-      {groupsOpen && groupProgress && (
+      {/* Per-group progress (word + grammar groups shown as separately labeled rows) — each domain
+          collapsed by default and toggled independently via its own 🏷 button since a large group
+          count clutters the screen. */}
+      {groupProgress && (wordGroupsOpen || grammarGroupsOpen) && (
         <div className="flex flex-col items-center gap-1.5">
           {(["word", "grammar"] as const).map((kind) => {
+            if (kind === "word" && !wordGroupsOpen) return null;
+            if (kind === "grammar" && !grammarGroupsOpen) return null;
             const rows = groupProgress.filter((g) => g.kind === kind);
             if (rows.length === 0) return null;
             return (
@@ -675,7 +701,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       </span>
 
       {wordQuestion ? (
-        <h2 className="text-xl sm:text-3xl font-bold text-gray-100">{wordQuestion.term}</h2>
+        <h2 className="max-w-full break-words px-2 text-center text-xl sm:text-3xl font-bold text-gray-100">{wordQuestion.term}</h2>
       ) : (
         // Grammar prompt: the grammar element itself — descriptions revealed on answer
         <h2 className="max-w-lg text-center text-xl sm:text-3xl font-bold text-gray-100">
@@ -809,18 +835,18 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             )}
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
+          <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
             <button
               disabled={submitting}
               onClick={() => handleGrade(false)}
-              className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+              className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-3 sm:py-2 text-white hover:bg-red-700 disabled:opacity-50"
             >
               {t("iWasWrong")}
             </button>
             <button
               disabled={submitting}
               onClick={() => handleGrade(true)}
-              className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+              className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-3 sm:py-2 text-white hover:bg-green-700 disabled:opacity-50"
             >
               {t("iWasCorrect")}
             </button>
@@ -880,18 +906,18 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto">
+          <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
             <button
               disabled={submitting}
               onClick={() => handleGrade(false)}
-              className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-2 text-white hover:bg-red-700 disabled:opacity-50"
+              className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-3 sm:py-2 text-white hover:bg-red-700 disabled:opacity-50"
             >
               {t("iWasWrong")}
             </button>
             <button
               disabled={submitting}
               onClick={() => handleGrade(true)}
-              className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-2 text-white hover:bg-green-700 disabled:opacity-50"
+              className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-3 sm:py-2 text-white hover:bg-green-700 disabled:opacity-50"
             >
               {t("iWasCorrect")}
             </button>
