@@ -53,6 +53,12 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [weightDraft, setWeightDraft] = useState<Record<string, string>>({});
   const [applyingWeights, setApplyingWeights] = useState(false);
+  // Session = every question graded since this component mounted (i.e. since
+  // the page was last loaded/refreshed), in the order it was graded. Retries
+  // of the same word appear as separate entries here.
+  const [sessionLog, setSessionLog] = useState<QuizQuestion[]>([]);
+  const [sessionReviewActive, setSessionReviewActive] = useState(false);
+  const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
 
   // Track how many questions have been fetched from the server
   const fetchedCountRef = useRef(0);
@@ -240,6 +246,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
       });
       setCurrentSession(updatedSession);
       totalQuestionsRef.current = updatedSession.questions.length;
+      setSessionLog((prev) => [...prev, { ...question, userCorrect: correct }]);
       if (!correct) {
         await fetchBatch(currentIndex + 1, BATCH_SIZE);
       }
@@ -254,11 +261,32 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     }
   }
 
+  function endSession() {
+    if (sessionLog.length === 0) return;
+    setSessionReviewIndex(0);
+    setSessionReviewActive(true);
+  }
+
+  function nextSessionReview() {
+    setSessionReviewIndex((i) => i + 1);
+  }
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       // Ignore shortcuts while typing in a form control (e.g. the weights panel).
       const target = event.target as HTMLElement | null;
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+
+      // Session review: no grading, "Next" only — advance on "1" or "2", never back.
+      if (sessionReviewActive) {
+        if (event.repeat) return;
+        if (event.key === "1" || event.key === "2") {
+          event.preventDefault();
+          nextSessionReview();
+        }
+        return;
+      }
+
       if (!showingAnswer) {
         if (question && !event.repeat && (event.key === " " || event.code === "Space")) {
           event.preventDefault();
@@ -290,19 +318,133 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [question, showingAnswer, submitting, handleGrade, alreadyFlaggedIds, currentSession.language]);
+  }, [question, showingAnswer, submitting, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive]);
 
   // On mobile the whole page scrolls (see min-h-full container note below), so
   // reset scroll to the top when a new question appears — otherwise the user
   // stays scrolled at the previous answer's grade buttons and misses the term.
   useEffect(() => {
     window.scrollTo({ top: 0 });
-  }, [currentIndex]);
+  }, [currentIndex, sessionReviewIndex]);
 
   if (loading) {
     return (
       <div className="flex min-h-full items-center justify-center">
         <p className="text-gray-400">Loading questions...</p>
+      </div>
+    );
+  }
+
+  if (sessionReviewActive) {
+    const reviewQuestion = sessionReviewIndex < sessionLog.length ? sessionLog[sessionReviewIndex] : null;
+
+    if (!reviewQuestion) {
+      const sessionCorrect = sessionLog.filter((q) => q.userCorrect).length;
+      return (
+        <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("sessionReviewComplete")}</h2>
+          <p className="text-2xl sm:text-4xl font-semibold text-blue-400">
+            {sessionCorrect} / {sessionLog.length}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={() => { onComplete(); onBrowse(); }}
+              className="rounded-lg border border-gray-600 px-6 py-2 text-gray-300 hover:bg-gray-700"
+            >
+              {t("browseWords")}
+            </button>
+            <button
+              onClick={() => { onComplete(); onStartNew(); }}
+              className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-500"
+            >
+              {t("startNew")}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    const reviewDefinitions = reviewQuestion.definitions ?? [];
+    const reviewExamples = reviewQuestion.examples ?? [];
+
+    return (
+      <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+        <p className="text-sm text-gray-400">
+          {sessionReviewIndex + 1} / {sessionLog.length}
+        </p>
+        <h2 className="max-w-full break-words px-2 text-center text-xl sm:text-3xl font-bold text-gray-100">
+          {reviewQuestion.term}
+        </h2>
+
+        {settings.showKoreanHanja && reviewQuestion.hanjaReadings && reviewQuestion.hanjaReadings.length > 0 && (
+          <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-px flex-1 bg-amber-500/50"></div>
+              <span className="text-xs font-semibold text-amber-400">🀄 {t("sectionKoreanHanja")}</span>
+              <div className="h-px flex-1 bg-amber-500/50"></div>
+            </div>
+            <div className="flex flex-wrap justify-center gap-3">
+              {reviewQuestion.hanjaReadings.map((r, i) => (
+                <div key={i} className="flex flex-col items-center rounded-lg bg-gray-800 px-3 py-2 text-center min-w-[56px]">
+                  <div className="flex items-baseline gap-1 text-base font-medium text-gray-100">
+                    <span>{r.simplifiedChar}</span>
+                    {r.simplifiedChar !== r.traditionalChar && (
+                      <>
+                        <span className="text-xs text-gray-500">→</span>
+                        <span className="text-amber-300">{r.traditionalChar}</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="mt-1 space-y-0.5">
+                    {r.hunEum.map((h, j) => (
+                      <p key={j} className="text-xs text-gray-400">{h}</p>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="text-center space-y-2">
+          {reviewDefinitions.map((m, mi) => (
+            <div key={mi}>
+              {m.partOfSpeech && <p className="text-xs text-gray-500 italic">{m.partOfSpeech}</p>}
+              {(() => {
+                const py = m.pinyins && m.pinyins.length > 0
+                  ? m.pinyins.join(" / ")
+                  : (mi === 0 ? reviewQuestion.transliteration : undefined);
+                return py ? <p className="text-sm text-gray-400">{py}</p> : null;
+              })()}
+              {displayDefEntries(m.text || {}).map(([lang, text]) => (
+                <p key={lang} className="text-xl text-green-400">
+                  <span className="text-sm text-gray-400">{LANG_LABEL_MAP[lang] || lang}: </span>{text}
+                </p>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {reviewExamples.length > 0 && (
+          <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
+            <p className="mb-2 text-sm font-medium text-gray-400">{t("examples")}</p>
+            {reviewExamples.map((ex, i) => (
+              <div key={i} className="mb-2 last:mb-0">
+                <p className="text-lg text-gray-100"><RubyText text={ex.sentence} segments={ex.segments} /></p>
+                <TranslationDisplay translation={ex.translation} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
+          <button
+            onClick={nextSessionReview}
+            className="w-full sm:w-auto rounded-lg bg-blue-600 px-6 py-3 sm:py-2 text-white hover:bg-blue-500"
+          >
+            {t("next")}
+          </button>
+        </div>
       </div>
     );
   }
@@ -335,9 +477,18 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
 
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
-      <p className="text-sm text-gray-400">
-        {currentSession.score.correct} / {originalTotal}
-      </p>
+      <div className="sticky top-0 z-10 flex w-full items-center justify-center gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:bg-transparent sm:py-0">
+        <p className="text-sm text-gray-400">
+          {currentSession.score.correct} / {originalTotal}
+        </p>
+        <button
+          onClick={endSession}
+          title={t("endSession")}
+          className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 whitespace-nowrap"
+        >
+          🏁 {t("endSession")}
+        </button>
+      </div>
       {groupProgress && (
         <div className="flex flex-wrap justify-center gap-2 items-center">
           {groupsOpen &&
