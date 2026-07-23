@@ -365,6 +365,15 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
               };
         insertRetryQuestion(session.questions, retry, session.questions.indexOf(question));
         session.score.total++;
+        // A wrong answer means it's no longer "already-correct": drop it from the mastered
+        // bucket so its retry is treated as a normal (unmastered) item for the rest of the session.
+        if (session.correctMembership) {
+          if (kind === "word") {
+            session.correctMembership.wordIds = session.correctMembership.wordIds.filter((id) => id !== refId);
+          } else {
+            session.correctMembership.grammarIds = session.correctMembership.grammarIds.filter((id) => id !== refId);
+          }
+        }
       }
 
       // Update per-domain progress (same bookkeeping as the standalone quizzes).

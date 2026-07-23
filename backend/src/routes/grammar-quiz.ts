@@ -196,6 +196,11 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
           });
           session.score.total++;
         }
+        // A wrong answer means it's no longer "already-correct": drop it from the mastered
+        // bucket so its retry is treated as a normal (unmastered) item for the rest of the session.
+        if (session.correctMembership) {
+          session.correctMembership = session.correctMembership.filter((id) => id !== grammarId);
+        }
       }
 
       // Update grammar progress
