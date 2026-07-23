@@ -541,7 +541,14 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
                     className="flex items-center gap-3 rounded border border-gray-700 bg-gray-800/80 px-3 py-2"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-gray-100">{draft.statement}</p>
+                      <p className="truncate text-sm text-gray-100">
+                        {draft.statement}
+                        {draft.duplicate && (
+                          <span className="ml-2 rounded bg-orange-900/60 px-1.5 py-0.5 align-middle text-[10px] font-medium text-orange-200">
+                            {t("duplicateBadge")}
+                          </span>
+                        )}
+                      </p>
                       {draft.transliteration && (
                         <p className="truncate text-xs text-gray-500">{draft.transliteration}</p>
                       )}

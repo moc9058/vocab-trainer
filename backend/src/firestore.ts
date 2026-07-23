@@ -1520,6 +1520,13 @@ export async function getAllGrammarItems(language: string): Promise<Grammar[]> {
   return hydrateGrammarItems(items);
 }
 
+/** Lightweight: fetch just the `statement` of every grammar item for a language
+ *  (used by the drafts bulk-upload duplicate check — avoids hydrating examples). */
+export async function getGrammarStatements(language: string): Promise<string[]> {
+  const snap = await grammarItems.where("language", "==", language).select("statement").get();
+  return snap.docs.map((d) => (d.data().statement as string | undefined) ?? "");
+}
+
 export async function getGrammarItem(grammarId: string): Promise<Grammar | null> {
   const doc = await grammarItems.doc(grammarId).get();
   if (!doc.exists) return null;

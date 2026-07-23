@@ -922,6 +922,11 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                           {draft.transliteration && (
                             <span className="ml-1 text-xs text-gray-400">({draft.transliteration})</span>
                           )}
+                          {draft.duplicate && (
+                            <span className="ml-2 rounded bg-orange-900/60 px-1.5 py-0.5 align-middle text-[10px] font-medium text-orange-200">
+                              {t("duplicateBadge")}
+                            </span>
+                          )}
                         </p>
                         <p className="truncate text-xs text-gray-400">{firstDef}</p>
                         <p className="text-xs text-gray-500">

@@ -1045,10 +1045,16 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       const { language } = request.params;
       const now = new Date().toISOString();
       const ts = Date.now();
+      // Flag drafts whose term already exists as a live word so the review panel
+      // can surface a "duplicate" badge (single batched word_index lookup).
+      const existingTerms = new Set(
+        (await lookupWordsByTerms(language, request.body.drafts.map((d) => d.term))).map((e) => e.term)
+      );
       const drafts: WordDraft[] = request.body.drafts.map((d, i) => ({
         ...d,
         language,
         createdAt: now,
+        ...(existingTerms.has(d.term) ? { duplicate: true } : {}),
         // ts (13-digit epoch, lexically = chronologically sortable) + zero-padded
         // index preserves upload order within a batch; see getWordDrafts sort.
         id: `draft-${language}-${ts}-${String(i).padStart(4, "0")}-${Math.random().toString(36).slice(2, 8)}`,

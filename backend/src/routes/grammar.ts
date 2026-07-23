@@ -5,6 +5,7 @@ import {
   addGrammar,
   updateGrammar,
   deleteGrammarItem,
+  getGrammarStatements,
   getGrammarDrafts,
   getGrammarDraft,
   updateGrammarDraft,
@@ -431,10 +432,16 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
       const { language } = request.params;
       const now = new Date().toISOString();
       const ts = Date.now();
+      // Flag drafts whose statement already exists as a live grammar item so the
+      // review panel can surface a "duplicate" badge (statements compared trimmed).
+      const existingStatements = new Set(
+        (await getGrammarStatements(language)).map((s) => s.trim())
+      );
       const drafts: GrammarDraft[] = request.body.drafts.map((d, i) => ({
         ...d,
         language,
         createdAt: now,
+        ...(existingStatements.has(d.statement.trim()) ? { duplicate: true } : {}),
         // ts (13-digit epoch, lexically = chronologically sortable) + zero-padded
         // index preserves upload order within a batch; see getGrammarDrafts sort.
         id: `draft-${language}-${ts}-${String(i).padStart(4, "0")}-${Math.random().toString(36).slice(2, 8)}`,

@@ -116,3 +116,4 @@ textbook-content-extractor（ローカルOCRツール）のアウトプットと
 
 - `Meaning` = `{ partOfSpeech: string, text: Record<string,string>, pinyins?: string[] }`（`backend/src/types.ts` / `frontend/src/types.ts`）
 - 文法draftは `GrammarDraft`、単語draftは `WordDraft`（`id`/`language`/`createdAt` はサーバー付与のため**ファイルには含めない**）
+- `duplicate` もサーバー付与（ファイルには含めない）。アップロード時に同じ `term`（単語）／`statement`（文法）の生きたレコードが既にDBに存在すると `true` が付き、下書きパネルに「重複」バッジが表示される。重複でも登録は妨げない（確認用のマークのみ）

@@ -109,6 +109,8 @@ export interface WordDraft {
   groups?: string[];
   /** Original upload filename, for traceability. */
   sourceImage?: string;
+  /** Set at bulk-upload time when a live word with the same `term` already exists in the DB. */
+  duplicate?: boolean;
   createdAt: string;
 }
 
@@ -231,6 +233,8 @@ export interface GrammarDraft {
   groups?: string[];
   /** Original upload filename, for traceability. */
   sourceImage?: string;
+  /** Set at bulk-upload time when a live grammar item with the same `statement` already exists in the DB. */
+  duplicate?: boolean;
   createdAt: string;
 }
 
