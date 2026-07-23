@@ -5,12 +5,14 @@ import {
   getWordsByIds,
   getWordProgress,
   updateWordProgress,
+  getProgressForLanguage,
   flagWord,
   getWordGroup,
   getAllGrammarItems,
   getGrammarGroup,
   getGrammarComponentProgress,
   updateGrammarComponentProgress,
+  getGrammarProgressForLanguage,
   getCombinedQuizSession,
   saveCombinedQuizSession,
 } from "../firestore.js";
@@ -23,7 +25,7 @@ import type {
   Word,
   WordProgress,
 } from "../types.js";
-import { shuffle, weightedInterleave, weightedMerge, insertRetryQuestion } from "../quiz-utils.js";
+import { shuffle, weightedInterleave, weightedMerge, insertRetryQuestion, isMastered } from "../quiz-utils.js";
 
 interface WordFilterBody {
   topics?: string[];
@@ -47,6 +49,7 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
     Body: {
       language: string;
       domainWeights?: { word?: number; grammar?: number };
+      correctWeight?: number;
       word?: WordFilterBody;
       grammar?: GrammarFilterBody;
     };
@@ -66,6 +69,7 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
                 grammar: { type: "number", minimum: 0 },
               },
             },
+            correctWeight: { type: "number", minimum: 0 },
             word: {
               type: "object",
               properties: {
@@ -89,21 +93,43 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { language, domainWeights, word, grammar } = request.body;
+      const { language, domainWeights, correctWeight, word, grammar } = request.body;
       const wordWeight = Math.max(0, domainWeights?.word ?? 1);
       const grammarWeight = Math.max(0, domainWeights?.grammar ?? 1);
-      if (wordWeight <= 0 && grammarWeight <= 0) {
-        return reply.badRequest("At least one of the word/grammar weights must be positive");
+      const useCorrect = correctWeight !== undefined;
+      if (wordWeight <= 0 && grammarWeight <= 0 && (correctWeight ?? 0) <= 0) {
+        return reply.badRequest("At least one of the word/grammar/already-correct weights must be positive");
       }
 
       if (!(await languageExists(language))) {
         return reply.notFound(`Language '${language}' not found`);
       }
 
-      // --- Word side: mirror /api/quiz/start ordering ---
+      const toWordQuestion = (w: Word): CombinedQuizWordQuestion => ({
+        kind: "word",
+        wordId: w.id,
+        term: w.term,
+        definitions: w.definitions,
+        transliteration: w.transliteration,
+        examples: w.examples,
+        ...(w.hanjaReadings ? { hanjaReadings: w.hanjaReadings } : {}),
+      });
+      const toGrammarQuestion = (item: Grammar): CombinedQuizGrammarQuestion => ({
+        kind: "grammar",
+        grammarId: item.id,
+        statement: item.statement,
+      });
+
+      // Load long-term progress only when partitioning mastered items into their own bucket.
+      const [wordProgress, grammarProgress] = useCorrect
+        ? await Promise.all([getProgressForLanguage(language), getGrammarProgressForLanguage(language)])
+        : [null, null];
+
+      // --- Word side: mirror /api/quiz/start ordering (fresh pool only when partitioning) ---
       let wordQuestions: CombinedQuizWordQuestion[] = [];
       let wordGroupMembership: Record<string, string[]> | undefined;
-      if (wordWeight > 0) {
+      let knownWordItems: Word[] = [];
+      if (wordWeight > 0 || useCorrect) {
         const pool = await getFilteredWords(language, {
           topics: word?.topics,
           categories: word?.categories,
@@ -111,69 +137,79 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
           groupIds: word?.groupIds,
           flaggedOnly: word?.flaggedOnly,
         });
-        let ordered: Word[];
-        if (word?.groupIds && word.groupIds.length > 0) {
-          const membership = await buildWordMembership(word.groupIds, pool);
-          ordered = weightedInterleave(
-            word.groupIds.map((id) => ({
-              weight: word.groupWeights?.[id] ?? 1,
-              items: membership[id] ?? [],
-            }))
-          );
-          wordGroupMembership = Object.fromEntries(
-            Object.entries(membership).map(([id, ws]) => [id, ws.map((w) => w.id)])
-          );
-        } else {
-          ordered = shuffle(pool);
+        let freshPool = pool;
+        if (useCorrect) {
+          knownWordItems = pool.filter((w) => isMastered(wordProgress!.words[w.id]));
+          freshPool = pool.filter((w) => !isMastered(wordProgress!.words[w.id]));
         }
-        wordQuestions = ordered.map((w) => ({
-          kind: "word" as const,
-          wordId: w.id,
-          term: w.term,
-          definitions: w.definitions,
-          transliteration: w.transliteration,
-          examples: w.examples,
-          ...(w.hanjaReadings ? { hanjaReadings: w.hanjaReadings } : {}),
-        }));
+        if (wordWeight > 0) {
+          let ordered: Word[];
+          if (word?.groupIds && word.groupIds.length > 0) {
+            const membership = await buildWordMembership(word.groupIds, freshPool);
+            ordered = weightedInterleave(
+              word.groupIds.map((id) => ({
+                weight: word.groupWeights?.[id] ?? 1,
+                items: membership[id] ?? [],
+              }))
+            );
+            wordGroupMembership = Object.fromEntries(
+              Object.entries(membership).map(([id, ws]) => [id, ws.map((w) => w.id)])
+            );
+          } else {
+            ordered = shuffle(freshPool);
+          }
+          wordQuestions = ordered.map(toWordQuestion);
+        }
       }
 
       // --- Grammar side: group-weighted like the word side (grammar groups gain weights here) ---
       let grammarQuestions: CombinedQuizGrammarQuestion[] = [];
       let grammarGroupMembership: Record<string, string[]> | undefined;
-      if (grammarWeight > 0) {
+      let knownGrammarItems: Grammar[] = [];
+      if (grammarWeight > 0 || useCorrect) {
         const pool = await getAllGrammarItems(language);
-        let ordered: Grammar[];
-        if (grammar?.groupIds && grammar.groupIds.length > 0) {
-          const membership = await buildGrammarMembership(grammar.groupIds, pool);
-          ordered = weightedInterleave(
-            grammar.groupIds.map((id) => ({
-              weight: grammar.groupWeights?.[id] ?? 1,
-              items: membership[id] ?? [],
-            }))
-          );
-          grammarGroupMembership = Object.fromEntries(
-            Object.entries(membership).map(([id, gs]) => [id, gs.map((g) => g.id)])
-          );
-        } else {
-          ordered = shuffle(pool);
+        let freshPool = pool;
+        if (useCorrect) {
+          knownGrammarItems = pool.filter((it) => isMastered(grammarProgress![it.id]));
+          freshPool = pool.filter((it) => !isMastered(grammarProgress![it.id]));
         }
-        // The question is the grammar element itself; descriptions/examples are
-        // fetched by the client on answer reveal.
-        grammarQuestions = ordered.map((item) => ({
-          kind: "grammar" as const,
-          grammarId: item.id,
-          statement: item.statement,
-        }));
+        if (grammarWeight > 0) {
+          let ordered: Grammar[];
+          if (grammar?.groupIds && grammar.groupIds.length > 0) {
+            const membership = await buildGrammarMembership(grammar.groupIds, freshPool);
+            ordered = weightedInterleave(
+              grammar.groupIds.map((id) => ({
+                weight: grammar.groupWeights?.[id] ?? 1,
+                items: membership[id] ?? [],
+              }))
+            );
+            grammarGroupMembership = Object.fromEntries(
+              Object.entries(membership).map(([id, gs]) => [id, gs.map((g) => g.id)])
+            );
+          } else {
+            ordered = shuffle(freshPool);
+          }
+          // The question is the grammar element itself; descriptions/examples are
+          // fetched by the client on answer reveal.
+          grammarQuestions = ordered.map(toGrammarQuestion);
+        }
       }
 
-      if (wordQuestions.length === 0 && grammarQuestions.length === 0) {
-        return reply.badRequest("No words or grammar items match the given filters");
-      }
+      // Mastered items from BOTH domains form one top-level bucket, peer to word/grammar.
+      const knownQuestions: CombinedQuizQuestion[] = useCorrect
+        ? shuffle([...knownWordItems.map(toWordQuestion), ...knownGrammarItems.map(toGrammarQuestion)])
+        : [];
 
-      const questions: CombinedQuizQuestion[] = weightedMerge<CombinedQuizQuestion>([
+      const buckets: { weight: number; items: CombinedQuizQuestion[] }[] = [
         { weight: wordWeight, items: wordQuestions },
         { weight: grammarWeight, items: grammarQuestions },
-      ]);
+      ];
+      if (useCorrect) buckets.push({ weight: correctWeight ?? 0, items: knownQuestions });
+      const questions: CombinedQuizQuestion[] = weightedMerge<CombinedQuizQuestion>(buckets);
+
+      if (questions.length === 0) {
+        return reply.badRequest("No words or grammar items match the given filters");
+      }
 
       const session: CombinedQuizSession = {
         sessionId: language,
@@ -188,6 +224,15 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
         ...(wordGroupMembership ? { wordGroupMembership } : {}),
         ...(grammar?.groupWeights ? { grammarGroupWeights: grammar.groupWeights } : {}),
         ...(grammarGroupMembership ? { grammarGroupMembership } : {}),
+        ...(useCorrect
+          ? {
+              correctWeight,
+              correctMembership: {
+                wordIds: knownWordItems.map((w) => w.id),
+                grammarIds: knownGrammarItems.map((g) => g.id),
+              },
+            }
+          : {}),
         ...(word?.flaggedOnly ? { flaggedOnly: true } : {}),
       };
 
@@ -388,6 +433,7 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
       domainWeights?: { word?: number; grammar?: number };
       wordGroupWeights?: Record<string, number>;
       grammarGroupWeights?: Record<string, number>;
+      correctWeight?: number;
     };
   }>(
     "/session/language/:language/weights",
@@ -405,6 +451,7 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
             },
             wordGroupWeights: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
             grammarGroupWeights: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
+            correctWeight: { type: "number", minimum: 0 },
           },
         },
       },
@@ -414,12 +461,33 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
       if (!session) return reply.notFound("No combined quiz session found for this language");
       if (session.status === "completed") return reply.badRequest("Session already completed");
 
-      const { domainWeights, wordGroupWeights, grammarGroupWeights } = request.body;
+      const { domainWeights, wordGroupWeights, grammarGroupWeights, correctWeight } = request.body;
+      if (correctWeight !== undefined) {
+        session.correctWeight = correctWeight;
+        // Activate the mastered partition on demand if the session didn't start with one.
+        if (!session.correctMembership) {
+          const [wp, gp] = await Promise.all([
+            getProgressForLanguage(request.params.language),
+            getGrammarProgressForLanguage(request.params.language),
+          ]);
+          const wordIds: string[] = [];
+          const grammarIds: string[] = [];
+          for (const q of session.questions) {
+            if (q.userCorrect !== undefined) continue;
+            if (q.kind === "word") {
+              if (isMastered(wp.words[q.wordId])) wordIds.push(q.wordId);
+            } else if (isMastered(gp[q.grammarId])) {
+              grammarIds.push(q.grammarId);
+            }
+          }
+          session.correctMembership = { wordIds, grammarIds };
+        }
+      }
       if (domainWeights) {
         const wordWeight = Math.max(0, domainWeights.word ?? session.domainWeights?.word ?? 1);
         const grammarWeight = Math.max(0, domainWeights.grammar ?? session.domainWeights?.grammar ?? 1);
-        if (wordWeight <= 0 && grammarWeight <= 0) {
-          return reply.badRequest("At least one of the word/grammar weights must be positive");
+        if (wordWeight <= 0 && grammarWeight <= 0 && (session.correctWeight ?? 0) <= 0) {
+          return reply.badRequest("At least one of the word/grammar/already-correct weights must be positive");
         }
         session.domainWeights = { word: wordWeight, grammar: grammarWeight };
       }
@@ -449,14 +517,21 @@ function reorderUnansweredTail(session: CombinedQuizSession): void {
     else unanswered.push(q);
   }
 
+  const useCorrect = session.correctWeight !== undefined;
+  const knownWordIds = new Set(session.correctMembership?.wordIds ?? []);
+  const knownGrammarIds = new Set(session.correctMembership?.grammarIds ?? []);
+  const isKnown = (q: CombinedQuizQuestion): boolean =>
+    q.kind === "word" ? knownWordIds.has(q.wordId) : knownGrammarIds.has(q.grammarId);
+  const freshUnanswered = useCorrect ? unanswered.filter((q) => !isKnown(q)) : unanswered;
+
   const wordTail = reweightDomain(
-    unanswered.filter((q): q is CombinedQuizWordQuestion => q.kind === "word"),
+    freshUnanswered.filter((q): q is CombinedQuizWordQuestion => q.kind === "word"),
     session.wordGroupMembership,
     session.wordGroupWeights,
     (q) => q.wordId
   );
   const grammarTail = reweightDomain(
-    unanswered.filter((q): q is CombinedQuizGrammarQuestion => q.kind === "grammar"),
+    freshUnanswered.filter((q): q is CombinedQuizGrammarQuestion => q.kind === "grammar"),
     session.grammarGroupMembership,
     session.grammarGroupWeights,
     (q) => q.grammarId
@@ -464,6 +539,9 @@ function reorderUnansweredTail(session: CombinedQuizSession): void {
   const merged = weightedMerge<CombinedQuizQuestion>([
     { weight: session.domainWeights?.word ?? 1, items: wordTail },
     { weight: session.domainWeights?.grammar ?? 1, items: grammarTail },
+    ...(useCorrect
+      ? [{ weight: session.correctWeight ?? 0, items: shuffle(unanswered.filter(isKnown)) }]
+      : []),
   ]);
   // weightedMerge drops zero-weight buckets; never lose questions.
   const covered = new Set(merged);

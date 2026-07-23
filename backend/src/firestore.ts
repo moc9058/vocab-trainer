@@ -1390,6 +1390,8 @@ function docToSession(doc: FirebaseFirestore.DocumentSnapshot): QuizSession {
     wordIds: d.wordIds,
     groupWeights: d.groupWeights,
     groupMembership: d.groupMembership,
+    correctWeight: d.correctWeight,
+    correctMembership: d.correctMembership,
     pendingWordIds: d.pendingWordIds,
     questionTarget: d.questionTarget,
     flaggedOnly: d.flaggedOnly,
@@ -1912,6 +1914,10 @@ export async function getGrammarQuizSession(language: string): Promise<GrammarQu
     score: d.score,
     questions: d.questions,
     groupFilter: d.groupFilter,
+    groupWeights: d.groupWeights,
+    groupMembership: d.groupMembership,
+    correctWeight: d.correctWeight,
+    correctMembership: d.correctMembership,
   };
 }
 
@@ -1963,6 +1969,8 @@ export async function getCombinedQuizSession(language: string): Promise<Combined
     wordGroupMembership: d.wordGroupMembership,
     grammarGroupWeights: d.grammarGroupWeights,
     grammarGroupMembership: d.grammarGroupMembership,
+    correctWeight: d.correctWeight,
+    correctMembership: d.correctMembership,
     flaggedOnly: d.flaggedOnly,
   };
 }

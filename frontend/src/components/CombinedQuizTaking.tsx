@@ -7,7 +7,7 @@ import { getGroups } from "../api/vocab";
 import { getGrammarGroups } from "../api/grammar";
 import { getFlaggedWordIds, flagWord, unflagWord } from "../api/flagged";
 import { fetchJson } from "../api/client";
-import { isWeightValid, parseWeightInput } from "../utils/weightInput";
+import { isWeightValid, parseWeightInput, scaleWeightRecord } from "../utils/weightInput";
 import RubyText from "./RubyText";
 import type {
   CombinedQuizSession,
@@ -68,7 +68,12 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const [domainDraft, setDomainDraft] = useState<{ word: string; grammar: string }>({ word: "1", grammar: "1" });
   const [wordWeightDraft, setWordWeightDraft] = useState<Record<string, string>>({});
   const [grammarWeightDraft, setGrammarWeightDraft] = useState<Record<string, string>>({});
+  const [correctDraft, setCorrectDraft] = useState("");
   const [applyingWeights, setApplyingWeights] = useState(false);
+  // Session review: every question graded since mount, in grading order (retries counted separately).
+  const [sessionLog, setSessionLog] = useState<CombinedQuizQuestion[]>([]);
+  const [sessionReviewActive, setSessionReviewActive] = useState(false);
+  const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
 
   const fetchedCountRef = useRef(0);
   const fetchQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -164,7 +169,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   // reset to the top on each new question — otherwise the prompt stays off-screen.
   useEffect(() => {
     window.scrollTo({ top: 0 });
-  }, [currentIndex]);
+  }, [currentIndex, sessionReviewIndex]);
 
   const question = currentIndex < questions.length ? questions[currentIndex] : null;
   const isComplete = currentSession.status === "completed";
@@ -259,6 +264,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         ])
       )
     );
+    setCorrectDraft(currentSession.correctWeight !== undefined ? String(currentSession.correctWeight) : "");
     setWeightsOpen(true);
   }
 
@@ -267,11 +273,17 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const hasInvalidDomainDraft = domainDraftWordNum === null || domainDraftGrammarNum === null;
   const hasInvalidWordWeightDraft = Object.keys(wordWeightDraft).some((gid) => !isWeightValid(wordWeightDraft[gid], 0));
   const hasInvalidGrammarWeightDraft = Object.keys(grammarWeightDraft).some((gid) => !isWeightValid(grammarWeightDraft[gid], 0));
+  // Already-correct: blank = feature off; a number (incl. 0) activates the top-level bucket.
+  const correctDraftActive = correctDraft.trim() !== "";
+  const correctDraftNum = parseWeightInput(correctDraft);
+  const correctDraftInvalid = correctDraftActive && !isWeightValid(correctDraft, 0);
+  const correctDomainActive = correctDraftActive && (correctDraftNum ?? 0) > 0;
   const canApplyWeights =
     !hasInvalidDomainDraft &&
     !hasInvalidWordWeightDraft &&
     !hasInvalidGrammarWeightDraft &&
-    !((domainDraftWordNum ?? 0) <= 0 && (domainDraftGrammarNum ?? 0) <= 0);
+    !correctDraftInvalid &&
+    !((domainDraftWordNum ?? 0) <= 0 && (domainDraftGrammarNum ?? 0) <= 0 && !correctDomainActive);
 
   // Apply new domain/group weights mid-session: the server reorders the
   // unanswered tail and returns the full session; re-sync local order and jump
@@ -280,18 +292,19 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     if (applyingWeights || !canApplyWeights) return;
     setApplyingWeights(true);
     try {
-      const domainWeights = {
-        word: Math.max(0, Math.floor(domainDraftWordNum ?? 0)),
-        grammar: Math.max(0, Math.floor(domainDraftGrammarNum ?? 0)),
-      };
-      const wordGroupWeights = Object.fromEntries(
-        Object.entries(wordWeightDraft).map(([gid, v]) => [gid, Math.max(0, Math.floor(parseWeightInput(v) ?? 0))])
-      );
-      const grammarGroupWeights = Object.fromEntries(
-        Object.entries(grammarWeightDraft).map(([gid, v]) => [gid, Math.max(0, Math.floor(parseWeightInput(v) ?? 0))])
-      );
+      // Scale every weight (domains + already-correct + all groups) by one common factor so
+      // decimals become integers while ratios are preserved (10, 0.3 -> 100, 3).
+      const raws: Record<string, string> = { __word__: domainDraft.word, __grammar__: domainDraft.grammar };
+      if (correctDraftActive) raws.__correct__ = correctDraft;
+      for (const gid of Object.keys(wordWeightDraft)) raws[`w:${gid}`] = wordWeightDraft[gid];
+      for (const gid of Object.keys(grammarWeightDraft)) raws[`g:${gid}`] = grammarWeightDraft[gid];
+      const s = scaleWeightRecord(raws);
+      const domainWeights = { word: s.__word__, grammar: s.__grammar__ };
+      const wordGroupWeights = Object.fromEntries(Object.keys(wordWeightDraft).map((gid) => [gid, s[`w:${gid}`] ?? 0]));
+      const grammarGroupWeights = Object.fromEntries(Object.keys(grammarWeightDraft).map((gid) => [gid, s[`g:${gid}`] ?? 0]));
       const updated = await updateCombinedQuizWeights(currentSession.language, {
         domainWeights,
+        ...(correctDraftActive ? { correctWeight: s.__correct__ } : {}),
         ...(Object.keys(wordGroupWeights).length > 0 ? { wordGroupWeights } : {}),
         ...(Object.keys(grammarGroupWeights).length > 0 ? { grammarGroupWeights } : {}),
       });
@@ -375,6 +388,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       });
       setCurrentSession(updatedSession);
       totalQuestionsRef.current = updatedSession.questions.length;
+      setSessionLog((prev) => [...prev, { ...question, userCorrect: correct }]);
       if (!correct) {
         await fetchBatch(currentIndex + 1, BATCH_SIZE);
       }
@@ -389,11 +403,32 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     }
   }
 
+  function endSession() {
+    if (sessionLog.length === 0) return;
+    setSessionReviewIndex(0);
+    setSessionReviewActive(true);
+  }
+
+  function nextSessionReview() {
+    setSessionReviewIndex((i) => i + 1);
+  }
+
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       // Ignore shortcuts while typing in a form control (e.g. the weights panel).
       const target = event.target as HTMLElement | null;
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+
+      // Session review: no grading, "Next" only — advance on "1" or "2".
+      if (sessionReviewActive) {
+        if (event.repeat) return;
+        if (event.key === "1" || event.key === "2") {
+          event.preventDefault();
+          nextSessionReview();
+        }
+        return;
+      }
+
       if (!showingAnswer) {
         if (question && !event.repeat && (event.key === " " || event.code === "Space")) {
           event.preventDefault();
@@ -426,12 +461,181 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [question, showingAnswer, submitting, handleGrade, alreadyFlaggedIds, currentSession.language]);
+  }, [question, showingAnswer, submitting, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive]);
 
   if (loading) {
     return (
       <div className="flex min-h-full items-center justify-center">
         <p className="text-gray-400">Loading questions...</p>
+      </div>
+    );
+  }
+
+  if (sessionReviewActive) {
+    const reviewQ = sessionReviewIndex < sessionLog.length ? sessionLog[sessionReviewIndex] : null;
+    if (!reviewQ) {
+      const sessionCorrect = sessionLog.filter((q) => q.userCorrect).length;
+      return (
+        <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("sessionReviewComplete")}</h2>
+          <p className="text-2xl sm:text-4xl font-semibold text-indigo-400">
+            {sessionCorrect} / {sessionLog.length}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={() => { onComplete(); onBrowse(); }}
+              className="rounded-lg border border-gray-600 px-6 py-2 text-gray-300 hover:bg-gray-700"
+            >
+              {t("browseWords")}
+            </button>
+            <button
+              onClick={() => { onComplete(); onStartNew(); }}
+              className="rounded-lg bg-indigo-600 px-6 py-2 text-white hover:bg-indigo-500"
+            >
+              {t("startNew")}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    const reviewWord = reviewQ.kind === "word" ? reviewQ : null;
+    const reviewGrammar = reviewQ.kind === "grammar" ? reviewQ : null;
+    const reviewGrammarItem = reviewGrammar ? grammarCache.get(reviewGrammar.grammarId) : null;
+    const reviewDefs = reviewWord?.definitions ?? [];
+    const reviewExamples = reviewWord?.examples ?? [];
+
+    return (
+      <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+        <p className="text-sm text-gray-400">{sessionReviewIndex + 1} / {sessionLog.length}</p>
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-medium border ${
+            reviewQ.kind === "word"
+              ? "bg-blue-900/40 text-blue-300 border-blue-700/50"
+              : "bg-emerald-900/40 text-emerald-300 border-emerald-700/50"
+          }`}
+        >
+          {reviewQ.kind === "word" ? t("sectionVocabulary") : t("sectionGrammar")}
+        </span>
+        {reviewWord ? (
+          <h2 className="max-w-full break-words px-2 text-center text-xl sm:text-3xl font-bold text-gray-100">{reviewWord.term}</h2>
+        ) : (
+          <h2 className="max-w-lg text-center text-xl sm:text-3xl font-bold text-gray-100">
+            {reviewGrammar!.statement || reviewGrammarItem?.statement}
+          </h2>
+        )}
+
+        {reviewWord && settings.showKoreanHanja && reviewWord.hanjaReadings && reviewWord.hanjaReadings.length > 0 && (
+          <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-px flex-1 bg-amber-500/50"></div>
+              <span className="text-xs font-semibold text-amber-400">🀄 {t("sectionKoreanHanja")}</span>
+              <div className="h-px flex-1 bg-amber-500/50"></div>
+            </div>
+            <div className="flex flex-wrap justify-center gap-3">
+              {reviewWord.hanjaReadings.map((r, i) => (
+                <div key={i} className="flex flex-col items-center rounded-lg bg-gray-800 px-3 py-2 text-center min-w-[56px]">
+                  <div className="flex items-baseline gap-1 text-base font-medium text-gray-100">
+                    <span>{r.simplifiedChar}</span>
+                    {r.simplifiedChar !== r.traditionalChar && (
+                      <>
+                        <span className="text-xs text-gray-500">→</span>
+                        <span className="text-amber-300">{r.traditionalChar}</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="mt-1 space-y-0.5">
+                    {r.hunEum.map((h, j) => (<p key={j} className="text-xs text-gray-400">{h}</p>))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {reviewWord && (
+          <div className="text-center space-y-2">
+            {reviewDefs.map((m, mi) => (
+              <div key={mi}>
+                {m.partOfSpeech && <p className="text-xs text-gray-500 italic">{m.partOfSpeech}</p>}
+                {(() => {
+                  const py = m.pinyins && m.pinyins.length > 0
+                    ? m.pinyins.join(" / ")
+                    : (mi === 0 ? reviewWord.transliteration : undefined);
+                  return py ? <p className="text-sm text-gray-400">{py}</p> : null;
+                })()}
+                {displayDefEntries(m.text || {}).map(([lang, text]) => (
+                  <p key={lang} className="text-xl text-green-400">
+                    <span className="text-sm text-gray-400">{LANG_LABEL_MAP[lang] || lang}: </span>{text}
+                  </p>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {reviewGrammarItem && (
+          <div className="w-full max-w-lg rounded-lg bg-gray-800 border border-gray-600 p-4">
+            {reviewGrammarItem.descriptions?.map((d, di) => {
+              const entries = displayDefEntries(d.text || {});
+              const rows = entries.length > 0 ? entries : Object.entries(d.text || {});
+              return (
+                <div key={di} className="mb-2 last:mb-0">
+                  {d.partOfSpeech && (
+                    <span className="mr-2 rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-300">{d.partOfSpeech}</span>
+                  )}
+                  {rows.map(([lang, text]) => (
+                    <p key={lang} className="text-sm text-gray-300 whitespace-pre-line">
+                      <span className="text-xs text-gray-500">[{lang}] </span>{text}
+                    </p>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {reviewWord && reviewExamples.length > 0 && (
+          <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
+            <p className="mb-2 text-sm font-medium text-gray-400">{t("examples")}</p>
+            {reviewExamples.map((ex, i) => (
+              <div key={i} className="mb-2 last:mb-0">
+                <p className="text-lg text-gray-100"><RubyText text={ex.sentence} segments={ex.segments} /></p>
+                <TranslationDisplay translation={ex.translation} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {reviewGrammarItem && reviewGrammarItem.examples && reviewGrammarItem.examples.length > 0 && (
+          <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
+            <p className="mb-2 text-sm font-medium text-gray-400">{t("examples")}</p>
+            {reviewGrammarItem.examples.map((ex, i) => (
+              <div key={i} className="mb-2 last:mb-0">
+                <p className="text-lg text-gray-100"><RubyText text={ex.sentence} segments={ex.segments} /></p>
+                {ex.transliteration && <p className="text-sm text-gray-500">{ex.transliteration}</p>}
+                {typeof ex.translation === "string" ? (
+                  ex.translation && <p className="text-sm text-gray-400">{ex.translation}</p>
+                ) : (
+                  displayGrammarDefEntries(ex.translation).map(([lang, text]) => (
+                    <p key={lang} className="text-sm text-gray-400">
+                      <span className="mr-1 text-xs font-medium uppercase text-gray-500">{lang}</span>{text}
+                    </p>
+                  ))
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
+          <button
+            onClick={nextSessionReview}
+            className="w-full sm:w-auto rounded-lg bg-indigo-600 px-6 py-3 sm:py-2 text-white hover:bg-indigo-500"
+          >
+            {t("next")}
+          </button>
+        </div>
       </div>
     );
   }
@@ -464,9 +668,18 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
-      <p className="text-sm text-gray-400">
-        {currentSession.score.correct} / {originalTotal}
-      </p>
+      <div className="sticky top-0 z-10 flex w-full items-center justify-center gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:bg-transparent sm:py-0">
+        <p className="text-sm text-gray-400">
+          {currentSession.score.correct} / {originalTotal}
+        </p>
+        <button
+          onClick={endSession}
+          title={t("endSession")}
+          className="rounded-full border border-amber-600/70 bg-amber-700/30 px-4 py-1.5 text-sm font-medium text-amber-200 hover:bg-amber-700/50 whitespace-nowrap"
+        >
+          🏁 {t("endSession")}
+        </button>
+      </div>
 
       {/* Per-domain progress (Vocabulary vs Grammar) */}
       {domainProgress.length > 0 && (
@@ -628,6 +841,25 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
               </details>
             )}
           </div>
+
+          {/* Already-correct: top-level bucket peer to the word/grammar domains. */}
+          <label
+            className="flex items-center gap-2 rounded border border-indigo-900/50 bg-gray-900/30 p-2 text-sm"
+            title={t("alreadyCorrectHint")}
+          >
+            <span className="flex-1 min-w-0 truncate font-medium text-indigo-300">✅ {t("alreadyCorrect")}</span>
+            <input
+              type="number"
+              min={0}
+              placeholder="—"
+              value={correctDraft}
+              aria-label={t("alreadyCorrect")}
+              onChange={(e) => setCorrectDraft(e.target.value)}
+              className={`w-16 shrink-0 rounded border bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:outline-none ${
+                correctDraftInvalid ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-indigo-400"
+              }`}
+            />
+          </label>
 
           {!canApplyWeights && (
             <p className="text-xs text-red-400">{t("groupWeightRequiredHint")}</p>

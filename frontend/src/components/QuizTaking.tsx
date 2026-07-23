@@ -7,7 +7,7 @@ import { getFlaggedWordIds, flagWord, unflagWord } from "../api/flagged";
 import { getGroups } from "../api/vocab";
 import RubyText from "./RubyText";
 import { displayTranslation, type QuizSession, type QuizQuestion } from "../types";
-import { isWeightValid, parseWeightInput } from "../utils/weightInput";
+import { isWeightValid, scaleWeightRecord } from "../utils/weightInput";
 
 const BATCH_SIZE = 50;
 const VISIBLE_ANSWER_ITEMS = 4;
@@ -52,6 +52,8 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   const [weightsOpen, setWeightsOpen] = useState(false);
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [weightDraft, setWeightDraft] = useState<Record<string, string>>({});
+  // Already-correct (mastered) bucket weight, edited as raw text. Blank = feature off.
+  const [correctDraft, setCorrectDraft] = useState<string>("");
   const [applyingWeights, setApplyingWeights] = useState(false);
   // Session = every question graded since this component mounted (i.e. since
   // the page was last loaded/refreshed), in the order it was graded. Retries
@@ -156,10 +158,13 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
         Object.keys(membership).map((gid) => [gid, String(currentSession.groupWeights?.[gid] ?? 1)])
       )
     );
+    setCorrectDraft(currentSession.correctWeight !== undefined ? String(currentSession.correctWeight) : "");
     setWeightsOpen(true);
   }
 
-  const hasInvalidWeightDraft = Object.keys(weightDraft).some((gid) => !isWeightValid(weightDraft[gid], 0));
+  const correctDraftInvalid = correctDraft.trim() !== "" && !isWeightValid(correctDraft, 0);
+  const hasInvalidWeightDraft =
+    Object.keys(weightDraft).some((gid) => !isWeightValid(weightDraft[gid], 0)) || correctDraftInvalid;
 
   // Apply new group weights mid-session: the server reorders the unanswered
   // tail and returns the full session; re-sync local order and jump to the
@@ -168,10 +173,14 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     if (applyingWeights || hasInvalidWeightDraft) return;
     setApplyingWeights(true);
     try {
-      const weights = Object.fromEntries(
-        Object.entries(weightDraft).map(([gid, v]) => [gid, Math.max(0, Math.floor(parseWeightInput(v) ?? 0))])
-      );
-      const updated = await updateQuizWeights(currentSession.language, weights);
+      // Scale groups + already-correct together so decimal weights become integers (10, 0.3 -> 100, 3).
+      const correctActive = correctDraft.trim() !== "";
+      const raws: Record<string, string> = { ...weightDraft };
+      if (correctActive) raws.__correct__ = correctDraft;
+      const scaled = scaleWeightRecord(raws);
+      const weights = Object.fromEntries(Object.keys(weightDraft).map((gid) => [gid, scaled[gid] ?? 0]));
+      const correctWeight = correctActive ? scaled.__correct__ : undefined;
+      const updated = await updateQuizWeights(currentSession.language, weights, correctWeight);
       const hydratedByWordId = new Map(questions.map((q) => [q.wordId, q]));
       setQuestions(updated.questions.map((q) => ({ ...hydratedByWordId.get(q.wordId), ...q })));
       setCurrentSession(updated);
@@ -484,26 +493,26 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
         <button
           onClick={endSession}
           title={t("endSession")}
-          className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 whitespace-nowrap"
+          className="rounded-full border border-amber-600/70 bg-amber-700/30 px-4 py-1.5 text-sm font-medium text-amber-200 hover:bg-amber-700/50 whitespace-nowrap"
         >
           🏁 {t("endSession")}
         </button>
       </div>
-      {groupProgress && (
-        <div className="flex flex-wrap justify-center gap-2 items-center">
-          {groupsOpen &&
-            groupProgress.map((g) => (
-              <span
-                key={g.id}
-                className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  g.remaining === 0
-                    ? "bg-green-900/40 text-green-400 border border-green-700/50"
-                    : "bg-gray-700 text-gray-300 border border-gray-600"
-                }`}
-              >
-                {g.name}: {g.remaining}/{g.total}
-              </span>
-            ))}
+      <div className="flex flex-wrap justify-center gap-2 items-center">
+        {groupProgress && groupsOpen &&
+          groupProgress.map((g) => (
+            <span
+              key={g.id}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                g.remaining === 0
+                  ? "bg-green-900/40 text-green-400 border border-green-700/50"
+                  : "bg-gray-700 text-gray-300 border border-gray-600"
+              }`}
+            >
+              {g.name}: {g.remaining}/{g.total}
+            </span>
+          ))}
+        {groupProgress && (
           <button
             onClick={() => setGroupsOpen((v) => !v)}
             aria-pressed={groupsOpen}
@@ -515,14 +524,14 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
           >
             🏷 {t("groups")}
           </button>
-          <button
-            onClick={() => (weightsOpen ? setWeightsOpen(false) : openWeightsPanel())}
-            className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1 text-xs text-gray-300 hover:bg-gray-700"
-          >
-            ⚖ {t("adjustWeights")}
-          </button>
-        </div>
-      )}
+        )}
+        <button
+          onClick={() => (weightsOpen ? setWeightsOpen(false) : openWeightsPanel())}
+          className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1 text-xs text-gray-300 hover:bg-gray-700"
+        >
+          ⚖ {t("adjustWeights")}
+        </button>
+      </div>
 
       {/* Mid-session group weight editor */}
       {weightsOpen && (
@@ -558,6 +567,21 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
               </div>
             </details>
           )}
+          {/* Already-correct bucket: peer to the groups (blank = off, 0 = exclude mastered). */}
+          <label className="flex items-center gap-2 text-sm text-gray-300" title={t("alreadyCorrectHint")}>
+            <span className="flex-1 min-w-0 truncate">✅ {t("alreadyCorrect")}</span>
+            <input
+              type="number"
+              min={0}
+              placeholder="—"
+              value={correctDraft}
+              aria-label={t("alreadyCorrect")}
+              onChange={(e) => setCorrectDraft(e.target.value)}
+              className={`w-16 shrink-0 rounded border bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:outline-none ${
+                correctDraftInvalid ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-blue-400"
+              }`}
+            />
+          </label>
           {hasInvalidWeightDraft && (
             <p className="text-xs text-red-400">{t("groupWeightRequiredHint")}</p>
           )}

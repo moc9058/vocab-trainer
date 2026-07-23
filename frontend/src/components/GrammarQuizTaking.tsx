@@ -4,8 +4,8 @@ import { useSettings } from "../settings/context";
 import { answerGrammarQuestion, getGrammarGroups, updateGrammarQuizWeights } from "../api/grammar";
 import { fetchJson } from "../api/client";
 import RubyText from "./RubyText";
-import type { GrammarQuizSession, Grammar } from "../types";
-import { isWeightValid, parseWeightInput } from "../utils/weightInput";
+import type { GrammarQuizSession, GrammarQuizQuestion, Grammar } from "../types";
+import { isWeightValid, scaleWeightRecord } from "../utils/weightInput";
 
 interface Props {
   session: GrammarQuizSession;
@@ -31,7 +31,12 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
   const [weightsOpen, setWeightsOpen] = useState(false);
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [weightDraft, setWeightDraft] = useState<Record<string, string>>({});
+  const [correctDraft, setCorrectDraft] = useState<string>("");
   const [applyingWeights, setApplyingWeights] = useState(false);
+  // Session review: every question graded since mount, in grading order (retries counted separately).
+  const [sessionLog, setSessionLog] = useState<GrammarQuizQuestion[]>([]);
+  const [sessionReviewActive, setSessionReviewActive] = useState(false);
+  const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
 
   // Fetch grammar item details for showing statement/descriptions on answer reveal
   useEffect(() => {
@@ -60,7 +65,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
   // reset to the top on each new question — otherwise the term stays off-screen.
   useEffect(() => {
     window.scrollTo({ top: 0 });
-  }, [currentIndex]);
+  }, [currentIndex, sessionReviewIndex]);
 
   const question =
     currentIndex < currentSession.questions.length ? currentSession.questions[currentIndex] : null;
@@ -88,10 +93,13 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
         Object.keys(membership).map((gid) => [gid, String(currentSession.groupWeights?.[gid] ?? 1)])
       )
     );
+    setCorrectDraft(currentSession.correctWeight !== undefined ? String(currentSession.correctWeight) : "");
     setWeightsOpen(true);
   }
 
-  const hasInvalidWeightDraft = Object.keys(weightDraft).some((gid) => !isWeightValid(weightDraft[gid], 0));
+  const correctDraftInvalid = correctDraft.trim() !== "" && !isWeightValid(correctDraft, 0);
+  const hasInvalidWeightDraft =
+    Object.keys(weightDraft).some((gid) => !isWeightValid(weightDraft[gid], 0)) || correctDraftInvalid;
 
   // Apply new group weights mid-session: the server reorders the unanswered tail and
   // returns the full session; jump to the first unanswered question of the new order.
@@ -99,10 +107,14 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
     if (applyingWeights || hasInvalidWeightDraft) return;
     setApplyingWeights(true);
     try {
-      const weights = Object.fromEntries(
-        Object.entries(weightDraft).map(([gid, v]) => [gid, Math.max(0, Math.floor(parseWeightInput(v) ?? 0))])
-      );
-      const updated = await updateGrammarQuizWeights(currentSession.language, weights);
+      // Scale groups + already-correct together so decimal weights become integers (10, 0.3 -> 100, 3).
+      const correctActive = correctDraft.trim() !== "";
+      const raws: Record<string, string> = { ...weightDraft };
+      if (correctActive) raws.__correct__ = correctDraft;
+      const scaled = scaleWeightRecord(raws);
+      const weights = Object.fromEntries(Object.keys(weightDraft).map((gid) => [gid, scaled[gid] ?? 0]));
+      const correctWeight = correctActive ? scaled.__correct__ : undefined;
+      const updated = await updateGrammarQuizWeights(currentSession.language, weights, correctWeight);
       setCurrentSession(updated);
       const firstUnanswered = updated.questions.findIndex((q) => q.userCorrect === undefined);
       setCurrentIndex(firstUnanswered === -1 ? updated.questions.length : firstUnanswered);
@@ -125,11 +137,113 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
         correct,
       });
       setCurrentSession(result.session);
+      setSessionLog((prev) => [...prev, { ...question, userCorrect: correct }]);
       setCurrentIndex((i) => i + 1);
       setShowingAnswer(false);
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function endSession() {
+    if (sessionLog.length === 0) return;
+    setSessionReviewIndex(0);
+    setSessionReviewActive(true);
+  }
+
+  function nextSessionReview() {
+    setSessionReviewIndex((i) => i + 1);
+  }
+
+  if (sessionReviewActive) {
+    const reviewQuestion = sessionReviewIndex < sessionLog.length ? sessionLog[sessionReviewIndex] : null;
+
+    if (!reviewQuestion) {
+      const sessionCorrect = sessionLog.filter((q) => q.userCorrect).length;
+      return (
+        <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("sessionReviewComplete")}</h2>
+          <p className="text-2xl sm:text-4xl font-semibold text-emerald-400">
+            {sessionCorrect} / {sessionLog.length}
+          </p>
+          <button
+            onClick={() => { onComplete(); onStartNew(); }}
+            className="rounded-lg bg-emerald-600 px-6 py-2 text-white hover:bg-emerald-500"
+          >
+            {t("startNew")}
+          </button>
+        </div>
+      );
+    }
+
+    const reviewGrammar = grammarCache.get(reviewQuestion.grammarId);
+    return (
+      <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+        <p className="text-sm text-gray-400">
+          {sessionReviewIndex + 1} / {sessionLog.length}
+        </p>
+        <h2 className="max-w-lg text-center text-xl sm:text-3xl font-bold text-gray-100">
+          {reviewQuestion.statement || reviewGrammar?.statement}
+        </h2>
+
+        {reviewGrammar && (
+          <div className="w-full max-w-lg rounded-lg bg-gray-800 border border-gray-600 p-4">
+            {reviewGrammar.descriptions?.map((d, di) => {
+              const entries = displayDefEntries(d.text || {});
+              const rows = entries.length > 0 ? entries : Object.entries(d.text || {});
+              return (
+                <div key={di} className="mb-2 last:mb-0">
+                  {d.partOfSpeech && (
+                    <span className="mr-2 rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-300">
+                      {d.partOfSpeech}
+                    </span>
+                  )}
+                  {rows.map(([lang, text]) => (
+                    <p key={lang} className="text-sm text-gray-300 whitespace-pre-line">
+                      <span className="text-xs text-gray-500">[{lang}] </span>
+                      {text}
+                    </p>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {reviewGrammar && reviewGrammar.examples && reviewGrammar.examples.length > 0 && (
+          <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
+            <p className="mb-2 text-sm font-medium text-gray-400">{t("examples")}</p>
+            {reviewGrammar.examples.map((ex, i) => (
+              <div key={i} className="mb-2 last:mb-0">
+                <p className="text-lg text-gray-100">
+                  <RubyText text={ex.sentence} segments={ex.segments} />
+                </p>
+                {ex.transliteration && <p className="text-sm text-gray-500">{ex.transliteration}</p>}
+                {typeof ex.translation === "string" ? (
+                  ex.translation && <p className="text-sm text-gray-400">{ex.translation}</p>
+                ) : (
+                  displayGrammarDefEntries(ex.translation).map(([lang, text]) => (
+                    <p key={lang} className="text-sm text-gray-400">
+                      <span className="mr-1 text-xs font-medium uppercase text-gray-500">{lang}</span>
+                      {text}
+                    </p>
+                  ))
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
+          <button
+            onClick={nextSessionReview}
+            className="w-full sm:w-auto rounded-lg bg-emerald-600 px-6 py-3 sm:py-2 text-white hover:bg-emerald-500"
+          >
+            {t("next")}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (isComplete || (!question && currentIndex >= currentSession.questions.length)) {
@@ -157,25 +271,34 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
 
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
-      <p className="text-sm text-gray-400">
-        {currentSession.score.correct} / {originalTotal}
-      </p>
+      <div className="sticky top-0 z-10 flex w-full items-center justify-center gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:bg-transparent sm:py-0">
+        <p className="text-sm text-gray-400">
+          {currentSession.score.correct} / {originalTotal}
+        </p>
+        <button
+          onClick={endSession}
+          title={t("endSession")}
+          className="rounded-full border border-amber-600/70 bg-amber-700/30 px-4 py-1.5 text-sm font-medium text-amber-200 hover:bg-amber-700/50 whitespace-nowrap"
+        >
+          🏁 {t("endSession")}
+        </button>
+      </div>
 
-      {groupProgress && (
-        <div className="flex flex-wrap justify-center gap-2 items-center">
-          {groupsOpen &&
-            groupProgress.map((g) => (
-              <span
-                key={g.id}
-                className={`rounded-full px-3 py-1 text-xs font-medium ${
-                  g.remaining === 0
-                    ? "bg-green-900/40 text-green-400 border border-green-700/50"
-                    : "bg-gray-700 text-gray-300 border border-gray-600"
-                }`}
-              >
-                {g.name}: {g.remaining}/{g.total}
-              </span>
-            ))}
+      <div className="flex flex-wrap justify-center gap-2 items-center">
+        {groupProgress && groupsOpen &&
+          groupProgress.map((g) => (
+            <span
+              key={g.id}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                g.remaining === 0
+                  ? "bg-green-900/40 text-green-400 border border-green-700/50"
+                  : "bg-gray-700 text-gray-300 border border-gray-600"
+              }`}
+            >
+              {g.name}: {g.remaining}/{g.total}
+            </span>
+          ))}
+        {groupProgress && (
           <button
             onClick={() => setGroupsOpen((v) => !v)}
             aria-pressed={groupsOpen}
@@ -187,14 +310,14 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
           >
             🏷 {t("grammarGroups")}
           </button>
-          <button
-            onClick={() => (weightsOpen ? setWeightsOpen(false) : openWeightsPanel())}
-            className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1 text-xs text-gray-300 hover:bg-gray-700"
-          >
-            ⚖ {t("adjustWeights")}
-          </button>
-        </div>
-      )}
+        )}
+        <button
+          onClick={() => (weightsOpen ? setWeightsOpen(false) : openWeightsPanel())}
+          className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1 text-xs text-gray-300 hover:bg-gray-700"
+        >
+          ⚖ {t("adjustWeights")}
+        </button>
+      </div>
 
       {/* Mid-session group weight editor */}
       {weightsOpen && (
@@ -230,6 +353,21 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
               </div>
             </details>
           )}
+          {/* Already-correct bucket: peer to the groups (blank = off, 0 = exclude mastered). */}
+          <label className="flex items-center gap-2 text-sm text-gray-300" title={t("alreadyCorrectHint")}>
+            <span className="flex-1 min-w-0 truncate">✅ {t("alreadyCorrect")}</span>
+            <input
+              type="number"
+              min={0}
+              placeholder="—"
+              value={correctDraft}
+              aria-label={t("alreadyCorrect")}
+              onChange={(e) => setCorrectDraft(e.target.value)}
+              className={`w-16 shrink-0 rounded border bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:outline-none ${
+                correctDraftInvalid ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-emerald-400"
+              }`}
+            />
+          </label>
           {hasInvalidWeightDraft && (
             <p className="text-xs text-red-400">{t("groupWeightRequiredHint")}</p>
           )}

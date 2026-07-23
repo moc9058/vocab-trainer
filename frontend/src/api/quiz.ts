@@ -17,6 +17,7 @@ export function startQuiz(opts: {
   levels?: string[];
   groupIds?: string[];
   groupWeights?: Record<string, number>;
+  correctWeight?: number;
   flaggedOnly?: boolean;
   questionType?: string;
 }): Promise<QuizSession> {
@@ -47,11 +48,12 @@ export function sampleWords(opts: {
 // the full session in the new order.
 export function updateQuizWeights(
   language: string,
-  groupWeights: Record<string, number>
+  groupWeights: Record<string, number>,
+  correctWeight?: number
 ): Promise<QuizSession> {
   return putJson(
     `/api/quiz/session/language/${encodeURIComponent(language)}/weights`,
-    { groupWeights }
+    { groupWeights, ...(correctWeight !== undefined ? { correctWeight } : {}) }
   );
 }
 

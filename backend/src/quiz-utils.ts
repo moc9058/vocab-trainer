@@ -1,5 +1,11 @@
 // Shared ordering helpers used by the word, grammar, and combined quiz routes.
 
+// A word/grammar item counts as "already-correct" (mastered) when its most recent answer was
+// correct — i.e. its saved progress streak is >= 1. Unseen or last-wrong items are not mastered.
+export function isMastered(p: { streak: number } | undefined | null): boolean {
+  return !!p && p.streak >= 1;
+}
+
 export function shuffle<T>(items: T[]): T[] {
   const shuffled = [...items];
   for (let i = shuffled.length - 1; i > 0; i--) {

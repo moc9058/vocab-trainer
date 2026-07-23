@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
 import { getGrammarGroups } from "../api/grammar";
 import type { GrammarGroup } from "../types";
-import { isWeightValid, parseWeightInput } from "../utils/weightInput";
+import { isWeightValid, scaleWeightRecord } from "../utils/weightInput";
 
 interface Props {
   language: string;
-  onStart: (filters: { groupIds: string[]; groupWeights: Record<string, number> }) => void;
+  onStart: (filters: { groupIds: string[]; groupWeights: Record<string, number>; correctWeight?: number }) => void;
   onClose: () => void;
 }
 
@@ -15,6 +15,9 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
   const [groups, setGroups] = useState<GrammarGroup[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [groupWeights, setGroupWeights] = useState<Record<string, string>>({});
+  // Blank = feature off (mastered items stay mixed in). A number activates the
+  // "already-correct" bucket: 0 excludes mastered items, higher reviews them more.
+  const [correctWeightDraft, setCorrectWeightDraft] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,7 +32,10 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
       .finally(() => setLoading(false));
   }, [language]);
 
-  const hasInvalidGroupWeight = [...selectedGroupIds].some((id) => !isWeightValid(groupWeights[id], 1));
+  const correctWeightActive = correctWeightDraft.trim() !== "";
+  const correctWeightInvalid = correctWeightActive && !isWeightValid(correctWeightDraft, 0);
+  const hasInvalidGroupWeight =
+    [...selectedGroupIds].some((id) => !isWeightValid(groupWeights[id], 0)) || correctWeightInvalid;
 
   function toggleGroup(id: string) {
     setSelectedGroupIds((prev) => {
@@ -37,6 +43,20 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
+    });
+  }
+
+  // Scale groups + already-correct by one common factor so decimals become integers (10, 0.3 -> 100, 3).
+  function submit() {
+    const raws: Record<string, string> = {};
+    for (const id of selectedGroupIds) raws[`g:${id}`] = groupWeights[id] ?? "1";
+    if (correctWeightActive) raws.__correct__ = correctWeightDraft;
+    const scaled = scaleWeightRecord(raws);
+    onStart({
+      // No groups selected = quiz the entire pool (server-side default behavior).
+      groupIds: [...selectedGroupIds],
+      groupWeights: Object.fromEntries([...selectedGroupIds].map((id) => [id, scaled[`g:${id}`] ?? 1])),
+      ...(correctWeightActive ? { correctWeight: scaled.__correct__ } : {}),
     });
   }
 
@@ -51,9 +71,25 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
         className="w-full max-w-2xl rounded-xl bg-gray-800 p-4 sm:p-6 shadow-xl max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="mb-4 text-lg font-semibold text-gray-100">
-          {t("selectGrammarGroups")}
-        </h2>
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-gray-100">
+            {t("selectGrammarGroups")}
+          </h2>
+          <label className="flex items-center gap-1.5 text-xs text-gray-300" title={t("alreadyCorrectHint")}>
+            <span className="whitespace-nowrap">✅ {t("alreadyCorrect")}</span>
+            <input
+              type="number"
+              min={0}
+              placeholder="—"
+              value={correctWeightDraft}
+              aria-label={t("alreadyCorrect")}
+              onChange={(e) => setCorrectWeightDraft(e.target.value)}
+              className={`w-14 rounded border bg-gray-700 px-1.5 py-0.5 text-xs text-gray-100 focus:outline-none ${
+                correctWeightInvalid ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-blue-400"
+              }`}
+            />
+          </label>
+        </div>
 
         {loading ? (
           <p className="text-gray-400">Loading...</p>
@@ -83,7 +119,7 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
                 </summary>
                 <div className="space-y-1">
                   {groups.map((g) => {
-                    const weightInvalid = selectedGroupIds.has(g.id) && !isWeightValid(groupWeights[g.id], 1);
+                    const weightInvalid = selectedGroupIds.has(g.id) && !isWeightValid(groupWeights[g.id], 0);
                     return (
                       <label
                         key={g.id}
@@ -99,7 +135,7 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
                         {selectedGroupIds.has(g.id) && (
                           <input
                             type="number"
-                            min={1}
+                            min={0}
                             value={groupWeights[g.id] ?? "1"}
                             title={t("groupWeightHint")}
                             aria-label={t("groupWeight")}
@@ -135,15 +171,7 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
             {t("cancel")}
           </button>
           <button
-            onClick={() =>
-              onStart({
-                // No groups selected = quiz the entire pool (server-side default behavior).
-                groupIds: [...selectedGroupIds],
-                groupWeights: Object.fromEntries(
-                  [...selectedGroupIds].map((id) => [id, Math.max(1, Math.floor(parseWeightInput(groupWeights[id]) ?? 1))])
-                ),
-              })
-            }
+            onClick={submit}
             disabled={loading || hasInvalidGroupWeight}
             className="rounded-lg bg-blue-600 px-4 py-1.5 text-sm text-white hover:bg-blue-500 disabled:opacity-50"
           >

@@ -4,6 +4,7 @@ import {
   getFilteredWords,
   getWordProgress,
   updateWordProgress,
+  getProgressForLanguage,
   getQuizSession,
   getQuizSessionByLanguage,
   createQuizSession,
@@ -13,7 +14,7 @@ import {
   getWordGroup,
 } from "../firestore.js";
 import type { QuizSession, QuizQuestion, Word, WordProgress } from "../types.js";
-import { shuffle, weightedInterleave, insertRetryQuestion } from "../quiz-utils.js";
+import { shuffle, weightedInterleave, insertRetryQuestion, isMastered } from "../quiz-utils.js";
 
 const quizRoutes: FastifyPluginAsync = async (fastify) => {
   // Start quiz session
@@ -26,6 +27,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       levels?: string[];
       groupIds?: string[];
       groupWeights?: Record<string, number>;
+      correctWeight?: number;
       flaggedOnly?: boolean;
       questionType?: string;
     };
@@ -44,6 +46,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
             levels: { type: "array", items: { type: "string" } },
             groupIds: { type: "array", items: { type: "string" } },
             groupWeights: { type: "object", additionalProperties: { type: "number" } },
+            correctWeight: { type: "number", minimum: 0 },
             flaggedOnly: { type: "boolean" },
             questionType: { type: "string" },
           },
@@ -51,7 +54,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { language, questionCount, topics, categories, levels, groupIds, groupWeights, flaggedOnly, questionType } = request.body;
+      const { language, questionCount, topics, categories, levels, groupIds, groupWeights, correctWeight, flaggedOnly, questionType } = request.body;
       const [exists, pool] = await Promise.all([
         languageExists(language),
         getFilteredWords(language, { topics, categories, levels, groupIds, flaggedOnly }),
@@ -66,6 +69,19 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const count = questionCount ? Math.min(questionCount, pool.length) : pool.length;
 
+      // Optionally split already-mastered words into their own weighted bucket, peer to the
+      // groups (correctWeight 0 = exclude them; >0 = mix them back in proportionally). Only
+      // active when correctWeight is provided — otherwise behavior is unchanged.
+      let freshPool = pool;
+      let knownWords: Word[] = [];
+      let correctMembership: string[] | undefined;
+      if (correctWeight !== undefined) {
+        const progress = await getProgressForLanguage(language);
+        knownWords = pool.filter((w) => isMastered(progress.words[w.id]));
+        freshPool = pool.filter((w) => !isMastered(progress.words[w.id]));
+        correctMembership = knownWords.map((w) => w.id);
+      }
+
       // When groups are selected, order the pool by a weighted interleave: each next word's
       // group is drawn proportionally to its weight (default 1), then a random word from it.
       // A group drops out of the draw once all its words have been placed; the existing retry
@@ -73,17 +89,30 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       let selected: Word[];
       let groupMembership: Record<string, string[]> | undefined;
       if (groupIds && groupIds.length > 0) {
-        const membership = await buildGroupMembership(groupIds, pool);
+        const membership = await buildGroupMembership(groupIds, freshPool);
         const buckets = groupIds.map((id) => ({
           weight: groupWeights?.[id] ?? 1,
           items: membership[id] ?? [],
         }));
+        if (correctWeight !== undefined) buckets.push({ weight: correctWeight, items: knownWords });
         selected = weightedInterleave(buckets).slice(0, count);
         groupMembership = Object.fromEntries(
           Object.entries(membership).map(([id, ws]) => [id, ws.map((w) => w.id)])
         );
+      } else if (correctWeight !== undefined) {
+        // Ungrouped + already-correct: fresh vs mastered as two peer buckets.
+        selected = weightedInterleave([
+          { weight: 1, items: freshPool },
+          { weight: correctWeight, items: knownWords },
+        ]).slice(0, count);
       } else {
         selected = randomSample(pool, count);
+      }
+
+      if (selected.length === 0) {
+        return reply.badRequest(
+          "No words match the given filters (all matching words are already mastered — raise the 'already correct' weight to review them)"
+        );
       }
 
       const questions: QuizQuestion[] = selected.map((w) => ({
@@ -106,6 +135,8 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         wordIds: selected.map((w) => w.id),
         ...(groupWeights ? { groupWeights } : {}),
         ...(groupMembership ? { groupMembership } : {}),
+        ...(correctWeight !== undefined ? { correctWeight } : {}),
+        ...(correctMembership ? { correctMembership } : {}),
         ...(flaggedOnly ? { flaggedOnly } : {}),
       };
 
@@ -322,7 +353,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
   // hydrated) so the client can re-sync its local order.
   fastify.put<{
     Params: { language: string };
-    Body: { groupWeights: Record<string, number> };
+    Body: { groupWeights: Record<string, number>; correctWeight?: number };
   }>(
     "/session/language/:language/weights",
     {
@@ -332,6 +363,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
           required: ["groupWeights"],
           properties: {
             groupWeights: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
+            correctWeight: { type: "number", minimum: 0 },
           },
         },
       },
@@ -342,6 +374,16 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       if (session.status === "completed") return reply.badRequest("Session already completed");
 
       session.groupWeights = { ...session.groupWeights, ...request.body.groupWeights };
+      if (request.body.correctWeight !== undefined) {
+        session.correctWeight = request.body.correctWeight;
+        // Activate the mastered partition on demand if the session didn't start with one.
+        if (!session.correctMembership) {
+          const progress = await getProgressForLanguage(request.params.language);
+          session.correctMembership = session.questions
+            .filter((q) => q.userCorrect === undefined && isMastered(progress.words[q.wordId]))
+            .map((q) => q.wordId);
+        }
+      }
       const answered: QuizQuestion[] = [];
       const unanswered: QuizQuestion[] = [];
       for (const q of session.questions) {
@@ -389,17 +431,36 @@ async function buildGroupMembership(
 // shuffle uniformly.
 function reweightUnanswered(unanswered: QuizQuestion[], session: QuizSession): QuizQuestion[] {
   const membership = session.groupMembership;
-  if (!membership || Object.keys(membership).length === 0) {
+  const hasCorrect = session.correctWeight !== undefined;
+  if ((!membership || Object.keys(membership).length === 0) && !hasCorrect) {
     return shuffle(unanswered);
   }
+  const knownSet = new Set(session.correctMembership ?? []);
   const byWordId = new Map<string, QuizQuestion>();
   for (const q of unanswered) byWordId.set(q.wordId, q);
-  const buckets = Object.entries(membership).map(([gid, wordIds]) => ({
-    weight: session.groupWeights?.[gid] ?? 1,
-    items: wordIds.filter((wid) => byWordId.has(wid)).map((wid) => byWordId.get(wid)!),
-  }));
+
+  const buckets: { weight: number; items: QuizQuestion[] }[] = [];
+  if (membership && Object.keys(membership).length > 0) {
+    for (const [gid, wordIds] of Object.entries(membership)) {
+      buckets.push({
+        weight: session.groupWeights?.[gid] ?? 1,
+        items: wordIds
+          .filter((wid) => byWordId.has(wid) && !knownSet.has(wid))
+          .map((wid) => byWordId.get(wid)!),
+      });
+    }
+  } else if (hasCorrect) {
+    // Ungrouped + already-correct: fresh = unanswered minus mastered.
+    buckets.push({ weight: 1, items: unanswered.filter((q) => !knownSet.has(q.wordId)) });
+  }
+  if (hasCorrect) {
+    buckets.push({
+      weight: session.correctWeight ?? 0,
+      items: unanswered.filter((q) => knownSet.has(q.wordId)),
+    });
+  }
   const ordered = weightedInterleave(buckets);
-  // Append any unanswered question not covered by the stored membership.
+  // Append any unanswered question not covered by a bucket (e.g. a zero-weight bucket).
   const covered = new Set(ordered.map((q) => q.wordId));
   for (const q of unanswered) {
     if (!covered.has(q.wordId)) ordered.push(q);

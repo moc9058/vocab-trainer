@@ -16,6 +16,7 @@ export async function getCurrentCombinedSession(
 export function startCombinedQuiz(opts: {
   language: string;
   domainWeights: { word: number; grammar: number };
+  correctWeight?: number;
   word?: {
     topics?: string[];
     categories?: string[];
@@ -50,6 +51,7 @@ export function updateCombinedQuizWeights(
     domainWeights?: { word: number; grammar: number };
     wordGroupWeights?: Record<string, number>;
     grammarGroupWeights?: Record<string, number>;
+    correctWeight?: number;
   }
 ): Promise<CombinedQuizSession> {
   return putJson(

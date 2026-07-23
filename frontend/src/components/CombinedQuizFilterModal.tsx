@@ -4,10 +4,12 @@ import { getFilters, getGroups } from "../api/vocab";
 import { getGrammarGroups } from "../api/grammar";
 import { getFlaggedWordIds } from "../api/flagged";
 import type { WordGroup, GrammarGroup } from "../types";
-import { isWeightValid, parseWeightInput } from "../utils/weightInput";
+import { isWeightValid, parseWeightInput, scaleWeightRecord } from "../utils/weightInput";
 
 export interface CombinedQuizFilters {
   domainWeights: { word: number; grammar: number };
+  /** Top-level weight for the "already-correct" (mastered) bucket; undefined = feature off. */
+  correctWeight?: number;
   word: {
     topics: string[];
     categories: string[];
@@ -130,6 +132,9 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
   const { t } = useI18n();
   const [wordWeight, setWordWeight] = useState("1");
   const [grammarWeight, setGrammarWeight] = useState("1");
+  // Blank = feature off (mastered items stay mixed in). A number activates the top-level
+  // "already-correct" bucket (peer to word/grammar): 0 excludes mastered items, higher reviews more.
+  const [correctWeightDraft, setCorrectWeightDraft] = useState("");
   const [allLevels, setAllLevels] = useState<string[]>([]);
   const [allTopics, setAllTopics] = useState<string[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
@@ -199,40 +204,50 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
   const grammarWeightNum = parseWeightInput(grammarWeight);
   const wordDomainActive = (wordWeightNum ?? 0) > 0;
   const grammarDomainActive = (grammarWeightNum ?? 0) > 0;
+  // Already-correct: blank = feature off; a number (incl. 0) activates the top-level bucket.
+  const correctWeightActive = correctWeightDraft.trim() !== "";
+  const correctWeightNum = parseWeightInput(correctWeightDraft);
+  const correctDomainActive = correctWeightActive && (correctWeightNum ?? 0) > 0;
+  const correctWeightInvalid = correctWeightActive && !isWeightValid(correctWeightDraft, 0);
   const hasInvalidDomainWeight = wordWeightNum === null || grammarWeightNum === null;
   const hasInvalidWordGroupWeight =
-    wordDomainActive && [...selectedWordGroupIds].some((id) => !isWeightValid(wordGroupWeights[id], 1));
+    wordDomainActive && [...selectedWordGroupIds].some((id) => !isWeightValid(wordGroupWeights[id], 0));
   const hasInvalidGrammarGroupWeight =
-    grammarDomainActive && [...selectedGrammarGroupIds].some((id) => !isWeightValid(grammarGroupWeights[id], 1));
+    grammarDomainActive && [...selectedGrammarGroupIds].some((id) => !isWeightValid(grammarGroupWeights[id], 0));
 
   function buildFilters(): CombinedQuizFilters {
+    // Scale every weight (domains + already-correct + all group weights) by one common factor
+    // so decimals become integers while ratios are preserved (e.g. 10, 0.3 -> 100, 3).
+    const raws: Record<string, string> = { __word__: wordWeight, __grammar__: grammarWeight };
+    if (correctWeightActive) raws.__correct__ = correctWeightDraft;
+    for (const id of selectedWordGroupIds) raws[`w:${id}`] = wordGroupWeights[id] ?? "1";
+    for (const id of selectedGrammarGroupIds) raws[`g:${id}`] = grammarGroupWeights[id] ?? "1";
+    const s = scaleWeightRecord(raws);
     return {
-      domainWeights: {
-        word: Math.max(0, Math.floor(wordWeightNum ?? 0)),
-        grammar: Math.max(0, Math.floor(grammarWeightNum ?? 0)),
-      },
+      domainWeights: { word: s.__word__, grammar: s.__grammar__ },
+      ...(correctWeightActive ? { correctWeight: s.__correct__ } : {}),
       word: {
         topics: [...selectedTopics],
         categories: [...selectedCategories],
         levels: [...selectedLevels],
         groupIds: [...selectedWordGroupIds],
-        groupWeights: Object.fromEntries(
-          [...selectedWordGroupIds].map((id) => [id, Math.max(1, Math.floor(parseWeightInput(wordGroupWeights[id]) ?? 1))])
-        ),
+        groupWeights: Object.fromEntries([...selectedWordGroupIds].map((id) => [id, s[`w:${id}`] ?? 1])),
         flaggedOnly: flaggedScope,
       },
       grammar: {
         groupIds: [...selectedGrammarGroupIds],
-        groupWeights: Object.fromEntries(
-          [...selectedGrammarGroupIds].map((id) => [id, Math.max(1, Math.floor(parseWeightInput(grammarGroupWeights[id]) ?? 1))])
-        ),
+        groupWeights: Object.fromEntries([...selectedGrammarGroupIds].map((id) => [id, s[`g:${id}`] ?? 1])),
       },
     };
   }
 
-  const bothZero = !wordDomainActive && !grammarDomainActive;
+  const allZero = !wordDomainActive && !grammarDomainActive && !correctDomainActive;
   const canStart =
-    !bothZero && !hasInvalidDomainWeight && !hasInvalidWordGroupWeight && !hasInvalidGrammarGroupWeight;
+    !allZero &&
+    !hasInvalidDomainWeight &&
+    !hasInvalidWordGroupWeight &&
+    !hasInvalidGrammarGroupWeight &&
+    !correctWeightInvalid;
 
   return (
     <div
@@ -245,6 +260,20 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
       >
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-gray-100">{t("selectCombinedFilters")}</h2>
+          <label className="flex items-center gap-1.5 text-xs text-gray-300" title={t("alreadyCorrectHint")}>
+            <span className="whitespace-nowrap">✅ {t("alreadyCorrect")}</span>
+            <input
+              type="number"
+              min={0}
+              placeholder="—"
+              value={correctWeightDraft}
+              aria-label={t("alreadyCorrect")}
+              onChange={(e) => setCorrectWeightDraft(e.target.value)}
+              className={`w-14 rounded border bg-gray-700 px-1.5 py-0.5 text-xs text-gray-100 focus:outline-none ${
+                correctWeightInvalid ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-indigo-400"
+              }`}
+            />
+          </label>
         </div>
         <p className="mb-3 text-xs text-gray-500">{t("domainWeightHint")}</p>
 
@@ -305,7 +334,7 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
                         </summary>
                         <ul className="space-y-1 md:max-h-48 md:overflow-y-auto">
                           {allWordGroups.map((group) => {
-                            const weightInvalid = selectedWordGroupIds.has(group.id) && !isWeightValid(wordGroupWeights[group.id], 1);
+                            const weightInvalid = selectedWordGroupIds.has(group.id) && !isWeightValid(wordGroupWeights[group.id], 0);
                             return (
                               <li key={group.id}>
                                 <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
@@ -319,7 +348,7 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
                                   {selectedWordGroupIds.has(group.id) && (
                                     <input
                                       type="number"
-                                      min={1}
+                                      min={0}
                                       value={wordGroupWeights[group.id] ?? "1"}
                                       title={t("groupWeightHint")}
                                       aria-label={t("groupWeight")}
@@ -429,7 +458,7 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
                       </summary>
                       <ul className="space-y-1 md:max-h-48 md:overflow-y-auto">
                         {allGrammarGroups.map((group) => {
-                          const weightInvalid = selectedGrammarGroupIds.has(group.id) && !isWeightValid(grammarGroupWeights[group.id], 1);
+                          const weightInvalid = selectedGrammarGroupIds.has(group.id) && !isWeightValid(grammarGroupWeights[group.id], 0);
                           return (
                             <li key={group.id}>
                               <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
@@ -443,7 +472,7 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
                                 {selectedGrammarGroupIds.has(group.id) && (
                                   <input
                                     type="number"
-                                    min={1}
+                                    min={0}
                                     value={grammarGroupWeights[group.id] ?? "1"}
                                     title={t("groupWeightHint")}
                                     aria-label={t("groupWeight")}
@@ -472,7 +501,7 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
           </div>
         )}
 
-        {(hasInvalidDomainWeight || hasInvalidWordGroupWeight || hasInvalidGrammarGroupWeight) && (
+        {(hasInvalidDomainWeight || hasInvalidWordGroupWeight || hasInvalidGrammarGroupWeight || correctWeightInvalid) && (
           <p className="mt-1 text-xs text-red-400">{t("groupWeightRequiredHint")}</p>
         )}
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2">

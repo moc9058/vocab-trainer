@@ -56,6 +56,11 @@ export interface QuizSession {
   wordIds?: string[];
   groupWeights?: Record<string, number>;
   groupMembership?: Record<string, string[]>;
+  /** Weight for the "already-correct" (mastered) bucket. When set, mastered words are pulled
+   *  out of the normal pool and drawn as one bucket peer to the groups (0 = exclude them). */
+  correctWeight?: number;
+  /** Word IDs classified as mastered when the session was built (or on-demand mid-session). */
+  correctMembership?: string[];
   pendingWordIds?: string[];
   questionTarget?: number;
   flaggedOnly?: boolean;
@@ -185,6 +190,10 @@ export interface GrammarQuizSession {
   groupFilter?: string[];
   groupWeights?: Record<string, number>;
   groupMembership?: Record<string, string[]>;
+  /** Weight for the "already-correct" (mastered) bucket (0 = exclude mastered grammar items). */
+  correctWeight?: number;
+  /** Grammar IDs classified as mastered when the session was built (or on-demand mid-session). */
+  correctMembership?: string[];
 }
 
 // ========== Combined Quiz (words + grammar) ==========
@@ -220,6 +229,11 @@ export interface CombinedQuizSession {
   wordGroupMembership?: Record<string, string[]>;
   grammarGroupWeights?: Record<string, number>;
   grammarGroupMembership?: Record<string, string[]>;
+  /** Top-level weight for the "already-correct" (mastered) bucket, peer to word/grammar domains
+   *  (0 = exclude mastered items). */
+  correctWeight?: number;
+  /** Word/grammar IDs classified as mastered when the session was built (or on-demand). */
+  correctMembership?: { wordIds: string[]; grammarIds: string[] };
   flaggedOnly?: boolean;
 }
 

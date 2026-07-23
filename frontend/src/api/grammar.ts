@@ -141,6 +141,7 @@ export function startGrammarQuiz(opts: {
   questionCount?: number;
   groupIds?: string[];
   groupWeights?: Record<string, number>;
+  correctWeight?: number;
 }): Promise<GrammarQuizSession> {
   return postJson("/api/grammar-quiz/start", opts);
 }
@@ -149,11 +150,12 @@ export function startGrammarQuiz(opts: {
 // the full session in the new order.
 export function updateGrammarQuizWeights(
   language: string,
-  groupWeights: Record<string, number>
+  groupWeights: Record<string, number>,
+  correctWeight?: number
 ): Promise<GrammarQuizSession> {
   return putJson(
     `/api/grammar-quiz/session/language/${encodeURIComponent(language)}/weights`,
-    { groupWeights }
+    { groupWeights, ...(correctWeight !== undefined ? { correctWeight } : {}) }
   );
 }
 

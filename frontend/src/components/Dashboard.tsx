@@ -165,6 +165,7 @@ export default function Dashboard() {
         levels: filters.levels,
         groupIds: filters.groupIds,
         groupWeights: filters.groupWeights,
+        correctWeight: filters.correctWeight,
         flaggedOnly: filters.flaggedOnly,
       });
       setStudyQuizTab(null);
@@ -203,6 +204,7 @@ export default function Dashboard() {
         levels: filters.levels,
         groupIds: filters.groupIds,
         groupWeights: filters.groupWeights,
+        correctWeight: filters.correctWeight,
         flaggedOnly: filters.flaggedOnly,
       });
       setActiveQuiz(session);
@@ -277,7 +279,7 @@ export default function Dashboard() {
     setStudyQuizTab("grammar");
   }
 
-  async function handleGrammarFiltersSelected(filters: { groupIds: string[]; groupWeights: Record<string, number> }) {
+  async function handleGrammarFiltersSelected(filters: { groupIds: string[]; groupWeights: Record<string, number>; correctWeight?: number }) {
     if (!language) return;
     setStudyQuizTab(null);
     try {
@@ -292,6 +294,7 @@ export default function Dashboard() {
         language,
         groupIds: filters.groupIds.length > 0 ? filters.groupIds : undefined,
         groupWeights: filters.groupIds.length > 0 ? filters.groupWeights : undefined,
+        correctWeight: filters.correctWeight,
       });
       setActiveGrammarQuiz(session);
       navigate(`/${language}/grammar-quiz`);
@@ -316,6 +319,7 @@ export default function Dashboard() {
     const session = await startCombinedQuiz({
       language,
       domainWeights: filters.domainWeights,
+      correctWeight: filters.correctWeight,
       word: filters.word,
       grammar: filters.grammar,
     });

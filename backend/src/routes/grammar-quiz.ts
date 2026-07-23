@@ -29,7 +29,7 @@ import type {
 } from "../types.js";
 import { TOPICS } from "../types.js";
 import { callLLM, stripMarkdownFences } from "../llm.js";
-import { weightedInterleave } from "../quiz-utils.js";
+import { weightedInterleave, weightedMerge, isMastered } from "../quiz-utils.js";
 
 const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
   // Start grammar quiz
@@ -39,6 +39,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       questionCount?: number;
       groupIds?: string[];
       groupWeights?: Record<string, number>;
+      correctWeight?: number;
     };
   }>(
     "/start",
@@ -52,12 +53,13 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
             questionCount: { type: "number", minimum: 1 },
             groupIds: { type: "array", items: { type: "string" } },
             groupWeights: { type: "object", additionalProperties: { type: "number" } },
+            correctWeight: { type: "number", minimum: 0 },
           },
         },
       },
     },
     async (request, reply) => {
-      const { language, questionCount, groupIds, groupWeights } = request.body;
+      const { language, questionCount, groupIds, groupWeights, correctWeight } = request.body;
 
       let pool = await getAllGrammarItems(language);
 
@@ -78,6 +80,18 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       const progressMap = await getGrammarProgressForLanguage(language);
       const count = questionCount ? Math.min(questionCount, pool.length) : Math.min(10, pool.length);
 
+      // Optionally split already-mastered items into their own weighted bucket, peer to the
+      // groups (correctWeight 0 = exclude them; >0 = mix them back in). Only active when
+      // correctWeight is provided — otherwise behavior is unchanged.
+      let freshPool = pool;
+      let knownItems: Grammar[] = [];
+      let correctMembership: string[] | undefined;
+      if (correctWeight !== undefined) {
+        knownItems = pool.filter((it) => isMastered(progressMap[it.id]));
+        freshPool = pool.filter((it) => !isMastered(progressMap[it.id]));
+        correctMembership = knownItems.map((it) => it.id);
+      }
+
       // When groups are selected, order the pool by a weighted interleave (mirrors the
       // word quiz): each next item's group is drawn proportionally to its weight (default
       // 1), then a random item from it. Otherwise fall back to the existing spaced-repetition
@@ -85,17 +99,32 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       let selected: Grammar[];
       let groupMembership: Record<string, string[]> | undefined;
       if (groupIds && groupIds.length > 0) {
-        const membership = buildGrammarGroupMembership(groupIds, groupDocs, pool);
+        const membership = buildGrammarGroupMembership(groupIds, groupDocs, freshPool);
         const buckets = groupIds.map((id) => ({
           weight: groupWeights?.[id] ?? 1,
           items: membership[id] ?? [],
         }));
+        if (correctWeight !== undefined) buckets.push({ weight: correctWeight, items: knownItems });
         selected = weightedInterleave(buckets).slice(0, count);
         groupMembership = Object.fromEntries(
           Object.entries(membership).map(([id, items]) => [id, items.map((i) => i.id)])
         );
+      } else if (correctWeight !== undefined) {
+        // Ungrouped + already-correct: keep spaced-repetition order on the fresh side, then
+        // merge the mastered bucket in by weight (weightedMerge preserves each bucket's order).
+        const freshOrdered = weightedSample(freshPool, freshPool.length, progressMap);
+        selected = weightedMerge([
+          { weight: 1, items: freshOrdered },
+          { weight: correctWeight, items: knownItems },
+        ]).slice(0, count);
       } else {
         selected = weightedSample(pool, count, progressMap);
+      }
+
+      if (selected.length === 0) {
+        return reply.badRequest(
+          "No grammar items match the given filters (all matching items are already mastered — raise the 'already correct' weight to review them)"
+        );
       }
 
       // The question is the grammar element itself; descriptions/examples are
@@ -115,6 +144,8 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
         ...(groupIds && groupIds.length > 0 ? { groupFilter: groupIds } : {}),
         ...(groupWeights ? { groupWeights } : {}),
         ...(groupMembership ? { groupMembership } : {}),
+        ...(correctWeight !== undefined ? { correctWeight } : {}),
+        ...(correctMembership ? { correctMembership } : {}),
       };
 
       await saveGrammarQuizSession(session);
@@ -207,7 +238,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
   // its local order.
   fastify.put<{
     Params: { language: string };
-    Body: { groupWeights: Record<string, number> };
+    Body: { groupWeights: Record<string, number>; correctWeight?: number };
   }>(
     "/session/language/:language/weights",
     {
@@ -217,6 +248,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
           required: ["groupWeights"],
           properties: {
             groupWeights: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
+            correctWeight: { type: "number", minimum: 0 },
           },
         },
       },
@@ -227,6 +259,15 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       if (session.status === "completed") return reply.badRequest("Session already completed");
 
       session.groupWeights = { ...session.groupWeights, ...request.body.groupWeights };
+      if (request.body.correctWeight !== undefined) {
+        session.correctWeight = request.body.correctWeight;
+        if (!session.correctMembership) {
+          const progressMap = await getGrammarProgressForLanguage(request.params.language);
+          session.correctMembership = session.questions
+            .filter((q) => q.userCorrect === undefined && isMastered(progressMap[q.grammarId]))
+            .map((q) => q.grammarId);
+        }
+      }
       const answered: GrammarQuizQuestion[] = [];
       const unanswered: GrammarQuizQuestion[] = [];
       for (const q of session.questions) {
@@ -455,17 +496,35 @@ function reweightUnansweredGrammar(
   session: GrammarQuizSession
 ): GrammarQuizQuestion[] {
   const membership = session.groupMembership;
-  if (!membership || Object.keys(membership).length === 0) {
+  const hasCorrect = session.correctWeight !== undefined;
+  if ((!membership || Object.keys(membership).length === 0) && !hasCorrect) {
     return unanswered;
   }
+  const knownSet = new Set(session.correctMembership ?? []);
   const byGrammarId = new Map<string, GrammarQuizQuestion>();
   for (const q of unanswered) byGrammarId.set(q.grammarId, q);
-  const buckets = Object.entries(membership).map(([gid, ids]) => ({
-    weight: session.groupWeights?.[gid] ?? 1,
-    items: ids.filter((id) => byGrammarId.has(id)).map((id) => byGrammarId.get(id)!),
-  }));
+
+  const buckets: { weight: number; items: GrammarQuizQuestion[] }[] = [];
+  if (membership && Object.keys(membership).length > 0) {
+    for (const [gid, ids] of Object.entries(membership)) {
+      buckets.push({
+        weight: session.groupWeights?.[gid] ?? 1,
+        items: ids
+          .filter((id) => byGrammarId.has(id) && !knownSet.has(id))
+          .map((id) => byGrammarId.get(id)!),
+      });
+    }
+  } else if (hasCorrect) {
+    buckets.push({ weight: 1, items: unanswered.filter((q) => !knownSet.has(q.grammarId)) });
+  }
+  if (hasCorrect) {
+    buckets.push({
+      weight: session.correctWeight ?? 0,
+      items: unanswered.filter((q) => knownSet.has(q.grammarId)),
+    });
+  }
   const ordered = weightedInterleave(buckets);
-  // Append any unanswered question not covered by the stored membership.
+  // Append any unanswered question not covered by a bucket (e.g. a zero-weight bucket).
   const covered = new Set(ordered.map((q) => q.grammarId));
   for (const q of unanswered) {
     if (!covered.has(q.grammarId)) ordered.push(q);
