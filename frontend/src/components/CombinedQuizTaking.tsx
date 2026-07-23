@@ -292,19 +292,17 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     if (applyingWeights || !canApplyWeights) return;
     setApplyingWeights(true);
     try {
-      // Scale every weight (domains + already-correct + all groups) by one common factor so
-      // decimals become integers while ratios are preserved (10, 0.3 -> 100, 3).
-      const raws: Record<string, string> = { __word__: domainDraft.word, __grammar__: domainDraft.grammar };
-      if (correctDraftActive) raws.__correct__ = correctDraft;
-      for (const gid of Object.keys(wordWeightDraft)) raws[`w:${gid}`] = wordWeightDraft[gid];
-      for (const gid of Object.keys(grammarWeightDraft)) raws[`g:${gid}`] = grammarWeightDraft[gid];
-      const s = scaleWeightRecord(raws);
-      const domainWeights = { word: s.__word__, grammar: s.__grammar__ };
-      const wordGroupWeights = Object.fromEntries(Object.keys(wordWeightDraft).map((gid) => [gid, s[`w:${gid}`] ?? 0]));
-      const grammarGroupWeights = Object.fromEntries(Object.keys(grammarWeightDraft).map((gid) => [gid, s[`g:${gid}`] ?? 0]));
+      // Normalize each competing set independently (scale to integers + GCD-reduce): the
+      // word/grammar/already-correct domains merge together, each domain's groups compete alone.
+      const domainRaw: Record<string, string> = { word: domainDraft.word, grammar: domainDraft.grammar };
+      if (correctDraftActive) domainRaw.correct = correctDraft;
+      const d = scaleWeightRecord(domainRaw);
+      const domainWeights = { word: d.word, grammar: d.grammar };
+      const wordGroupWeights = scaleWeightRecord(wordWeightDraft);
+      const grammarGroupWeights = scaleWeightRecord(grammarWeightDraft);
       const updated = await updateCombinedQuizWeights(currentSession.language, {
         domainWeights,
-        ...(correctDraftActive ? { correctWeight: s.__correct__ } : {}),
+        ...(correctDraftActive ? { correctWeight: d.correct } : {}),
         ...(Object.keys(wordGroupWeights).length > 0 ? { wordGroupWeights } : {}),
         ...(Object.keys(grammarGroupWeights).length > 0 ? { grammarGroupWeights } : {}),
       });

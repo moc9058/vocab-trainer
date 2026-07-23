@@ -216,27 +216,32 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
     grammarDomainActive && [...selectedGrammarGroupIds].some((id) => !isWeightValid(grammarGroupWeights[id], 0));
 
   function buildFilters(): CombinedQuizFilters {
-    // Scale every weight (domains + already-correct + all group weights) by one common factor
-    // so decimals become integers while ratios are preserved (e.g. 10, 0.3 -> 100, 3).
-    const raws: Record<string, string> = { __word__: wordWeight, __grammar__: grammarWeight };
-    if (correctWeightActive) raws.__correct__ = correctWeightDraft;
-    for (const id of selectedWordGroupIds) raws[`w:${id}`] = wordGroupWeights[id] ?? "1";
-    for (const id of selectedGrammarGroupIds) raws[`g:${id}`] = grammarGroupWeights[id] ?? "1";
-    const s = scaleWeightRecord(raws);
+    // Each competing set is normalized independently (scaled to integers + GCD-reduced): the
+    // word/grammar/already-correct domains merge together, while each domain's group weights
+    // compete only among themselves.
+    const domainRaw: Record<string, string> = { word: wordWeight, grammar: grammarWeight };
+    if (correctWeightActive) domainRaw.correct = correctWeightDraft;
+    const d = scaleWeightRecord(domainRaw);
+    const wordGroupWeightsOut = scaleWeightRecord(
+      Object.fromEntries([...selectedWordGroupIds].map((id) => [id, wordGroupWeights[id] ?? "1"]))
+    );
+    const grammarGroupWeightsOut = scaleWeightRecord(
+      Object.fromEntries([...selectedGrammarGroupIds].map((id) => [id, grammarGroupWeights[id] ?? "1"]))
+    );
     return {
-      domainWeights: { word: s.__word__, grammar: s.__grammar__ },
-      ...(correctWeightActive ? { correctWeight: s.__correct__ } : {}),
+      domainWeights: { word: d.word, grammar: d.grammar },
+      ...(correctWeightActive ? { correctWeight: d.correct } : {}),
       word: {
         topics: [...selectedTopics],
         categories: [...selectedCategories],
         levels: [...selectedLevels],
         groupIds: [...selectedWordGroupIds],
-        groupWeights: Object.fromEntries([...selectedWordGroupIds].map((id) => [id, s[`w:${id}`] ?? 1])),
+        groupWeights: wordGroupWeightsOut,
         flaggedOnly: flaggedScope,
       },
       grammar: {
         groupIds: [...selectedGrammarGroupIds],
-        groupWeights: Object.fromEntries([...selectedGrammarGroupIds].map((id) => [id, s[`g:${id}`] ?? 1])),
+        groupWeights: grammarGroupWeightsOut,
       },
     };
   }

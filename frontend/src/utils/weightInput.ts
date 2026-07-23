@@ -26,14 +26,26 @@ export function decimalPlaces(raw: string | undefined): number {
   return dot === -1 ? 0 : trimmed.length - dot - 1;
 }
 
-// Scale a set of raw weight strings by the smallest common power of 10 that turns every value
-// into a whole number, preserving all ratios. e.g. ["10", "0.3"] -> [100, 3]. Ratios are NOT
-// reduced (no GCD) — matching the requested "10, 0.3 -> 100, 3" behavior. Blank/invalid
-// entries become 0. A single common factor keeps every pairwise ratio intact.
+// Greatest common divisor. gcd(0, n) === n, so zeros are ignored when reduced over an array.
+function gcd(a: number, b: number): number {
+  a = Math.abs(a);
+  b = Math.abs(b);
+  while (b) {
+    [a, b] = [b, a % b];
+  }
+  return a;
+}
+
+// Normalize a set of raw weight strings to the smallest whole numbers with the same ratios:
+//  1. Scale by the smallest common power of 10 that clears every decimal (["10","0.3"] -> [100,3]).
+//  2. Divide the whole set by its GCD ([40,10,5] -> [8,2,1]; [100,3] stays [100,3] since GCD=1).
+// Blank/invalid entries become 0 (0 is preserved — gcd(0,n)=n — so "excluded" stays excluded).
 export function scaleWeightsToIntegers(raws: (string | undefined)[]): number[] {
   const places = raws.reduce<number>((max, r) => Math.max(max, decimalPlaces(r)), 0);
   const factor = 10 ** places;
-  return raws.map((r) => Math.max(0, Math.round((parseWeightInput(r) ?? 0) * factor)));
+  const scaled = raws.map((r) => Math.max(0, Math.round((parseWeightInput(r) ?? 0) * factor)));
+  const divisor = scaled.reduce((g, n) => gcd(g, n), 0);
+  return divisor > 1 ? scaled.map((n) => n / divisor) : scaled;
 }
 
 // Record variant of scaleWeightsToIntegers: scales every value by one common factor and
