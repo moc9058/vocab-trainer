@@ -41,17 +41,19 @@ interface Props {
    *  directly, so in-flight terms surface in the global Dashboard pill. */
   onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
   /** When provided, create-mode submits enqueue instead of awaiting directly.
-   *  Form resets after enqueue so the user can add another grammar immediately. */
-  onGrammarQueue?: (statement: string, language: string, payload: GrammarPayload) => void;
+   *  Form resets after enqueue so the user can add another grammar immediately.
+   *  `opts.groupNames` carries the selected-groups checkbox state (existing
+   *  groups) plus any not-yet-existing draft group names to create. */
+  onGrammarQueue?: (statement: string, language: string, payload: GrammarPayload, opts?: { groupNames?: string[] }) => void;
   /** When provided, edit-mode submits enqueue instead of awaiting directly.
    *  Modal closes after brief "✓ Queued" flash. */
   onGrammarUpdateQueue?: (statement: string, language: string, grammarId: string, updates: Partial<Grammar>, groupsToAdd: string[], groupsToRemove: string[]) => void;
   /** Prefill for CREATE mode (e.g. reviewing an OCR draft). Ignored when `editItem` is set —
    *  the submit still goes through the smart-add create path. */
   initialItem?: Partial<Omit<Grammar, "language">>;
-  /** CREATE mode only: grammar-group NAMES the new item should be added to on
-   *  successful save. Missing groups are created. Only applied on the direct
-   *  (non-queue) create path — the queue path never learns the created id. */
+  /** CREATE mode only: grammar-group NAMES to preselect in the groups checkbox
+   *  UI (existing names) and to create on save (names with no existing group
+   *  yet) — mirrors `SmartAddWordModal`'s `initialGroups`. */
   initialGroups?: string[];
   /** Draft review mode: when provided, the primary "Save Draft" button (and
    *  Enter) writes the edits back to the draft via this callback WITHOUT
@@ -143,22 +145,37 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
   }, []);
 
   useEffect(() => {
-    if (!editItem?.id) {
-      setGroups([]);
-      setSelectedGroupIds(new Set());
+    if (editItem?.id) {
+      getGrammarGroups(language)
+        .then((loaded) => {
+          setGroups(loaded);
+          setSelectedGroupIds(
+            new Set(loaded.filter((g) => g.grammarIds.includes(editItem.id)).map((g) => g.id))
+          );
+        })
+        .catch(() => {
+          setGroups([]);
+          setSelectedGroupIds(new Set());
+        });
       return;
     }
+    // Create mode: preselect the draft's group names that already exist
+    // (missing ones are created on save — see handleSubmit). With no draft
+    // groups to prefill, default to the most recently created group.
+    setSelectedGroupIds(new Set());
     getGrammarGroups(language)
       .then((loaded) => {
         setGroups(loaded);
-        setSelectedGroupIds(
-          new Set(loaded.filter((g) => g.grammarIds.includes(editItem.id)).map((g) => g.id))
-        );
+        if (initialGroups && initialGroups.length > 0) {
+          const names = new Set(initialGroups.map((n) => n.trim()).filter(Boolean));
+          setSelectedGroupIds(new Set(loaded.filter((g) => names.has(g.name)).map((g) => g.id)));
+          return;
+        }
+        const latest = latestGrammarGroup(loaded);
+        setSelectedGroupIds(latest ? new Set([latest.id]) : new Set());
       })
-      .catch(() => {
-        setGroups([]);
-        setSelectedGroupIds(new Set());
-      });
+      .catch(() => setGroups([]));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [language, editItem?.id]);
 
   function updateDescription(idx: number, update: Partial<DescriptionFormState>) {
@@ -289,6 +306,13 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
 
       if (!isEdit && onGrammarQueue) {
         const id = `grammar-${language}-${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+        const selectedNames = groups.filter((g) => selectedGroupIds.has(g.id)).map((g) => g.name);
+        const missingNames = initialGroups
+          ? [...new Set(initialGroups.map((n) => n.trim()).filter(Boolean))].filter(
+              (name) => !groups.some((g) => g.name === name)
+            )
+          : [];
+        const groupNames = [...new Set([...selectedNames, ...missingNames])];
         onGrammarQueue(statement.trim(), language, {
           id,
           statement: statement.trim(),
@@ -298,7 +322,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
           words: wordsArr.length > 0 ? wordsArr : undefined,
           level: level.trim() || undefined,
           tags: tagsArr.length > 0 ? tagsArr : undefined,
-        });
+        }, groupNames.length > 0 ? { groupNames } : undefined);
         setSaving(false);
         setQueued(true);
         // Draft review: close so the user can move on to the next draft
@@ -348,22 +372,23 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
         });
       }
 
-      // Create mode: attach the new item to the requested group names (from a
-      // draft's `groups`), creating any that don't exist yet. With no group
-      // names requested, default to the most recently created group instead.
+      // Create mode: join the selected (existing) groups from the checkbox UI,
+      // and create+join any draft-only group names that don't exist yet.
       if (!isEdit) {
-        const names = new Set((initialGroups ?? []).map((n) => n.trim()).filter(Boolean));
-        const existing = await getGrammarGroups(language);
-        if (names.size > 0) {
-          for (const name of names) {
-            const group =
-              existing.find((g) => g.name === name) ??
-              (await createGrammarGroup(language, name));
-            await modifyGrammarGroupMembers(language, group.id, [saved.id], "add");
-          }
-        } else {
-          const latest = latestGrammarGroup(existing);
-          if (latest) await modifyGrammarGroupMembers(language, latest.id, [saved.id], "add");
+        const selectedIds = [...selectedGroupIds];
+        if (selectedIds.length > 0) {
+          await Promise.all(
+            selectedIds.map((gid) => modifyGrammarGroupMembers(language, gid, [saved.id], "add"))
+          );
+        }
+        const missingNames = initialGroups
+          ? [...new Set(initialGroups.map((n) => n.trim()).filter(Boolean))].filter(
+              (name) => !groups.some((g) => g.name === name)
+            )
+          : [];
+        for (const name of missingNames) {
+          const group = await createGrammarGroup(language, name);
+          await modifyGrammarGroupMembers(language, group.id, [saved.id], "add");
         }
       }
 
@@ -430,8 +455,8 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
             </div>
           )}
 
-          {/* Groups (edit mode only) */}
-          {isEdit && groups.length > 0 && (
+          {/* Groups (optional) */}
+          {groups.length > 0 && (
             <div>
               <label className="mb-1 block text-sm text-gray-400">{t("groups")}</label>
               <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-600 bg-gray-700 p-2">

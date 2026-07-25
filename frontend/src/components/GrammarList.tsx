@@ -759,11 +759,8 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
           initialGroups={reviewingDraft.groups}
           onGrammarQueue={
             onGrammarQueue
-              ? (statement, lang, payload) =>
-                  onGrammarQueue(statement, lang, payload, {
-                    groupNames: reviewingDraft.groups,
-                    draftId: reviewingDraft.id,
-                  })
+              ? (statement, lang, payload, opts) =>
+                  onGrammarQueue(statement, lang, payload, { ...opts, draftId: reviewingDraft.id })
               : undefined
           }
           onDraftSave={async (updates) => {
