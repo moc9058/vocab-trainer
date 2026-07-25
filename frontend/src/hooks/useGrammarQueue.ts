@@ -8,7 +8,7 @@ import {
   deleteGrammarDraft,
   uploadGrammarDrafts,
 } from "../api/grammar";
-import type { Grammar, GrammarDraft } from "../types";
+import { latestGrammarGroup, type Grammar, type GrammarDraft } from "../types";
 
 type GrammarPayload = Omit<Grammar, "language">;
 
@@ -50,18 +50,23 @@ function withGroupLock<T>(fn: () => Promise<T>): Promise<T> {
 async function processItem(item: QueueItem): Promise<void> {
   if (item.type === "create") {
     const saved = await smartAddGrammarItem(item.language, item.payload);
-    if (item.groupNames && item.groupNames.length > 0) {
-      const names = [...new Set(item.groupNames.map((n) => n.trim()).filter(Boolean))];
-      await withGroupLock(async () => {
-        const existing = await getGrammarGroups(item.language);
+    const names = [...new Set((item.groupNames ?? []).map((n) => n.trim()).filter(Boolean))];
+    await withGroupLock(async () => {
+      const existing = await getGrammarGroups(item.language);
+      if (names.length > 0) {
         for (const name of names) {
           const group =
             existing.find((g) => g.name === name) ??
             (await createGrammarGroup(item.language, name));
           await modifyGrammarGroupMembers(item.language, group.id, [saved.id], "add");
         }
-      });
-    }
+      } else {
+        // No group requested — default to the most recently created group for
+        // this language, if one exists.
+        const latest = latestGrammarGroup(existing);
+        if (latest) await modifyGrammarGroupMembers(item.language, latest.id, [saved.id], "add");
+      }
+    });
     // Retire the source draft only after the item and its groups all succeeded,
     // so a failed registration keeps the draft available for another attempt.
     if (item.draftId) {

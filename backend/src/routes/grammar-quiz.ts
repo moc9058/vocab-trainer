@@ -22,14 +22,13 @@ import type {
   GrammarGroup,
   GrammarQuizSession,
   GrammarQuizQuestion,
-  GrammarProgress,
   Word,
   Meaning,
   ExampleSentence,
 } from "../types.js";
 import { TOPICS } from "../types.js";
 import { callLLM, stripMarkdownFences } from "../llm.js";
-import { weightedInterleave, weightedMerge, isMastered } from "../quiz-utils.js";
+import { shuffle, weightedInterleave, isMastered } from "../quiz-utils.js";
 
 const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
   // Start grammar quiz
@@ -77,7 +76,6 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.badRequest("No grammar items match the given filters");
       }
 
-      const progressMap = await getGrammarProgressForLanguage(language);
       const count = questionCount ? Math.min(questionCount, pool.length) : Math.min(10, pool.length);
 
       // Optionally split already-mastered items into their own weighted bucket, peer to the
@@ -87,6 +85,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       let knownItems: Grammar[] = [];
       let correctMembership: string[] | undefined;
       if (correctWeight !== undefined) {
+        const progressMap = await getGrammarProgressForLanguage(language);
         knownItems = pool.filter((it) => isMastered(progressMap[it.id]));
         freshPool = pool.filter((it) => !isMastered(progressMap[it.id]));
         correctMembership = knownItems.map((it) => it.id);
@@ -94,8 +93,9 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
 
       // When groups are selected, order the pool by a weighted interleave (mirrors the
       // word quiz): each next item's group is drawn proportionally to its weight (default
-      // 1), then a random item from it. Otherwise fall back to the existing spaced-repetition
-      // sampling (unseen / overdue / low-accuracy items weighted higher).
+      // 1), then a random item from it. Otherwise items are picked completely at random
+      // (uniform shuffle) — weight only comes in via the already-mastered bucket when
+      // correctWeight is set.
       let selected: Grammar[];
       let groupMembership: Record<string, string[]> | undefined;
       if (groupIds && groupIds.length > 0) {
@@ -110,15 +110,13 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
           Object.entries(membership).map(([id, items]) => [id, items.map((i) => i.id)])
         );
       } else if (correctWeight !== undefined) {
-        // Ungrouped + already-correct: keep spaced-repetition order on the fresh side, then
-        // merge the mastered bucket in by weight (weightedMerge preserves each bucket's order).
-        const freshOrdered = weightedSample(freshPool, freshPool.length, progressMap);
-        selected = weightedMerge([
-          { weight: 1, items: freshOrdered },
+        // Ungrouped + already-correct: fresh vs mastered as two peer buckets.
+        selected = weightedInterleave([
+          { weight: 1, items: freshPool },
           { weight: correctWeight, items: knownItems },
         ]).slice(0, count);
       } else {
-        selected = weightedSample(pool, count, progressMap);
+        selected = randomSample(pool, count);
       }
 
       if (selected.length === 0) {
@@ -429,43 +427,8 @@ Allowed topics: ${TOPICS.join(", ")}`;
   );
 };
 
-function weightedSample(
-  items: Grammar[],
-  count: number,
-  progressMap: Record<string, GrammarProgress>
-): Grammar[] {
-  const now = Date.now();
-  const weighted = items.map((item) => {
-    const p = progressMap[item.id];
-    let weight = 1;
-
-    if (!p || p.timesSeen === 0) {
-      weight = 5;
-    } else {
-      weight += (1 - p.correctRate) * 4;
-      const daysSince = (now - new Date(p.lastReviewed).getTime()) / (1000 * 60 * 60 * 24);
-      weight += Math.min(daysSince, 7) * 0.5;
-    }
-
-    return { item, weight };
-  });
-
-  const selected: Grammar[] = [];
-  const remaining = [...weighted];
-
-  for (let i = 0; i < count && remaining.length > 0; i++) {
-    const totalWeight = remaining.reduce((sum, entry) => sum + entry.weight, 0);
-    let r = Math.random() * totalWeight;
-    let idx = 0;
-    for (; idx < remaining.length - 1; idx++) {
-      r -= remaining[idx].weight;
-      if (r <= 0) break;
-    }
-    selected.push(remaining[idx].item);
-    remaining.splice(idx, 1);
-  }
-
-  return selected;
+function randomSample(items: Grammar[], count: number): Grammar[] {
+  return shuffle(items).slice(0, count);
 }
 
 // Assign each pooled item to exactly one of the selected groups — the first group (in
@@ -492,10 +455,9 @@ function buildGrammarGroupMembership(
   return membership;
 }
 
-// Re-order the unanswered tail by the session's current per-group weights. Ungrouped
-// sessions (no stored membership) are left in their existing order — unlike the word
-// quiz, an ungrouped grammar session's order already reflects spaced-repetition weight
-// (see weightedSample), so there is no uniform-shuffle fallback to apply here.
+// Re-order the unanswered tail by the session's current per-group weights (mirrors the
+// word quiz's reweightUnanswered). Ungrouped sessions with no already-correct bucket just
+// get a uniform shuffle.
 function reweightUnansweredGrammar(
   unanswered: GrammarQuizQuestion[],
   session: GrammarQuizSession
@@ -503,7 +465,7 @@ function reweightUnansweredGrammar(
   const membership = session.groupMembership;
   const hasCorrect = session.correctWeight !== undefined;
   if ((!membership || Object.keys(membership).length === 0) && !hasCorrect) {
-    return unanswered;
+    return shuffle(unanswered);
   }
   const knownSet = new Set(session.correctMembership ?? []);
   const byGrammarId = new Map<string, GrammarQuizQuestion>();

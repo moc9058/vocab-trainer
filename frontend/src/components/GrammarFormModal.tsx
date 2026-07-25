@@ -12,7 +12,7 @@ import { ALL_KNOWN_LANGUAGES } from "../settings/defaults";
 import { LEVEL_OPTIONS } from "../constants/levels";
 import ExampleSentenceEditor, { type ExampleFormState } from "./ExampleSentenceEditor";
 import PinyinInput from "./PinyinInput";
-import { displayTranslation, type Grammar, type GrammarDraft, type GrammarGroup, type Meaning } from "../types";
+import { displayTranslation, latestGrammarGroup, type Grammar, type GrammarDraft, type GrammarGroup, type Meaning } from "../types";
 import type { smartAddWord } from "../api/vocab";
 
 type SmartAddPayload = Parameters<typeof smartAddWord>[1];
@@ -349,15 +349,21 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
       }
 
       // Create mode: attach the new item to the requested group names (from a
-      // draft's `groups`), creating any that don't exist yet.
-      if (!isEdit && initialGroups && initialGroups.length > 0) {
+      // draft's `groups`), creating any that don't exist yet. With no group
+      // names requested, default to the most recently created group instead.
+      if (!isEdit) {
+        const names = new Set((initialGroups ?? []).map((n) => n.trim()).filter(Boolean));
         const existing = await getGrammarGroups(language);
-        const names = new Set(initialGroups.map((n) => n.trim()).filter(Boolean));
-        for (const name of names) {
-          const group =
-            existing.find((g) => g.name === name) ??
-            (await createGrammarGroup(language, name));
-          await modifyGrammarGroupMembers(language, group.id, [saved.id], "add");
+        if (names.size > 0) {
+          for (const name of names) {
+            const group =
+              existing.find((g) => g.name === name) ??
+              (await createGrammarGroup(language, name));
+            await modifyGrammarGroupMembers(language, group.id, [saved.id], "add");
+          }
+        } else {
+          const latest = latestGrammarGroup(existing);
+          if (latest) await modifyGrammarGroupMembers(language, latest.id, [saved.id], "add");
         }
       }
 

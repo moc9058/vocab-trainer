@@ -176,6 +176,14 @@ export interface GrammarGroup {
   createdAt: string;
 }
 
+/** Most recently created group (by `createdAt`), or undefined if `groups` is empty. */
+export function latestGrammarGroup(groups: GrammarGroup[]): GrammarGroup | undefined {
+  return groups.reduce<GrammarGroup | undefined>(
+    (latest, g) => (!latest || g.createdAt > latest.createdAt ? g : latest),
+    undefined
+  );
+}
+
 export interface GrammarQuizQuestion {
   grammarId: string;
   /** The grammar element shown as-is as the question; descriptions are revealed on answer. */
