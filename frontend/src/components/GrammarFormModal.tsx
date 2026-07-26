@@ -11,8 +11,9 @@ import {
 import { ALL_KNOWN_LANGUAGES } from "../settings/defaults";
 import { LEVEL_OPTIONS } from "../constants/levels";
 import ExampleSentenceEditor, { type ExampleFormState } from "./ExampleSentenceEditor";
+import GroupBSelect from "./GroupBSelect";
 import PinyinInput from "./PinyinInput";
-import { displayTranslation, latestGrammarGroup, type Grammar, type GrammarDraft, type GrammarGroup, type Meaning } from "../types";
+import { categoryGroups, displayTranslation, latestGrammarGroup, type Grammar, type GrammarDraft, type GrammarGroup, type Meaning } from "../types";
 import type { smartAddWord } from "../api/vocab";
 
 type SmartAddPayload = Parameters<typeof smartAddWord>[1];
@@ -44,7 +45,7 @@ interface Props {
    *  Form resets after enqueue so the user can add another grammar immediately.
    *  `opts.groupNames` carries the selected-groups checkbox state (existing
    *  groups) plus any not-yet-existing draft group names to create. */
-  onGrammarQueue?: (statement: string, language: string, payload: GrammarPayload, opts?: { groupNames?: string[] }) => void;
+  onGrammarQueue?: (statement: string, language: string, payload: GrammarPayload, opts?: { groupNames?: string[]; groupIds?: string[] }) => void;
   /** When provided, edit-mode submits enqueue instead of awaiting directly.
    *  Modal closes after brief "✓ Queued" flash. */
   onGrammarUpdateQueue?: (statement: string, language: string, grammarId: string, updates: Partial<Grammar>, groupsToAdd: string[], groupsToRemove: string[]) => void;
@@ -113,6 +114,11 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
 
   const [groups, setGroups] = useState<GrammarGroup[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
+  // Category-B GRAMMAR groups this item additionally joins (create/smart-add mode only).
+  const [groupBIds, setGroupBIds] = useState<string[]>([]);
+  // Category-B WORD groups for the segment-chip workflow below: chips create
+  // vocabulary words, so they need word-group IDs, never the grammar ones above.
+  const [chipGroupBIds, setChipGroupBIds] = useState<string[]>([]);
 
   const [saving, setSaving] = useState(false);
   const [queued, setQueued] = useState(false);
@@ -147,7 +153,8 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
   useEffect(() => {
     if (editItem?.id) {
       getGrammarGroups(language)
-        .then((loaded) => {
+        .then((all) => {
+          const loaded = categoryGroups(all, "A");
           setGroups(loaded);
           setSelectedGroupIds(
             new Set(loaded.filter((g) => g.grammarIds.includes(editItem.id)).map((g) => g.id))
@@ -164,7 +171,8 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
     // groups to prefill, default to the most recently created group.
     setSelectedGroupIds(new Set());
     getGrammarGroups(language)
-      .then((loaded) => {
+      .then((all) => {
+        const loaded = categoryGroups(all, "A");
         setGroups(loaded);
         if (initialGroups && initialGroups.length > 0) {
           const names = new Set(initialGroups.map((n) => n.trim()).filter(Boolean));
@@ -322,7 +330,12 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
           words: wordsArr.length > 0 ? wordsArr : undefined,
           level: level.trim() || undefined,
           tags: tagsArr.length > 0 ? tagsArr : undefined,
-        }, groupNames.length > 0 ? { groupNames } : undefined);
+        }, groupNames.length > 0 || groupBIds.length > 0
+          ? {
+              ...(groupNames.length > 0 ? { groupNames } : {}),
+              ...(groupBIds.length > 0 ? { groupIds: groupBIds } : {}),
+            }
+          : undefined);
         setSaving(false);
         setQueued(true);
         // Draft review: close so the user can move on to the next draft
@@ -375,7 +388,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
       // Create mode: join the selected (existing) groups from the checkbox UI,
       // and create+join any draft-only group names that don't exist yet.
       if (!isEdit) {
-        const selectedIds = [...selectedGroupIds];
+        const selectedIds = [...new Set([...selectedGroupIds, ...groupBIds])];
         if (selectedIds.length > 0) {
           await Promise.all(
             selectedIds.map((gid) => modifyGrammarGroupMembers(language, gid, [saved.id], "add"))
@@ -486,6 +499,24 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
                 })}
               </div>
             </div>
+          )}
+
+          {!isEdit && (
+            <GroupBSelect
+              kind="grammar"
+              language={language}
+              selectedIds={groupBIds}
+              onChange={setGroupBIds}
+            />
+          )}
+          {language === "chinese" && (
+            <GroupBSelect
+              kind="word"
+              language={language}
+              selectedIds={chipGroupBIds}
+              onChange={setChipGroupBIds}
+              label="Group B (words from chips)"
+            />
           )}
 
           {/* Descriptions */}
@@ -623,6 +654,7 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
             examples={examples}
             setExamples={setExamples}
             selectedGroupIds={selectedGroupIds}
+            extraGroupIds={chipGroupBIds}
             onChipInFlightChange={setChipsInFlight}
             onQueue={onQueue}
             pendingTerms={pendingTerms}

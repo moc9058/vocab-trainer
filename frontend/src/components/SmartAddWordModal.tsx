@@ -4,7 +4,8 @@ import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP, urlLanguageToIsoCode } from "../settings/defaults";
 import { LEVEL_OPTIONS } from "../constants/levels";
 import { smartAddWord, lookupWord, checkTerms, getGroups, createGroup, modifyGroupMembers } from "../api/vocab";
-import { displayTranslation, type Word, type WordDraft, type WordGroup } from "../types";
+import { categoryGroups, displayTranslation, latestWordGroup, type Word, type WordDraft, type WordGroup } from "../types";
+import GroupBSelect from "./GroupBSelect";
 
 interface Prefill {
   term: string;
@@ -49,6 +50,9 @@ interface Props {
    *  are created and joined on save (directly on the non-queue path; via the
    *  queue worker's `groupNames` on the queue path). */
   initialGroups?: string[];
+  /** Category-B word-group IDs to preselect (draft review passes the drafts
+   *  panel's Group B selection). Merged into the outgoing `groupIds`. */
+  initialGroupBIds?: string[];
   /** Draft review: the draft under review. Queue-mode registration threads it
    *  through so the queue deletes the draft only after full success, and the
    *  modal closes right after enqueueing. */
@@ -97,7 +101,7 @@ const ALL_TOPICS = [
   "History", "Media & News", "Language Fundamentals",
 ] as const;
 
-export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage, onJumpToWord, onQueue, pendingTerms, succeededTerms, initialItem, initialGroups, draftId, onDraftSave }: Props) {
+export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLanguage, onJumpToWord, onQueue, pendingTerms, succeededTerms, initialItem, initialGroups, initialGroupBIds, draftId, onDraftSave }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const LANG_OPTIONS = useMemo(
@@ -121,6 +125,9 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   const [topics, setTopics] = useState<string[]>(initialItem?.topics ?? []);
   const [groups, setGroups] = useState<WordGroup[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
+  // Category-B groups to additionally join. Kept separate from `selectedGroupIds`
+  // (the Group A chips) and merged only in the outgoing payload.
+  const [groupBIds, setGroupBIds] = useState<string[]>(initialGroupBIds ?? []);
   const [examples, setExamples] = useState<{ sentence: string; translation: string }[]>(
     prefill?.example
       ? [prefill.example]
@@ -163,7 +170,9 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   useEffect(() => {
     setSelectedGroupIds(new Set());
     getGroups(wordLanguage)
-      .then((loadedGroups) => {
+      .then((allGroups) => {
+        // The group chips are the Group A picker; Group B is a separate control.
+        const loadedGroups = categoryGroups(allGroups, "A");
         setGroups(loadedGroups);
         if (initialGroups && initialGroups.length > 0) {
           // Draft review: preselect the draft's group names that already exist.
@@ -172,7 +181,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           setSelectedGroupIds(new Set(loadedGroups.filter((g) => names.has(g.name)).map((g) => g.id)));
           return;
         }
-        const latestGroup = loadedGroups.at(-1);
+        const latestGroup = latestWordGroup(loadedGroups);
         setSelectedGroupIds(latestGroup ? new Set([latestGroup.id]) : new Set());
       })
       .catch(() => setGroups([]));
@@ -317,7 +326,8 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   }
 
   function getSelectedGroupIdsPayload(): string[] | undefined {
-    return selectedGroupIds.size > 0 ? [...selectedGroupIds] : undefined;
+    const merged = new Set([...selectedGroupIds, ...groupBIds]);
+    return merged.size > 0 ? [...merged] : undefined;
   }
 
   function buildPayload() {
@@ -362,7 +372,7 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     setGrammaticalCategory("");
     setLevel("");
     setTopics([]);
-    const latestGroup = groups.at(-1);
+    const latestGroup = latestWordGroup(groups);
     setSelectedGroupIds(latestGroup ? new Set([latestGroup.id]) : new Set());
     setExamples([{ sentence: "", translation: "" }]);
     setExistingWord(null);
@@ -614,6 +624,15 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
               </div>
             </div>
           )}
+
+          <div className="order-2">
+            <GroupBSelect
+              kind="word"
+              language={wordLanguage}
+              selectedIds={groupBIds}
+              onChange={setGroupBIds}
+            />
+          </div>
 
           {/* Definitions (optional) */}
           <div className="order-2">

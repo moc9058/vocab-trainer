@@ -28,6 +28,7 @@ import type {
   TokenCostConfig,
   GrammarSettings,
   WordGroup,
+  GroupCategory,
   Expression,
   ExpressionGroup,
 } from "./types.js";
@@ -1772,6 +1773,9 @@ function docToGrammarGroup(doc: FirebaseFirestore.DocumentSnapshot): GrammarGrou
     name: d.name as string,
     grammarIds: (d.grammarIds ?? []) as string[],
     createdAt: d.createdAt as string,
+    // Only "B" is ever persisted — a missing field means category A, so pre-existing
+    // groups become Group A with zero migration.
+    ...(d.category === "B" ? { category: "B" as const } : {}),
   };
 }
 
@@ -1785,7 +1789,11 @@ export async function getGrammarGroup(groupId: string): Promise<GrammarGroup | n
   return doc.exists ? docToGrammarGroup(doc) : null;
 }
 
-export async function createGrammarGroup(language: string, name: string): Promise<GrammarGroup> {
+export async function createGrammarGroup(
+  language: string,
+  name: string,
+  category?: GroupCategory
+): Promise<GrammarGroup> {
   const id = `${language}_${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
   const group: GrammarGroup = {
     id,
@@ -1793,6 +1801,7 @@ export async function createGrammarGroup(language: string, name: string): Promis
     name,
     grammarIds: [],
     createdAt: new Date().toISOString(),
+    ...(category === "B" ? { category: "B" as const } : {}),
   };
   await grammarGroups.doc(id).set(group);
   return group;
@@ -1834,8 +1843,27 @@ export async function modifyGrammarGroupMembers(
       name: doc.data()!.name as string,
       grammarIds: next,
       createdAt: doc.data()!.createdAt as string,
+      ...(doc.data()!.category === "B" ? { category: "B" as const } : {}),
     };
   });
+}
+
+/** Drop `grammarId` from every category-B group of `language`. Returns the affected group IDs. */
+export async function removeGrammarFromCategoryBGroups(
+  language: string,
+  grammarId: string
+): Promise<string[]> {
+  const groups = await getGrammarGroups(language);
+  const affected = groups.filter((g) => g.category === "B" && g.grammarIds.includes(grammarId));
+  if (affected.length === 0) return [];
+  const batch = db.batch();
+  for (const g of affected) {
+    batch.update(grammarGroups.doc(g.id), {
+      grammarIds: g.grammarIds.filter((id) => id !== grammarId),
+    });
+  }
+  await batch.commit();
+  return affected.map((g) => g.id);
 }
 
 // ========== Grammar Progress ==========
@@ -1945,8 +1973,13 @@ function slimCombinedQuestions(questions: CombinedQuizSession["questions"]) {
   );
 }
 
-export async function getCombinedQuizSession(language: string): Promise<CombinedQuizSession | null> {
-  const doc = await combinedQuizSessions.doc(language).get();
+/**
+ * `sessionKey` is the Firestore doc ID, NOT the language: the Group B quiz reuses
+ * this collection under `${language}__groupB` so both sessions can coexist.
+ * `session.language` stays the plain language for the client's API calls.
+ */
+export async function getCombinedQuizSession(sessionKey: string): Promise<CombinedQuizSession | null> {
+  const doc = await combinedQuizSessions.doc(sessionKey).get();
   if (!doc.exists) return null;
   const d = doc.data()!;
   return {
@@ -1976,7 +2009,9 @@ export async function saveCombinedQuizSession(session: CombinedQuizSession): Pro
   };
   delete data.sessionId;
   const clean = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
-  await combinedQuizSessions.doc(session.language).set(clean);
+  // `sessionId` IS the doc key (plain language for the combined quiz, suffixed for
+  // Group B) — keying off `session.language` would collapse the two sessions.
+  await combinedQuizSessions.doc(session.sessionId).set(clean);
 }
 
 // ========== Translation History ==========
@@ -2450,6 +2485,21 @@ export async function getGrammarConfig(): Promise<{
   };
 }
 
+// ========== Config: Import (external-source article analysis) ==========
+
+export async function getImportConfig(): Promise<{
+  analyzeSchema: Record<string, unknown>;
+  analyzePrompts: Record<string, string>;
+}> {
+  const doc = await db.collection("config").doc("import").get();
+  if (!doc.exists) throw new Error("Missing config/import in Firestore");
+  const d = doc.data()!;
+  return {
+    analyzeSchema: d.analyzeSchema,
+    analyzePrompts: d.analyzePrompts,
+  };
+}
+
 export async function getGrammarSettings(): Promise<GrammarSettings | null> {
   const doc = await db.collection("config").doc("grammar_settings").get();
   if (!doc.exists) return null;
@@ -2471,6 +2521,9 @@ function docToWordGroup(doc: FirebaseFirestore.DocumentSnapshot): WordGroup {
     wordIds: (d.wordIds ?? []) as string[],
     createdAt: d.createdAt as string,
     order: typeof d.order === "number" ? d.order : undefined,
+    // Only "B" is ever persisted — a missing field means category A, so pre-existing
+    // groups become Group A with zero migration.
+    ...(d.category === "B" ? { category: "B" as const } : {}),
   };
 }
 
@@ -2490,7 +2543,11 @@ export async function getWordGroup(groupId: string): Promise<WordGroup | null> {
   return doc.exists ? docToWordGroup(doc) : null;
 }
 
-export async function createWordGroup(language: string, name: string): Promise<WordGroup> {
+export async function createWordGroup(
+  language: string,
+  name: string,
+  category?: GroupCategory
+): Promise<WordGroup> {
   const existingGroups = await getWordGroups(language);
   const id = `${language}_${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
   const group: WordGroup = {
@@ -2502,6 +2559,7 @@ export async function createWordGroup(language: string, name: string): Promise<W
     ...(existingGroups.some((existingGroup) => existingGroup.order !== undefined)
       ? { order: existingGroups.length }
       : {}),
+    ...(category === "B" ? { category: "B" as const } : {}),
   };
   await wordGroups.doc(id).set(group);
   return group;
@@ -2563,8 +2621,25 @@ export async function modifyWordGroupMembers(
       wordIds: next,
       createdAt: doc.data()!.createdAt as string,
       order: typeof doc.data()!.order === "number" ? doc.data()!.order as number : undefined,
+      ...(doc.data()!.category === "B" ? { category: "B" as const } : {}),
     };
   });
+}
+
+/** Drop `wordId` from every category-B group of `language`. Returns the affected group IDs. */
+export async function removeWordFromCategoryBGroups(
+  language: string,
+  wordId: string
+): Promise<string[]> {
+  const groups = await getWordGroups(language);
+  const affected = groups.filter((g) => g.category === "B" && g.wordIds.includes(wordId));
+  if (affected.length === 0) return [];
+  const batch = db.batch();
+  for (const g of affected) {
+    batch.update(wordGroups.doc(g.id), { wordIds: g.wordIds.filter((id) => id !== wordId) });
+  }
+  await batch.commit();
+  return affected.map((g) => g.id);
 }
 
 export { db };

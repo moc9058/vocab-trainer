@@ -13,6 +13,8 @@ interface Props {
   onResumeGrammar: (session: GrammarQuizSession) => void;
   onResumeCombined: (session: CombinedQuizSession) => void;
   onCombinedQuiz: () => void;
+  onResumeGroupB: (session: CombinedQuizSession) => void;
+  onGroupBQuiz: () => void;
   onStartNew: () => void;
   onBrowse: () => void;
   onFlaggedReview: () => void;
@@ -31,7 +33,7 @@ interface Props {
   onAddExpression: () => void;
 }
 
-export default function EmptyState({ language, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onBrowseExpressions, onAddExpression }: Props) {
+export default function EmptyState({ language, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onResumeGroupB, onGroupBQuiz, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onBrowseExpressions, onAddExpression }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const isoCode = urlLanguageToIsoCode(language) ?? language;
@@ -40,6 +42,7 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
   const [vocabSession, setVocabSession] = useState<QuizSession | null>(null);
   const [grammarSession, setGrammarSession] = useState<GrammarQuizSession | null>(null);
   const [combinedSession, setCombinedSession] = useState<CombinedQuizSession | null>(null);
+  const [groupBSession, setGroupBSession] = useState<CombinedQuizSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [wordGrammarTab, setWordGrammarTab] = useState<"word" | "grammar">("word");
 
@@ -51,15 +54,17 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
     let cancelled = false;
     (async () => {
       try {
-        const [vocabResult, grammarResult, combinedResult] = await Promise.all([
+        const [vocabResult, grammarResult, combinedResult, groupBResult] = await Promise.all([
           getCurrentSession(language),
           getCurrentGrammarSession(language),
           getCurrentCombinedSession(language),
+          getCurrentCombinedSession(language, "groupB"),
         ]);
         if (!cancelled) {
           setVocabSession(vocabResult && vocabResult.status === "in-progress" ? vocabResult : null);
           setGrammarSession(grammarResult && grammarResult.status === "in-progress" ? grammarResult : null);
           setCombinedSession(combinedResult && combinedResult.status === "in-progress" ? combinedResult : null);
+          setGroupBSession(groupBResult && groupBResult.status === "in-progress" ? groupBResult : null);
         }
       } catch {
         // ignore
@@ -100,6 +105,23 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
                     className="w-full rounded-lg bg-indigo-600 px-5 py-3 text-center font-medium text-white hover:bg-indigo-500 transition-colors"
                   >
                     {t("combinedQuiz")}
+                  </button>
+                  {!loading && groupBSession && (
+                    <button
+                      onClick={() => onResumeGroupB(groupBSession)}
+                      className="w-full rounded-lg border border-amber-700 bg-amber-900/30 px-4 py-3 text-left hover:border-amber-500 hover:bg-amber-800/40 transition-colors"
+                    >
+                      <p className="font-semibold text-sm text-amber-300">{t("resumeGroupBQuiz")}</p>
+                      <p className="mt-0.5 text-xs text-amber-400">
+                        {groupBSession.score.correct} / {groupBSession.initialTotal ?? groupBSession.questions.length} {t("questionsAnswered")}
+                      </p>
+                    </button>
+                  )}
+                  <button
+                    onClick={onGroupBQuiz}
+                    className="w-full rounded-lg border border-amber-600 bg-amber-700/30 px-5 py-3 text-center font-medium text-amber-200 hover:bg-amber-700/50 transition-colors"
+                  >
+                    {t("groupBQuiz")}
                   </button>
                 </div>
               )}

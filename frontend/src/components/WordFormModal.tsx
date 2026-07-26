@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
 import { getFilters, smartAddWord, getGroups } from "../api/vocab";
-import { displayTranslation, type Word, type Meaning, type WordGroup } from "../types";
+import { categoryGroups, displayTranslation, type Word, type Meaning, type WordGroup } from "../types";
+import GroupBSelect from "./GroupBSelect";
 import ExampleSentenceEditor, { type ExampleFormState } from "./ExampleSentenceEditor";
 import PinyinInput from "./PinyinInput";
 
@@ -54,6 +55,8 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
   const [groups, setGroups] = useState<WordGroup[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
+  // Category-B word groups applied to segment-chip adds (Chinese chip workflow).
+  const [chipGroupBIds, setChipGroupBIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   // True while ExampleSentenceEditor has at least one chip mid-smartAddWord.
@@ -74,7 +77,9 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
       return;
     }
     getGroups(language)
-      .then((loadedGroups) => {
+      .then((all) => {
+        // Group A flow — Group B membership is edited from the Group B manager.
+        const loadedGroups = categoryGroups(all, "A");
         setGroups(loadedGroups);
         setSelectedGroupIds(new Set(
           loadedGroups.filter((group) => group.wordIds.includes(word.id)).map((group) => group.id)
@@ -228,6 +233,15 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
           </div>
 
           {/* Examples */}
+          {language === "chinese" && (
+            <GroupBSelect
+              kind="word"
+              language={language}
+              selectedIds={chipGroupBIds}
+              onChange={setChipGroupBIds}
+              label="Group B (words from chips)"
+            />
+          )}
           <ExampleSentenceEditor
             language={language}
             examples={examples}
@@ -238,6 +252,7 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
             succeededTerms={succeededTerms}
             refreshSignal={refreshSignal}
             onQueue={onQueue}
+            extraGroupIds={chipGroupBIds}
             onChipInFlightChange={setChipsInFlight}
           />
 

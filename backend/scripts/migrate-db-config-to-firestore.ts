@@ -82,6 +82,29 @@ async function migrateTranslation(): Promise<void> {
   console.log(`  Translate prompts: ${Object.keys(translatePrompts).join(", ")}`);
 }
 
+// ========== Import Config (external-source article analysis) ==========
+
+async function migrateImport(): Promise<void> {
+  console.log("\n--- Migrating import config ---");
+  const dir = resolve(DB_DIR, "import");
+
+  const analyzeSchema = JSON.parse(await readFile(resolve(dir, "analyze_schema.json"), "utf-8"));
+
+  // Keyed by BACKEND LANGUAGE NAME (the article is in the study language).
+  const analyzePrompts: Record<string, string> = {};
+  for (const name of ["english", "japanese", "korean", "chinese"]) {
+    analyzePrompts[name] = await readFile(resolve(dir, `system_prompt_analyze_${name}.md`), "utf-8");
+  }
+
+  await db.collection("config").doc("import").set({
+    analyzeSchema,
+    analyzePrompts,
+  });
+
+  console.log("  Written to config/import");
+  console.log(`  Analyze prompts: ${Object.keys(analyzePrompts).join(", ")}`);
+}
+
 // ========== Vocabulary Config ==========
 
 async function migrateVocabulary(): Promise<void> {
@@ -320,6 +343,7 @@ async function main(): Promise<void> {
     await migrateTranslation();
     await migrateVocabulary();
     await migrateGrammar();
+    await migrateImport();
   }
   if (runArchives) {
     await migrateBackups();

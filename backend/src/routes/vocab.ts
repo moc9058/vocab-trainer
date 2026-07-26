@@ -37,6 +37,7 @@ import {
   deleteWordDraft,
   getWordGroups,
   createWordGroup,
+  removeWordFromCategoryBGroups,
   updateWordGroup,
   reorderWordGroups,
   deleteWordGroup,
@@ -1128,24 +1129,38 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  fastify.post<{ Params: { language: string }; Body: { name: string } }>(
+  fastify.post<{ Params: { language: string }; Body: { name: string; category?: "A" | "B" } }>(
     "/:language/groups",
     {
       schema: {
         body: {
           type: "object",
           required: ["name"],
-          properties: { name: { type: "string", minLength: 1 } },
+          properties: {
+            name: { type: "string", minLength: 1 },
+            category: { type: "string", enum: ["A", "B"] },
+          },
         },
       },
     },
     async (request, reply) => {
       const { language } = request.params;
-      const { name } = request.body;
+      const { name, category } = request.body;
       if (!(await languageExists(language))) return reply.notFound(`Language '${language}' not found`);
-      const group = await createWordGroup(language, name.trim());
+      const group = await createWordGroup(language, name.trim(), category);
       reply.code(201);
       return group;
+    }
+  );
+
+  /** Group B quiz "3" key: drop a word from every category-B group it belongs to. */
+  fastify.delete<{ Params: { language: string; wordId: string } }>(
+    "/:language/group-b/members/:wordId",
+    async (request, reply) => {
+      const { language, wordId } = request.params;
+      if (!(await languageExists(language))) return reply.notFound(`Language '${language}' not found`);
+      const removedFromGroupIds = await removeWordFromCategoryBGroups(language, wordId);
+      return { removedFromGroupIds };
     }
   );
 

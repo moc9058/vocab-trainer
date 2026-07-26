@@ -1,13 +1,15 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks, getGroups, modifyGroupMembers, getWordDrafts, uploadWordDrafts, updateWordDraft, deleteWordDraft } from "../api/vocab";
 import GroupPickerModal from "./GroupPickerModal";
+import GroupBSelect from "./GroupBSelect";
 import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
 import SmartAddWordModal from "./SmartAddWordModal";
-import { displayTranslation, latestWordGroup, type Word, type WordDraft, type PaginatedResult, type WordGroup } from "../types";
+import { categoryGroups, displayTranslation, latestWordGroup, type Word, type WordDraft, type PaginatedResult, type WordGroup } from "../types";
 import { urlLanguageToIsoCode } from "../settings/defaults";
 
 type SmartAddPayload = {
@@ -49,6 +51,7 @@ function getPageNumbers(current: number, total: number): (number | "...")[] {
 }
 
 export default function WordList({ language, onBack, initialExpandId, initialSearch, refreshSignal, onQueue, onQueueEdit, pendingTerms, succeededTerms, pendingDraftIds }: Props) {
+  const navigate = useNavigate();
   const { t } = useI18n();
   const currentIsoCode = urlLanguageToIsoCode(language) ?? language;
   const [result, setResult] = useState<PaginatedResult<Word> | null>(null);
@@ -61,7 +64,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const [groupId, setGroupId] = useState("");
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [groups, setGroups] = useState<WordGroup[]>([]);
-  const [showGroupPicker, setShowGroupPicker] = useState<{ wordIds: string[]; manage: boolean } | null>(null);
+  const [showGroupPicker, setShowGroupPicker] = useState<{ wordIds: string[]; manage: boolean; category?: "A" | "B" } | null>(null);
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [existingTerms, setExistingTerms] = useState<Map<string, string>>(new Map());
@@ -108,6 +111,8 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   // Defaults to the most recently CREATED group; a user pick sticks (the ref
   // stops the group-refresh effect from resetting it).
   const [draftGroupId, setDraftGroupId] = useState<string>("");
+  // Category-B groups every draft registration additionally joins.
+  const [draftGroupBIds, setDraftGroupBIds] = useState<string[]>([]);
   const draftGroupTouchedRef = useRef(false);
 
   // refreshSignal keeps the panel in sync with the queue: successful
@@ -210,7 +215,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
         topics: draft.topics && draft.topics.length > 0 ? draft.topics : undefined,
         examples: examples.length > 0 ? examples : undefined,
         level: draft.level || undefined,
-        groupIds: draftGroupId ? [draftGroupId] : [],
+        groupIds: [...new Set([...(draftGroupId ? [draftGroupId] : []), ...draftGroupBIds])],
       },
       { draftId: draft.id },
     );
@@ -437,7 +442,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
 
   // The API returns groups in their persisted arranged order. New chips default
   // to the last group in that order while explicit per-chip choices take priority.
-  const defaultChipGroupId = groups.at(-1)?.id ?? "";
+  const defaultChipGroupId = latestWordGroup(groups)?.id ?? "";
   function getChipGroupId(chipText: string): string {
     const override = chipGroupOverrides.get(chipText);
     return override !== undefined ? override : defaultChipGroupId;
@@ -702,7 +707,9 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       .then(setFilterOptions)
       .catch(() => setFilterOptions(null));
     getGroups(language)
-      .then(setGroups)
+      // Every list/draft/chip flow here is a Group A flow; B groups are only
+      // reachable through the explicit "Group B" manager + GroupBSelect.
+      .then((gs) => setGroups(categoryGroups(gs, "A")))
       .catch(() => setGroups([]));
   }, [language]);
 
@@ -747,7 +754,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     silentRefreshRef.current = true;
     fetchData();
     getGroups(language)
-      .then(setGroups)
+      .then((gs) => setGroups(categoryGroups(gs, "A")))
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSignal]);
@@ -824,6 +831,12 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
               if (file) handleDraftsJsonFile(file);
             }}
           />
+          <button
+            onClick={() => navigate(`/${language}/import`)}
+            className="rounded-lg border border-violet-700/60 px-4 py-1.5 text-sm text-violet-300 hover:bg-gray-700"
+          >
+            {t("importFromSource")}
+          </button>
         </div>
         {uploadStatus && (
           <p className={`mb-2 text-sm ${uploadStatus.ok ? "text-green-400" : "text-red-400"}`}>
@@ -892,6 +905,13 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                 title={t("manageGroups")}
               >
                 {t("manageGroups")}
+              </button>
+              <button
+                onClick={() => setShowGroupPicker({ wordIds: [], manage: true, category: "B" })}
+                className="rounded-lg border border-amber-700/60 bg-gray-700 px-2 py-1.5 text-xs text-amber-300 hover:bg-gray-600"
+                title={t("manageGroupB")}
+              >
+                {t("manageGroupB")}
               </button>
             </div>
           )}
@@ -980,6 +1000,16 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                 </select>
               )}
             </div>
+            {onQueue && (
+              <div className="mb-2">
+                <GroupBSelect
+                  kind="word"
+                  language={language}
+                  selectedIds={draftGroupBIds}
+                  onChange={setDraftGroupBIds}
+                />
+              </div>
+            )}
             {draftsOpen && (
               <div className="space-y-2 px-3 pb-3">
                 {drafts.map((draft) => {
@@ -1258,6 +1288,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           initialGroups={
             draftGroupId ? [groups.find((g) => g.id === draftGroupId)?.name ?? ""].filter(Boolean) : undefined
           }
+          initialGroupBIds={draftGroupBIds}
           draftId={reviewingDraft.id}
           onQueue={onQueue}
           pendingTerms={pendingTerms}
@@ -1274,7 +1305,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
               .finally(() => fetchDrafts());
             silentRefreshRef.current = true;
             fetchData();
-            getGroups(language).then(setGroups).catch(() => {});
+            getGroups(language).then((gs) => setGroups(categoryGroups(gs, "A"))).catch(() => {});
             getFlaggedWords(language)
               .then(({ words: fw }) => setFlaggedIds(new Set(fw.map((w) => w.id))))
               .catch(() => {});
@@ -1417,9 +1448,10 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           kind="word"
           language={language}
           itemIds={showGroupPicker.wordIds}
+          category={showGroupPicker.category ?? "A"}
           onClose={() => setShowGroupPicker(null)}
           onDone={(updatedGroups) => {
-            setGroups(updatedGroups as WordGroup[]);
+            setGroups(categoryGroups(updatedGroups as WordGroup[], "A"));
           }}
         />
       )}

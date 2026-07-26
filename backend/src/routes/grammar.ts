@@ -13,6 +13,7 @@ import {
   deleteGrammarDraft,
   getGrammarGroups,
   createGrammarGroup,
+  removeGrammarFromCategoryBGroups,
   updateGrammarGroup,
   deleteGrammarGroup,
   modifyGrammarGroupMembers,
@@ -526,7 +527,7 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{
     Params: { language: string };
-    Body: { name: string };
+    Body: { name: string; category?: "A" | "B" };
   }>(
     "/:language/groups",
     {
@@ -534,13 +535,32 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
         body: {
           type: "object",
           required: ["name"],
-          properties: { name: { type: "string" } },
+          properties: {
+            name: { type: "string" },
+            category: { type: "string", enum: ["A", "B"] },
+          },
         },
       },
     },
     async (request, reply) => {
-      const group = await createGrammarGroup(request.params.language, request.body.name);
+      const group = await createGrammarGroup(
+        request.params.language,
+        request.body.name,
+        request.body.category
+      );
       return reply.status(201).send(group);
+    }
+  );
+
+  /** Group B quiz "3" key: drop a grammar item from every category-B group it belongs to. */
+  fastify.delete<{ Params: { language: string; grammarId: string } }>(
+    "/:language/group-b/members/:grammarId",
+    async (request) => {
+      const removedFromGroupIds = await removeGrammarFromCategoryBGroups(
+        request.params.language,
+        request.params.grammarId
+      );
+      return { removedFromGroupIds };
     }
   );
 

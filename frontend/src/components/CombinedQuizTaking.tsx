@@ -2,9 +2,14 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP } from "../settings/defaults";
-import { answerCombinedQuestion, getCombinedQuizQuestions, updateCombinedQuizWeights } from "../api/combined-quiz";
-import { getGroups } from "../api/vocab";
-import { getGrammarGroups } from "../api/grammar";
+import {
+  answerCombinedQuestion,
+  getCombinedQuizQuestions,
+  updateCombinedQuizWeights,
+  type CombinedQuizVariant,
+} from "../api/combined-quiz";
+import { getGroups, removeWordFromGroupB } from "../api/vocab";
+import { getGrammarGroups, removeGrammarFromGroupB } from "../api/grammar";
 import { getFlaggedWordIds, flagWord, unflagWord } from "../api/flagged";
 import { fetchJson } from "../api/client";
 import { isWeightValid, parseWeightInput, scaleWeightRecord } from "../utils/weightInput";
@@ -25,6 +30,9 @@ interface Props {
   onComplete: () => void;
   onBrowse: () => void;
   onStartNew: () => void;
+  /** "groupB" talks to /api/group-b-quiz and swaps the "3" key from flag to
+   *  "remove from Group B". Default "combined". */
+  variant?: CombinedQuizVariant;
 }
 
 function questionKey(q: CombinedQuizQuestion): string {
@@ -46,7 +54,8 @@ function TranslationDisplay({ translation }: { translation: string | Record<stri
   );
 }
 
-export default function CombinedQuizTaking({ session, onComplete, onBrowse, onStartNew }: Props) {
+export default function CombinedQuizTaking({ session, onComplete, onBrowse, onStartNew, variant = "combined" }: Props) {
+  const isGroupB = variant === "groupB";
   const { t } = useI18n();
   const { settings, displayDefEntries, displayGrammarDefEntries } = useSettings();
   const [currentSession, setCurrentSession] = useState(session);
@@ -59,6 +68,10 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const [submitting, setSubmitting] = useState(false);
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [alreadyFlaggedIds, setAlreadyFlaggedIds] = useState<Set<string>>(new Set());
+  // Group B variant: items the "3" key has dropped from their Group B groups.
+  // Purely local feedback — the current session keeps showing them; they simply
+  // stop appearing in future Group B sessions.
+  const [removedFromBIds, setRemovedFromBIds] = useState<Set<string>>(new Set());
   const [grammarCache, setGrammarCache] = useState<Map<string, Grammar>>(new Map());
   const [groupNameMap, setGroupNameMap] = useState<Map<string, string>>(new Map());
   const [originalTotal] = useState(() => session.initialTotal ?? session.questions.length);
@@ -82,7 +95,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
   const fetchBatch = useCallback((offset: number, limit: number) => {
     const request = fetchQueueRef.current.then(async () => {
-      const { questions: batch, total } = await getCombinedQuizQuestions(session.language, offset, limit);
+      const { questions: batch, total } = await getCombinedQuizQuestions(session.language, offset, limit, variant);
       totalQuestionsRef.current = total;
       fetchedCountRef.current = Math.max(fetchedCountRef.current, offset + batch.length);
       setQuestions((prev) => {
@@ -124,10 +137,12 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   }, [currentIndex, loading, questions, fetchBatch, session.questions]);
 
   useEffect(() => {
+    // The Group B variant has no flag concept — skip the fetch entirely.
+    if (isGroupB) return;
     getFlaggedWordIds(session.language)
       .then(({ wordIds }) => setAlreadyFlaggedIds(new Set(wordIds)))
       .catch(() => setAlreadyFlaggedIds(new Set()));
-  }, [session.language]);
+  }, [session.language, isGroupB]);
 
   // Fetch group names for the per-group progress badges (word + grammar groups).
   useEffect(() => {
@@ -305,7 +320,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         ...(correctDraftActive ? { correctWeight: d.correct } : {}),
         ...(Object.keys(wordGroupWeights).length > 0 ? { wordGroupWeights } : {}),
         ...(Object.keys(grammarGroupWeights).length > 0 ? { grammarGroupWeights } : {}),
-      });
+      }, variant);
       const hydratedByKey = new Map(questions.map((q) => [questionKey(q), q]));
       setQuestions(
         updated.questions.map((q) => ({
@@ -359,11 +374,39 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     });
   }
 
+  // Group B: "3"-key equivalent as a clickable control, plus the post-removal badge.
+  function GroupBExcludeControl({ refId, kind }: { refId: string; kind: "word" | "grammar" }) {
+    if (!isGroupB) return null;
+    if (removedFromBIds.has(refId)) {
+      return (
+        <p className="w-full max-w-lg rounded-md border border-amber-700/50 bg-amber-950/30 px-3 py-1.5 text-xs text-amber-300">
+          ✓ {t("removedFromGroupB")}
+        </p>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          const call =
+            kind === "word"
+              ? removeWordFromGroupB(currentSession.language, refId)
+              : removeGrammarFromGroupB(currentSession.language, refId);
+          void call.catch(() => {});
+          setRemovedFromBIds((prev) => new Set([...prev, refId]));
+        }}
+        className="w-full max-w-lg rounded-md border border-amber-700/50 px-3 py-1.5 text-xs text-amber-300 hover:bg-amber-950/30"
+      >
+        3 · {t("removeFromGroupB")}
+      </button>
+    );
+  }
+
   async function handleGrade(correct: boolean) {
     if (!question || submittingRef.current) return;
     submittingRef.current = true;
     setSubmitting(true);
-    const submittedFlagIds = question.kind === "word" ? Array.from(flaggedIds) : [];
+    const submittedFlagIds = !isGroupB && question.kind === "word" ? Array.from(flaggedIds) : [];
     try {
       const { session: updatedSession } = await answerCombinedQuestion({
         language: currentSession.language,
@@ -371,7 +414,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         refId: question.kind === "word" ? question.wordId : question.grammarId,
         correct,
         flagWordIds: submittedFlagIds.length > 0 ? submittedFlagIds : undefined,
-      });
+      }, variant);
 
       if (submittedFlagIds.length > 0) {
         setAlreadyFlaggedIds((prev) => new Set([...prev, ...submittedFlagIds]));
@@ -442,7 +485,18 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       } else if (event.key === "2") {
         event.preventDefault();
         void handleGrade(true);
-      } else if (event.key === "3" && question?.kind === "word") {
+      } else if (event.key === "3" && isGroupB && question) {
+        // Group B: "3" retires the item from every Group B group it belongs to
+        // (both domains), instead of flagging. It stays in the current session.
+        event.preventDefault();
+        const refId = question.kind === "word" ? question.wordId : question.grammarId;
+        const call =
+          question.kind === "word"
+            ? removeWordFromGroupB(currentSession.language, refId)
+            : removeGrammarFromGroupB(currentSession.language, refId);
+        void call.catch(() => {});
+        setRemovedFromBIds((prev) => new Set([...prev, refId]));
+      } else if (event.key === "3" && !isGroupB && question?.kind === "word") {
         event.preventDefault();
         const wordId = question.wordId;
         if (alreadyFlaggedIds.has(wordId)) {
@@ -459,7 +513,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [question, showingAnswer, submitting, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive]);
+  }, [question, showingAnswer, submitting, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, isGroupB]);
 
   if (loading) {
     return (
@@ -1034,7 +1088,9 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             </div>
           )}
 
-          <div className="w-full max-w-lg space-y-1">
+          <GroupBExcludeControl refId={wordQuestion.wordId} kind="word" />
+
+          <div className={`w-full max-w-lg space-y-1 ${isGroupB ? "hidden" : ""}`}>
             <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -1134,6 +1190,10 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
                 </div>
               ))}
             </div>
+          )}
+
+          {grammarQuestion && (
+            <GroupBExcludeControl refId={grammarQuestion.grammarId} kind="grammar" />
           )}
 
           <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">

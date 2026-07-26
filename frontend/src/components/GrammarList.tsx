@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import {
@@ -12,9 +13,10 @@ import {
   uploadGrammarDrafts,
 } from "../api/grammar";
 import { LEVEL_OPTIONS } from "../constants/levels";
-import { latestGrammarGroup, type Grammar, type GrammarDraft, type GrammarGroup } from "../types";
+import { categoryGroups, latestGrammarGroup, type Grammar, type GrammarDraft, type GrammarGroup } from "../types";
 import GrammarFormModal from "./GrammarFormModal";
 import GroupPickerModal from "./GroupPickerModal";
+import GroupBSelect from "./GroupBSelect";
 import RubyText from "./RubyText";
 import type { smartAddWord } from "../api/vocab";
 import type { useGrammarQueue } from "../hooks/useGrammarQueue";
@@ -236,6 +238,7 @@ function GrammarRow(props: ItemProps) {
 }
 
 export default function GrammarList({ language, onBack, onQueue, onGrammarQueue, onGrammarUpdateQueue, pendingTerms, succeededTerms, grammarPendingTerms, grammarPendingDraftIds, refreshSignal }: Props) {
+  const navigate = useNavigate();
   const { t } = useI18n();
   const { displayGrammarDefEntries } = useSettings();
   const [items, setItems] = useState<Grammar[]>([]);
@@ -251,6 +254,7 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
   const [editingItem, setEditingItem] = useState<Grammar | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [groupPickerIds, setGroupPickerIds] = useState<string[] | null>(null);
+  const [groupPickerCategory, setGroupPickerCategory] = useState<"A" | "B">("A");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -264,13 +268,16 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
   // Registration target for the drafts panel's one-click "Register" button.
   // Defaults to the most recently CREATED group; a user pick sticks.
   const [draftGroupId, setDraftGroupId] = useState<string>("");
+  // Category-B grammar groups every draft registration additionally joins.
+  const [draftGroupBIds, setDraftGroupBIds] = useState<string[]>([]);
   const draftGroupTouchedRef = useRef(false);
 
   const levelOptions = LEVEL_OPTIONS[language];
 
   useEffect(() => {
     getGrammarGroups(language)
-      .then(setGroups)
+      // Group A flow — see WordList for the same rationale.
+      .then((gs) => setGroups(categoryGroups(gs, "A")))
       .catch(() => setGroups([]));
   }, [language]);
 
@@ -396,7 +403,11 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
         level: draft.level || undefined,
         tags: draft.tags && draft.tags.length > 0 ? draft.tags : undefined,
       },
-      { draftId: draft.id, ...(groupName ? { groupNames: [groupName] } : {}) },
+      {
+        draftId: draft.id,
+        ...(groupName ? { groupNames: [groupName] } : {}),
+        ...(draftGroupBIds.length > 0 ? { groupIds: draftGroupBIds } : {}),
+      },
     );
   }
 
@@ -509,6 +520,12 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
             }}
           />
           <button
+            onClick={() => navigate(`/${language}/import`)}
+            className="rounded-lg border border-violet-700/60 px-4 py-1.5 text-sm text-violet-300 hover:bg-gray-700"
+          >
+            {t("importFromSource")}
+          </button>
+          <button
             onClick={onBack}
             className="rounded-lg border border-gray-600 px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
           >
@@ -550,10 +567,16 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
           </select>
         )}
         <button
-          onClick={() => setGroupPickerIds([])}
+          onClick={() => { setGroupPickerCategory("A"); setGroupPickerIds([]); }}
           className="rounded-lg border border-gray-600 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
         >
           {t("manageGroups")}
+        </button>
+        <button
+          onClick={() => { setGroupPickerCategory("B"); setGroupPickerIds([]); }}
+          className="rounded-lg border border-amber-700/60 px-3 py-1.5 text-sm text-amber-300 hover:bg-gray-700"
+        >
+          {t("manageGroupB")}
         </button>
       </div>
 
@@ -600,6 +623,16 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
               </select>
             )}
           </div>
+          {onGrammarQueue && (
+            <div className="px-3 pb-2">
+              <GroupBSelect
+                kind="grammar"
+                language={language}
+                selectedIds={draftGroupBIds}
+                onChange={setDraftGroupBIds}
+              />
+            </div>
+          )}
           {draftsOpen && (
             <div className="space-y-2 px-3 pb-3">
               {drafts.map((draft) => {
@@ -891,9 +924,10 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
           kind="grammar"
           language={language}
           itemIds={groupPickerIds}
+          category={groupPickerCategory}
           onClose={() => setGroupPickerIds(null)}
           onDone={(updated) => {
-            setGroups(updated as GrammarGroup[]);
+            setGroups(categoryGroups(updated as GrammarGroup[], "A"));
             fetchItems();
           }}
         />

@@ -1,8 +1,9 @@
-import { fetchJson, postJson, putJson, deleteRequest } from "./client";
+import { fetchJson, postJson, putJson, deleteRequest, deleteJson } from "./client";
 import type {
   Grammar,
   GrammarDraft,
   GrammarGroup,
+  GroupCategory,
   GrammarQuizSession,
   GrammarSettings,
   PaginatedResult,
@@ -101,8 +102,22 @@ export function getGrammarGroups(language: string): Promise<GrammarGroup[]> {
   return fetchJson(`/api/grammar/${encodeURIComponent(language)}/groups`);
 }
 
-export function createGrammarGroup(language: string, name: string): Promise<GrammarGroup> {
-  return postJson(`/api/grammar/${encodeURIComponent(language)}/groups`, { name });
+export function createGrammarGroup(
+  language: string,
+  name: string,
+  category?: GroupCategory
+): Promise<GrammarGroup> {
+  return postJson(`/api/grammar/${encodeURIComponent(language)}/groups`, { name, ...(category ? { category } : {}) });
+}
+
+/** Group B quiz "3" key — drop the grammar item from every category-B group it belongs to. */
+export function removeGrammarFromGroupB(
+  language: string,
+  grammarId: string
+): Promise<{ removedFromGroupIds: string[] }> {
+  return deleteJson(
+    `/api/grammar/${encodeURIComponent(language)}/group-b/members/${encodeURIComponent(grammarId)}`
+  );
 }
 
 export function renameGrammarGroup(

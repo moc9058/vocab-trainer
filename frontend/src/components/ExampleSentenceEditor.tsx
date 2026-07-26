@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, Fragment } from "react";
 import { useI18n } from "../i18n/context";
 import { checkTerms, smartAddWord, modifyGroupMembers, getGroups } from "../api/vocab";
-import { displayTranslation, type WordGroup } from "../types";
+import { categoryGroups, displayTranslation, latestWordGroup, type WordGroup } from "../types";
 
 export interface ExampleFormState {
   id?: string;
@@ -37,6 +37,9 @@ interface Props {
    *  (completion is driven by `succeededTerms`, not a DB re-poll). */
   refreshSignal?: number;
   onQueue?: (term: string, language: string, payload: ExampleSegmentQueuePayload) => void;
+  /** Extra group IDs (typically the host form's Group B selection) merged into
+   *  every chip add on top of the chip's own category-A group choice. */
+  extraGroupIds?: string[];
   /** Fired whenever the editor has at least one chip mid-`smartAddWord`. Parents
    *  use this to lock Cancel / backdrop-close while an add is in flight so the
    *  user can't drop the modal with a half-created word still in progress. */
@@ -51,6 +54,7 @@ export default function ExampleSentenceEditor({
   pendingTerms,
   succeededTerms,
   onQueue,
+  extraGroupIds,
   onChipInFlightChange,
 }: Props) {
   const { t } = useI18n();
@@ -78,7 +82,9 @@ export default function ExampleSentenceEditor({
   useEffect(() => {
     getGroups(language)
       .then((gs) => {
-        const sorted = [...gs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        // Chip adds always target a category-A group; Group B membership comes
+        // from the host form's GroupBSelect via `extraGroupIds`.
+        const sorted = categoryGroups(gs, "A").sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         setWordGroups(sorted);
       })
       .catch(() => setWordGroups([]));
@@ -91,7 +97,7 @@ export default function ExampleSentenceEditor({
     onChipInFlightChange?.(busySegments.size > 0);
   }, [busySegments, onChipInFlightChange]);
 
-  const latestGroupId = wordGroups[0]?.id ?? "";
+  const latestGroupId = latestWordGroup(wordGroups)?.id ?? "";
   function getChipGroupId(chipText: string): string {
     const override = chipGroupOverrides.get(chipText);
     return override !== undefined ? override : latestGroupId;
@@ -164,7 +170,8 @@ export default function ExampleSentenceEditor({
     // workflow: each chip carries exactly the group selected in its dropdown
     // (latest-created by default, or "" for no group).
     const chipGroupId = getChipGroupId(chipText);
-    const groupIds = chipGroupId ? [chipGroupId] : [];
+    // …plus any Group B groups the host form selected, which apply to every chip.
+    const groupIds = [...new Set([...(chipGroupId ? [chipGroupId] : []), ...(extraGroupIds ?? [])])];
     if (onQueue) {
       // Enqueue and let the parent's `pendingTerms` (amber) → `succeededTerms`
       // (green) drive the chip's state authoritatively.

@@ -1,0 +1,96 @@
+{
+  "name": "article_import_analysis",
+  "strict": true,
+  "schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "paragraphs",
+      "words",
+      "grammar"
+    ],
+    "properties": {
+      "paragraphs": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sentences"
+          ],
+          "properties": {
+            "sentences": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "text",
+                  "translation"
+                ],
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "translation": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "words": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "term",
+            "transliteration",
+            "meaning",
+            "sentenceIndex"
+          ],
+          "properties": {
+            "term": {
+              "type": "string"
+            },
+            "transliteration": {
+              "type": "string"
+            },
+            "meaning": {
+              "type": "string"
+            },
+            "sentenceIndex": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "grammar": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "statement",
+            "description",
+            "sentenceIndex"
+          ],
+          "properties": {
+            "statement": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "sentenceIndex": {
+              "type": "integer"
+            }
+          }
+        }
+      }
+    }
+  }
+}

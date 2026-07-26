@@ -41,7 +41,15 @@ interface GrammarFilterBody {
   groupWeights?: Record<string, number>;
 }
 
-const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
+/**
+ * The combined quiz and the Group B quiz are the SAME routes over the same
+ * `combined_quiz_sessions` collection, differing only in the Firestore doc key —
+ * so both can be in progress for one language at the same time. Everything else
+ * (weighted ordering, retry re-queue, paged word hydration, mid-session weight
+ * changes) is inherited unchanged.
+ */
+function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string }): FastifyPluginAsync {
+  return async (fastify) => {
   // Start a combined session: each domain is ordered internally by group weights
   // (words exactly like /api/quiz, grammar analogously), then the two streams are
   // merged by the word/grammar domain weights.
@@ -212,7 +220,7 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const session: CombinedQuizSession = {
-        sessionId: language,
+        sessionId: opts.sessionKey(language),
         language,
         startedAt: new Date().toISOString(),
         status: "in-progress",
@@ -276,7 +284,7 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
       const offset = request.query.offset ?? 0;
       const limit = request.query.limit ?? 50;
 
-      const session = await getCombinedQuizSession(language);
+      const session = await getCombinedQuizSession(opts.sessionKey(language));
       if (!session) return reply.notFound("No combined quiz session found for this language");
 
       const slice = session.questions.slice(offset, offset + limit);
@@ -331,7 +339,7 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
     },
     async (request, reply) => {
       const { language, kind, refId, correct, flagWordIds } = request.body;
-      const session = await getCombinedQuizSession(language);
+      const session = await getCombinedQuizSession(opts.sessionKey(language));
       if (!session) return reply.notFound("No combined quiz session found for this language");
       if (session.status === "completed") return reply.badRequest("Session already completed");
 
@@ -423,7 +431,7 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get<{ Params: { language: string } }>(
     "/session/language/:language",
     async (request, reply) => {
-      const session = await getCombinedQuizSession(request.params.language);
+      const session = await getCombinedQuizSession(opts.sessionKey(request.params.language));
       if (!session) return reply.notFound("No combined quiz session found for this language");
 
       reorderUnansweredTail(session);
@@ -466,7 +474,7 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const session = await getCombinedQuizSession(request.params.language);
+      const session = await getCombinedQuizSession(opts.sessionKey(request.params.language));
       if (!session) return reply.notFound("No combined quiz session found for this language");
       if (session.status === "completed") return reply.badRequest("Session already completed");
 
@@ -513,7 +521,13 @@ const combinedQuizRoutes: FastifyPluginAsync = async (fastify) => {
       return session;
     }
   );
-};
+  };
+}
+
+const combinedQuizRoutes = makeCombinedQuizRoutes({ sessionKey: (l) => l });
+/** Group B quiz — same handlers, session stored under `${language}__groupB`
+ *  ("__" cannot occur in a language name, so the keys never collide). */
+export const groupBQuizRoutes = makeCombinedQuizRoutes({ sessionKey: (l) => `${l}__groupB` });
 
 // Reorder the unanswered tail by the session's current domain + group weights,
 // keeping answered questions in place. Shared by resume (GET session) and the

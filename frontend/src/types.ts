@@ -78,6 +78,21 @@ export interface Word {
   hanjaReadings?: HanjaReading[];
 }
 
+/** Meta-group bucket. Absent = "A" (the universe of all items).
+ *  "B" = the not-yet-memorized subset, drilled by the dedicated Group B quiz. */
+export type GroupCategory = "A" | "B";
+
+export function groupCategory(g: { category?: GroupCategory }): GroupCategory {
+  return g.category ?? "A";
+}
+
+export function categoryGroups<T extends { category?: GroupCategory }>(
+  groups: T[],
+  cat: GroupCategory
+): T[] {
+  return groups.filter((g) => groupCategory(g) === cat);
+}
+
 export interface WordGroup {
   id: string;
   language: string;
@@ -85,12 +100,15 @@ export interface WordGroup {
   wordIds: string[];
   createdAt: string;
   order?: number;
+  /** Meta-group. Absent = "A" (all words). "B" = not-yet-memorized subset. */
+  category?: GroupCategory;
 }
 
-/** Most recently created word group — the default registration target for
- *  drafts (groups are otherwise listed in their user-arranged order). */
+/** Most recently created **category A** word group — the default registration target
+ *  for drafts (groups are otherwise listed in their user-arranged order). Group B
+ *  groups are never an implicit default; they are only ever picked explicitly. */
 export function latestWordGroup(groups: WordGroup[]): WordGroup | undefined {
-  return groups.reduce<WordGroup | undefined>(
+  return categoryGroups(groups, "A").reduce<WordGroup | undefined>(
     (latest, g) => (!latest || g.createdAt > latest.createdAt ? g : latest),
     undefined
   );
@@ -179,11 +197,13 @@ export interface GrammarGroup {
   name: string;
   grammarIds: string[];
   createdAt: string;
+  /** Meta-group. Absent = "A" (all grammar). "B" = not-yet-memorized subset. */
+  category?: GroupCategory;
 }
 
-/** Most recently created group (by `createdAt`), or undefined if `groups` is empty. */
+/** Most recently created **category A** group (by `createdAt`), or undefined if there is none. */
 export function latestGrammarGroup(groups: GrammarGroup[]): GrammarGroup | undefined {
-  return groups.reduce<GrammarGroup | undefined>(
+  return categoryGroups(groups, "A").reduce<GrammarGroup | undefined>(
     (latest, g) => (!latest || g.createdAt > latest.createdAt ? g : latest),
     undefined
   );
@@ -380,4 +400,39 @@ export interface ExpressionQuizSubsession {
   score: QuizScore;
   questions: ExpressionQuizQuestion[];
   groupFilter?: string[];
+}
+
+// ========== Import (analyze an external article into words + grammar) ==========
+
+export interface ImportSentence {
+  /** Position across the whole article (0-based); assigned server-side. */
+  index: number;
+  text: string;
+  translation?: string;
+}
+
+export interface ImportParagraph {
+  sentences: ImportSentence[];
+}
+
+export interface ImportExtractedWord {
+  term: string;
+  transliteration?: string;
+  /** Short gloss, for the review list only — the real definitions come from smart-add. */
+  meaning?: string;
+  /** The sentence the word occurs in; it becomes the word's example sentence. */
+  sentenceIndex: number;
+}
+
+export interface ImportExtractedGrammar {
+  /** Pattern notation, e.g. "～的话：〜なら". */
+  statement: string;
+  description: string;
+  sentenceIndex: number;
+}
+
+export interface ImportAnalysisResult {
+  paragraphs: ImportParagraph[];
+  words: ImportExtractedWord[];
+  grammar: ImportExtractedGrammar[];
 }

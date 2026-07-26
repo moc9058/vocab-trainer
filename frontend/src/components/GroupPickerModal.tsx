@@ -32,7 +32,7 @@ import {
   deleteGrammarGroup,
   modifyGrammarGroupMembers,
 } from "../api/grammar";
-import type { WordGroup, GrammarGroup } from "../types";
+import { categoryGroups, type WordGroup, type GrammarGroup, type GroupCategory } from "../types";
 
 type AnyGroup = WordGroup | GrammarGroup;
 
@@ -41,7 +41,10 @@ interface Props {
   language: string;
   itemIds: string[];
   onClose: () => void;
+  /** Receives the FULL group list (both categories) so parents can keep their cache in sync. */
   onDone: (updatedGroups: AnyGroup[]) => void;
+  /** Which meta-group bucket this modal lists and creates into. Default "A". */
+  category?: GroupCategory;
 }
 
 function memberIds(g: AnyGroup): string[] {
@@ -85,8 +88,17 @@ function SortableGroupRow({
   );
 }
 
-export default function GroupPickerModal({ kind, language, itemIds, onClose, onDone }: Props) {
+export default function GroupPickerModal({
+  kind,
+  language,
+  itemIds,
+  onClose,
+  onDone,
+  category = "A",
+}: Props) {
   const { t } = useI18n();
+  // `groups` holds EVERY group for the language (both categories); only `visibleGroups`
+  // is rendered. The full list is needed for the reorder invariant below.
   const [groups, setGroups] = useState<AnyGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [newName, setNewName] = useState("");
@@ -100,6 +112,7 @@ export default function GroupPickerModal({ kind, language, itemIds, onClose, onD
 
   const isManageMode = itemIds.length === 0;
   const canReorder = kind === "word" && isManageMode;
+  const visibleGroups = categoryGroups(groups, category);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -144,7 +157,7 @@ export default function GroupPickerModal({ kind, language, itemIds, onClose, onD
     if (!name || creating) return;
     setCreating(true);
     try {
-      const group = (await api.create(language, name)) as AnyGroup;
+      const group = (await api.create(language, name, category)) as AnyGroup;
       let finalGroup = group;
       if (itemIds.length > 0) {
         finalGroup = (await api.modify(language, group.id, itemIds, "add")) as AnyGroup;
@@ -203,12 +216,16 @@ export default function GroupPickerModal({ kind, language, itemIds, onClose, onD
     const { active, over } = event;
     if (!canReorder || !over || active.id === over.id || reordering) return;
 
-    const oldIndex = groups.findIndex((group) => group.id === active.id);
-    const newIndex = groups.findIndex((group) => group.id === over.id);
+    const oldIndex = visibleGroups.findIndex((group) => group.id === active.id);
+    const newIndex = visibleGroups.findIndex((group) => group.id === over.id);
     if (oldIndex < 0 || newIndex < 0) return;
 
     const previous = groups;
-    const next = arrayMove(groups, oldIndex, newIndex);
+    const reordered = arrayMove(visibleGroups, oldIndex, newIndex);
+    // The server requires `groupIds` to list EVERY group of the language exactly once, so
+    // append the hidden category's IDs (in their current relative order) after the visible ones.
+    const hidden = groups.filter((group) => !visibleGroups.some((v) => v.id === group.id));
+    const next = [...reordered, ...hidden];
     setGroups(next);
     setReordering(true);
     try {
@@ -236,6 +253,7 @@ export default function GroupPickerModal({ kind, language, itemIds, onClose, onD
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-base font-semibold text-gray-100">
             {isManageMode ? t("manageGroups") : t("addToGroup")}
+            {category === "B" && <span className="ml-2 text-xs text-amber-300">Group B</span>}
           </h2>
           {!isManageMode && (
             <span className="text-xs text-gray-400">
@@ -249,14 +267,14 @@ export default function GroupPickerModal({ kind, language, itemIds, onClose, onD
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
             <SortableContext
-              items={groups.map((group) => group.id)}
+              items={visibleGroups.map((group) => group.id)}
               strategy={verticalListSortingStrategy}
             >
               <ul className={`mb-4 max-h-56 space-y-1 overflow-y-auto ${reordering ? "opacity-70" : ""}`}>
-                {groups.length === 0 && (
+                {visibleGroups.length === 0 && (
                   <li className="text-sm text-gray-500 px-1">No groups yet.</li>
                 )}
-                {groups.map((group) => {
+                {visibleGroups.map((group) => {
                   const ids = memberIds(group);
                   const containedCount = itemIds.filter((id) => ids.includes(id)).length;
                   const allSelectedContained = itemIds.length > 0 && containedCount === itemIds.length;

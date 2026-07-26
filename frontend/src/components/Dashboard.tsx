@@ -13,6 +13,8 @@ import BrowseView from "./BrowseView";
 import FlaggedReview from "./FlaggedReview";
 import GrammarQuizTaking from "./GrammarQuizTaking";
 import CombinedQuizTaking from "./CombinedQuizTaking";
+import CombinedQuizFilterModal from "./CombinedQuizFilterModal";
+import ImportView from "./ImportView";
 import StudyQuizModal, { type StudyQuizTab } from "./StudyQuizModal";
 import SmartAddWordModal from "./SmartAddWordModal";
 import GrammarFormModal from "./GrammarFormModal";
@@ -54,6 +56,12 @@ export default function Dashboard() {
   const [activeCombinedQuiz, setActiveCombinedQuiz] = useState<CombinedQuizSession | null>(null);
   const [combinedResumePrompt, setCombinedResumePrompt] = useState<CombinedQuizSession | null>(null);
   const [pendingCombinedFilters, setPendingCombinedFilters] = useState<CombinedQuizFilters | null>(null);
+  // Group B quiz — an independent system on top of the same combined-quiz machinery,
+  // so it gets its own session state and setup modal (no StudyQuizModal tab).
+  const [activeGroupBQuiz, setActiveGroupBQuiz] = useState<CombinedQuizSession | null>(null);
+  const [showGroupBSetup, setShowGroupBSetup] = useState(false);
+  const [groupBResumePrompt, setGroupBResumePrompt] = useState<CombinedQuizSession | null>(null);
+  const [pendingGroupBFilters, setPendingGroupBFilters] = useState<CombinedQuizFilters | null>(null);
   // Smart Add Word / Grammar state
   const [showSmartAdd, setShowSmartAdd] = useState(false);
   const [grammarFormLanguage, setGrammarFormLanguage] = useState<string | null>(null);
@@ -91,6 +99,16 @@ export default function Dashboard() {
     if (subPath !== "/combined-quiz" || activeCombinedQuiz) return;
     getCurrentCombinedSession(language ?? "").then(session => {
       if (session) setActiveCombinedQuiz(session);
+      else navigate(`/${language}`, { replace: true });
+    }).catch(() => navigate(`/${language}`, { replace: true }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subPath, language]);
+
+  // Session recovery: navigate to /:language/group-b-quiz → fetch active session if state is empty
+  useEffect(() => {
+    if (subPath !== "/group-b-quiz" || activeGroupBQuiz) return;
+    getCurrentCombinedSession(language ?? "", "groupB").then(session => {
+      if (session) setActiveGroupBQuiz(session);
       else navigate(`/${language}`, { replace: true });
     }).catch(() => navigate(`/${language}`, { replace: true }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -245,6 +263,10 @@ export default function Dashboard() {
     setActiveCombinedQuiz(null);
     setCombinedResumePrompt(null);
     setPendingCombinedFilters(null);
+    setActiveGroupBQuiz(null);
+    setShowGroupBSetup(false);
+    setGroupBResumePrompt(null);
+    setPendingGroupBFilters(null);
     setShowSmartAdd(false);
     setGrammarFormLanguage(null);
     navigate(`/${language}`);
@@ -374,6 +396,70 @@ export default function Dashboard() {
     }
   }
 
+  function handleStartGroupBQuiz() {
+    if (!language) return;
+    setShowGroupBSetup(true);
+  }
+
+  async function doStartGroupB(filters: CombinedQuizFilters) {
+    if (!language) return;
+    const session = await startCombinedQuiz({
+      language,
+      domainWeights: filters.domainWeights,
+      correctWeight: filters.correctWeight,
+      word: filters.word,
+      grammar: filters.grammar,
+    }, "groupB");
+    setActiveGroupBQuiz(session);
+    navigate(`/${language}/group-b-quiz`);
+  }
+
+  async function handleGroupBFiltersSelected(filters: CombinedQuizFilters) {
+    if (starting || !language) return;
+    setStarting(true);
+    try {
+      const existing = await getCurrentCombinedSession(language, "groupB");
+      if (existing && existing.status === "in-progress") {
+        setPendingGroupBFilters(filters);
+        setGroupBResumePrompt(existing);
+        return;
+      }
+      setShowGroupBSetup(false);
+      await doStartGroupB(filters);
+    } catch (err) {
+      console.error("Failed to start Group B quiz:", err);
+      alert(String(err));
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  function handleResumeGroupB() {
+    if (!groupBResumePrompt) return;
+    setActiveGroupBQuiz(groupBResumePrompt);
+    setGroupBResumePrompt(null);
+    setPendingGroupBFilters(null);
+    setShowGroupBSetup(false);
+    setStarting(false);
+    navigate(`/${language}/group-b-quiz`);
+  }
+
+  async function handleStartNewGroupB() {
+    if (!language || !pendingGroupBFilters) return;
+    const filters = pendingGroupBFilters;
+    setGroupBResumePrompt(null);
+    setShowGroupBSetup(false);
+    setPendingGroupBFilters(null);
+    try {
+      await doStartGroupB(filters);
+    } catch (err) {
+      console.error("Failed to start Group B quiz:", err);
+      alert(String(err));
+    } finally {
+      setStarting(false);
+    }
+  }
+
   function handleStartExpressionQuiz() {
     if (!language) return;
     navigate(`/${language}/speaking-writing`, { state: { mode: "new", subMode: "expression-quiz" } });
@@ -478,6 +564,39 @@ export default function Dashboard() {
           onStartGrammar={handleGrammarFiltersSelected}
           onStartCombined={handleCombinedFiltersSelected}
         />
+      )}
+      {showGroupBSetup && !groupBResumePrompt && language && (
+        <CombinedQuizFilterModal
+          language={language}
+          groupCategory="B"
+          showFlaggedToggle={false}
+          onStart={handleGroupBFiltersSelected}
+          onClose={() => setShowGroupBSetup(false)}
+        />
+      )}
+      {groupBResumePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-sm rounded-xl bg-gray-800 p-6 shadow-lg">
+            <p className="mb-4 text-gray-300">{t("existingCombinedQuizFound")}</p>
+            <p className="mb-4 text-lg font-semibold text-amber-400">
+              {groupBResumePrompt.score.correct} / {groupBResumePrompt.initialTotal ?? groupBResumePrompt.questions.length}
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleResumeGroupB}
+                className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-white hover:bg-amber-500"
+              >
+                {t("resumeQuiz")}
+              </button>
+              <button
+                onClick={handleStartNewGroupB}
+                className="flex-1 rounded-lg bg-gray-700 px-4 py-2 text-gray-300 hover:bg-gray-600"
+              >
+                {t("startNewQuiz")}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {combinedResumePrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
@@ -623,6 +742,27 @@ export default function Dashboard() {
               <span className="text-gray-400">Loading quiz…</span>
             </div>
           )
+        ) : subPath === "/import" ? (
+          <ImportView
+            language={language ?? ""}
+            onQueue={enqueue}
+            onGrammarQueue={enqueueGrammar}
+            onBack={() => navigate(`/${language}`)}
+          />
+        ) : subPath === "/group-b-quiz" ? (
+          activeGroupBQuiz ? (
+            <CombinedQuizTaking
+              session={activeGroupBQuiz}
+              variant="groupB"
+              onComplete={() => { setActiveGroupBQuiz(null); navigate(`/${language}`); }}
+              onBrowse={handleBrowse}
+              onStartNew={handleStartGroupBQuiz}
+            />
+          ) : (
+            <div className="flex items-center justify-center p-8">
+              <span className="text-gray-400">Loading quiz…</span>
+            </div>
+          )
         ) : subPath === "/print-worksheet" ? (
           (() => {
             const st = (location.state as {
@@ -666,6 +806,8 @@ export default function Dashboard() {
             onResumeGrammar={(session) => { setActiveGrammarQuiz(session); navigate(`/${language}/grammar-quiz`); }}
             onResumeCombined={(session) => { setActiveCombinedQuiz(session); navigate(`/${language}/combined-quiz`); }}
             onCombinedQuiz={handleStartCombinedQuiz}
+            onResumeGroupB={(session) => { setActiveGroupBQuiz(session); navigate(`/${language}/group-b-quiz`); }}
+            onGroupBQuiz={handleStartGroupBQuiz}
             onStartNew={handleStartQuiz}
             onBrowse={handleBrowse}
             onFlaggedReview={handleFlaggedReview}

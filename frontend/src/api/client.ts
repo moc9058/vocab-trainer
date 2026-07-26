@@ -33,3 +33,10 @@ export async function deleteRequest(path: string): Promise<void> {
   const res = await fetch(path, { method: "DELETE" });
   if (!res.ok) throw await errorFromResponse(res);
 }
+
+/** DELETE that returns a parsed body (most DELETE endpoints return nothing — use `deleteRequest`). */
+export async function deleteJson<T>(path: string): Promise<T> {
+  const res = await fetch(path, { method: "DELETE" });
+  if (!res.ok) throw await errorFromResponse(res);
+  return res.json() as Promise<T>;
+}

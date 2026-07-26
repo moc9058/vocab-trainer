@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
 import { getFilters, getGroups } from "../api/vocab";
 import { getFlaggedWordIds } from "../api/flagged";
-import type { WordGroup } from "../types";
+import { categoryGroups, type WordGroup } from "../types";
 import { isWeightValid, parseWeightInput, scaleWeightRecord } from "../utils/weightInput";
 
 export interface QuizFilters {
@@ -91,9 +91,11 @@ export default function QuizFilterModal({
           setAllCategories(categories);
         }
         if (groupsResult.status === "fulfilled") {
-          setAllGroups(groupsResult.value);
-          setSelectedGroupIds(new Set(groupsResult.value.map((g: WordGroup) => g.id)));
-          setGroupWeights(Object.fromEntries(groupsResult.value.map((g: WordGroup) => [g.id, "1"])));
+          // Word quiz draws from the Group A universe; Group B has its own quiz.
+          const aGroups = categoryGroups(groupsResult.value as WordGroup[], "A");
+          setAllGroups(aGroups);
+          setSelectedGroupIds(new Set(aGroups.map((g: WordGroup) => g.id)));
+          setGroupWeights(Object.fromEntries(aGroups.map((g: WordGroup) => [g.id, "1"])));
         }
       })
       .finally(() => setLoading(false));

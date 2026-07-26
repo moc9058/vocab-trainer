@@ -1,5 +1,5 @@
-import { fetchJson, postJson, putJson, deleteRequest } from "./client";
-import type { Word, WordDraft, Meaning, PaginatedResult, WordGroup } from "../types";
+import { fetchJson, postJson, putJson, deleteRequest, deleteJson } from "./client";
+import type { Word, WordDraft, Meaning, PaginatedResult, WordGroup, GroupCategory } from "../types";
 
 interface WordFilters {
   search?: string;
@@ -122,8 +122,22 @@ export function getGroups(language: string): Promise<WordGroup[]> {
   return fetchJson(`/api/vocab/${encodeURIComponent(language)}/groups`);
 }
 
-export function createGroup(language: string, name: string): Promise<WordGroup> {
-  return postJson(`/api/vocab/${encodeURIComponent(language)}/groups`, { name });
+export function createGroup(
+  language: string,
+  name: string,
+  category?: GroupCategory
+): Promise<WordGroup> {
+  return postJson(`/api/vocab/${encodeURIComponent(language)}/groups`, { name, ...(category ? { category } : {}) });
+}
+
+/** Group B quiz "3" key — drop the word from every category-B group it belongs to. */
+export function removeWordFromGroupB(
+  language: string,
+  wordId: string
+): Promise<{ removedFromGroupIds: string[] }> {
+  return deleteJson(
+    `/api/vocab/${encodeURIComponent(language)}/group-b/members/${encodeURIComponent(wordId)}`
+  );
 }
 
 export function renameGroup(language: string, groupId: string, name: string): Promise<WordGroup> {

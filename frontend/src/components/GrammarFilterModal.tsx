@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
 import { getGrammarGroups } from "../api/grammar";
-import type { GrammarGroup } from "../types";
+import { categoryGroups, type GrammarGroup } from "../types";
 import { isWeightValid, scaleWeightRecord } from "../utils/weightInput";
 
 interface Props {
@@ -22,7 +22,9 @@ export default function GrammarFilterModal({ language, onStart, onClose }: Props
 
   useEffect(() => {
     getGrammarGroups(language)
-      .then((gs) => {
+      .then((all) => {
+        // Group A universe only — Group B has its own dedicated quiz.
+        const gs = categoryGroups(all, "A");
         setGroups(gs);
         // Pre-select all groups by default (mirrors word quiz filter)
         setSelectedGroupIds(new Set(gs.map((g) => g.id)));

@@ -82,6 +82,10 @@ export const TOPICS = [
 
 export type Topic = (typeof TOPICS)[number];
 
+/** Meta-group bucket. Absent = "A" (the universe of all items).
+ *  "B" = the not-yet-memorized subset, drilled by the dedicated Group B quiz. */
+export type GroupCategory = "A" | "B";
+
 export interface WordGroup {
   id: string;
   language: string;
@@ -89,6 +93,8 @@ export interface WordGroup {
   wordIds: string[];
   createdAt: string;
   order?: number;
+  /** Meta-group. Absent = "A" (all words). "B" = not-yet-memorized subset. */
+  category?: GroupCategory;
 }
 
 export interface WordDraft {
@@ -240,6 +246,8 @@ export interface GrammarGroup {
   name: string;
   grammarIds: string[];
   createdAt: string;
+  /** Meta-group. Absent = "A" (all grammar). "B" = not-yet-memorized subset. */
+  category?: GroupCategory;
 }
 
 export interface GrammarProgress {
@@ -506,4 +514,39 @@ export interface UsageMetricsSummary {
   }>;
   totalEstimatedCost: number;
   daily: TokenUsageDailySummary[];
+}
+
+// ========== Import (analyze an external article into words + grammar) ==========
+
+export interface ImportSentence {
+  /** Position across the whole article (0-based); assigned server-side. */
+  index: number;
+  text: string;
+  translation?: string;
+}
+
+export interface ImportParagraph {
+  sentences: ImportSentence[];
+}
+
+export interface ImportExtractedWord {
+  term: string;
+  transliteration?: string;
+  /** Short gloss, for the review list only — the real definitions come from smart-add. */
+  meaning?: string;
+  /** The sentence the word occurs in; it becomes the word's example sentence. */
+  sentenceIndex: number;
+}
+
+export interface ImportExtractedGrammar {
+  /** Pattern notation, e.g. "～的话：〜なら". */
+  statement: string;
+  description: string;
+  sentenceIndex: number;
+}
+
+export interface ImportAnalysisResult {
+  paragraphs: ImportParagraph[];
+  words: ImportExtractedWord[];
+  grammar: ImportExtractedGrammar[];
 }

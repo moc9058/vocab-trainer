@@ -3,7 +3,7 @@ import { useI18n } from "../i18n/context";
 import { getFilters, getGroups } from "../api/vocab";
 import { getGrammarGroups } from "../api/grammar";
 import { getFlaggedWordIds } from "../api/flagged";
-import type { WordGroup, GrammarGroup } from "../types";
+import { categoryGroups, type WordGroup, type GrammarGroup, type GroupCategory } from "../types";
 import { isWeightValid, parseWeightInput, scaleWeightRecord } from "../utils/weightInput";
 
 export interface CombinedQuizFilters {
@@ -28,6 +28,10 @@ interface Props {
   language: string;
   onStart: (filters: CombinedQuizFilters) => void;
   onClose: () => void;
+  /** Which meta-group bucket to draw the pool from. Default "A" (the normal combined quiz). */
+  groupCategory?: GroupCategory;
+  /** The Group B quiz has no flag concept — hide the toggle and force `flaggedOnly: false`. */
+  showFlaggedToggle?: boolean;
 }
 
 function ColumnDivider() {
@@ -128,7 +132,13 @@ function CheckboxColumn({
   );
 }
 
-export default function CombinedQuizFilterModal({ language, onStart, onClose }: Props) {
+export default function CombinedQuizFilterModal({
+  language,
+  onStart,
+  onClose,
+  groupCategory = "A",
+  showFlaggedToggle = true,
+}: Props) {
   const { t } = useI18n();
   const [wordWeight, setWordWeight] = useState("1");
   const [grammarWeight, setGrammarWeight] = useState("1");
@@ -161,18 +171,20 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
           setAllCategories(categories);
         }
         if (groupsResult.status === "fulfilled") {
-          setAllWordGroups(groupsResult.value);
-          setSelectedWordGroupIds(new Set(groupsResult.value.map((g: WordGroup) => g.id)));
-          setWordGroupWeights(Object.fromEntries(groupsResult.value.map((g: WordGroup) => [g.id, "1"])));
+          const wg = categoryGroups(groupsResult.value as WordGroup[], groupCategory);
+          setAllWordGroups(wg);
+          setSelectedWordGroupIds(new Set(wg.map((g: WordGroup) => g.id)));
+          setWordGroupWeights(Object.fromEntries(wg.map((g: WordGroup) => [g.id, "1"])));
         }
         if (grammarGroupsResult.status === "fulfilled") {
-          setAllGrammarGroups(grammarGroupsResult.value);
-          setSelectedGrammarGroupIds(new Set(grammarGroupsResult.value.map((g) => g.id)));
-          setGrammarGroupWeights(Object.fromEntries(grammarGroupsResult.value.map((g) => [g.id, "1"])));
+          const gg = categoryGroups(grammarGroupsResult.value as GrammarGroup[], groupCategory);
+          setAllGrammarGroups(gg);
+          setSelectedGrammarGroupIds(new Set(gg.map((g) => g.id)));
+          setGrammarGroupWeights(Object.fromEntries(gg.map((g) => [g.id, "1"])));
         }
       })
       .finally(() => setLoading(false));
-  }, [language]);
+  }, [language, groupCategory]);
 
   useEffect(() => {
     getFlaggedWordIds(language)
@@ -237,7 +249,7 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
         levels: [...selectedLevels],
         groupIds: [...selectedWordGroupIds],
         groupWeights: wordGroupWeightsOut,
-        flaggedOnly: flaggedScope,
+        flaggedOnly: showFlaggedToggle ? flaggedScope : false,
       },
       grammar: {
         groupIds: [...selectedGrammarGroupIds],
@@ -247,8 +259,15 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
   }
 
   const allZero = !wordDomainActive && !grammarDomainActive && !correctDomainActive;
+  // A Group B pool IS its group selection — with none selected the quiz would be
+  // empty, so require at least one group per active domain.
+  const missingGroupBSelection =
+    groupCategory === "B" &&
+    ((wordDomainActive && selectedWordGroupIds.size === 0) ||
+      (grammarDomainActive && selectedGrammarGroupIds.size === 0));
   const canStart =
     !allZero &&
+    !missingGroupBSelection &&
     !hasInvalidDomainWeight &&
     !hasInvalidWordGroupWeight &&
     !hasInvalidGrammarGroupWeight &&
@@ -296,6 +315,7 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
                   label={`${t("sectionVocabulary")} ${t("groupWeight")}`}
                   invalid={wordWeightNum === null}
                 />
+                {showFlaggedToggle && (
                 <button
                   type="button"
                   onClick={() => setFlaggedScope((v) => !v)}
@@ -308,6 +328,7 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
                 >
                   ⚑ {t("limitToFlagged")}
                 </button>
+                )}
               </div>
               {!wordDomainActive ? (
                 <p className="text-xs text-gray-500 px-1">—</p>
@@ -508,6 +529,9 @@ export default function CombinedQuizFilterModal({ language, onStart, onClose }: 
 
         {(hasInvalidDomainWeight || hasInvalidWordGroupWeight || hasInvalidGrammarGroupWeight || correctWeightInvalid) && (
           <p className="mt-1 text-xs text-red-400">{t("groupWeightRequiredHint")}</p>
+        )}
+        {missingGroupBSelection && (
+          <p className="mt-1 text-xs text-amber-400">{t("groupBNeedsGroup")}</p>
         )}
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
           <button

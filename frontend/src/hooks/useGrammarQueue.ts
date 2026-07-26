@@ -17,6 +17,9 @@ type GrammarPayload = Omit<Grammar, "language">;
 export interface GrammarCreateOptions {
   /** Group NAMES to attach the new item to; missing groups are created. */
   groupNames?: string[];
+  /** Existing group IDs to attach the new item to (mirrors the word queue's
+   *  `payload.groupIds`). Used by the Group B selector, which always knows IDs. */
+  groupIds?: string[];
   /** Draft to delete once the item (and its groups) are fully registered. */
   draftId?: string;
 }
@@ -24,7 +27,7 @@ export interface GrammarCreateOptions {
 const CONCURRENCY = 4;
 
 type QueueItem =
-  | { id: string; type: "create"; statement: string; language: string; payload: GrammarPayload; groupNames?: string[]; draftId?: string }
+  | { id: string; type: "create"; statement: string; language: string; payload: GrammarPayload; groupNames?: string[]; groupIds?: string[]; draftId?: string }
   | { id: string; type: "update"; statement: string; language: string; grammarId: string; updates: Partial<Grammar>; groupsToAdd: string[]; groupsToRemove: string[] };
 
 export interface GrammarQueueResult {
@@ -50,6 +53,13 @@ function withGroupLock<T>(fn: () => Promise<T>): Promise<T> {
 async function processItem(item: QueueItem): Promise<void> {
   if (item.type === "create") {
     const saved = await smartAddGrammarItem(item.language, item.payload);
+    if (item.groupIds && item.groupIds.length > 0) {
+      await Promise.all(
+        item.groupIds.map((groupId) =>
+          modifyGrammarGroupMembers(item.language, groupId, [saved.id], "add"),
+        ),
+      );
+    }
     // `item.groupNames` already reflects the caller's full intent — the form's
     // selected-groups checkboxes (defaulted to the latest group unless the
     // user changed them) plus any not-yet-existing draft group names.
