@@ -128,8 +128,7 @@ async function searchWordIndex(language: string, searchTerm: string): Promise<st
   for (const doc of snap.docs) {
     const d = doc.data();
     const term = (d.term as string || "").toLowerCase();
-    const transliteration = ((d.transliteration ?? d.pinyin) as string || "").toLowerCase();
-    if (term.includes(q) || transliteration.includes(q)) {
+    if (term.includes(q)) {
       matchingIds.push(d.id as string);
     }
   }
@@ -152,30 +151,9 @@ function applyFilters(
   }
   if (filters.search) {
     const q = filters.search.toLowerCase();
-    results = results.filter(
-      (w) =>
-        w.term.toLowerCase().includes(q) ||
-        w.transliteration?.toLowerCase().includes(q) ||
-        w.definitions.some((m) => Object.values(m.text).some((d) => d.toLowerCase().includes(q)))
-    );
-    results = sortByPrimaryLanguageMatch(results, q, (w) => w.definitions.flatMap((m) => [m.text.en, m.text.zh]));
+    results = results.filter((w) => w.term.toLowerCase().includes(q));
   }
   return results;
-}
-
-/** Stable-sorts items so those matching `q` in an English/Chinese field (via `getPrimaryFields`) come first. */
-function sortByPrimaryLanguageMatch<T>(items: T[], q: string, getPrimaryFields: (item: T) => (string | undefined)[]): T[] {
-  return items
-    .map((item, index) => ({
-      item,
-      index,
-      primary: getPrimaryFields(item).some((f) => f?.toLowerCase().includes(q)),
-    }))
-    .sort((a, b) => {
-      if (a.primary !== b.primary) return a.primary ? -1 : 1;
-      return a.index - b.index;
-    })
-    .map((x) => x.item);
 }
 
 function paginateResults(results: Word[], page: number, limit: number): PaginatedResult<Word> {
@@ -1512,17 +1490,7 @@ export async function getGrammarItems(
 
   if (filters?.search) {
     const q = filters.search.toLowerCase();
-    results = results.filter(
-      (item) =>
-        (item.statement ?? "").toLowerCase().includes(q) ||
-        item.descriptions?.some((d) =>
-          Object.values(d.text ?? {}).some((t) => (t as string).toLowerCase().includes(q))
-        ) ||
-        item.words?.some((w: string) => w.toLowerCase().includes(q))
-    );
-    results = sortByPrimaryLanguageMatch(results, q, (item) =>
-      item.descriptions?.flatMap((d) => [d.text?.en, d.text?.zh]) ?? []
-    );
+    results = results.filter((item) => (item.statement ?? "").toLowerCase().includes(q));
   }
 
   const total = results.length;
