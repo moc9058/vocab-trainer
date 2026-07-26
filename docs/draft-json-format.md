@@ -26,6 +26,8 @@ textbook-content-extractor（ローカルOCRツール）のアウトプットと
 
 アップロードUIは、ファイルの `language` が現在表示中の言語と一致しない場合はエラーにする（誤アップロード防止）。
 
+**グループはJSONに含めない。** 単語・文法とも、下書き自体はグループ情報を持たない。追加先グループは登録時にUI側（下書きパネルのグループセレクター）で指定する。デフォルトは**最新作成のグループ**で、セレクターで変更できる。ファイルに `groups` が入っていても無視される。
+
 ## kind: "grammar-drafts"（文法下書き）
 
 `POST /api/grammar/:language/drafts` の入力にそのまま対応する。
@@ -47,7 +49,6 @@ textbook-content-extractor（ローカルOCRツール）のアウトプットと
       ],
       "level": "HSK4",
       "tags": [],
-      "groups": ["第3課"],
       "sourceImage": "page_012.png"
     }
   ]
@@ -64,7 +65,6 @@ textbook-content-extractor（ローカルOCRツール）のアウトプットと
 | `examples` | 任意 | {sentence, translation}[] | 例文。ピンイン・分かち書きは本登録時に生成されるため含めない |
 | `level` | 任意 | string | HSK等のレベル表記 |
 | `tags` | 任意 | string[] | タグ |
-| `groups` | 任意 | string[] | 追加先の文法グループ名（`grammar_groups.name`）。IDではなく**名前**で指定する。下書きを本登録（保存）した時点で解決され、同名グループが無ければ自動作成される |
 | `sourceImage` | 任意 | string | 元画像ファイル名（トレーサビリティ用） |
 
 ## kind: "word-drafts"（単語下書き）
@@ -92,7 +92,6 @@ textbook-content-extractor（ローカルOCRツール）のアウトプットと
       ],
       "level": "HSK4",
       "topics": [],
-      "groups": ["第3課"],
       "sourceImage": "page_012.png"
     }
   ]
@@ -109,7 +108,6 @@ textbook-content-extractor（ローカルOCRツール）のアウトプットと
 | `examples` | 任意 | {sentence, translation, segments?}[] | 例文。`segments` はチップ（分かち書き）情報：文中の語セグメント**文字列**を文順に並べた配列（中国語のみ有効。`Example.segments` のオブジェクト形式とは別物）。確認モーダルでスペース区切りのチップ表示に復元され、本登録時に smart-add の `userSplits` として渡り `example_sentences.segments`（ピンイン・語ID付き）の生成に使われる。省略時はチップ分割なし（本登録時にLLMが分かち書きを生成） |
 | `level` | 任意 | string | HSK/JLPT等 |
 | `topics` | 任意 | string[] | `Word.topics`（`TOPICS` 定数のいずれか） |
-| `groups` | 任意 | string[] | 追加先の単語グループ名（`word_groups.name`）。文法と同じく名前で指定し、本登録時に解決される（既存グループは選択済みで表示、無ければ保存時に自動作成） |
 | `sourceImage` | 任意 | string | 元画像ファイル名 |
 
 ## 型の対応

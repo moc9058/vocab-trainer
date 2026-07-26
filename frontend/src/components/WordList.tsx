@@ -7,7 +7,7 @@ import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord }
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
 import SmartAddWordModal from "./SmartAddWordModal";
-import { displayTranslation, type Word, type WordDraft, type PaginatedResult, type WordGroup } from "../types";
+import { displayTranslation, latestWordGroup, type Word, type WordDraft, type PaginatedResult, type WordGroup } from "../types";
 import { urlLanguageToIsoCode } from "../settings/defaults";
 
 type SmartAddPayload = {
@@ -104,6 +104,11 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const [uploadStatus, setUploadStatus] = useState<{ ok: boolean; message: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const jsonFileInputRef = useRef<HTMLInputElement>(null);
+  // Registration target for the drafts panel's one-click "Register" button.
+  // Defaults to the most recently CREATED group; a user pick sticks (the ref
+  // stops the group-refresh effect from resetting it).
+  const [draftGroupId, setDraftGroupId] = useState<string>("");
+  const draftGroupTouchedRef = useRef(false);
 
   // refreshSignal keeps the panel in sync with the queue: successful
   // registrations delete their draft, failed queue adds rescue into a new one.
@@ -149,7 +154,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           ...(Array.isArray(d.examples) ? { examples: d.examples as WordDraft["examples"] } : {}),
           ...(typeof d.level === "string" && d.level ? { level: d.level } : {}),
           ...(Array.isArray(d.topics) ? { topics: d.topics as string[] } : {}),
-          ...(Array.isArray(d.groups) ? { groups: (d.groups as string[]).filter((g) => typeof g === "string" && g.trim()) } : {}),
           ...(typeof d.sourceImage === "string" && d.sourceImage ? { sourceImage: d.sourceImage } : {}),
         };
       });
@@ -162,6 +166,54 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     } finally {
       setUploading(false);
     }
+  }
+
+  // Keep the draft registration target on the latest group until the user picks
+  // one (also re-defaults when the language, and so the group list, changes).
+  useEffect(() => {
+    if (draftGroupTouchedRef.current) return;
+    setDraftGroupId(latestWordGroup(groups)?.id ?? "");
+  }, [groups]);
+
+  useEffect(() => {
+    draftGroupTouchedRef.current = false;
+  }, [language]);
+
+  // One-click registration: skip the review modal and enqueue the draft as-is.
+  // The queue attaches `draftGroupId` and deletes the draft only on full
+  // success, so a failed add leaves the draft in place for a retry/review.
+  function handleRegisterDraft(draft: WordDraft) {
+    if (!onQueue) return;
+    const isChinese = language === "chinese";
+    const examples = (draft.examples ?? [])
+      .filter((ex) => ex.sentence.trim())
+      .map((ex) => {
+        if (!isChinese) return { sentence: ex.sentence.trim(), translation: ex.translation };
+        // Chip splits come from the draft's `segments`; fall back to spaces in
+        // the sentence for hand-written JSON that marks them that way.
+        const spaceSplits = /[\s　]/.test(ex.sentence)
+          ? (ex.sentence.match(/[\p{Script=Han}a-zA-Z]+/gu) ?? [])
+          : [];
+        const splits = ex.segments && ex.segments.length >= 2 ? ex.segments : spaceSplits;
+        const sentence = ex.sentence.replace(/[\s　]+/g, "");
+        return splits.length >= 2
+          ? { sentence, translation: ex.translation, userSplits: splits }
+          : { sentence, translation: ex.translation };
+      });
+    onQueue(
+      draft.term,
+      language,
+      {
+        term: draft.term.trim(),
+        transliteration: draft.transliteration?.trim() || undefined,
+        definitions: draft.definitions,
+        topics: draft.topics && draft.topics.length > 0 ? draft.topics : undefined,
+        examples: examples.length > 0 ? examples : undefined,
+        level: draft.level || undefined,
+        groupIds: draftGroupId ? [draftGroupId] : [],
+      },
+      { draftId: draft.id },
+    );
   }
 
   async function handleDiscardDraft(draftId: string) {
@@ -897,15 +949,37 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
         {/* Uploaded drafts panel */}
         {drafts.length > 0 && (
           <div className="mb-4 rounded-lg border border-amber-700/60 bg-amber-950/30">
-            <button
-              onClick={() => setDraftsOpen((o) => !o)}
-              className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-amber-200"
-            >
-              <span>
-                {t("wordDrafts")} ({drafts.length})
-              </span>
-              <span className="text-xs">{draftsOpen ? "▾" : "▸"}</span>
-            </button>
+            <div className="flex items-center gap-2 px-3 py-2">
+              <button
+                onClick={() => setDraftsOpen((o) => !o)}
+                className="flex flex-1 items-center justify-between text-sm font-medium text-amber-200"
+              >
+                <span>
+                  {t("wordDrafts")} ({drafts.length})
+                </span>
+                <span className="text-xs">{draftsOpen ? "▾" : "▸"}</span>
+              </button>
+              {/* Target group for the per-row "Register" button (defaults to
+                  the newest group). */}
+              {onQueue && (
+                <select
+                  value={draftGroupId}
+                  onChange={(e) => {
+                    draftGroupTouchedRef.current = true;
+                    setDraftGroupId(e.target.value);
+                  }}
+                  title={t("registerToGroup")}
+                  className="max-w-[10rem] rounded border border-amber-700/60 bg-gray-800 px-2 py-1 text-xs text-gray-200"
+                >
+                  <option value="">{t("noGroupOption")}</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
             {draftsOpen && (
               <div className="space-y-2 px-3 pb-3">
                 {drafts.map((draft) => {
@@ -930,7 +1004,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                         </p>
                         <p className="truncate text-xs text-gray-400">{firstDef}</p>
                         <p className="text-xs text-gray-500">
-                          {draft.groups && draft.groups.length > 0 ? `${draft.groups.join(", ")} · ` : ""}
                           {draft.sourceImage ? `${draft.sourceImage} · ` : ""}
                           {draft.createdAt ? new Date(draft.createdAt).toLocaleDateString() : ""}
                         </p>
@@ -942,6 +1015,14 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                         </span>
                       ) : (
                         <>
+                          {onQueue && (
+                            <button
+                              onClick={() => handleRegisterDraft(draft)}
+                              className="rounded bg-emerald-600 px-3 py-1.5 text-xs text-white hover:bg-emerald-500"
+                            >
+                              {t("registerDraft")}
+                            </button>
+                          )}
                           <button
                             onClick={() => setReviewingDraft(draft)}
                             className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500"
@@ -1158,8 +1239,8 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       {/* Draft review modal — create mode with prefill.
           onDraftSave (the "Save Draft" button / Enter) writes edits back to the
           draft; the explicit "Register" button enqueues into the shared word
-          queue (missing group names + draftId ride along so the QUEUE attaches
-          groups and deletes the draft on success) and the modal closes
+          queue (the drafts panel's selected group + draftId ride along so the
+          QUEUE attaches groups and deletes the draft on success) and the modal closes
           immediately so the next draft can be reviewed. Without onQueue the
           modal falls back to awaiting smartAddWord directly, where onSave —
           firing only on success — is the delete-draft signal. */}
@@ -1174,7 +1255,9 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
             level: reviewingDraft.level,
             topics: reviewingDraft.topics,
           }}
-          initialGroups={reviewingDraft.groups}
+          initialGroups={
+            draftGroupId ? [groups.find((g) => g.id === draftGroupId)?.name ?? ""].filter(Boolean) : undefined
+          }
           draftId={reviewingDraft.id}
           onQueue={onQueue}
           pendingTerms={pendingTerms}

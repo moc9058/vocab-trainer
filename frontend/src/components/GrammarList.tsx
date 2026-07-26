@@ -12,7 +12,7 @@ import {
   uploadGrammarDrafts,
 } from "../api/grammar";
 import { LEVEL_OPTIONS } from "../constants/levels";
-import type { Grammar, GrammarDraft, GrammarGroup } from "../types";
+import { latestGrammarGroup, type Grammar, type GrammarDraft, type GrammarGroup } from "../types";
 import GrammarFormModal from "./GrammarFormModal";
 import GroupPickerModal from "./GroupPickerModal";
 import RubyText from "./RubyText";
@@ -261,6 +261,10 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
   const [uploadStatus, setUploadStatus] = useState<{ ok: boolean; message: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const jsonFileInputRef = useRef<HTMLInputElement>(null);
+  // Registration target for the drafts panel's one-click "Register" button.
+  // Defaults to the most recently CREATED group; a user pick sticks.
+  const [draftGroupId, setDraftGroupId] = useState<string>("");
+  const draftGroupTouchedRef = useRef(false);
 
   const levelOptions = LEVEL_OPTIONS[language];
 
@@ -268,6 +272,15 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
     getGrammarGroups(language)
       .then(setGroups)
       .catch(() => setGroups([]));
+  }, [language]);
+
+  useEffect(() => {
+    if (draftGroupTouchedRef.current) return;
+    setDraftGroupId(latestGrammarGroup(groups)?.id ?? "");
+  }, [groups]);
+
+  useEffect(() => {
+    draftGroupTouchedRef.current = false;
   }, [language]);
 
   const fetchItems = useCallback(() => {
@@ -336,7 +349,6 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
           ...(Array.isArray(d.examples) ? { examples: d.examples as GrammarDraft["examples"] } : {}),
           ...(typeof d.level === "string" && d.level ? { level: d.level } : {}),
           ...(Array.isArray(d.tags) ? { tags: d.tags as string[] } : {}),
-          ...(Array.isArray(d.groups) ? { groups: (d.groups as string[]).filter((g) => typeof g === "string" && g.trim()) } : {}),
           ...(typeof d.sourceImage === "string" && d.sourceImage ? { sourceImage: d.sourceImage } : {}),
         };
       });
@@ -349,6 +361,43 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
     } finally {
       setUploading(false);
     }
+  }
+
+  // One-click registration: skip the review modal and enqueue the draft as-is.
+  // The queue attaches the selected group and deletes the draft only on full
+  // success, so a failed add leaves the draft in place for a retry/review.
+  function handleRegisterDraft(draft: GrammarDraft) {
+    if (!onGrammarQueue) return;
+    const isChinese = language === "chinese";
+    const examples = (draft.examples ?? [])
+      .filter((ex) => ex.sentence.trim())
+      .map((ex) => {
+        const trimmed = ex.sentence.trim();
+        if (!isChinese) return { sentence: trimmed, translation: ex.translation };
+        // Grammar drafts keep the user's chip splits as spaces in the sentence.
+        const sentence = trimmed.replace(/[\s　]+/g, "");
+        const splits = /[\s　]/.test(trimmed)
+          ? (trimmed.match(/[\p{Script=Han}a-zA-Z]+/gu) ?? [])
+          : [];
+        return splits.length >= 2
+          ? { sentence, translation: ex.translation, userSplits: splits }
+          : { sentence, translation: ex.translation };
+      });
+    const groupName = groups.find((g) => g.id === draftGroupId)?.name;
+    onGrammarQueue(
+      draft.statement,
+      language,
+      {
+        id: `grammar-${language}-${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
+        statement: draft.statement.trim(),
+        transliteration: draft.transliteration?.trim() || undefined,
+        descriptions: draft.descriptions ?? [],
+        examples: examples.length > 0 ? examples : undefined,
+        level: draft.level || undefined,
+        tags: draft.tags && draft.tags.length > 0 ? draft.tags : undefined,
+      },
+      { draftId: draft.id, ...(groupName ? { groupNames: [groupName] } : {}) },
+    );
   }
 
   async function handleDiscardDraft(draftId: string) {
@@ -520,15 +569,37 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
       {/* OCR drafts panel */}
       {drafts.length > 0 && (
         <div className="mb-4 rounded-lg border border-amber-700/60 bg-amber-950/30">
-          <button
-            onClick={() => setDraftsOpen((o) => !o)}
-            className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-amber-200"
-          >
-            <span>
-              {t("grammarDrafts")} ({drafts.length})
-            </span>
-            <span className="text-xs">{draftsOpen ? "▾" : "▸"}</span>
-          </button>
+          <div className="flex items-center gap-2 px-3 py-2">
+            <button
+              onClick={() => setDraftsOpen((o) => !o)}
+              className="flex flex-1 items-center justify-between text-sm font-medium text-amber-200"
+            >
+              <span>
+                {t("grammarDrafts")} ({drafts.length})
+              </span>
+              <span className="text-xs">{draftsOpen ? "▾" : "▸"}</span>
+            </button>
+            {/* Target group for the per-row "Register" button (defaults to the
+                newest group). */}
+            {onGrammarQueue && (
+              <select
+                value={draftGroupId}
+                onChange={(e) => {
+                  draftGroupTouchedRef.current = true;
+                  setDraftGroupId(e.target.value);
+                }}
+                title={t("registerToGroup")}
+                className="max-w-[10rem] rounded border border-amber-700/60 bg-gray-800 px-2 py-1 text-xs text-gray-200"
+              >
+                <option value="">{t("noGroupOption")}</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
           {draftsOpen && (
             <div className="space-y-2 px-3 pb-3">
               {drafts.map((draft) => {
@@ -554,7 +625,6 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
                       )}
                       <p className="truncate text-xs text-gray-400">{firstDesc}</p>
                       <p className="text-xs text-gray-500">
-                        {draft.groups && draft.groups.length > 0 ? `${draft.groups.join(", ")} · ` : ""}
                         {draft.sourceImage ? `${draft.sourceImage} · ` : ""}
                         {draft.createdAt ? new Date(draft.createdAt).toLocaleDateString() : ""}
                       </p>
@@ -566,6 +636,14 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
                       </span>
                     ) : (
                       <>
+                        {onGrammarQueue && (
+                          <button
+                            onClick={() => handleRegisterDraft(draft)}
+                            className="rounded bg-emerald-600 px-3 py-1.5 text-xs text-white hover:bg-emerald-500"
+                          >
+                            {t("registerDraft")}
+                          </button>
+                        )}
                         <button
                           onClick={() => setReviewingDraft(draft)}
                           className="rounded bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500"
@@ -740,8 +818,8 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
       {/* Draft review modal — create mode with prefill.
           onDraftSave (the "Save Draft" button / Enter) writes edits back to the
           draft; the explicit "Register" button enqueues into the shared grammar
-          queue (groupNames + draftId ride along so the QUEUE attaches groups and
-          deletes the draft on success) and the modal closes immediately so the
+          queue (the drafts panel's selected group + draftId ride along so the
+          QUEUE attaches groups and deletes the draft on success) and the modal closes immediately so the
           next draft can be reviewed. Without onGrammarQueue the modal falls back
           to awaiting smartAddGrammarItem directly, where onSave — firing only on
           success — is the delete-draft signal. */}
@@ -756,7 +834,9 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
             level: reviewingDraft.level,
             tags: reviewingDraft.tags,
           }}
-          initialGroups={reviewingDraft.groups}
+          initialGroups={
+            draftGroupId ? [groups.find((g) => g.id === draftGroupId)?.name ?? ""].filter(Boolean) : undefined
+          }
           onGrammarQueue={
             onGrammarQueue
               ? (statement, lang, payload, opts) =>

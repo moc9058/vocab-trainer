@@ -96,13 +96,13 @@ function respaceByUserSplits(sentence: string, splits?: string[]): string {
 }
 
 // A failed create would silently lose the user's input, so it is preserved as a
-// grammar draft for review/retry. Draft-originated items never reach this: their
-// source draft is only deleted on success and thus still exists.
+// grammar draft for review/retry. Drafts no longer carry group targets — the
+// group is chosen again at registration time. Draft-originated items never reach
+// this: their source draft is only deleted on success and thus still exists.
 async function saveFailedCreateAsDraft(
   item: Extract<QueueItem, { type: "create" }>,
 ): Promise<void> {
   const p = item.payload;
-  const names = [...new Set((item.groupNames ?? []).map((n) => n.trim()).filter(Boolean))];
   const draft: Omit<GrammarDraft, "id" | "language" | "createdAt"> = {
     statement: p.statement,
     ...(p.transliteration ? { transliteration: p.transliteration } : {}),
@@ -117,7 +117,6 @@ async function saveFailedCreateAsDraft(
       : {}),
     ...(p.level ? { level: p.level } : {}),
     ...(p.tags?.length ? { tags: p.tags } : {}),
-    ...(names.length ? { groups: names } : {}),
   };
   await uploadGrammarDrafts(item.language, [draft]);
 }

@@ -44,9 +44,10 @@ interface Props {
   /** Prefill for reviewing an uploaded word draft. The submit still goes
    *  through the normal smart-add path. */
   initialItem?: Pick<WordDraft, "term" | "transliteration" | "definitions" | "examples" | "level" | "topics">;
-  /** Word-group NAMES (from a draft's `groups`): existing ones are preselected;
-   *  missing ones are created and joined on save (directly on the non-queue
-   *  path; via the queue worker's `groupNames` on the queue path). */
+  /** Word-group NAMES to preselect (draft review passes the drafts panel's
+   *  selected registration group): existing ones are preselected; missing ones
+   *  are created and joined on save (directly on the non-queue path; via the
+   *  queue worker's `groupNames` on the queue path). */
   initialGroups?: string[];
   /** Draft review: the draft under review. Queue-mode registration threads it
    *  through so the queue deletes the draft only after full success, and the

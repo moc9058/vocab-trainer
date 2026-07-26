@@ -105,8 +105,6 @@ export interface WordDraft {
   examples?: { sentence: string; translation: string; segments?: string[] }[];
   level?: string;
   topics?: string[];
-  /** Target word-group NAMES (not IDs) — resolved (and auto-created) when the draft is promoted. */
-  groups?: string[];
   /** Original upload filename, for traceability. */
   sourceImage?: string;
   /** Set at bulk-upload time when a live word with the same `term` already exists in the DB. */
@@ -229,8 +227,6 @@ export interface GrammarDraft {
   examples?: GrammarExample[];
   level?: string;
   tags?: string[];
-  /** Target grammar-group NAMES (not IDs) — resolved (and auto-created) when the draft is promoted. */
-  groups?: string[];
   /** Original upload filename, for traceability. */
   sourceImage?: string;
   /** Set at bulk-upload time when a live grammar item with the same `statement` already exists in the DB. */

@@ -92,27 +92,13 @@ async function processItem(item: QueueItem): Promise<void> {
 // A failed create would silently lose the user's input (segment-chip adds have
 // no other record), so it is preserved as a word draft for review/retry. Draft
 // examples carry the chip segmentation as `segments` (plain segment texts) so
-// the review modal restores the splits. Draft-originated items never reach
-// this: their source draft is only deleted on success and thus still exists.
+// the review modal restores the splits. Drafts no longer carry group targets —
+// the group is chosen again at registration time. Draft-originated items never
+// reach this: their source draft is only deleted on success and thus still exists.
 async function saveFailedCreateAsDraft(
   item: Extract<QueueItem, { type: "create" }>,
 ): Promise<void> {
   const p = item.payload;
-  let groupNames = item.groupNames ?? [];
-  const groupIds = p.groupIds ?? [];
-  if (groupIds.length > 0) {
-    try {
-      const groups = await getGroups(item.language);
-      const nameById = new Map(groups.map((g) => [g.id, g.name]));
-      groupNames = [
-        ...groupNames,
-        ...groupIds.map((id) => nameById.get(id)).filter((n): n is string => !!n),
-      ];
-    } catch {
-      // Groups are best-effort on the rescue path — keep the draft itself.
-    }
-  }
-  const names = [...new Set(groupNames.map((n) => n.trim()).filter(Boolean))];
   const draft: Omit<WordDraft, "id" | "language" | "createdAt"> = {
     term: p.term,
     ...(p.transliteration ? { transliteration: p.transliteration } : {}),
@@ -128,7 +114,6 @@ async function saveFailedCreateAsDraft(
       : {}),
     ...(p.level ? { level: p.level } : {}),
     ...(p.topics?.length ? { topics: p.topics } : {}),
-    ...(names.length ? { groups: names } : {}),
   };
   await uploadWordDrafts(item.language, [draft]);
 }

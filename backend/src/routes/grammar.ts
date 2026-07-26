@@ -419,7 +419,6 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
                   examples: { type: "array" },
                   level: { type: "string" },
                   tags: { type: "array", items: { type: "string" } },
-                  groups: { type: "array", items: { type: "string" } },
                   sourceImage: { type: "string" },
                 },
               },
@@ -437,15 +436,20 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
       const existingStatements = new Set(
         (await getGrammarStatements(language)).map((s) => s.trim())
       );
-      const drafts: GrammarDraft[] = request.body.drafts.map((d, i) => ({
-        ...d,
-        language,
-        createdAt: now,
-        ...(existingStatements.has(d.statement.trim()) ? { duplicate: true } : {}),
-        // ts (13-digit epoch, lexically = chronologically sortable) + zero-padded
-        // index preserves upload order within a batch; see getGrammarDrafts sort.
-        id: `draft-${language}-${ts}-${String(i).padStart(4, "0")}-${Math.random().toString(36).slice(2, 8)}`,
-      }));
+      const drafts: GrammarDraft[] = request.body.drafts.map((d, i) => {
+        // Drafts no longer carry a group target — the registration group is
+        // picked in the UI — so a legacy `groups` field is dropped here.
+        const { groups: _groups, ...rest } = d as typeof d & { groups?: string[] };
+        return {
+          ...rest,
+          language,
+          createdAt: now,
+          ...(existingStatements.has(d.statement.trim()) ? { duplicate: true } : {}),
+          // ts (13-digit epoch, lexically = chronologically sortable) + zero-padded
+          // index preserves upload order within a batch; see getGrammarDrafts sort.
+          id: `draft-${language}-${ts}-${String(i).padStart(4, "0")}-${Math.random().toString(36).slice(2, 8)}`,
+        };
+      });
       await addGrammarDrafts(drafts);
       return reply.status(201).send({ created: drafts.length, drafts });
     }
@@ -479,7 +483,6 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
             examples: { type: "array" },
             level: { type: "string" },
             tags: { type: "array", items: { type: "string" } },
-            groups: { type: "array", items: { type: "string" } },
             sourceImage: { type: "string" },
           },
         },

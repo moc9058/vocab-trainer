@@ -1032,7 +1032,6 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
                   examples: { type: "array" },
                   level: { type: "string" },
                   topics: { type: "array", items: { type: "string" } },
-                  groups: { type: "array", items: { type: "string" } },
                   sourceImage: { type: "string" },
                 },
               },
@@ -1050,15 +1049,20 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       const existingTerms = new Set(
         (await lookupWordsByTerms(language, request.body.drafts.map((d) => d.term))).map((e) => e.term)
       );
-      const drafts: WordDraft[] = request.body.drafts.map((d, i) => ({
-        ...d,
-        language,
-        createdAt: now,
-        ...(existingTerms.has(d.term) ? { duplicate: true } : {}),
-        // ts (13-digit epoch, lexically = chronologically sortable) + zero-padded
-        // index preserves upload order within a batch; see getWordDrafts sort.
-        id: `draft-${language}-${ts}-${String(i).padStart(4, "0")}-${Math.random().toString(36).slice(2, 8)}`,
-      }));
+      const drafts: WordDraft[] = request.body.drafts.map((d, i) => {
+        // Drafts no longer carry a group target — the registration group is
+        // picked in the UI — so a legacy `groups` field is dropped here.
+        const { groups: _groups, ...rest } = d as typeof d & { groups?: string[] };
+        return {
+          ...rest,
+          language,
+          createdAt: now,
+          ...(existingTerms.has(d.term) ? { duplicate: true } : {}),
+          // ts (13-digit epoch, lexically = chronologically sortable) + zero-padded
+          // index preserves upload order within a batch; see getWordDrafts sort.
+          id: `draft-${language}-${ts}-${String(i).padStart(4, "0")}-${Math.random().toString(36).slice(2, 8)}`,
+        };
+      });
       await addWordDrafts(drafts);
       return reply.status(201).send({ created: drafts.length, drafts });
     }
@@ -1092,7 +1096,6 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             examples: { type: "array" },
             level: { type: "string" },
             topics: { type: "array", items: { type: "string" } },
-            groups: { type: "array", items: { type: "string" } },
             sourceImage: { type: "string" },
           },
         },
