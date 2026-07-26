@@ -158,8 +158,24 @@ function applyFilters(
         w.transliteration?.toLowerCase().includes(q) ||
         w.definitions.some((m) => Object.values(m.text).some((d) => d.toLowerCase().includes(q)))
     );
+    results = sortByPrimaryLanguageMatch(results, q, (w) => w.definitions.flatMap((m) => [m.text.en, m.text.zh]));
   }
   return results;
+}
+
+/** Stable-sorts items so those matching `q` in an English/Chinese field (via `getPrimaryFields`) come first. */
+function sortByPrimaryLanguageMatch<T>(items: T[], q: string, getPrimaryFields: (item: T) => (string | undefined)[]): T[] {
+  return items
+    .map((item, index) => ({
+      item,
+      index,
+      primary: getPrimaryFields(item).some((f) => f?.toLowerCase().includes(q)),
+    }))
+    .sort((a, b) => {
+      if (a.primary !== b.primary) return a.primary ? -1 : 1;
+      return a.index - b.index;
+    })
+    .map((x) => x.item);
 }
 
 function paginateResults(results: Word[], page: number, limit: number): PaginatedResult<Word> {
@@ -1503,6 +1519,9 @@ export async function getGrammarItems(
           Object.values(d.text ?? {}).some((t) => (t as string).toLowerCase().includes(q))
         ) ||
         item.words?.some((w: string) => w.toLowerCase().includes(q))
+    );
+    results = sortByPrimaryLanguageMatch(results, q, (item) =>
+      item.descriptions?.flatMap((d) => [d.text?.en, d.text?.zh]) ?? []
     );
   }
 
