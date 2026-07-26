@@ -31,13 +31,16 @@ import {
 import { callLLMWithSchema, stripMarkdownFences, fillSegmentPinyin } from "../llm.js";
 import type { Grammar, GrammarDraft, GrammarExample, Meaning, ExampleSentence, GrammarSettings } from "../types.js";
 import {
-  ALL_DEFINITION_LANGUAGES,
   needsMoreTranslations,
   generateMissingExampleTranslations,
   type MissingTranslationItem,
 } from "../exampleTranslations.js";
 
 type ExampleSegment = { text: string; transliteration?: string; id?: string };
+
+// Unlike vocab (which enriches definitions to ALL_DEFINITION_LANGUAGES),
+// grammar descriptions are Japanese-only by design.
+const GRAMMAR_DEFINITION_LANGUAGES = ["ja"] as const;
 
 function fillPlaceholders(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
@@ -281,7 +284,10 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
       const { language } = request.params;
       const body = request.body;
 
-      const defLangStr = ALL_DEFINITION_LANGUAGES.map((l) => `"${l}": "..."`).join(", ");
+      // Grammar descriptions are Japanese-only by design (unlike vocab, which
+      // enriches to all of ALL_DEFINITION_LANGUAGES) — only "ja" is ever
+      // requested from or accepted out of the LLM here.
+      const defLangStr = GRAMMAR_DEFINITION_LANGUAGES.map((l) => `"${l}": "..."`).join(", ");
       const promptTemplate = grammarConfig.smartAddPrompts[language]
         ?? grammarConfig.smartAddPrompts["default"];
       const systemPrompt = fillPlaceholders(promptTemplate, {
@@ -309,9 +315,14 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
       // codes from the LLM's same-index description.
       const mergedDescs: Meaning[] = body.descriptions.map((userDesc, i) => {
         const llmDesc = llmDescs[i];
-        const mergedText: Record<string, string> = { ...(llmDesc?.text ?? {}) };
-        for (const [lang, text] of Object.entries(userDesc.text ?? {})) {
-          if (text && text.trim()) mergedText[lang] = text;
+        const mergedText: Record<string, string> = {};
+        for (const lang of GRAMMAR_DEFINITION_LANGUAGES) {
+          const userText = userDesc.text?.[lang];
+          if (userText && userText.trim()) {
+            mergedText[lang] = userText;
+          } else if (llmDesc?.text?.[lang]) {
+            mergedText[lang] = llmDesc.text[lang];
+          }
         }
         return {
           partOfSpeech: userDesc.partOfSpeech,
