@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
-import { getFilters, getGroups } from "../api/vocab";
+import { getGroups } from "../api/vocab";
 import { getFlaggedWordIds } from "../api/flagged";
 import { categoryGroups, type WordGroup } from "../types";
 import { isWeightValid, parseWeightInput, scaleWeightRecord } from "../utils/weightInput";
@@ -29,29 +29,6 @@ interface Props {
   showFlaggedScope?: boolean;
 }
 
-function AndDivider() {
-  return (
-    <>
-      {/* Vertical divider on desktop */}
-      <div className="hidden md:flex flex-col items-center justify-center px-1 flex-shrink-0">
-        <div className="flex-1 w-px bg-gray-700" />
-        <span className="text-xs font-bold text-gray-500 bg-gray-750 py-1.5 px-2 rounded border border-gray-600 my-2 select-none">
-          AND
-        </span>
-        <div className="flex-1 w-px bg-gray-700" />
-      </div>
-      {/* Horizontal divider on mobile */}
-      <div className="flex md:hidden items-center gap-2 py-1 flex-shrink-0">
-        <div className="flex-1 h-px bg-gray-700" />
-        <span className="text-xs font-bold text-gray-500 bg-gray-750 py-1 px-2 rounded border border-gray-600 select-none">
-          AND
-        </span>
-        <div className="flex-1 h-px bg-gray-700" />
-      </div>
-    </>
-  );
-}
-
 export default function QuizFilterModal({
   language,
   onStart,
@@ -63,13 +40,7 @@ export default function QuizFilterModal({
   showFlaggedScope = false,
 }: Props) {
   const { t } = useI18n();
-  const [allLevels, setAllLevels] = useState<string[]>([]);
-  const [allTopics, setAllTopics] = useState<string[]>([]);
-  const [allCategories, setAllCategories] = useState<string[]>([]);
   const [allGroups, setAllGroups] = useState<WordGroup[]>([]);
-  const [selectedLevels, setSelectedLevels] = useState<Set<string>>(new Set());
-  const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
   const [groupWeights, setGroupWeights] = useState<Record<string, string>>({});
   // Blank = feature off (mastered words stay mixed in as usual). A number activates the
@@ -82,22 +53,15 @@ export default function QuizFilterModal({
   const [printAllMode, setPrintAllMode] = useState<boolean>(false);
 
   useEffect(() => {
-    Promise.allSettled([getFilters(language), getGroups(language)])
-      .then(([filtersResult, groupsResult]) => {
-        if (filtersResult.status === "fulfilled") {
-          const { levels, topics, categories } = filtersResult.value;
-          setAllLevels(levels);
-          setAllTopics(topics);
-          setAllCategories(categories);
-        }
-        if (groupsResult.status === "fulfilled") {
-          // Word quiz draws from the Group A universe; Group B has its own quiz.
-          const aGroups = categoryGroups(groupsResult.value as WordGroup[], "A");
-          setAllGroups(aGroups);
-          setSelectedGroupIds(new Set(aGroups.map((g: WordGroup) => g.id)));
-          setGroupWeights(Object.fromEntries(aGroups.map((g: WordGroup) => [g.id, "1"])));
-        }
+    getGroups(language)
+      .then((groups) => {
+        // Word quiz draws from the Group A universe; Group B has its own quiz.
+        const aGroups = categoryGroups(groups as WordGroup[], "A");
+        setAllGroups(aGroups);
+        setSelectedGroupIds(new Set(aGroups.map((g: WordGroup) => g.id)));
+        setGroupWeights(Object.fromEntries(aGroups.map((g: WordGroup) => [g.id, "1"])));
       })
+      .catch(() => setAllGroups([]))
       .finally(() => setLoading(false));
   }, [language]);
 
@@ -121,15 +85,7 @@ export default function QuizFilterModal({
     setFn(selected.size === all.length ? new Set() : new Set(all));
   }
 
-  const hasSelection =
-    selectedLevels.size > 0 || selectedTopics.size > 0 || selectedCategories.size > 0 || selectedGroupIds.size > 0;
-
-  const visibleColumns = [
-    allLevels.length > 0 ? "levels" : null,
-    allTopics.length > 0 ? "topics" : null,
-    allCategories.length > 0 ? "categories" : null,
-    "groups",
-  ].filter(Boolean);
+  const hasSelection = selectedGroupIds.size > 0;
 
   // When the standard quiz's flagged toggle is on, use the locally-fetched flagged IDs;
   // otherwise honor the prop-driven mode (used by Flagged Review).
@@ -160,9 +116,9 @@ export default function QuizFilterModal({
     if (correctWeightActive) raws.__correct__ = correctWeightDraft;
     const scaled = scaleWeightRecord(raws);
     return {
-      topics: [...selectedTopics],
-      categories: [...selectedCategories],
-      levels: [...selectedLevels],
+      topics: [],
+      categories: [],
+      levels: [],
       groupIds: [...selectedGroupIds],
       groupWeights: Object.fromEntries([...selectedGroupIds].map((id) => [id, scaled[`g:${id}`] ?? 1])),
       ...(correctWeightActive ? { correctWeight: scaled.__correct__ } : {}),
@@ -291,114 +247,9 @@ export default function QuizFilterModal({
                 </details>
               )}
             </div>
-
-            {/* Levels column */}
-            {allLevels.length > 0 && (
-              <>
-                <AndDivider />
-                <div className="flex flex-col min-w-0 md:flex-1 md:min-h-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm font-medium text-gray-300">{t("levelsColumn")}</h3>
-                    <span className="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded select-none">OR</span>
-                    <button
-                      onClick={() => toggleAll(allLevels, selectedLevels, setSelectedLevels)}
-                      className="ml-auto text-xs text-blue-400 hover:text-blue-300"
-                    >
-                      {selectedLevels.size === allLevels.length ? t("clearAll") : t("selectAll")}
-                    </button>
-                  </div>
-                  <ul className="space-y-1 md:flex-1 md:overflow-y-auto">
-                    {allLevels.map((level) => (
-                      <li key={level}>
-                        <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={selectedLevels.has(level)}
-                            onChange={() => toggle(selectedLevels, setSelectedLevels, level)}
-                            className="accent-blue-600"
-                          />
-                          {level}
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </>
-            )}
-
-            {/* Topics column */}
-            {allTopics.length > 0 && (
-              <>
-                <AndDivider />
-                <div className="flex flex-col min-w-0 md:flex-1 md:min-h-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm font-medium text-gray-300">{t("topicsColumn")}</h3>
-                    <span className="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded select-none">OR</span>
-                    <button
-                      onClick={() => toggleAll(allTopics, selectedTopics, setSelectedTopics)}
-                      className="ml-auto text-xs text-blue-400 hover:text-blue-300"
-                    >
-                      {selectedTopics.size === allTopics.length ? t("clearAll") : t("selectAll")}
-                    </button>
-                  </div>
-                  <ul className="space-y-1 md:flex-1 md:overflow-y-auto">
-                    {allTopics.map((topic) => (
-                      <li key={topic}>
-                        <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={selectedTopics.has(topic)}
-                            onChange={() => toggle(selectedTopics, setSelectedTopics, topic)}
-                            className="accent-blue-600"
-                          />
-                          {topic}
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </>
-            )}
-
-            {/* Categories column */}
-            {allCategories.length > 0 && (
-              <>
-                <AndDivider />
-                <div className="flex flex-col min-w-0 md:flex-1 md:min-h-0">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm font-medium text-gray-300">{t("grammarColumn")}</h3>
-                    <span className="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded select-none">OR</span>
-                    <button
-                      onClick={() => toggleAll(allCategories, selectedCategories, setSelectedCategories)}
-                      className="ml-auto text-xs text-blue-400 hover:text-blue-300"
-                    >
-                      {selectedCategories.size === allCategories.length ? t("clearAll") : t("selectAll")}
-                    </button>
-                  </div>
-                  <ul className="space-y-1 md:flex-1 md:overflow-y-auto">
-                    {allCategories.map((cat) => (
-                      <li key={cat}>
-                        <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={selectedCategories.has(cat)}
-                            onChange={() => toggle(selectedCategories, setSelectedCategories, cat)}
-                            className="accent-blue-600"
-                          />
-                          {cat}
-                        </label>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </>
-            )}
           </div>
         )}
 
-        {!loading && visibleColumns.length > 1 && (
-          <p className="mt-3 text-xs text-gray-500">{t("filterAndOrHint")}</p>
-        )}
         {!hasSelection && !loading && (
           <p className="mt-1 text-xs text-gray-400">{t("allWordsHint")}</p>
         )}

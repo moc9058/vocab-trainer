@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
-import { getFilters, getGroups } from "../api/vocab";
+import { getGroups } from "../api/vocab";
 import { getGrammarGroups } from "../api/grammar";
 import { getFlaggedWordIds } from "../api/flagged";
 import { categoryGroups, type WordGroup, type GrammarGroup, type GroupCategory } from "../types";
@@ -34,27 +34,6 @@ interface Props {
   showFlaggedToggle?: boolean;
 }
 
-function ColumnDivider() {
-  return (
-    <>
-      <div className="hidden md:flex flex-col items-center justify-center px-1 flex-shrink-0">
-        <div className="flex-1 w-px bg-gray-700" />
-        <span className="text-xs font-bold text-gray-500 bg-gray-750 py-1.5 px-2 rounded border border-gray-600 my-2 select-none">
-          AND
-        </span>
-        <div className="flex-1 w-px bg-gray-700" />
-      </div>
-      <div className="flex md:hidden items-center gap-2 py-1 flex-shrink-0">
-        <div className="flex-1 h-px bg-gray-700" />
-        <span className="text-xs font-bold text-gray-500 bg-gray-750 py-1 px-2 rounded border border-gray-600 select-none">
-          AND
-        </span>
-        <div className="flex-1 h-px bg-gray-700" />
-      </div>
-    </>
-  );
-}
-
 // Domain weight input: how often this domain (word/grammar) is drawn relative to the other.
 // Kept as a raw string so the field can sit blank while retyping; a blank/invalid
 // value blocks quiz generation instead of silently reverting to a default.
@@ -86,52 +65,6 @@ function DomainWeightInput({
   );
 }
 
-// Plain multi-select column (levels / topics / categories).
-function CheckboxColumn({
-  title,
-  items,
-  selected,
-  onToggle,
-  onToggleAll,
-  selectAllLabel,
-  clearAllLabel,
-}: {
-  title: string;
-  items: string[];
-  selected: Set<string>;
-  onToggle: (value: string) => void;
-  onToggleAll: () => void;
-  selectAllLabel: string;
-  clearAllLabel: string;
-}) {
-  return (
-    <div className="flex flex-col min-w-0 md:flex-1 md:min-h-0">
-      <div className="flex items-center gap-2 mb-2">
-        <h3 className="text-sm font-medium text-gray-300">{title}</h3>
-        <span className="text-xs text-gray-500 bg-gray-700 px-1.5 py-0.5 rounded select-none">OR</span>
-        <button onClick={onToggleAll} className="ml-auto text-xs text-blue-400 hover:text-blue-300">
-          {selected.size === items.length ? clearAllLabel : selectAllLabel}
-        </button>
-      </div>
-      <ul className="space-y-1 md:flex-1 md:overflow-y-auto">
-        {items.map((item) => (
-          <li key={item}>
-            <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={selected.has(item)}
-                onChange={() => onToggle(item)}
-                className="accent-blue-600"
-              />
-              {item}
-            </label>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 export default function CombinedQuizFilterModal({
   language,
   onStart,
@@ -145,14 +78,8 @@ export default function CombinedQuizFilterModal({
   // Blank = feature off (mastered items stay mixed in). A number activates the top-level
   // "already-correct" bucket (peer to word/grammar): 0 excludes mastered items, higher reviews more.
   const [correctWeightDraft, setCorrectWeightDraft] = useState("");
-  const [allLevels, setAllLevels] = useState<string[]>([]);
-  const [allTopics, setAllTopics] = useState<string[]>([]);
-  const [allCategories, setAllCategories] = useState<string[]>([]);
   const [allWordGroups, setAllWordGroups] = useState<WordGroup[]>([]);
   const [allGrammarGroups, setAllGrammarGroups] = useState<GrammarGroup[]>([]);
-  const [selectedLevels, setSelectedLevels] = useState<Set<string>>(new Set());
-  const [selectedTopics, setSelectedTopics] = useState<Set<string>>(new Set());
-  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedWordGroupIds, setSelectedWordGroupIds] = useState<Set<string>>(new Set());
   const [wordGroupWeights, setWordGroupWeights] = useState<Record<string, string>>({});
   const [selectedGrammarGroupIds, setSelectedGrammarGroupIds] = useState<Set<string>>(new Set());
@@ -162,14 +89,8 @@ export default function CombinedQuizFilterModal({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.allSettled([getFilters(language), getGroups(language), getGrammarGroups(language)])
-      .then(([filtersResult, groupsResult, grammarGroupsResult]) => {
-        if (filtersResult.status === "fulfilled") {
-          const { levels, topics, categories } = filtersResult.value;
-          setAllLevels(levels);
-          setAllTopics(topics);
-          setAllCategories(categories);
-        }
+    Promise.allSettled([getGroups(language), getGrammarGroups(language)])
+      .then(([groupsResult, grammarGroupsResult]) => {
         if (groupsResult.status === "fulfilled") {
           const wg = categoryGroups(groupsResult.value as WordGroup[], groupCategory);
           setAllWordGroups(wg);
@@ -244,9 +165,9 @@ export default function CombinedQuizFilterModal({
       domainWeights: { word: d.word, grammar: d.grammar },
       ...(correctWeightActive ? { correctWeight: d.correct } : {}),
       word: {
-        topics: [...selectedTopics],
-        categories: [...selectedCategories],
-        levels: [...selectedLevels],
+        topics: [],
+        categories: [],
+        levels: [],
         groupIds: [...selectedWordGroupIds],
         groupWeights: wordGroupWeightsOut,
         flaggedOnly: showFlaggedToggle ? flaggedScope : false,
@@ -398,49 +319,6 @@ export default function CombinedQuizFilterModal({
                       </details>
                     )}
                   </div>
-
-                  {allLevels.length > 0 && (
-                    <>
-                      <ColumnDivider />
-                      <CheckboxColumn
-                        title={t("levelsColumn")}
-                        items={allLevels}
-                        selected={selectedLevels}
-                        onToggle={(v) => toggle(selectedLevels, setSelectedLevels, v)}
-                        onToggleAll={() => toggleAll(allLevels, selectedLevels, setSelectedLevels)}
-                        selectAllLabel={t("selectAll")}
-                        clearAllLabel={t("clearAll")}
-                      />
-                    </>
-                  )}
-                  {allTopics.length > 0 && (
-                    <>
-                      <ColumnDivider />
-                      <CheckboxColumn
-                        title={t("topicsColumn")}
-                        items={allTopics}
-                        selected={selectedTopics}
-                        onToggle={(v) => toggle(selectedTopics, setSelectedTopics, v)}
-                        onToggleAll={() => toggleAll(allTopics, selectedTopics, setSelectedTopics)}
-                        selectAllLabel={t("selectAll")}
-                        clearAllLabel={t("clearAll")}
-                      />
-                    </>
-                  )}
-                  {allCategories.length > 0 && (
-                    <>
-                      <ColumnDivider />
-                      <CheckboxColumn
-                        title={t("grammarColumn")}
-                        items={allCategories}
-                        selected={selectedCategories}
-                        onToggle={(v) => toggle(selectedCategories, setSelectedCategories, v)}
-                        onToggleAll={() => toggleAll(allCategories, selectedCategories, setSelectedCategories)}
-                        selectAllLabel={t("selectAll")}
-                        clearAllLabel={t("clearAll")}
-                      />
-                    </>
-                  )}
                 </div>
               )}
             </section>
