@@ -1,4 +1,43 @@
-import type { ImportAnalysisResult } from "../types";
+import { deleteRequest, fetchJson, postJson, putJson } from "./client";
+import type { ImportAnalysisResult, ImportSession, ImportSessionSummary } from "../types";
+
+// ----- Import sessions (paused, resumable article reviews) -----
+
+type NewImportSession = Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt">;
+
+export function listImportSessions(language: string): Promise<ImportSessionSummary[]> {
+  return fetchJson(`/api/import/${encodeURIComponent(language)}/sessions`);
+}
+
+export function createImportSession(
+  language: string,
+  session: NewImportSession
+): Promise<ImportSession> {
+  return postJson(`/api/import/${encodeURIComponent(language)}/sessions`, session);
+}
+
+export function getImportSession(language: string, sessionId: string): Promise<ImportSession> {
+  return fetchJson(
+    `/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(sessionId)}`
+  );
+}
+
+export function updateImportSession(
+  language: string,
+  sessionId: string,
+  updates: Partial<NewImportSession>
+): Promise<ImportSession> {
+  return putJson(
+    `/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(sessionId)}`,
+    updates
+  );
+}
+
+export function deleteImportSession(language: string, sessionId: string): Promise<void> {
+  return deleteRequest(
+    `/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(sessionId)}`
+  );
+}
 
 export interface AnalyzeImportCallbacks {
   onStart?: () => void;

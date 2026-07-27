@@ -5,8 +5,17 @@ import {
   getImportConfig,
   getAllGrammarItems,
   lookupWordsByTerms,
+  saveImportSession,
+  getImportSessions,
+  getImportSession,
+  updateImportSession,
+  deleteImportSession,
 } from "../firestore.js";
-import type { ImportAnalysisResult } from "../types.js";
+import type {
+  ImportAnalysisResult,
+  ImportSession,
+  ImportSessionSummary,
+} from "../types.js";
 
 /** How many existing grammar `statement`s to show the model as style examples. */
 const STYLE_EXAMPLE_LIMIT = 40;
@@ -158,6 +167,131 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
         clearInterval(keepAlive);
         reply.raw.end();
       }
+    }
+  );
+
+  // ===== Import sessions =====
+  // A review of one article, persisted so it can be paused and resumed days later.
+  // Nested under :language to match the drafts convention (/api/vocab/:language/drafts)
+  // and to keep these paths clear of the existing /:language/analyze-stream route.
+
+  fastify.get<{ Params: { language: string } }>(
+    "/:language/sessions",
+    async (request) => {
+      const sessions = await getImportSessions(request.params.language);
+      // Projected summary: the resume list never needs text/paragraphs/items, and
+      // shipping them would make listing cost as much as opening every session.
+      return sessions.map(
+        (s): ImportSessionSummary => ({
+          id: s.id,
+          language: s.language,
+          title: s.title,
+          totalCount: s.items?.length ?? 0,
+          registeredCount: (s.items ?? []).filter((i) => i.status === "registered").length,
+          status: s.status,
+          createdAt: s.createdAt,
+          updatedAt: s.updatedAt,
+        })
+      );
+    }
+  );
+
+  fastify.post<{
+    Params: { language: string };
+    Body: Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt">;
+  }>(
+    "/:language/sessions",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["text", "paragraphs", "items"],
+          properties: {
+            title: { type: "string" },
+            text: { type: "string" },
+            paragraphs: { type: "array" },
+            items: { type: "array" },
+            wordGroupId: { type: "string" },
+            grammarGroupId: { type: "string" },
+            groupBNames: { type: "array", items: { type: "string" } },
+            focusedSentenceIndex: { type: "number" },
+            status: { type: "string", enum: ["in-progress", "done"] },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { language } = request.params;
+      if (!(await languageExists(language))) {
+        return reply.notFound(`Language '${language}' not found`);
+      }
+      const body = request.body;
+      const now = new Date().toISOString();
+      const session = await saveImportSession({
+        language,
+        title: body.title?.trim() || body.text.slice(0, 40),
+        text: body.text,
+        paragraphs: body.paragraphs ?? [],
+        items: body.items ?? [],
+        wordGroupId: body.wordGroupId,
+        grammarGroupId: body.grammarGroupId,
+        groupBNames: body.groupBNames ?? [],
+        focusedSentenceIndex: body.focusedSentenceIndex ?? 0,
+        status: body.status ?? "in-progress",
+        createdAt: now,
+        updatedAt: now,
+      });
+      return reply.status(201).send(session);
+    }
+  );
+
+  fastify.get<{ Params: { language: string; sessionId: string } }>(
+    "/:language/sessions/:sessionId",
+    async (request, reply) => {
+      const session = await getImportSession(request.params.sessionId);
+      if (!session) return reply.notFound("Import session not found");
+      return session;
+    }
+  );
+
+  // Autosave target. `items` replaces wholesale so deleted/merged rows disappear;
+  // `updatedAt` is stamped server-side.
+  fastify.put<{
+    Params: { language: string; sessionId: string };
+    Body: Partial<Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt">>;
+  }>(
+    "/:language/sessions/:sessionId",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            text: { type: "string" },
+            paragraphs: { type: "array" },
+            items: { type: "array" },
+            wordGroupId: { type: "string" },
+            grammarGroupId: { type: "string" },
+            groupBNames: { type: "array", items: { type: "string" } },
+            focusedSentenceIndex: { type: "number" },
+            status: { type: "string", enum: ["in-progress", "done"] },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const updated = await updateImportSession(request.params.sessionId, request.body);
+      if (!updated) return reply.notFound("Import session not found");
+      return updated;
+    }
+  );
+
+  fastify.delete<{ Params: { language: string; sessionId: string } }>(
+    "/:language/sessions/:sessionId",
+    async (request, reply) => {
+      const deleted = await deleteImportSession(request.params.sessionId);
+      if (!deleted) return reply.notFound("Import session not found");
+      return { deleted: true };
     }
   );
 };

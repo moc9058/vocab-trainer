@@ -14,7 +14,6 @@ import FlaggedReview from "./FlaggedReview";
 import GrammarQuizTaking from "./GrammarQuizTaking";
 import CombinedQuizTaking from "./CombinedQuizTaking";
 import CombinedQuizFilterModal from "./CombinedQuizFilterModal";
-import ImportView from "./ImportView";
 import StudyQuizModal, { type StudyQuizTab } from "./StudyQuizModal";
 import SmartAddWordModal from "./SmartAddWordModal";
 import GrammarFormModal from "./GrammarFormModal";
@@ -692,11 +691,13 @@ export default function Dashboard() {
               <span className="text-gray-400">Loading quiz…</span>
             </div>
           )
-        ) : subPath === "/browse" || subPath === "/grammar" ? (
+        ) : subPath === "/browse" || subPath === "/grammar" || subPath === "/import" ? (
           <BrowseView
             language={language ?? ""}
-            initialTab={subPath === "/grammar" ? "grammar" : "word"}
-            onTabChange={(tab) => navigate(`/${language}/${tab === "grammar" ? "grammar" : "browse"}`, { replace: true })}
+            initialTab={subPath === "/grammar" ? "grammar" : subPath === "/import" ? "import" : "word"}
+            onTabChange={(tab) =>
+              navigate(`/${language}/${tab === "word" ? "browse" : tab}`, { replace: true })
+            }
             onBack={() => navigate(`/${language}`)}
             initialExpandId={(location.state as { expandId?: string } | null)?.expandId}
             initialSearch={(location.state as { search?: string } | null)?.search}
@@ -742,13 +743,6 @@ export default function Dashboard() {
               <span className="text-gray-400">Loading quiz…</span>
             </div>
           )
-        ) : subPath === "/import" ? (
-          <ImportView
-            language={language ?? ""}
-            onQueue={enqueue}
-            onGrammarQueue={enqueueGrammar}
-            onBack={() => navigate(`/${language}`)}
-          />
         ) : subPath === "/group-b-quiz" ? (
           activeGroupBQuiz ? (
             <CombinedQuizTaking
@@ -813,6 +807,7 @@ export default function Dashboard() {
             onFlaggedReview={handleFlaggedReview}
             onGrammarQuiz={handleStartGrammarQuiz}
             onBrowseGrammar={handleBrowseGrammar}
+            onImport={() => navigate(`/${language}/import`)}
             onAddWord={handleAddWord}
             onAddGrammar={handleAddGrammar}
             onStartTranslation={() => navigate(`/${language}/translation`, { state: { mode: "new" } })}

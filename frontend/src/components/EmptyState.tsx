@@ -20,6 +20,8 @@ interface Props {
   onFlaggedReview: () => void;
   onGrammarQuiz: () => void;
   onBrowseGrammar: () => void;
+  /** Opens the article-import screen (the Word & Grammar browse view's import tab). */
+  onImport: () => void;
   onAddWord: () => void;
   onAddGrammar: () => void;
   onStartTranslation: () => void;
@@ -33,7 +35,7 @@ interface Props {
   onAddExpression: () => void;
 }
 
-export default function EmptyState({ language, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onResumeGroupB, onGroupBQuiz, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onBrowseExpressions, onAddExpression }: Props) {
+export default function EmptyState({ language, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onResumeGroupB, onGroupBQuiz, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onImport, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onBrowseExpressions, onAddExpression }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const isoCode = urlLanguageToIsoCode(language) ?? language;
@@ -221,6 +223,14 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
                   </div>
                 </>
               )}
+              {/* Feeds BOTH domains at once, so it sits below the word/grammar tab
+                  split rather than inside either tab. */}
+              <button
+                onClick={onImport}
+                className="mt-3 w-full rounded-lg border border-dashed border-indigo-700/70 px-4 py-2.5 text-center text-sm text-indigo-300 transition-colors hover:border-indigo-500 hover:bg-indigo-900/20"
+              >
+                ＋ {t("importFromSource")}
+              </button>
             </section>
           );
           if (section === "speaking-writing") return (

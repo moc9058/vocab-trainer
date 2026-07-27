@@ -436,3 +436,96 @@ export interface ImportAnalysisResult {
   words: ImportExtractedWord[];
   grammar: ImportExtractedGrammar[];
 }
+
+// ---------- Import sessions (a paused, resumable review of one article) ----------
+
+/**
+ * `queued` means "handed to the client-side add queue" — it is NOT proof of a
+ * successful write, which is why it renders as unverified rather than a ✓.
+ * `duplicate` is a 409: the item IS in the DB, but the queue's group work never
+ * ran, so no group membership may be claimed. `skipped` covers both a user
+ * deletion and a row consumed by a merge/split (see `supersededByIds`).
+ */
+export type ImportItemStatus =
+  | "pending"
+  | "queued"
+  | "registered"
+  | "duplicate"
+  | "failed"
+  | "skipped";
+
+interface ImportItemBase {
+  /** Stable across edits, merges and reloads; assigned client-side. */
+  id: string;
+  sentenceIndex: number;
+  /** Fractional, so a split can insert its parts between neighbours without renumbering. */
+  order: number;
+  status: ImportItemStatus;
+  origin: "llm" | "merge" | "split" | "manual";
+  /** Rows this one was derived from — drives the hint line and the undo. */
+  sourceIds?: string[];
+  /** Set on the rows a merge/split consumed. They stay in `items` as `skipped`
+   *  tombstones so the operation can be undone and the session remains a complete
+   *  record of what was proposed and what the user did with it. */
+  supersededByIds?: string[];
+  error?: string;
+  /** The queue rescues a failed create into a draft — surfaced so a failed row can
+   *  say the input was not lost. */
+  rescuedAsDraft?: boolean;
+}
+
+export interface ImportWordItem extends ImportItemBase {
+  kind: "word";
+  term: string;
+  transliteration?: string;
+  meaning?: string;
+  /** Already in the DB — such a word is never re-created, only given group membership. */
+  existingWordId?: string;
+}
+
+export interface ImportGrammarItem extends ImportItemBase {
+  kind: "grammar";
+  statement: string;
+  description: string;
+}
+
+export type ImportItem = ImportWordItem | ImportGrammarItem;
+
+/**
+ * One article being worked through. `items` is the single working copy — the raw
+ * `ImportAnalysisResult` words/grammar arrays are flattened into it at creation and
+ * are NOT stored separately, so there is no drift between what the LLM extracted and
+ * what the user edited. `paragraphs` keeps the article structure for the review UI.
+ */
+export interface ImportSession {
+  id: string;
+  /** Backend full-name language, e.g. "chinese". */
+  language: string;
+  /** Leading slice of `text`, for the resume list. */
+  title: string;
+  text: string;
+  paragraphs: ImportParagraph[];
+  items: ImportItem[];
+  /** Group A destinations (per-domain, as Group A groups are domain-specific). */
+  wordGroupId?: string;
+  grammarGroupId?: string;
+  /** Group B is cross-domain and joined by NAME across both group collections. */
+  groupBNames: string[];
+  focusedSentenceIndex: number;
+  status: "in-progress" | "done";
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Row shape for the resume list — omits `text`/`paragraphs`/`items` so listing
+ *  many sessions stays cheap. */
+export interface ImportSessionSummary {
+  id: string;
+  language: string;
+  title: string;
+  totalCount: number;
+  registeredCount: number;
+  status: "in-progress" | "done";
+  createdAt: string;
+  updatedAt: string;
+}

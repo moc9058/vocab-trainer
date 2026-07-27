@@ -19,6 +19,18 @@ export interface WordCreateOptions {
   groupNames?: string[];
   /** Draft to delete once the word (and its groups) are fully registered. */
   draftId?: string;
+  /**
+   * Per-item outcome, for callers that must report the fate of ONE enqueued item
+   * (the article importer). `succeededTerms` cannot serve this: it is keyed by term
+   * string, so two rows sharing a term are indistinguishable, it is success-only,
+   * and it lives in memory so it cannot survive the reload. Held in queue state
+   * only — never serialized.
+   */
+  onSettled?: (
+    result:
+      | { ok: true }
+      | { ok: false; error: string; duplicate: boolean; rescuedAsDraft: boolean }
+  ) => void;
 }
 
 // Maximum concurrent queue item executions. Higher = faster bulk adds,
@@ -29,7 +41,7 @@ export interface WordCreateOptions {
 const CONCURRENCY = 4;
 
 type QueueItem =
-  | { id: string; type: "create"; term: string; language: string; payload: SmartAddPayload; groupNames?: string[]; draftId?: string }
+  | { id: string; type: "create"; term: string; language: string; payload: SmartAddPayload; groupNames?: string[]; draftId?: string; onSettled?: WordCreateOptions["onSettled"] }
   | { id: string; type: "update"; term: string; language: string; wordId: string; updates: Partial<Word>; groupsToAdd: string[]; groupsToRemove: string[] };
 
 export interface QueueResult {
@@ -142,6 +154,7 @@ export function useWordQueue() {
     for (const item of toStart) {
       processItem(item)
         .then(() => {
+          if (item.type === "create") item.onSettled?.({ ok: true });
           setRecentResults((prev) =>
             [{ id: item.id, term: item.term, success: true }, ...prev].slice(0, 5),
           );
@@ -154,10 +167,20 @@ export function useWordQueue() {
           );
           // Rescue failed creates into a draft — except 409 duplicates (the word
           // is already in the DB) and draft-originated items (draft still exists).
-          if (item.type === "create" && !item.draftId && !String(err).includes("409")) {
+          if (item.type !== "create") return;
+          const duplicate = String(err).includes("409");
+          const settle = (rescuedAsDraft: boolean) =>
+            item.onSettled?.({ ok: false, error: String(err), duplicate, rescuedAsDraft });
+          if (!item.draftId && !duplicate) {
+            // Settle only once the rescue resolves, so `rescuedAsDraft` is accurate.
             saveFailedCreateAsDraft(item)
-              .then(() => setRefreshSignal((s) => s + 1))
-              .catch(() => {});
+              .then(() => {
+                setRefreshSignal((s) => s + 1);
+                settle(true);
+              })
+              .catch(() => settle(false));
+          } else {
+            settle(false);
           }
         })
         .finally(() => {

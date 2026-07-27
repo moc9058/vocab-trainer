@@ -31,6 +31,7 @@ import type {
   GroupCategory,
   Expression,
   ExpressionGroup,
+  ImportSession,
 } from "./types.js";
 
 const db = new Firestore({
@@ -2640,6 +2641,58 @@ export async function removeWordFromCategoryBGroups(
   }
   await batch.commit();
   return affected.map((g) => g.id);
+}
+
+// ========== Import Sessions ==========
+
+// Auto-ID docs rather than one-per-language: a user can have several articles
+// paused at once, so this follows the translation_history pattern, not the
+// singleton-per-language quiz/speaking session pattern.
+const importSessions = db.collection("import_sessions");
+
+export async function saveImportSession(
+  session: Omit<ImportSession, "id">
+): Promise<ImportSession> {
+  const docRef = importSessions.doc();
+  await docRef.set(session);
+  return { id: docRef.id, ...session };
+}
+
+export async function getImportSessions(language?: string): Promise<ImportSession[]> {
+  const snap = language
+    ? await importSessions.where("language", "==", language).get()
+    : await importSessions.get();
+  const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ImportSession));
+  // In-memory sort avoids a composite index on language + updatedAt.
+  return items.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+}
+
+export async function getImportSession(sessionId: string): Promise<ImportSession | null> {
+  const doc = await importSessions.doc(sessionId).get();
+  if (!doc.exists) return null;
+  return { id: doc.id, ...doc.data() } as ImportSession;
+}
+
+export async function updateImportSession(
+  sessionId: string,
+  updates: Partial<Omit<ImportSession, "id" | "language" | "createdAt">>
+): Promise<ImportSession | null> {
+  const ref = importSessions.doc(sessionId);
+  const doc = await ref.get();
+  if (!doc.exists) return null;
+  const clean = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
+  // `items` is replaced wholesale rather than merged: a merge would leave deleted
+  // rows behind, since Firestore merges arrays by replacement only at the top level.
+  await ref.set({ ...clean, updatedAt: new Date().toISOString() }, { merge: true });
+  const after = await ref.get();
+  return { id: after.id, ...after.data() } as ImportSession;
+}
+
+export async function deleteImportSession(sessionId: string): Promise<boolean> {
+  const doc = await importSessions.doc(sessionId).get();
+  if (!doc.exists) return false;
+  await importSessions.doc(sessionId).delete();
+  return true;
 }
 
 export { db };
