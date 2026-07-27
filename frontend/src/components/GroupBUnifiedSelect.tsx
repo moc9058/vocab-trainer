@@ -75,7 +75,7 @@ export default function GroupBUnifiedSelect({ language, selectedNames, onChange 
               type="button"
               onClick={() => toggle(g.name)}
               aria-pressed={isSelected}
-              className={`rounded-full border px-3 py-1 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+              className={`rounded-full border px-3 py-1.5 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:py-1 ${
                 isSelected
                   ? "border-amber-500 bg-amber-500/20 text-amber-200"
                   : "border-gray-600 text-gray-400 hover:border-amber-600/60 hover:text-amber-300"
@@ -88,7 +88,7 @@ export default function GroupBUnifiedSelect({ language, selectedNames, onChange 
         })}
 
         {creating ? (
-          <span className="inline-flex items-center gap-1">
+          <span className="inline-flex w-full items-center gap-1 sm:w-auto">
             <input
               autoFocus
               value={draftName}
@@ -98,13 +98,13 @@ export default function GroupBUnifiedSelect({ language, selectedNames, onChange 
                 if (e.key === "Escape") { setCreating(false); setDraftName(""); }
               }}
               placeholder={t("groupName")}
-              className="w-36 rounded-full border border-amber-600/60 bg-gray-900 px-3 py-1 text-xs text-amber-100 placeholder-gray-500 focus:border-amber-400 focus:outline-none"
+              className="min-w-0 flex-1 rounded-full border border-amber-600/60 bg-gray-900 px-3 py-1.5 text-base text-amber-100 placeholder-gray-500 focus:border-amber-400 focus:outline-none sm:w-36 sm:flex-none sm:py-1 sm:text-xs"
             />
             <button
               type="button"
               onClick={handleCreate}
               disabled={!draftName.trim() || busy}
-              className="rounded-full bg-amber-600/80 px-2.5 py-1 text-xs text-white hover:bg-amber-500 disabled:opacity-40"
+              className="shrink-0 rounded-full bg-amber-600/80 px-3 py-1.5 text-xs text-white hover:bg-amber-500 disabled:opacity-40 sm:px-2.5 sm:py-1"
             >
               {busy ? "…" : t("save")}
             </button>
@@ -113,7 +113,7 @@ export default function GroupBUnifiedSelect({ language, selectedNames, onChange 
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="rounded-full border border-dashed border-gray-600 px-3 py-1 text-xs text-gray-400 hover:border-amber-600/60 hover:text-amber-300"
+            className="rounded-full border border-dashed border-gray-600 px-3 py-1.5 text-xs text-gray-400 hover:border-amber-600/60 hover:text-amber-300 sm:py-1"
           >
             + {t("importNewGroupB")}
           </button>

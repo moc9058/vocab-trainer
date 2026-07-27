@@ -60,7 +60,7 @@ export default function GroupBSelect({ kind, language, selectedIds, onChange, la
           key={g.id}
           type="button"
           onClick={() => toggle(g.id)}
-          className={`rounded-full border px-2 py-0.5 text-xs transition-colors ${
+          className={`rounded-full border px-2.5 py-1 text-xs transition-colors sm:px-2 sm:py-0.5 ${
             selected.has(g.id)
               ? "border-amber-500 bg-amber-600/30 text-amber-200"
               : "border-gray-600 text-gray-400 hover:border-amber-600/60 hover:text-amber-300"

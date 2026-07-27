@@ -78,7 +78,7 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
   }, [language]);
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+    <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
       <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("welcome")}</h2>
 
       <div className="w-full max-w-lg space-y-6">

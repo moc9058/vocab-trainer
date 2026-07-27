@@ -574,22 +574,22 @@ export default function Dashboard() {
         />
       )}
       {groupBResumePrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-sm rounded-xl bg-gray-800 p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-gray-800 p-5 shadow-lg sm:p-6">
             <p className="mb-4 text-gray-300">{t("existingCombinedQuizFound")}</p>
             <p className="mb-4 text-lg font-semibold text-amber-400">
               {groupBResumePrompt.score.correct} / {groupBResumePrompt.initialTotal ?? groupBResumePrompt.questions.length}
             </p>
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 onClick={handleResumeGroupB}
-                className="flex-1 rounded-lg bg-amber-600 px-4 py-2 text-white hover:bg-amber-500"
+                className="flex-1 rounded-lg bg-amber-600 px-4 py-3 text-white hover:bg-amber-500 sm:py-2"
               >
                 {t("resumeQuiz")}
               </button>
               <button
                 onClick={handleStartNewGroupB}
-                className="flex-1 rounded-lg bg-gray-700 px-4 py-2 text-gray-300 hover:bg-gray-600"
+                className="flex-1 rounded-lg bg-gray-700 px-4 py-3 text-gray-300 hover:bg-gray-600 sm:py-2"
               >
                 {t("startNewQuiz")}
               </button>
@@ -598,22 +598,22 @@ export default function Dashboard() {
         </div>
       )}
       {combinedResumePrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-sm rounded-xl bg-gray-800 p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-gray-800 p-5 shadow-lg sm:p-6">
             <p className="mb-4 text-gray-300">{t("existingCombinedQuizFound")}</p>
             <p className="mb-4 text-lg font-semibold text-indigo-400">
               {combinedResumePrompt.score.correct} / {combinedResumePrompt.initialTotal ?? combinedResumePrompt.questions.length}
             </p>
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 onClick={handleResumeCombined}
-                className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-500"
+                className="flex-1 rounded-lg bg-indigo-600 px-4 py-3 text-white hover:bg-indigo-500 sm:py-2"
               >
                 {t("resumeQuiz")}
               </button>
               <button
                 onClick={handleStartNewCombined}
-                className="flex-1 rounded-lg bg-gray-700 px-4 py-2 text-gray-300 hover:bg-gray-600"
+                className="flex-1 rounded-lg bg-gray-700 px-4 py-3 text-gray-300 hover:bg-gray-600 sm:py-2"
               >
                 {t("startNewQuiz")}
               </button>
@@ -622,22 +622,22 @@ export default function Dashboard() {
         </div>
       )}
       {resumePrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="w-full max-w-sm rounded-xl bg-gray-800 p-6 shadow-lg">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-gray-800 p-5 shadow-lg sm:p-6">
             <p className="mb-4 text-gray-300">{t("existingQuizFound")}</p>
             <p className="mb-4 text-lg font-semibold text-blue-400">
               {resumePrompt.score.correct} / {resumePrompt.wordIds?.length ?? resumePrompt.questions.length}
             </p>
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 onClick={handleResume}
-                className="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-500"
+                className="flex-1 rounded-lg bg-blue-600 px-4 py-3 text-white hover:bg-blue-500 sm:py-2"
               >
                 {t("resumeQuiz")}
               </button>
               <button
                 onClick={handleStartNew}
-                className="flex-1 rounded-lg bg-gray-700 px-4 py-2 text-gray-300 hover:bg-gray-600"
+                className="flex-1 rounded-lg bg-gray-700 px-4 py-3 text-gray-300 hover:bg-gray-600 sm:py-2"
               >
                 {t("startNewQuiz")}
               </button>

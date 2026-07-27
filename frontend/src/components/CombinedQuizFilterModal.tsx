@@ -57,7 +57,7 @@ function DomainWeightInput({
         value={value}
         aria-label={label}
         onChange={(e) => onChange(e.target.value)}
-        className={`w-14 rounded border bg-gray-700 px-1.5 py-0.5 text-sm text-gray-100 focus:outline-none ${
+        className={`w-16 rounded border bg-gray-700 px-1.5 py-1 text-base text-gray-100 focus:outline-none sm:w-14 sm:py-0.5 sm:text-sm ${
           invalid ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-blue-400"
         }`}
       />
@@ -196,14 +196,14 @@ export default function CombinedQuizFilterModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4"
       onClick={onClose}
     >
       <div
         className="w-full max-w-4xl rounded-xl bg-gray-800 p-4 sm:p-6 shadow-xl max-h-[85dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-gray-100">{t("selectCombinedFilters")}</h2>
           <label className="flex items-center gap-1.5 text-xs text-gray-300" title={t("alreadyCorrectHint")}>
             <span className="whitespace-nowrap">✅ {t("alreadyCorrect")}</span>
@@ -214,7 +214,7 @@ export default function CombinedQuizFilterModal({
               value={correctWeightDraft}
               aria-label={t("alreadyCorrect")}
               onChange={(e) => setCorrectWeightDraft(e.target.value)}
-              className={`w-14 rounded border bg-gray-700 px-1.5 py-0.5 text-xs text-gray-100 focus:outline-none ${
+              className={`w-16 rounded border bg-gray-700 px-1.5 py-1 text-base text-gray-100 focus:outline-none sm:w-14 sm:py-0.5 sm:text-xs ${
                 correctWeightInvalid ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-indigo-400"
               }`}
             />
@@ -279,17 +279,17 @@ export default function CombinedQuizFilterModal({
                             {selectedWordGroupIds.size === allWordGroups.length ? t("clearAll") : t("selectAll")}
                           </button>
                         </summary>
-                        <ul className="space-y-1 md:max-h-48 md:overflow-y-auto">
+                        <ul className="space-y-1 max-h-56 overflow-y-auto md:max-h-48">
                           {allWordGroups.map((group) => {
                             const weightInvalid = selectedWordGroupIds.has(group.id) && !isWeightValid(wordGroupWeights[group.id], 0);
                             return (
                               <li key={group.id}>
-                                <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
+                                <label className="flex items-center gap-2 rounded px-2 py-2 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer sm:py-1">
                                   <input
                                     type="checkbox"
                                     checked={selectedWordGroupIds.has(group.id)}
                                     onChange={() => toggle(selectedWordGroupIds, setSelectedWordGroupIds, group.id)}
-                                    className="accent-blue-600"
+                                    className="h-4 w-4 shrink-0 accent-blue-600"
                                   />
                                   <span className="flex-1 min-w-0 truncate">{group.name}</span>
                                   {selectedWordGroupIds.has(group.id) && (
@@ -303,7 +303,7 @@ export default function CombinedQuizFilterModal({
                                       onChange={(e) => {
                                         setWordGroupWeights((prev) => ({ ...prev, [group.id]: e.target.value }));
                                       }}
-                                      className={`w-12 shrink-0 rounded border bg-gray-700 px-1 py-0.5 text-xs text-gray-100 focus:outline-none ${
+                                      className={`w-16 shrink-0 rounded border bg-gray-700 px-1 py-1 text-base text-gray-100 focus:outline-none sm:w-12 sm:py-0.5 sm:text-xs ${
                                         weightInvalid
                                           ? "border-red-500 focus:border-red-400"
                                           : "border-gray-600 focus:border-blue-400"
@@ -365,12 +365,12 @@ export default function CombinedQuizFilterModal({
                           const weightInvalid = selectedGrammarGroupIds.has(group.id) && !isWeightValid(grammarGroupWeights[group.id], 0);
                           return (
                             <li key={group.id}>
-                              <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
+                              <label className="flex items-center gap-2 rounded px-2 py-2 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer sm:py-1">
                                 <input
                                   type="checkbox"
                                   checked={selectedGrammarGroupIds.has(group.id)}
                                   onChange={() => toggle(selectedGrammarGroupIds, setSelectedGrammarGroupIds, group.id)}
-                                  className="accent-emerald-600"
+                                  className="h-4 w-4 shrink-0 accent-emerald-600"
                                 />
                                 <span className="flex-1 min-w-0 truncate">{group.name}</span>
                                 {selectedGrammarGroupIds.has(group.id) && (
@@ -384,7 +384,7 @@ export default function CombinedQuizFilterModal({
                                     onChange={(e) => {
                                       setGrammarGroupWeights((prev) => ({ ...prev, [group.id]: e.target.value }));
                                     }}
-                                    className={`w-12 shrink-0 rounded border bg-gray-700 px-1 py-0.5 text-xs text-gray-100 focus:outline-none ${
+                                    className={`w-16 shrink-0 rounded border bg-gray-700 px-1 py-1 text-base text-gray-100 focus:outline-none sm:w-12 sm:py-0.5 sm:text-xs ${
                                       weightInvalid
                                         ? "border-red-500 focus:border-red-400"
                                         : "border-gray-600 focus:border-emerald-400"
@@ -411,17 +411,17 @@ export default function CombinedQuizFilterModal({
         {missingGroupBSelection && (
           <p className="mt-1 text-xs text-amber-400">{t("groupBNeedsGroup")}</p>
         )}
-        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+        <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
           <button
             onClick={onClose}
-            className="rounded-lg px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
+            className="w-full rounded-lg border border-gray-600 px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-700 sm:w-auto sm:border-transparent sm:py-1.5"
           >
             {t("cancel")}
           </button>
           <button
             onClick={() => onStart(buildFilters())}
             disabled={loading || !canStart}
-            className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm text-white hover:bg-indigo-500 disabled:opacity-50"
+            className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm text-white hover:bg-indigo-500 disabled:opacity-50 sm:w-auto sm:py-1.5"
           >
             {t("startCombinedQuiz")}
           </button>

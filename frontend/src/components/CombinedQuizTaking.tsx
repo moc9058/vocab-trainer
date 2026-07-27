@@ -379,7 +379,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     if (!isGroupB) return null;
     if (removedFromBIds.has(refId)) {
       return (
-        <p className="w-full max-w-lg rounded-md border border-amber-700/50 bg-amber-950/30 px-3 py-1.5 text-xs text-amber-300">
+        <p className="w-full max-w-lg rounded-md border border-amber-700/50 bg-amber-950/30 px-3 py-2.5 text-center text-sm text-amber-300 sm:py-1.5 sm:text-left sm:text-xs">
           ✓ {t("removedFromGroupB")}
         </p>
       );
@@ -395,9 +395,11 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
           void call.catch(() => {});
           setRemovedFromBIds((prev) => new Set([...prev, refId]));
         }}
-        className="w-full max-w-lg rounded-md border border-amber-700/50 px-3 py-1.5 text-xs text-amber-300 hover:bg-amber-950/30"
+        className="w-full max-w-lg rounded-md border border-amber-700/50 bg-amber-950/40 px-3 py-2.5 text-center text-sm font-medium text-amber-300 hover:bg-amber-950/60 sm:bg-transparent sm:py-1.5 sm:text-left sm:text-xs sm:font-normal sm:hover:bg-amber-950/30"
       >
-        3 · {t("removeFromGroupB")}
+        {/* The "3" hint only means something where there is a keyboard. */}
+        <span className="hidden sm:inline">3 · </span>
+        {t("removeFromGroupB")}
       </button>
     );
   }
@@ -572,7 +574,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         {reviewWord ? (
           <h2 className="max-w-full break-words px-2 text-center text-xl sm:text-3xl font-bold text-gray-100">{reviewWord.term}</h2>
         ) : (
-          <h2 className="max-w-lg text-center text-xl sm:text-3xl font-bold text-gray-100">
+          <h2 className="max-w-full break-words px-2 text-center text-xl sm:max-w-lg sm:text-3xl font-bold text-gray-100">
             {reviewGrammar!.statement || reviewGrammarItem?.statement}
           </h2>
         )}
@@ -680,7 +682,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
           </div>
         )}
 
-        <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
+        <div className="sticky bottom-0 z-10 -mx-4 flex w-[calc(100%+2rem)] flex-col gap-3 bg-gray-900/95 px-4 py-2 sm:static sm:mx-0 sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:px-0 sm:py-0">
           <button
             onClick={nextSessionReview}
             className="w-full sm:w-auto rounded-lg bg-indigo-600 px-6 py-3 sm:py-2 text-white hover:bg-indigo-500"
@@ -720,7 +722,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
-      <div className="sticky top-0 z-10 flex w-full items-center justify-center gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:bg-transparent sm:py-0">
+      <div className="sticky top-0 z-10 -mx-4 flex w-[calc(100%+2rem)] items-center justify-center gap-3 bg-gray-900/95 px-4 py-2 sm:static sm:mx-0 sm:w-auto sm:bg-transparent sm:px-0 sm:py-0">
         <p className="text-sm text-gray-400">
           {currentSession.score.correct} / {originalTotal}
         </p>
@@ -752,7 +754,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             <button
               onClick={() => setWordGroupsOpen((v) => !v)}
               aria-pressed={wordGroupsOpen}
-              className={`rounded-full border px-3 py-1 text-xs font-medium text-blue-200 ${
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium text-blue-200 sm:py-1 ${
                 wordGroupsOpen
                   ? "border-blue-400 bg-blue-700/60"
                   : "border-blue-800/70 bg-blue-900/30 hover:bg-blue-900/50"
@@ -765,7 +767,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             <button
               onClick={() => setGrammarGroupsOpen((v) => !v)}
               aria-pressed={grammarGroupsOpen}
-              className={`rounded-full border px-3 py-1 text-xs font-medium text-emerald-200 ${
+              className={`rounded-full border px-3 py-1.5 text-xs font-medium text-emerald-200 sm:py-1 ${
                 grammarGroupsOpen
                   ? "border-emerald-400 bg-emerald-700/60"
                   : "border-emerald-800/70 bg-emerald-900/30 hover:bg-emerald-900/50"
@@ -776,7 +778,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
           )}
           <button
             onClick={() => (weightsOpen ? setWeightsOpen(false) : openWeightsPanel())}
-            className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1 text-xs text-gray-300 hover:bg-gray-700"
+            className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 sm:py-1"
           >
             ⚖ {t("adjustWeights")}
           </button>
@@ -801,7 +803,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
                 onChange={(e) => {
                   setDomainDraft((prev) => ({ ...prev, word: e.target.value }));
                 }}
-                className={`w-16 shrink-0 rounded border bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:outline-none ${
+                className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
                   parseWeightInput(domainDraft.word) === null
                     ? "border-red-500 focus:border-red-400"
                     : "border-gray-600 focus:border-blue-400"
@@ -829,7 +831,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
                           onChange={(e) => {
                             setWordWeightDraft((prev) => ({ ...prev, [gid]: e.target.value }));
                           }}
-                          className={`w-16 shrink-0 rounded border bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:outline-none ${
+                          className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
                             invalid ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-blue-400"
                           }`}
                         />
@@ -854,7 +856,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
                 onChange={(e) => {
                   setDomainDraft((prev) => ({ ...prev, grammar: e.target.value }));
                 }}
-                className={`w-16 shrink-0 rounded border bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:outline-none ${
+                className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
                   parseWeightInput(domainDraft.grammar) === null
                     ? "border-red-500 focus:border-red-400"
                     : "border-gray-600 focus:border-emerald-400"
@@ -882,7 +884,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
                         onChange={(e) => {
                           setGrammarWeightDraft((prev) => ({ ...prev, [gid]: e.target.value }));
                         }}
-                        className={`w-16 shrink-0 rounded border bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:outline-none ${
+                        className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
                           invalid ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-emerald-400"
                         }`}
                       />
@@ -907,7 +909,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
               value={correctDraft}
               aria-label={t("alreadyCorrect")}
               onChange={(e) => setCorrectDraft(e.target.value)}
-              className={`w-16 shrink-0 rounded border bg-gray-700 px-2 py-1 text-xs text-gray-100 focus:outline-none ${
+              className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
                 correctDraftInvalid ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-indigo-400"
               }`}
             />
@@ -916,17 +918,17 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
           {!canApplyWeights && (
             <p className="text-xs text-red-400">{t("groupWeightRequiredHint")}</p>
           )}
-          <div className="flex justify-end gap-2 pt-1">
+          <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
             <button
               onClick={() => setWeightsOpen(false)}
-              className="rounded-lg border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700"
+              className="rounded-lg border border-gray-600 px-3 py-2.5 text-sm text-gray-300 hover:bg-gray-700 sm:py-1.5 sm:text-xs"
             >
               {t("cancel")}
             </button>
             <button
               onClick={applyWeights}
               disabled={applyingWeights || !canApplyWeights}
-              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-500 disabled:opacity-50"
+              className="rounded-lg bg-indigo-600 px-3 py-2.5 text-sm text-white hover:bg-indigo-500 disabled:opacity-50 sm:py-1.5 sm:text-xs"
             >
               {applyingWeights ? "..." : t("applyWeights")}
             </button>
@@ -988,18 +990,22 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         <h2 className="max-w-full break-words px-2 text-center text-xl sm:text-3xl font-bold text-gray-100">{wordQuestion.term}</h2>
       ) : (
         // Grammar prompt: the grammar element itself — descriptions revealed on answer
-        <h2 className="max-w-lg text-center text-xl sm:text-3xl font-bold text-gray-100">
+        <h2 className="max-w-full break-words px-2 text-center text-xl sm:max-w-lg sm:text-3xl font-bold text-gray-100">
           {grammarQuestion!.statement || grammarItem?.statement}
         </h2>
       )}
 
       {!showingAnswer ? (
-        <button
-          onClick={revealAnswer}
-          className="rounded-lg bg-gray-700 px-6 py-2 text-gray-300 hover:bg-gray-600"
-        >
-          {wordQuestion ? t("showAnswer") : t("showGrammarAnswer")}
-        </button>
+        // Same sticky-bottom treatment as the grade buttons: the progress pills above can
+        // push this off-screen on a phone, and it is the only way forward.
+        <div className="sticky bottom-0 z-10 -mx-4 flex w-[calc(100%+2rem)] flex-col bg-gray-900/95 px-4 py-2 sm:static sm:mx-0 sm:w-auto sm:bg-transparent sm:px-0 sm:py-0">
+          <button
+            onClick={revealAnswer}
+            className="w-full rounded-lg bg-gray-700 px-6 py-3 text-gray-300 hover:bg-gray-600 sm:w-auto sm:py-2"
+          >
+            {wordQuestion ? t("showAnswer") : t("showGrammarAnswer")}
+          </button>
+        </div>
       ) : wordQuestion ? (
         <>
           {settings.showKoreanHanja && wordQuestion.hanjaReadings && (
@@ -1121,7 +1127,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             )}
           </div>
 
-          <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
+          <div className="sticky bottom-0 z-10 -mx-4 flex w-[calc(100%+2rem)] flex-col gap-3 bg-gray-900/95 px-4 py-2 sm:static sm:mx-0 sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:px-0 sm:py-0">
             <button
               disabled={submitting}
               onClick={() => handleGrade(false)}
@@ -1196,7 +1202,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             <GroupBExcludeControl refId={grammarQuestion.grammarId} kind="grammar" />
           )}
 
-          <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
+          <div className="sticky bottom-0 z-10 -mx-4 flex w-[calc(100%+2rem)] flex-col gap-3 bg-gray-900/95 px-4 py-2 sm:static sm:mx-0 sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:px-0 sm:py-0">
             <button
               disabled={submitting}
               onClick={() => handleGrade(false)}
