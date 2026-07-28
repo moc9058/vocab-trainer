@@ -25,6 +25,9 @@ const BATCH_SIZE = 50;
 const VISIBLE_ANSWER_ITEMS = 4;
 // How many upcoming grammar questions to prefetch item details for.
 const GRAMMAR_PREFETCH = 5;
+/** Reading preference, not session data: kept in localStorage so hiding the
+ *  readings once holds for the next question, the next session and both quizzes. */
+const EXAMPLE_PINYIN_PREF_KEY = "quizShowExamplePinyin";
 
 interface Props {
   session: CombinedQuizSession;
@@ -55,6 +58,53 @@ function TranslationDisplay({ translation }: { translation: string | Record<stri
   );
 }
 
+/** Anything the pinyin toggle can hide: per-segment ruby, or a whole-sentence
+ *  reading (grammar examples carry one). */
+interface ReadableExample {
+  transliteration?: string;
+  segments?: { transliteration?: string }[];
+}
+
+/** Whether a set of examples has any reading at all — the toggle is pointless
+ *  otherwise, and a Japanese or Korean sentence never has one. */
+function hasExampleReadings(examples: ReadableExample[]): boolean {
+  return examples.some(
+    (ex) => ex.transliteration?.trim() || ex.segments?.some((s) => s.transliteration?.trim())
+  );
+}
+
+/**
+ * The "Examples" heading, with the readings toggle sat on its right. It lives on
+ * the examples card rather than in the quiz header because that is what it acts
+ * on, and because the card is the one place on screen guaranteed to be in view
+ * when the reader wants it. The button is omitted entirely when there is no
+ * reading to hide.
+ */
+function ExamplesHeader({ showPinyin, onToggle }: { showPinyin: boolean; onToggle?: () => void }) {
+  const { t } = useI18n();
+  return (
+    <div className="mb-2 flex items-center gap-2">
+      <p className="min-w-0 flex-1 text-sm font-medium text-gray-400">{t("examples")}</p>
+      {onToggle && (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-pressed={showPinyin}
+          // Generous vertical padding below `sm`: this sits among tappable
+          // controls on a phone and needs a real target, not a text link.
+          className={`shrink-0 whitespace-nowrap rounded-md border px-2.5 py-1.5 text-xs transition-colors sm:py-1 ${
+            showPinyin
+              ? "border-indigo-600/70 bg-indigo-950/40 text-indigo-200"
+              : "border-gray-600 text-gray-400 hover:border-gray-500 hover:text-gray-200"
+          }`}
+        >
+          {showPinyin ? t("hideExamplePinyin") : t("showExamplePinyin")}
+        </button>
+      )}
+    </div>
+  );
+}
+
 export default function CombinedQuizTaking({ session, onComplete, onBrowse, onStartNew, variant = "combined" }: Props) {
   const isGroupB = variant === "groupB";
   const { t } = useI18n();
@@ -66,6 +116,14 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const [showingAnswer, setShowingAnswer] = useState(false);
   const [showAllDefinitions, setShowAllDefinitions] = useState(false);
   const [showAllExamples, setShowAllExamples] = useState(false);
+  const [showExamplePinyin, setShowExamplePinyin] = useState(
+    () => localStorage.getItem(EXAMPLE_PINYIN_PREF_KEY) !== "0"
+  );
+  const toggleExamplePinyin = () =>
+    setShowExamplePinyin((prev) => {
+      localStorage.setItem(EXAMPLE_PINYIN_PREF_KEY, prev ? "0" : "1");
+      return !prev;
+    });
   const [submitting, setSubmitting] = useState(false);
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [alreadyFlaggedIds, setAlreadyFlaggedIds] = useState<Set<string>>(new Set());
@@ -633,10 +691,15 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
         {reviewWord && reviewExamples.length > 0 && (
           <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
-            <p className="mb-2 text-sm font-medium text-gray-400">{t("examples")}</p>
+            <ExamplesHeader
+              showPinyin={showExamplePinyin}
+              onToggle={hasExampleReadings(reviewExamples) ? toggleExamplePinyin : undefined}
+            />
             {reviewExamples.map((ex, i) => (
               <div key={i} className="mb-2 last:mb-0">
-                <p className="text-lg text-gray-100"><RubyText text={ex.sentence} segments={ex.segments} /></p>
+                <p className="text-lg text-gray-100">
+                  <RubyText text={ex.sentence} segments={showExamplePinyin ? ex.segments : undefined} />
+                </p>
                 <TranslationDisplay translation={ex.translation} />
               </div>
             ))}
@@ -645,11 +708,20 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
         {reviewGrammarItem && reviewGrammarItem.examples && reviewGrammarItem.examples.length > 0 && (
           <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
-            <p className="mb-2 text-sm font-medium text-gray-400">{t("examples")}</p>
+            <ExamplesHeader
+              showPinyin={showExamplePinyin}
+              onToggle={
+                hasExampleReadings(reviewGrammarItem.examples) ? toggleExamplePinyin : undefined
+              }
+            />
             {reviewGrammarItem.examples.map((ex, i) => (
               <div key={i} className="mb-2 last:mb-0">
-                <p className="text-lg text-gray-100"><RubyText text={ex.sentence} segments={ex.segments} /></p>
-                {ex.transliteration && <p className="text-sm text-gray-500">{ex.transliteration}</p>}
+                <p className="text-lg text-gray-100">
+                  <RubyText text={ex.sentence} segments={showExamplePinyin ? ex.segments : undefined} />
+                </p>
+                {showExamplePinyin && ex.transliteration && (
+                  <p className="text-sm text-gray-500">{ex.transliteration}</p>
+                )}
                 {typeof ex.translation === "string" ? (
                   ex.translation && <p className="text-sm text-gray-400">{ex.translation}</p>
                 ) : (
@@ -1055,10 +1127,15 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
           {examples.length > 0 && (
             <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
-              <p className="mb-2 text-sm font-medium text-gray-400">{t("examples")}</p>
+              <ExamplesHeader
+                showPinyin={showExamplePinyin}
+                onToggle={hasExampleReadings(examples) ? toggleExamplePinyin : undefined}
+              />
               {visibleExamples.map((ex, i) => (
                 <div key={i} className="mb-2 last:mb-0">
-                  <p className="text-lg text-gray-100"><RubyText text={ex.sentence} segments={ex.segments} /></p>
+                  <p className="text-lg text-gray-100">
+                    <RubyText text={ex.sentence} segments={showExamplePinyin ? ex.segments : undefined} />
+                  </p>
                   <TranslationDisplay translation={ex.translation} />
                 </div>
               ))}
@@ -1134,13 +1211,16 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
           {/* Registered examples (if any) */}
           {grammarItem && grammarItem.examples && grammarItem.examples.length > 0 && (
             <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
-              <p className="mb-2 text-sm font-medium text-gray-400">{t("examples")}</p>
+              <ExamplesHeader
+                showPinyin={showExamplePinyin}
+                onToggle={hasExampleReadings(grammarItem.examples) ? toggleExamplePinyin : undefined}
+              />
               {grammarItem.examples.map((ex, i) => (
                 <div key={i} className="mb-2 last:mb-0">
                   <p className="text-lg text-gray-100">
-                    <RubyText text={ex.sentence} segments={ex.segments} />
+                    <RubyText text={ex.sentence} segments={showExamplePinyin ? ex.segments : undefined} />
                   </p>
-                  {ex.transliteration && (
+                  {showExamplePinyin && ex.transliteration && (
                     <p className="text-sm text-gray-500">{ex.transliteration}</p>
                   )}
                   {typeof ex.translation === "string" ? (
