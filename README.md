@@ -744,7 +744,9 @@ One grammar quiz session is stored per language. Each question shows an example-
 }
 ```
 
-All fields except `language` are optional. `groupIds` scopes the question pool to the given grammar groups.
+All fields except `language` are optional (`questionCount` defaults to all matching grammar items). `groupIds` scopes the question pool to the given grammar groups.
+
+Every item of the selected groups is asked — `groupWeights` (and `correctWeight`) only decide the ORDER of the questions, never which items make the cut. A group weighted `0` is the one exception: it is excluded entirely.
 
 **Response:** `201` with `GrammarQuizSession`. Question `exampleTranslation` may be a plain string or a multi-language `Record<string, string>`.
 

@@ -76,7 +76,9 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.badRequest("No grammar items match the given filters");
       }
 
-      const count = questionCount ? Math.min(questionCount, pool.length) : Math.min(10, pool.length);
+      // Default to the ENTIRE matching pool (mirrors the word quiz): every item of the
+      // selected groups is asked, and weights only decide the ORDER, not who makes the cut.
+      const count = questionCount ? Math.min(questionCount, pool.length) : pool.length;
 
       // Optionally split already-mastered items into their own weighted bucket, peer to the
       // groups (correctWeight 0 = exclude them; >0 = mix them back in). Only active when

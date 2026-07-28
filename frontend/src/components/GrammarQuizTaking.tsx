@@ -4,6 +4,7 @@ import { useSettings } from "../settings/context";
 import { answerGrammarQuestion, getGrammarGroups, updateGrammarQuizWeights } from "../api/grammar";
 import { fetchJson } from "../api/client";
 import RubyText from "./RubyText";
+import GrammarDescriptionsPanel from "./GrammarDescriptionsPanel";
 import type { GrammarQuizSession, GrammarQuizQuestion, Grammar } from "../types";
 import { isWeightValid, scaleWeightRecord } from "../utils/weightInput";
 
@@ -15,7 +16,7 @@ interface Props {
 
 export default function GrammarQuizTaking({ session, onComplete, onStartNew }: Props) {
   const { t } = useI18n();
-  const { displayDefEntries, displayGrammarDefEntries } = useSettings();
+  const { displayGrammarDefEntries } = useSettings();
   const [currentSession, setCurrentSession] = useState(session);
   const [currentIndex, setCurrentIndex] = useState(() => {
     const idx = session.questions.findIndex((q) => q.userCorrect === undefined);
@@ -186,29 +187,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
           {reviewQuestion.statement || reviewGrammar?.statement}
         </h2>
 
-        {reviewGrammar && (
-          <div className="w-full max-w-lg rounded-lg bg-gray-800 border border-gray-600 p-4">
-            {reviewGrammar.descriptions?.map((d, di) => {
-              const entries = displayDefEntries(d.text || {});
-              const rows = entries.length > 0 ? entries : Object.entries(d.text || {});
-              return (
-                <div key={di} className="mb-2 last:mb-0">
-                  {d.partOfSpeech && (
-                    <span className="mr-2 rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-300">
-                      {d.partOfSpeech}
-                    </span>
-                  )}
-                  {rows.map(([lang, text]) => (
-                    <p key={lang} className="text-sm text-gray-300 whitespace-pre-line">
-                      <span className="text-xs text-gray-500">[{lang}] </span>
-                      {text}
-                    </p>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {reviewGrammar && <GrammarDescriptionsPanel item={reviewGrammar} />}
 
         {reviewGrammar && reviewGrammar.examples && reviewGrammar.examples.length > 0 && (
           <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
@@ -403,30 +382,8 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
         </button>
       ) : (
         <>
-          {/* Reveal: descriptions */}
-          {grammar && (
-            <div className="w-full max-w-lg rounded-lg bg-gray-800 border border-gray-600 p-4">
-              {grammar.descriptions?.map((d, di) => {
-                const entries = displayDefEntries(d.text || {});
-                const rows = entries.length > 0 ? entries : Object.entries(d.text || {});
-                return (
-                  <div key={di} className="mb-2 last:mb-0">
-                    {d.partOfSpeech && (
-                      <span className="mr-2 rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-300">
-                        {d.partOfSpeech}
-                      </span>
-                    )}
-                    {rows.map(([lang, text]) => (
-                      <p key={lang} className="text-sm text-gray-300 whitespace-pre-line">
-                        <span className="text-xs text-gray-500">[{lang}] </span>
-                        {text}
-                      </p>
-                    ))}
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          {/* Reveal: descriptions (statement pinyin + per-description pinyins included) */}
+          {grammar && <GrammarDescriptionsPanel item={grammar} />}
 
           {/* Registered examples (if any) */}
           {grammar && grammar.examples && grammar.examples.length > 0 && (
