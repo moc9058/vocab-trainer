@@ -26,6 +26,13 @@ interface Props {
 type Phase = "sessions" | "input" | "analyzing" | "review";
 
 const MAX_TEXT = 8000;
+/**
+ * Past roughly this much text, exhaustive per-sentence segmentation produces more
+ * JSON than the model will emit in one response and the analysis comes back
+ * truncated. Not a hard cap — the article may be mostly short sentences — so it
+ * warns rather than blocks.
+ */
+const LONG_TEXT_WARNING = 1500;
 
 /** Phase router for the article importer; all session state lives in `useImportSession`. */
 export default function ImportView({ language, onQueue, onGrammarQueue }: Props) {
@@ -244,9 +251,18 @@ export default function ImportView({ language, onQueue, onGrammarQueue }: Props)
                 placeholder={t("importPastePlaceholder")}
                 className="h-48 w-full resize-y rounded-2xl border border-gray-700 bg-gray-800/60 px-3 py-3 text-base leading-relaxed text-gray-100 placeholder-gray-600 focus:border-indigo-500 focus:outline-none sm:h-auto sm:px-4 sm:text-[15px]"
               />
-              <p className="mt-1 text-right text-xs text-gray-600">
+              <p
+                className={`mt-1 text-right text-xs ${
+                  text.length > LONG_TEXT_WARNING ? "text-amber-500/90" : "text-gray-600"
+                }`}
+              >
                 {text.length} / {MAX_TEXT}
               </p>
+              {text.length > LONG_TEXT_WARNING && (
+                <p className="mt-1 rounded-lg border border-amber-700/50 bg-amber-950/25 px-3 py-2 text-[11px] leading-snug text-amber-200/90">
+                  {t("importLongTextWarning")}
+                </p>
+              )}
             </div>
 
             <div className="space-y-3">

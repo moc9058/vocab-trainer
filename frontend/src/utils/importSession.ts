@@ -242,3 +242,89 @@ export function sessionCounts(items: ImportItem[]) {
 export function flattenSentences(paragraphs: { sentences: ImportSentence[] }[]): ImportSentence[] {
   return paragraphs.flatMap((p) => p.sentences);
 }
+
+// ---------- coverage ----------
+
+/**
+ * A character has to be accounted for when it is a letter or an ideograph.
+ * Punctuation (。、！？「」…), spaces, digits and symbols are deliberately out of
+ * scope — they are not vocabulary and are never asked of the analysis.
+ */
+function needsCoverage(ch: string): boolean {
+  return /\p{L}/u.test(ch);
+}
+
+export interface SentenceCoverage {
+  /** One flag per UTF-16 index of the sentence. */
+  covered: boolean[];
+  /** Characters that have to be accounted for at all. */
+  required: number;
+  /** …of which this many still are not. */
+  missing: number;
+  complete: boolean;
+}
+
+/**
+ * Which characters of a sentence the extracted words already account for.
+ *
+ * The analysis is asked to segment a sentence exhaustively, so a complete
+ * sentence is the normal case and a gap means something was missed — the gap is
+ * highlighted so it can be selected and added. Only live word rows count;
+ * grammar rows are pattern NOTATION (「随着～，越来越～」) rather than a substring of
+ * the sentence, so they cannot be matched positionally and never contribute.
+ */
+export function sentenceCoverage(sentence: string, words: ImportWordItem[]): SentenceCoverage {
+  const covered = new Array<boolean>(sentence.length).fill(false);
+  const mark = (at: number, len: number) => {
+    for (let i = at; i < at + len && i < covered.length; i++) covered[i] = true;
+  };
+
+  for (const word of words) {
+    const term = word.term.trim();
+    if (!term) continue;
+    // Every occurrence: a word listed once per sentence is meant to cover all of
+    // its occurrences in that sentence.
+    let hit = false;
+    for (let at = sentence.indexOf(term); at !== -1; at = sentence.indexOf(term, at + 1)) {
+      mark(at, term.length);
+      hit = true;
+    }
+    if (hit) continue;
+    // The model may still hand back a dictionary form where the sentence has an
+    // inflected one (食べる vs 食べました). Cover the longest prefix that does occur,
+    // and only its first occurrence — a short prefix would otherwise over-claim.
+    // Chinese has no inflection, so this branch never runs there.
+    for (let len = term.length - 1; len >= 1; len--) {
+      const at = sentence.indexOf(term.slice(0, len));
+      if (at !== -1) {
+        mark(at, len);
+        break;
+      }
+    }
+  }
+
+  let required = 0;
+  let missing = 0;
+  for (let i = 0; i < sentence.length; i++) {
+    if (!needsCoverage(sentence[i])) continue;
+    required++;
+    if (!covered[i]) missing++;
+  }
+  return { covered, required, missing, complete: missing === 0 };
+}
+
+/** The sentence split into runs so the uncovered stretches can be highlighted.
+ *  `gap` is true only for characters that both need covering and lack it. */
+export function coverageRuns(
+  sentence: string,
+  coverage: SentenceCoverage
+): { text: string; gap: boolean }[] {
+  const runs: { text: string; gap: boolean }[] = [];
+  for (let i = 0; i < sentence.length; i++) {
+    const gap = !coverage.covered[i] && needsCoverage(sentence[i]);
+    const last = runs[runs.length - 1];
+    if (last && last.gap === gap) last.text += sentence[i];
+    else runs.push({ text: sentence[i], gap });
+  }
+  return runs;
+}

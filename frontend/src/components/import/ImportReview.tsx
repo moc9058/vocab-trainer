@@ -2,7 +2,12 @@ import { useEffect, useMemo, useRef } from "react";
 import { useI18n } from "../../i18n/context";
 import ImportDestinationRail from "./ImportDestinationRail";
 import ImportSentenceCard from "./ImportSentenceCard";
-import { flattenSentences, sentenceItems, sessionCounts } from "../../utils/importSession";
+import {
+  flattenSentences,
+  sentenceCoverage,
+  sentenceItems,
+  sessionCounts,
+} from "../../utils/importSession";
 import type { ImportItem, ImportSession } from "../../types";
 import type { SaveStatus } from "../../hooks/useImportSession";
 
@@ -32,6 +37,16 @@ export default function ImportReview({
   const { t } = useI18n();
   const sentences = useMemo(() => flattenSentences(session.paragraphs), [session.paragraphs]);
   const counts = useMemo(() => sessionCounts(session.items), [session.items]);
+  /** How many characters each sentence still leaves unaccounted for. Computed once
+   *  per items change — a collapsed row would otherwise rescan on every render. */
+  const gapsBySentence = useMemo(() => {
+    const map = new Map<number, number>();
+    for (const s of sentences) {
+      const { words } = sentenceItems(session.items, s.index);
+      map.set(s.index, sentenceCoverage(s.text, words).missing);
+    }
+    return map;
+  }, [sentences, session.items]);
   const focused = session.focusedSentenceIndex;
   const focusRef = useRef<HTMLDivElement>(null);
 
@@ -150,6 +165,7 @@ export default function ImportReview({
                       );
                     }
                     const total = words.length + grammar.length;
+                    const gap = gapsBySentence.get(sentence.index) ?? 0;
                     return (
                       <button
                         key={sentence.index}
@@ -165,8 +181,16 @@ export default function ImportReview({
                         >
                           {sentence.text}
                         </p>
-                        {total > 0 && (
+                        {(total > 0 || gap > 0) && (
                           <span className="mt-1 flex flex-wrap gap-1">
+                            {/* Leads the chips: an incomplete sentence is the reason
+                                to open this row at all. */}
+                            {gap > 0 && (
+                              <span className="rounded border border-amber-700/60 px-1.5 py-0.5 text-[10px] text-amber-400/90">
+                                {gap}
+                                {t("importCoverageMissing")}
+                              </span>
+                            )}
                             {words.map((w) => (
                               <StatusChip key={w.id} status={w.status} label={w.term} kind="word" />
                             ))}

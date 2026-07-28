@@ -1,10 +1,12 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useI18n } from "../../i18n/context";
 import {
   addGrammarItem,
   addWordItem,
+  coverageRuns,
   isLocked,
   mergeWordItems,
+  sentenceCoverage,
   sentenceItems,
   splitWordItem,
   undoDerivation,
@@ -87,6 +89,12 @@ export default function ImportSentenceCard({
           .join("")
       : "";
 
+  // The analysis segments a sentence exhaustively, so anything still uncovered is
+  // something it missed — show it in the sentence itself rather than as a count
+  // the reader has to reconcile by eye.
+  const coverage = useMemo(() => sentenceCoverage(sentence.text, words), [sentence.text, words]);
+  const runs = useMemo(() => coverageRuns(sentence.text, coverage), [sentence.text, coverage]);
+
   return (
     <div className="min-w-0 rounded-xl border border-indigo-800/50 bg-gray-800/60 p-3 sm:p-4">
       <p
@@ -95,8 +103,35 @@ export default function ImportSentenceCard({
         onTouchEnd={captureSelection}
         className="select-text break-words text-[17px] leading-relaxed text-gray-100 sm:text-[15px]"
       >
-        {sentence.text}
+        {runs.map((run, i) =>
+          run.gap ? (
+            <span
+              key={i}
+              className="rounded-sm bg-amber-500/15 text-amber-200 underline decoration-amber-500/70 decoration-dotted underline-offset-4"
+            >
+              {run.text}
+            </span>
+          ) : (
+            <span key={i}>{run.text}</span>
+          )
+        )}
       </p>
+
+      {coverage.required > 0 && (
+        <p className="mt-1.5 text-[11px] leading-snug">
+          {coverage.complete ? (
+            <span className="text-green-500/80">✓ {t("importCoverageDone")}</span>
+          ) : (
+            <>
+              <span className="text-amber-400/90">
+                {coverage.missing}
+                {t("importCoverageMissing")}
+              </span>
+              <span className="text-gray-500"> — {t("importCoverageHint")}</span>
+            </>
+          )}
+        </p>
+      )}
 
       {selection && (
         <button

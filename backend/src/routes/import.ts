@@ -40,7 +40,20 @@ function buildAnalyzeSystemPrompt(basePrompt: string, statements: string[]): str
  * silently pointing at the wrong sentence.
  */
 function normalizeAnalysis(raw: string): ImportAnalysisResult {
-  const parsed = JSON.parse(raw) as ImportAnalysisResult;
+  let parsed: ImportAnalysisResult;
+  try {
+    parsed = JSON.parse(raw) as ImportAnalysisResult;
+  } catch (err) {
+    // The analysis segments every sentence exhaustively, so a long article can run
+    // the model into its output cap and the stream ends mid-token. Say so, rather
+    // than surfacing a bare "Unexpected end of JSON input".
+    throw new Error(
+      `The analysis did not come back as complete JSON (${raw.length} characters received). ` +
+        `Exhaustive word segmentation produces a lot of output, so a long article can exceed ` +
+        `the model's response limit — try importing it a few paragraphs at a time. ` +
+        `Underlying error: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
   const paragraphs = (parsed.paragraphs ?? []).map((p) => ({ sentences: p.sentences ?? [] }));
   let index = 0;
   for (const p of paragraphs) {
