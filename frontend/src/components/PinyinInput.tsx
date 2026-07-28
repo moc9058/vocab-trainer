@@ -53,9 +53,24 @@ interface Props {
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
+  /** Sizing for the element that wraps input + panel — needed wherever the input
+   *  is a flex item, since the wrapper, not the input, is what the parent lays out. */
+  wrapperClassName?: string;
+  /** Float the panel over the page instead of pushing content down. Used in dense
+   *  lists (the importer's word rows), where an in-flow panel would reflow the row. */
+  floatingPanel?: boolean;
 }
 
-export default function PinyinInput({ value, onChange, placeholder, className }: Props) {
+export default function PinyinInput({
+  value,
+  onChange,
+  placeholder,
+  className,
+  disabled,
+  wrapperClassName,
+  floatingPanel,
+}: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const caretRef = useRef<number | null>(null);
   const [focused, setFocused] = useState(false);
@@ -89,7 +104,7 @@ export default function PinyinInput({ value, onChange, placeholder, className }:
   };
 
   return (
-    <div>
+    <div className={`${floatingPanel ? "relative " : ""}${wrapperClassName ?? ""}`}>
       <input
         ref={inputRef}
         type="text"
@@ -99,13 +114,17 @@ export default function PinyinInput({ value, onChange, placeholder, className }:
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         placeholder={placeholder}
+        disabled={disabled}
         className={className}
       />
-      {focused && (
-        // Normal document flow (not absolutely positioned) so the panel pushes
-        // following content down instead of floating over it and hiding it.
+      {focused && !disabled && (
+        // In normal document flow the panel pushes following content down instead
+        // of floating over it and hiding it; `floatingPanel` opts out where the
+        // reflow would be worse than the overlay (see the prop's note).
         <div
-          className="mt-1 rounded-lg border border-gray-600 bg-gray-800 p-2 shadow-lg"
+          className={`rounded-lg border border-gray-600 bg-gray-800 p-2 shadow-lg ${
+            floatingPanel ? "absolute left-0 top-full z-30 mt-1 w-max" : "mt-1"
+          }`}
           onMouseDown={(e) => e.preventDefault()}
         >
           <div className="flex flex-col gap-1">

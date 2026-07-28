@@ -35,6 +35,10 @@ import type {
 } from "./types.js";
 
 const db = new Firestore({
+  // Unset (the deployed case) falls back to ADC, which on Cloud Run is already
+  // the right project; locally it is whatever gcloud points at, which is why the
+  // migration scripts set this.
+  projectId: process.env.FIRESTORE_PROJECT || undefined,
   databaseId: process.env.FIRESTORE_DATABASE_ID || "vocab-database",
   ignoreUndefinedProperties: true,
 });

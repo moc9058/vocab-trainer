@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../i18n/context";
 import ImportDestinationRail from "./ImportDestinationRail";
 import ImportSentenceCard from "./ImportSentenceCard";
@@ -8,8 +8,11 @@ import {
   sentenceItems,
   sessionCounts,
 } from "../../utils/importSession";
+import { useImportLibraryStatus } from "../../hooks/useImportLibraryStatus";
 import type { ImportItem, ImportSession } from "../../types";
 import type { SaveStatus } from "../../hooks/useImportSession";
+
+const TRANSLATION_PREF_KEY = "importShowTranslations";
 
 interface Props {
   session: ImportSession;
@@ -50,6 +53,24 @@ export default function ImportReview({
   const focused = session.focusedSentenceIndex;
   const focusRef = useRef<HTMLDivElement>(null);
 
+  // Reading preference, not session data — kept in localStorage so it survives
+  // moving between articles.
+  const [showTranslations, setShowTranslations] = useState(
+    () => localStorage.getItem(TRANSLATION_PREF_KEY) !== "0"
+  );
+  function toggleTranslations() {
+    setShowTranslations((prev) => {
+      localStorage.setItem(TRANSLATION_PREF_KEY, prev ? "0" : "1");
+      return !prev;
+    });
+  }
+
+  const { inLibrary, groupBByTerm } = useImportLibraryStatus(
+    session.id,
+    session.language,
+    session.items
+  );
+
   const position = sentences.findIndex((s) => s.index === focused);
 
   function focus(index: number) {
@@ -88,12 +109,25 @@ export default function ImportReview({
               />
             </div>
           </div>
-          <button
-            onClick={onExit}
-            className="shrink-0 whitespace-nowrap rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-200 sm:text-sm"
-          >
-            {t("importBackToSessions")}
-          </button>
+          <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+            <button
+              onClick={toggleTranslations}
+              aria-pressed={showTranslations}
+              className={`whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs ${
+                showTranslations
+                  ? "border-indigo-600/70 bg-indigo-950/40 text-indigo-200"
+                  : "border-gray-700 text-gray-400 hover:border-gray-500 hover:text-gray-200"
+              }`}
+            >
+              {showTranslations ? t("importHideTranslation") : t("importShowTranslation")}
+            </button>
+            <button
+              onClick={onExit}
+              className="whitespace-nowrap rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-200 sm:text-sm"
+            >
+              {t("importBackToSessions")}
+            </button>
+          </div>
         </header>
 
         {/* Grid placement is explicit so the destination can lead on a phone —
@@ -135,11 +169,15 @@ export default function ImportReview({
                           className="scroll-mt-4 scroll-mb-24 lg:scroll-mb-4"
                         >
                           <ImportSentenceCard
+                            language={session.language}
                             sentence={sentence}
                             items={session.items}
                             onSetItems={onSetItems}
                             onPatchItem={onPatchItem}
                             onRegister={onRegister}
+                            showTranslation={showTranslations}
+                            inLibrary={inLibrary}
+                            groupBByTerm={groupBByTerm}
                           />
                           {/* On a phone the same controls live in the sticky bar below. */}
                           <div className="mt-2 hidden items-center gap-3 text-xs lg:flex">
@@ -181,6 +219,11 @@ export default function ImportReview({
                         >
                           {sentence.text}
                         </p>
+                        {showTranslations && sentence.translation?.trim() && (
+                          <p className="mt-0.5 line-clamp-2 break-words text-[13px] leading-snug text-indigo-200/50 sm:line-clamp-1">
+                            {sentence.translation}
+                          </p>
+                        )}
                         {(total > 0 || gap > 0) && (
                           <span className="mt-1 flex flex-wrap gap-1">
                             {/* Leads the chips: an incomplete sentence is the reason
@@ -192,7 +235,13 @@ export default function ImportReview({
                               </span>
                             )}
                             {words.map((w) => (
-                              <StatusChip key={w.id} status={w.status} label={w.term} kind="word" />
+                              <StatusChip
+                                key={w.id}
+                                status={w.status}
+                                label={w.term}
+                                kind="word"
+                                inGroupA={inLibrary.has(w.term.trim())}
+                              />
                             ))}
                             {grammar.map((g) => (
                               <StatusChip
@@ -243,10 +292,14 @@ function StatusChip({
   status,
   label,
   kind,
+  inGroupA = false,
 }: {
   status: ImportItem["status"];
   label: string;
   kind: "word" | "grammar";
+  /** Already in a Group A study set — kept visible rather than greyed out like a
+   *  plain "done" chip, since it is the state the reader is scanning for. */
+  inGroupA?: boolean;
 }) {
   const done = status === "registered" || status === "duplicate";
   const base = kind === "word" ? "border-blue-800/60 text-blue-300" : "border-emerald-800/60 text-emerald-300";
@@ -255,6 +308,8 @@ function StatusChip({
       ? "border-red-800/60 text-red-300"
       : status === "queued"
       ? "border-amber-800/60 text-amber-300"
+      : inGroupA
+      ? "border-emerald-500/70 bg-emerald-900/40 font-medium text-emerald-300"
       : done
       ? "border-gray-700 text-gray-500"
       : base;

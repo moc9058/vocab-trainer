@@ -43,8 +43,9 @@ import {
   deleteWordGroup,
   modifyWordGroupMembers,
 } from "../firestore.js";
-import type { Word, WordDraft, Example, ExampleSentence } from "../types.js";
+import type { Word, WordDraft, Example, ExampleSentence, HanjaReading } from "../types.js";
 import { TOPICS } from "../types.js";
+import { generateHanjaReadings } from "../hanja.js";
 import { callLLMWithSchema, stripMarkdownFences, validateWord, segmentBatch, fillSegmentPinyin, type Segment } from "../llm.js";
 import {
   ALL_DEFINITION_LANGUAGES,
@@ -364,6 +365,18 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         merged.topics = ["Language Fundamentals"];
       }
 
+      // Korean hanja readings, for Chinese words only. Started here and awaited
+      // just before the word doc is built, so it runs alongside the example-sentence
+      // writes instead of adding its own round-trip to the request. A failure is
+      // logged and dropped: the word is worth more than its readings, and
+      // `backfill-hanja-readings.ts` can fill in what is missing later.
+      const hanjaPromise: Promise<HanjaReading[] | undefined> = isChinese
+        ? generateHanjaReadings(merged.term, merged.transliteration).catch((err) => {
+            fastify.log.error({ err, term }, "hanja reading generation failed");
+            return undefined;
+          })
+        : Promise.resolve(undefined);
+
       // Parse segments from LLM response (Chinese only — segments are included in Call 1)
       const examplesWithSegments: Example[] = merged.examples.map((ex: any) => {
         if (!isChinese || !Array.isArray(ex.segments)) return ex as Example;
@@ -526,6 +539,8 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
+      const hanjaReadings = await hanjaPromise;
+
       const word: Word = {
         id,
         term: merged.term,
@@ -535,6 +550,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         topics: merged.topics as Word["topics"],
         level: merged.level,
         notes: merged.notes,
+        ...(hanjaReadings ? { hanjaReadings } : {}),
       };
 
       // addWord now defaults appearsInIds to include own exampleIds.

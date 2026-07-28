@@ -6,6 +6,7 @@ import { LEVEL_OPTIONS } from "../constants/levels";
 import { smartAddWord, lookupWord, checkTerms, getGroups, createGroup, modifyGroupMembers } from "../api/vocab";
 import { categoryGroups, displayTranslation, latestWordGroup, type Word, type WordDraft, type WordGroup } from "../types";
 import GroupBSelect from "./GroupBSelect";
+import PinyinInput from "./PinyinInput";
 
 interface Prefill {
   term: string;
@@ -582,10 +583,9 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           {wordLanguage === "chinese" && (
             <div>
               <label className="mb-1 block text-sm text-gray-400">{t("transliteration")}</label>
-              <input
-                type="text"
+              <PinyinInput
                 value={transliteration}
-                onChange={(e) => setTransliteration(e.target.value)}
+                onChange={setTransliteration}
                 placeholder="LLM will generate if empty"
                 className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-400 focus:outline-none"
               />

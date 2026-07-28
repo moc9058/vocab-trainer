@@ -1,7 +1,11 @@
 /**
  * One-off migration: backfill hanjaReadings for existing words in Firestore.
  *
- * For each word, the LLM (MINI model) decomposes every character into:
+ * Words are sent to the LLM in CHUNKS (default 10 per call): the readings are a
+ * per-character lookup with no cross-word context, so one call per word spends a
+ * whole round-trip and a whole prompt on each of ~400 words for nothing.
+ *
+ * For each word, the LLM (FULL model) decomposes every character into:
  *   - simplifiedChar  : the original simplified Chinese character
  *   - traditionalChar : the traditional (번체) Korean hanja form
  *   - hunEum          : list of Korean 훈음 readings (e.g. ["사랑 애"])
@@ -18,17 +22,21 @@
  *   --dry-run            Don't write to Firestore — just log what would change.
  *   --language=<name>    Only process words in this language (default: chinese).
  *   --limit=<n>          Process at most n words.
+ *   --chunk=<n>          Words per LLM call (default 10).
  *   --force              Re-process words that already have hanjaReadings set.
  *   --empty-only         Re-process only words whose hanjaReadings is an empty array.
  */
 
+// Must stay the FIRST import: it fixes the project for every Firestore client the
+// process builds, including the one src/firestore.ts creates at module load.
+import { PROJECT_ID, DATABASE_ID } from "./_project-env.js";
 import { Firestore } from "@google-cloud/firestore";
-import { callLLMWithSchema, stripMarkdownFences } from "../src/llm.js";
+import { generateHanjaReadingsBatch } from "../src/hanja.js";
 import type { HanjaReading } from "../src/types.js";
 
 const db = new Firestore({
-  projectId: process.env.FIRESTORE_PROJECT || undefined,
-  databaseId: process.env.FIRESTORE_DATABASE_ID || "vocab-database",
+  projectId: PROJECT_ID,
+  databaseId: DATABASE_ID,
   ignoreUndefinedProperties: true,
 });
 
@@ -40,90 +48,34 @@ interface CliArgs {
   dryRun: boolean;
   language: string;
   limit: number | null;
+  chunk: number;
   force: boolean;
   emptyOnly: boolean;
 }
 
+/** Words per LLM call. Big enough to amortise the prompt, small enough that one
+ *  bad response costs a handful of words rather than the whole run. */
+const DEFAULT_CHUNK = 10;
+
 function parseArgs(): CliArgs {
-  const args: CliArgs = { dryRun: false, language: "chinese", limit: null, force: false, emptyOnly: false };
+  const args: CliArgs = {
+    dryRun: false,
+    language: "chinese",
+    limit: null,
+    chunk: DEFAULT_CHUNK,
+    force: false,
+    emptyOnly: false,
+  };
   for (const arg of process.argv.slice(2)) {
     if (arg === "--dry-run") args.dryRun = true;
     else if (arg === "--force") args.force = true;
     else if (arg === "--empty-only") args.emptyOnly = true;
     else if (arg.startsWith("--language=")) args.language = arg.slice("--language=".length);
     else if (arg.startsWith("--limit=")) args.limit = parseInt(arg.slice("--limit=".length), 10) || null;
+    else if (arg.startsWith("--chunk=")) args.chunk = parseInt(arg.slice("--chunk=".length), 10) || DEFAULT_CHUNK;
     else console.warn(`Unknown argument: ${arg}`);
   }
   return args;
-}
-
-// ---------- LLM ----------
-
-const SYSTEM_PROMPT = `You are a Korean hanja expert. Given a Chinese word (simplified characters) and its pinyin, decompose each character of the term into its Korean hanja information.
-
-For each character provide:
-- simplifiedChar : the original simplified Chinese character (copy exactly from input)
-- traditionalChar: the traditional (번체) Korean hanja form; if identical to simplified, repeat it
-- hunEum         : list of ALL valid Korean 훈음 readings for this character
-                   (e.g. ["사랑 애"] or ["다닐 행", "항렬 항", "줄 행"] for multi-reading characters)
-
-Rules:
-- List every attested 훈음 — do NOT omit secondary readings.
-- If a character has no established Korean hanja reading (digits, Latin letters, punctuation, or extremely rare characters not used in Korean), return hunEum as an empty array [].
-- Do NOT fabricate readings. Only include attested 훈음.
-- Process ONLY the characters in the "term" field, one entry per character, in order.`;
-
-const LLM_SCHEMA = {
-  name: "hanja_readings",
-  strict: false,
-  schema: {
-    type: "object",
-    required: ["readings"],
-    properties: {
-      readings: {
-        type: "array",
-        items: {
-          type: "object",
-          required: ["simplifiedChar", "traditionalChar", "hunEum"],
-          properties: {
-            simplifiedChar:  { type: "string" },
-            traditionalChar: { type: "string" },
-            hunEum:          { type: "array", items: { type: "string" } },
-          },
-        },
-      },
-    },
-  },
-} as const;
-
-interface LLMReading {
-  simplifiedChar: string;
-  traditionalChar: string;
-  hunEum: string[];
-}
-
-interface LLMResponse {
-  readings: LLMReading[];
-}
-
-async function fetchHanjaReadings(term: string, transliteration: string | undefined): Promise<HanjaReading[]> {
-  const userPrompt = JSON.stringify({ term, pinyin: transliteration ?? "" });
-  const raw = await callLLMWithSchema(
-    SYSTEM_PROMPT,
-    userPrompt,
-    LLM_SCHEMA as unknown as Record<string, unknown>,
-    "scripts/backfill-hanja-readings",
-  );
-  const parsed = JSON.parse(stripMarkdownFences(raw)) as LLMResponse;
-
-  // Keep only entries that have at least one 훈음
-  return parsed.readings
-    .filter((r) => Array.isArray(r.hunEum) && r.hunEum.length > 0)
-    .map((r) => ({
-      simplifiedChar:  r.simplifiedChar,
-      traditionalChar: r.traditionalChar,
-      hunEum:          r.hunEum,
-    }));
 }
 
 // ---------- Main ----------
@@ -134,29 +86,35 @@ async function main(): Promise<void> {
   console.log(`  language: ${args.language}`);
   console.log(`  dry-run:  ${args.dryRun}`);
   console.log(`  limit:    ${args.limit ?? "<none>"}`);
+  console.log(`  chunk:    ${args.chunk} word(s) per LLM call`);
   console.log(`  force:    ${args.force}`);
   console.log(`  empty-only: ${args.emptyOnly}`);
+  // Printed because writing to the wrong project is the costly mistake here.
+  console.log(`  project:  ${PROJECT_ID}`);
+  console.log(`  database: ${DATABASE_ID}`);
 
   console.log("\nFetching words...");
-  const snap = await wordsCol.where("language", "==", args.language).get();
+  let snap;
+  try {
+    snap = await wordsCol.where("language", "==", args.language).get();
+  } catch (err) {
+    if ((err as { code?: number }).code === 5) {
+      throw new Error(
+        `Firestore returned NOT_FOUND: project "${PROJECT_ID}" has no database ` +
+          `"${DATABASE_ID}". Check FIRESTORE_PROJECT / FIRESTORE_DATABASE_ID, and that ` +
+          `the account gcloud is authenticated as can read that project.`
+      );
+    }
+    throw err;
+  }
   console.log(`Found ${snap.size} word(s) in language=${args.language}`);
 
-  let scanned = 0;
+  // ---- select the work ----
   let skipped = 0;
-  let processed = 0;
-  let updated = 0;
-  let withoutReadings = 0;
-  let failed = 0;
-
+  const todo: { id: string; term: string; transliteration?: string }[] = [];
   for (const doc of snap.docs) {
-    if (args.limit !== null && processed >= args.limit) break;
-    scanned++;
-
+    if (args.limit !== null && todo.length >= args.limit) break;
     const data = doc.data();
-    const term: string = data.term ?? "";
-    const transliteration: string | undefined = data.transliteration;
-
-    // Skip if already processed (hanjaReadings field present) unless --force
     const alreadySet = Array.isArray(data.hanjaReadings);
     if (args.emptyOnly && (!alreadySet || data.hanjaReadings.length > 0)) {
       skipped++;
@@ -166,37 +124,74 @@ async function main(): Promise<void> {
       skipped++;
       continue;
     }
+    const term: string = data.term ?? "";
+    if (!term) {
+      skipped++;
+      continue;
+    }
+    todo.push({ id: doc.id, term, transliteration: data.transliteration });
+  }
 
-    processed++;
-    console.log(`\n[${scanned}] ${doc.id} "${term}"`);
+  const chunkCount = Math.ceil(todo.length / args.chunk);
+  console.log(
+    `Skipping ${skipped} already-processed word(s); ${todo.length} to do ` +
+      `in ${chunkCount} call(s) of up to ${args.chunk}`
+  );
+
+  let updated = 0;
+  let withoutReadings = 0;
+  let failed = 0;
+
+  for (let start = 0; start < todo.length; start += args.chunk) {
+    const chunk = todo.slice(start, start + args.chunk);
+    const n = Math.floor(start / args.chunk) + 1;
+    console.log(`\n[chunk ${n}/${chunkCount}] ${chunk.map((w) => w.term).join(", ")}`);
 
     if (args.dryRun) {
-      console.log(`    (dry-run) would call LLM for "${term}"`);
+      console.log(`    (dry-run) would call the LLM for ${chunk.length} word(s)`);
       continue;
     }
 
+    let readingsByTerm: Map<string, HanjaReading[]>;
     try {
-      const readings = await fetchHanjaReadings(term, transliteration);
-      console.log(`    → ${readings.length} reading(s):`);
-      for (const r of readings) {
-        console.log(`       ${r.simplifiedChar} / ${r.traditionalChar}: [${r.hunEum.join(", ")}]`);
-      }
+      readingsByTerm = await generateHanjaReadingsBatch(chunk, "scripts/backfill-hanja-readings");
+    } catch (err) {
+      // One bad response costs this chunk only; the rest of the run continues and
+      // the words stay unprocessed, so a later run picks them up.
+      failed += chunk.length;
+      console.error(`    FAIL (whole chunk): ${err instanceof Error ? err.message : String(err)}`);
+      continue;
+    }
 
-      // Store even if empty (marks word as processed)
-      await wordsCol.doc(doc.id).update({ hanjaReadings: readings });
+    // Writes are batched too — one commit per LLM call instead of one per word.
+    const batch = db.batch();
+    let inBatch = 0;
+    for (const word of chunk) {
+      const readings = readingsByTerm.get(word.term);
+      if (!readings) {
+        failed++;
+        console.error(`    MISSING from response: "${word.term}" (left unprocessed)`);
+        continue;
+      }
+      console.log(
+        `    ${word.term}: ${readings
+          .map((r) => `${r.simplifiedChar}/${r.traditionalChar}[${r.hunEum.join(", ")}]`)
+          .join(" ") || "(no hanja)"}`
+      );
+      // Stored even when empty — that is what marks the word as processed.
+      batch.update(wordsCol.doc(word.id), { hanjaReadings: readings });
+      inBatch++;
       updated++;
       if (readings.length === 0) withoutReadings++;
-      console.log(`    OK: saved hanjaReadings (${readings.length} entries)`);
-    } catch (err) {
-      failed++;
-      console.error(`    FAIL: ${err instanceof Error ? err.message : String(err)}`);
     }
+    if (inBatch > 0) await batch.commit();
+    console.log(`    saved ${inBatch} word(s)`);
   }
 
   console.log("\n--- Done ---");
-  console.log(`Scanned:   ${scanned}`);
   console.log(`Skipped:   ${skipped} (already had hanjaReadings)`);
-  console.log(`Processed: ${processed}`);
+  console.log(`Processed: ${todo.length}`);
+  console.log(`LLM calls: ${args.dryRun ? 0 : chunkCount}`);
   console.log(`Updated:   ${updated}`);
   console.log(`No Hanja:  ${withoutReadings}`);
   console.log(`Failed:    ${failed}`);

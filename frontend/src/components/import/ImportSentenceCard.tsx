@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useI18n } from "../../i18n/context";
+import PinyinInput from "../PinyinInput";
 import {
   addGrammarItem,
   addWordItem,
@@ -8,6 +9,7 @@ import {
   mergeWordItems,
   sentenceCoverage,
   sentenceItems,
+  sentenceSpanForTerms,
   splitWordItem,
   undoDerivation,
 } from "../../utils/importSession";
@@ -19,20 +21,33 @@ import type {
 } from "../../types";
 
 interface Props {
+  /** Backend full-name language ("chinese"), which is what gates the pinyin input. */
+  language: string;
   sentence: ImportSentence;
   /** The whole item list — `sourceIds` on a merged row point at tombstones in it. */
   items: ImportItem[];
   onSetItems: (updater: (items: ImportItem[]) => ImportItem[], immediate?: boolean) => void;
   onPatchItem: (id: string, updates: Partial<ImportItem>, immediate?: boolean) => void;
   onRegister: (id: string) => void;
+  /** Sentence translation visibility is a per-user preference owned by `ImportReview`. */
+  showTranslation: boolean;
+  /** Terms already in the library (= in Group A), keyed by term so a word registered
+   *  from one sentence lights up its other occurrences too. */
+  inLibrary: Set<string>;
+  /** Category-B group names already holding a term. */
+  groupBByTerm: Map<string, string[]>;
 }
 
 export default function ImportSentenceCard({
+  language,
   sentence,
   items,
   onSetItems,
   onPatchItem,
   onRegister,
+  showTranslation,
+  inLibrary,
+  groupBByTerm,
 }: Props) {
   const { t } = useI18n();
   const { words, grammar } = sentenceItems(items, sentence.index);
@@ -62,9 +77,9 @@ export default function ImportSentenceCard({
     setSelection(text.length > 0 && text.length <= 30 ? text : "");
   }
 
-  function handleMerge() {
-    if (mergeSelection.length < 2) return;
-    onSetItems((prev) => mergeWordItems(prev, mergeSelection, sentence.text), true);
+  function merge(ids: string[]) {
+    if (ids.length < 2) return;
+    onSetItems((prev) => mergeWordItems(prev, ids, sentence.text), true);
     setMergeIds([]);
   }
 
@@ -81,12 +96,14 @@ export default function ImportSentenceCard({
     setMergeIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
+  // The same span the merge itself will produce, so the preview cannot promise a
+  // term the merge does not deliver.
   const mergePreview =
     mergeSelection.length >= 2
-      ? words
-          .filter((w) => mergeSelection.includes(w.id))
-          .map((w) => w.term)
-          .join("")
+      ? sentenceSpanForTerms(
+          sentence.text,
+          words.filter((w) => mergeSelection.includes(w.id)).map((w) => w.term)
+        )
       : "";
 
   // The analysis segments a sentence exhaustively, so anything still uncovered is
@@ -116,6 +133,16 @@ export default function ImportSentenceCard({
           )
         )}
       </p>
+
+      {/* The sentence's own translation, read alongside the text it belongs to.
+          Set apart by a left rule so it is never mistaken for the source. */}
+      {showTranslation && (
+        <p className="mt-2 break-words border-l-2 border-indigo-500/40 pl-2.5 text-[14px] leading-relaxed text-indigo-100/80 sm:text-[13px]">
+          {sentence.translation?.trim() || (
+            <span className="text-gray-600">{t("importNoTranslation")}</span>
+          )}
+        </p>
+      )}
 
       {coverage.required > 0 && (
         <p className="mt-1.5 text-[11px] leading-snug">
@@ -169,7 +196,7 @@ export default function ImportSentenceCard({
             </span>
             <button
               type="button"
-              onClick={handleMerge}
+              onClick={() => merge(mergeSelection)}
               className="ml-auto shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-white hover:bg-amber-500 sm:px-2.5 sm:py-1"
             >
               {t("importMerge")}
@@ -185,11 +212,22 @@ export default function ImportSentenceCard({
         )}
 
         <ul className="space-y-1.5">
-          {words.map((word) => (
+          {words.map((word, wi) => (
             <WordRow
               key={word.id}
               word={word}
               byId={byId}
+              isChinese={language === "chinese"}
+              // Merging with the row below is the whole of the common case — two
+              // characters the analysis cut apart — so it gets a button of its own
+              // beside "split" rather than only the multi-select checkboxes.
+              onMergeNext={
+                words[wi + 1] && !isLocked(words[wi + 1])
+                  ? () => merge([word.id, words[wi + 1].id])
+                  : undefined
+              }
+              inGroupA={inLibrary.has(word.term.trim())}
+              groupBNames={groupBByTerm.get(word.term.trim()) ?? []}
               checked={mergeIds.includes(word.id)}
               splitting={splitting?.id === word.id ? splitting.draft : null}
               onToggleMerge={() => toggleMerge(word.id)}
@@ -247,6 +285,10 @@ export default function ImportSentenceCard({
 function WordRow({
   word,
   byId,
+  isChinese,
+  onMergeNext,
+  inGroupA,
+  groupBNames,
   checked,
   splitting,
   onToggleMerge,
@@ -261,6 +303,16 @@ function WordRow({
 }: {
   word: ImportWordItem;
   byId: Map<string, ImportItem>;
+  /** Pinyin gets the tone-mark input; every other language a plain one. */
+  isChinese: boolean;
+  /** Merge this row with the one below it. Absent on the last row of a sentence,
+   *  and whenever the row below has already been handed to the queue. */
+  onMergeNext?: () => void;
+  /** Already in the library (= Group A) — the row is toned green so a word the
+   *  user already has stands out from the ones still to be added. */
+  inGroupA: boolean;
+  /** Group B sets already holding this word; only knowable once its ID is. */
+  groupBNames: string[];
   checked: boolean;
   splitting: string | null;
   onToggleMerge: () => void;
@@ -317,7 +369,13 @@ function WordRow({
   // because term + a fixed-width reading + four controls on one line leaves the term
   // field about 100px wide on a phone. From `sm` it collapses back to the single row.
   return (
-    <li className="rounded-lg bg-gray-900/50 px-2.5 py-2">
+    <li
+      className={`rounded-lg px-2.5 py-2 ${
+        inGroupA
+          ? "border-l-4 border-emerald-500/70 bg-emerald-950/30"
+          : "bg-gray-900/50"
+      }`}
+    >
       <div className="sm:flex sm:items-center sm:gap-2">
         <div className="flex items-start gap-2 sm:min-w-0 sm:flex-1 sm:items-center">
           <input
@@ -334,15 +392,35 @@ function WordRow({
               onChange={(e) => onPatch({ term: e.target.value })}
               disabled={locked}
               placeholder={t("words")}
-              className="block w-full min-w-0 rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-base text-gray-100 focus:border-blue-500 focus:outline-none disabled:border-transparent disabled:bg-transparent disabled:text-gray-400 sm:flex-1 sm:py-1 sm:text-sm"
+              className={`block w-full min-w-0 rounded-md border bg-gray-950/60 px-2 py-1.5 text-base focus:border-blue-500 focus:outline-none disabled:border-transparent disabled:bg-transparent sm:flex-1 sm:py-1 sm:text-sm ${
+                inGroupA
+                  ? "border-emerald-700/60 font-medium text-emerald-200 disabled:text-emerald-200"
+                  : "border-gray-700 text-gray-100 disabled:text-gray-400"
+              }`}
             />
-            <input
-              value={word.transliteration ?? ""}
-              onChange={(e) => onPatch({ transliteration: e.target.value })}
-              disabled={locked}
-              placeholder={t("importReading")}
-              className="block w-full min-w-0 rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-base text-gray-300 focus:border-blue-500 focus:outline-none disabled:border-transparent disabled:bg-transparent sm:w-24 sm:shrink-0 sm:py-1 sm:text-xs"
-            />
+            {isChinese ? (
+              // Tone marks cannot be typed on a normal keyboard, so the reading
+              // field is the shared pinyin input (hao3 → hǎo, plus the palette).
+              // Its panel floats: in a list this dense, pushing every row below it
+              // down would be worse than an overlay.
+              <PinyinInput
+                value={word.transliteration ?? ""}
+                onChange={(value) => onPatch({ transliteration: value })}
+                disabled={locked}
+                placeholder={t("importReading")}
+                wrapperClassName="w-full min-w-0 sm:w-24 sm:shrink-0"
+                floatingPanel
+                className="block w-full min-w-0 rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-base text-gray-300 focus:border-blue-500 focus:outline-none disabled:border-transparent disabled:bg-transparent sm:py-1 sm:text-xs"
+              />
+            ) : (
+              <input
+                value={word.transliteration ?? ""}
+                onChange={(e) => onPatch({ transliteration: e.target.value })}
+                disabled={locked}
+                placeholder={t("importReading")}
+                className="block w-full min-w-0 rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-base text-gray-300 focus:border-blue-500 focus:outline-none disabled:border-transparent disabled:bg-transparent sm:w-24 sm:shrink-0 sm:py-1 sm:text-xs"
+              />
+            )}
           </div>
         </div>
 
@@ -356,11 +434,23 @@ function WordRow({
           />
           {!locked && (
             <>
+              {onMergeNext && (
+                <button
+                  type="button"
+                  onClick={onMergeNext}
+                  title={t("importMergeNextHint")}
+                  className="ml-auto shrink-0 whitespace-nowrap rounded px-1.5 py-1.5 text-[11px] text-gray-500 hover:text-amber-300 sm:ml-0 sm:py-0.5"
+                >
+                  {t("importMergeNext")}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={onStartSplit}
                 title={t("importSplit")}
-                className="ml-auto shrink-0 whitespace-nowrap rounded px-1.5 py-1.5 text-[11px] text-gray-500 hover:text-amber-300 sm:ml-0 sm:py-0.5"
+                className={`shrink-0 whitespace-nowrap rounded px-1.5 py-1.5 text-[11px] text-gray-500 hover:text-amber-300 sm:py-0.5 ${
+                  onMergeNext ? "" : "ml-auto sm:ml-0"
+                }`}
               >
                 {t("importSplit")}
               </button>
@@ -377,8 +467,19 @@ function WordRow({
         </div>
       </div>
 
-      {word.meaning && (
-        <p className="mt-1 break-words pl-6 text-[11px] text-gray-500">{word.meaning}</p>
+      {/* Editable, because a split or a merge leaves it empty on purpose: the parts
+          of a compound do not inherit its gloss, and nothing else can supply one. */}
+      {locked ? (
+        word.meaning && (
+          <p className="mt-1 break-words pl-6 text-[11px] text-gray-500">{word.meaning}</p>
+        )
+      ) : (
+        <input
+          value={word.meaning ?? ""}
+          onChange={(e) => onPatch({ meaning: e.target.value })}
+          placeholder={t("importMeaningPlaceholder")}
+          className="mt-1.5 ml-6 block w-[calc(100%-1.5rem)] min-w-0 rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-base text-gray-300 placeholder-gray-600 focus:border-blue-500 focus:outline-none sm:py-1 sm:text-xs"
+        />
       )}
       {sources.length > 0 && (
         <p className="mt-1 flex flex-wrap items-center gap-2 pl-6 text-[11px] text-gray-500">
@@ -397,8 +498,22 @@ function WordRow({
           )}
         </p>
       )}
-      {word.existingWordId && word.status === "pending" && (
-        <p className="mt-1 break-words pl-6 text-[11px] text-green-500/80">{t("importAlreadyInDb")}</p>
+      {(inGroupA || groupBNames.length > 0) && (
+        <p className="mt-1 flex flex-wrap items-center gap-1.5 pl-6 text-[11px]">
+          {inGroupA && (
+            <span className="shrink-0 rounded border border-emerald-600/60 bg-emerald-900/40 px-1.5 py-0.5 font-medium text-emerald-300">
+              ✓ {t("importInGroupA")}
+            </span>
+          )}
+          {groupBNames.length > 0 && (
+            <span className="min-w-0 truncate rounded border border-amber-600/60 bg-amber-900/30 px-1.5 py-0.5 font-medium text-amber-300">
+              ✓ {t("importInGroupB")}: {groupBNames.join(", ")}
+            </span>
+          )}
+          {word.existingWordId && word.status === "pending" && (
+            <span className="min-w-0 break-words text-gray-500">{t("importAlreadyInDb")}</span>
+          )}
+        </p>
       )}
     </li>
   );

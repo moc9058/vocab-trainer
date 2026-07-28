@@ -33,6 +33,11 @@ async function loadLLMConfig(): Promise<void> {
   // Fetch from Firestore config/llm
   try {
     const db = new Firestore({
+      // Honoured for the same reason firestore.ts does: without it the client
+      // resolves the project from ADC, so a local run reads config/llm out of
+      // whatever project gcloud is pointed at and silently finds no API key.
+      // Unset (the deployed case) keeps the ADC behaviour.
+      projectId: process.env.FIRESTORE_PROJECT || undefined,
       databaseId: process.env.FIRESTORE_DATABASE_ID || "vocab-database",
       ignoreUndefinedProperties: true,
     });

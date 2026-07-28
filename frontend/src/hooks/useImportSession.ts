@@ -341,6 +341,16 @@ export function useImportSession({
             ...(item.transliteration?.trim()
               ? { transliteration: item.transliteration.trim() }
               : {}),
+            // The row's gloss is an ANCHOR, not the final definition: smart-add still
+            // asks the LLM for all four languages. It is what makes the meaning the
+            // user typed after a split or a merge actually reach the new word.
+            ...(item.meaning?.trim()
+              ? {
+                  definitions: [
+                    { partOfSpeech: "", text: { [descriptionLanguage]: item.meaning.trim() } },
+                  ],
+                }
+              : {}),
             ...(sentence ? { examples: [{ sentence, translation: "" }] } : {}),
             ...(groupIds.length > 0 ? { groupIds } : {}),
           },

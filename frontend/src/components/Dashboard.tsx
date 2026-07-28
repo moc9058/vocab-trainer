@@ -576,7 +576,7 @@ export default function Dashboard() {
       {groupBResumePrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-sm rounded-xl bg-gray-800 p-5 shadow-lg sm:p-6">
-            <p className="mb-4 text-gray-300">{t("existingCombinedQuizFound")}</p>
+            <p className="mb-4 text-gray-300">{t("existingGroupBQuizFound")}</p>
             <p className="mb-4 text-lg font-semibold text-amber-400">
               {groupBResumePrompt.score.correct} / {groupBResumePrompt.initialTotal ?? groupBResumePrompt.questions.length}
             </p>

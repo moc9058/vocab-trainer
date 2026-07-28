@@ -204,7 +204,9 @@ export default function CombinedQuizFilterModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold text-gray-100">{t("selectCombinedFilters")}</h2>
+          <h2 className="text-lg font-semibold text-gray-100">
+            {t(groupCategory === "B" ? "selectGroupBFilters" : "selectCombinedFilters")}
+          </h2>
           <label className="flex items-center gap-1.5 text-xs text-gray-300" title={t("alreadyCorrectHint")}>
             <span className="whitespace-nowrap">✅ {t("alreadyCorrect")}</span>
             <input
@@ -423,7 +425,7 @@ export default function CombinedQuizFilterModal({
             disabled={loading || !canStart}
             className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm text-white hover:bg-indigo-500 disabled:opacity-50 sm:w-auto sm:py-1.5"
           >
-            {t("startCombinedQuiz")}
+            {t(groupCategory === "B" ? "startGroupBQuiz" : "startCombinedQuiz")}
           </button>
         </div>
       </div>
