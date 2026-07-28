@@ -66,7 +66,7 @@ export default function BrowseView({
       <div className="flex gap-1 border-b border-gray-700 bg-gray-800 px-3 sm:px-6 pt-3">
         <button
           onClick={() => selectTab("word")}
-          className={`rounded-t-lg px-4 py-2 text-sm font-medium transition-colors ${
+          className={`shrink-0 rounded-t-lg px-3 py-2 text-sm font-medium transition-colors sm:px-4 ${
             tab === "word" ? "bg-gray-900 text-blue-400" : "text-gray-400 hover:text-gray-200"
           }`}
         >
@@ -74,23 +74,25 @@ export default function BrowseView({
         </button>
         <button
           onClick={() => selectTab("grammar")}
-          className={`rounded-t-lg px-4 py-2 text-sm font-medium transition-colors ${
+          className={`shrink-0 rounded-t-lg px-3 py-2 text-sm font-medium transition-colors sm:px-4 ${
             tab === "grammar" ? "bg-gray-900 text-emerald-400" : "text-gray-400 hover:text-gray-200"
           }`}
         >
           {t("sectionGrammar")}
         </button>
         {/* Set apart from the two reading tabs: this is where new material enters,
-            not another list to browse. */}
+            not another list to browse. The label is shortened on a phone — with the
+            two tabs beside it the full one pushes the bar past a 375px viewport. */}
         <button
           onClick={() => selectTab("import")}
-          className={`ml-auto mb-1 self-center rounded-full border px-3 py-1 text-xs transition-colors ${
+          className={`ml-auto mb-1 shrink-0 self-center whitespace-nowrap rounded-full border px-3 py-1 text-xs transition-colors ${
             tab === "import"
               ? "border-indigo-500 bg-indigo-500/20 text-indigo-200"
               : "border-gray-600 text-gray-400 hover:border-indigo-500/60 hover:text-indigo-300"
           }`}
         >
-          ＋ {t("importFromSource")}
+          ＋ <span className="sm:hidden">{t("importFromSourceShort")}</span>
+          <span className="hidden sm:inline">{t("importFromSource")}</span>
         </button>
       </div>
       <div className="min-h-0 flex-1">

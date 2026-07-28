@@ -181,25 +181,25 @@ export default function ImportView({ language, onQueue, onGrammarQueue }: Props)
   if (phase === "analyzing") {
     const sentences = extractStreamingSentences(streamText);
     return (
-      <div className="h-full overflow-y-auto">
-        <div className="mx-auto max-w-3xl p-4 sm:p-6">
+      <div className="h-full overflow-y-auto overflow-x-hidden">
+        <div className="mx-auto max-w-3xl px-3 py-4 sm:p-6">
           <div className="mb-5 flex items-center gap-3">
-            <span className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
+            <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
             <span className="text-sm text-gray-300">{t("importAnalyzing")}</span>
             <button
               onClick={() => { abortRef.current?.abort(); abortRef.current = null; setPhase("input"); }}
-              className="ml-auto text-sm text-gray-400 hover:text-gray-200"
+              className="ml-auto shrink-0 text-sm text-gray-400 hover:text-gray-200"
             >
               {t("cancel")}
             </button>
           </div>
           <ol className="space-y-2">
             {sentences.map((s, i) => (
-              <li key={i} className="flex gap-3 text-sm leading-relaxed text-gray-300">
-                <span className="mt-0.5 w-6 shrink-0 text-right font-mono text-[11px] text-gray-600">
+              <li key={i} className="flex gap-2 text-sm leading-relaxed text-gray-300 sm:gap-3">
+                <span className="mt-0.5 w-5 shrink-0 text-right font-mono text-[11px] text-gray-600 sm:w-6">
                   {i + 1}
                 </span>
-                <span>{s}</span>
+                <span className="min-w-0 break-words">{s}</span>
               </li>
             ))}
           </ol>
@@ -211,16 +211,16 @@ export default function ImportView({ language, onQueue, onGrammarQueue }: Props)
   // ===== INPUT =====
   if (phase === "input") {
     return (
-      <div className="h-full overflow-y-auto">
-        <div className="mx-auto max-w-5xl p-4 sm:p-6">
-          <header className="mb-5 flex flex-wrap items-center gap-3">
-            <div>
-              <h2 className="text-lg font-bold text-gray-100">{t("importNewSession")}</h2>
-              <p className="mt-1 text-sm text-gray-400">{t("importDescription")}</p>
+      <div className="h-full overflow-y-auto overflow-x-hidden">
+        <div className="mx-auto max-w-5xl px-3 py-4 sm:p-6">
+          <header className="mb-5 flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-bold text-gray-100 sm:text-lg">{t("importNewSession")}</h2>
+              <p className="mt-1 text-xs text-gray-400 sm:text-sm">{t("importDescription")}</p>
             </div>
             <button
               onClick={() => setPhase("sessions")}
-              className="ml-auto text-sm text-gray-400 hover:text-gray-200"
+              className="shrink-0 rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-200 sm:text-sm"
             >
               {t("cancel")}
             </button>
@@ -232,15 +232,17 @@ export default function ImportView({ language, onQueue, onGrammarQueue }: Props)
             </p>
           )}
 
-          <div className="grid gap-5 lg:grid-cols-[1fr_19rem]">
+          <div className="grid gap-4 lg:grid-cols-[1fr_19rem] lg:gap-5">
             <div>
+              {/* `text-base` keeps iOS from zooming the viewport on focus — the
+                  usual cause of a page that suddenly scrolls sideways. */}
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
                 maxLength={MAX_TEXT}
                 rows={16}
                 placeholder={t("importPastePlaceholder")}
-                className="w-full resize-y rounded-2xl border border-gray-700 bg-gray-800/60 px-4 py-3 text-[15px] leading-relaxed text-gray-100 placeholder-gray-600 focus:border-indigo-500 focus:outline-none"
+                className="h-48 w-full resize-y rounded-2xl border border-gray-700 bg-gray-800/60 px-3 py-3 text-base leading-relaxed text-gray-100 placeholder-gray-600 focus:border-indigo-500 focus:outline-none sm:h-auto sm:px-4 sm:text-[15px]"
               />
               <p className="mt-1 text-right text-xs text-gray-600">
                 {text.length} / {MAX_TEXT}

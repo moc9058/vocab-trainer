@@ -52,39 +52,73 @@ export default function ImportReview({
   }, [focused]);
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-5xl p-4 sm:p-6">
-        <header className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <h2 className="text-lg font-bold text-gray-100">{t("importReview")}</h2>
-          <span className="font-mono text-xs text-gray-500">
-            {counts.registered}/{counts.total} {t("importRegistered")}
-          </span>
-          <SaveIndicator
-            status={saveStatus}
-            error={saveError}
-            updatedAt={session.updatedAt}
-            onRetry={onRetrySave}
-          />
-          <button onClick={onExit} className="ml-auto text-sm text-gray-400 hover:text-gray-200">
+    // `overflow-x-hidden` is a hard stop: nothing in a review should ever be able
+    // to scroll the page sideways on a phone.
+    <div className="h-full overflow-y-auto overflow-x-hidden">
+      <div className="mx-auto max-w-5xl px-3 pb-2 pt-4 sm:p-6">
+        <header className="mb-4 flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <h2 className="truncate text-base font-bold text-gray-100 sm:text-lg">
+              {t("importReview")}
+            </h2>
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+              <span className="font-mono text-[11px] text-gray-500">
+                {counts.registered}/{counts.total} {t("importRegistered")}
+              </span>
+              <SaveIndicator
+                status={saveStatus}
+                error={saveError}
+                updatedAt={session.updatedAt}
+                onRetry={onRetrySave}
+              />
+            </div>
+          </div>
+          <button
+            onClick={onExit}
+            className="shrink-0 whitespace-nowrap rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-200 sm:text-sm"
+          >
             {t("importBackToSessions")}
           </button>
         </header>
 
-        <div className="grid gap-5 lg:grid-cols-[1fr_19rem]">
+        {/* Grid placement is explicit so the destination can lead on a phone —
+            where it is unreachable at the bottom — and still be the right-hand
+            sidebar from `lg`. */}
+        <div className="grid gap-4 lg:grid-cols-[1fr_19rem] lg:gap-5">
+          <div className="lg:col-start-2 lg:row-start-1 lg:sticky lg:top-4 lg:self-start">
+            <ImportDestinationRail
+              language={session.language}
+              wordGroupId={session.wordGroupId}
+              grammarGroupId={session.grammarGroupId}
+              groupBNames={session.groupBNames}
+              onChange={(patch) => onPatch((s) => ({ ...s, ...patch }), true)}
+              collapsible
+            />
+            <p className="mt-2 hidden px-1 text-[11px] leading-snug text-gray-600 lg:block">
+              {t("importDestinationAppliesToNext")}
+            </p>
+          </div>
+
           {/* The article, with the focused sentence opened into its editor. */}
-          <div className="space-y-6">
+          <div className="space-y-5 lg:col-start-1 lg:row-start-1 lg:space-y-6">
             {session.paragraphs.map((paragraph, pIndex) => (
-              <section key={pIndex} className="flex gap-3">
-                <span className="w-6 shrink-0 pt-1 text-right font-mono text-[11px] text-gray-600">
+              <section key={pIndex} className="sm:flex sm:gap-3">
+                {/* The number is a gutter column from `sm`; on a phone it sits above
+                    the paragraph instead, which buys back ~50px of text width. */}
+                <span className="mb-1 block font-mono text-[11px] text-gray-600 sm:mb-0 sm:w-6 sm:shrink-0 sm:pt-1 sm:text-right">
                   {String(pIndex + 1).padStart(2, "0")}
                 </span>
-                <div className="min-w-0 flex-1 space-y-2 border-l border-gray-800 pl-4">
+                <div className="min-w-0 space-y-1.5 border-l border-gray-800 pl-2.5 sm:flex-1 sm:space-y-2 sm:pl-4">
                   {paragraph.sentences.map((sentence) => {
                     const isFocused = sentence.index === focused;
                     const { words, grammar } = sentenceItems(session.items, sentence.index);
                     if (isFocused) {
                       return (
-                        <div key={sentence.index} ref={focusRef}>
+                        <div
+                          key={sentence.index}
+                          ref={focusRef}
+                          className="scroll-mt-4 scroll-mb-24 lg:scroll-mb-4"
+                        >
                           <ImportSentenceCard
                             sentence={sentence}
                             items={session.items}
@@ -92,7 +126,8 @@ export default function ImportReview({
                             onPatchItem={onPatchItem}
                             onRegister={onRegister}
                           />
-                          <div className="mt-2 flex items-center gap-3 text-xs">
+                          {/* On a phone the same controls live in the sticky bar below. */}
+                          <div className="mt-2 hidden items-center gap-3 text-xs lg:flex">
                             <button
                               onClick={() => step(-1)}
                               disabled={position <= 0}
@@ -119,17 +154,19 @@ export default function ImportReview({
                       <button
                         key={sentence.index}
                         onClick={() => focus(sentence.index)}
-                        className="block w-full rounded-lg px-1 py-1 text-left transition-colors hover:bg-gray-800/60"
+                        className="block w-full rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-gray-800/60"
                       >
+                        {/* Two lines on a phone: one ellipsized line is too little to
+                            tell sentences apart when picking the next one. */}
                         <p
-                          className={`truncate text-[15px] leading-relaxed ${
+                          className={`line-clamp-2 break-words text-[15px] leading-relaxed sm:line-clamp-1 ${
                             total > 0 ? "text-gray-300" : "text-gray-600"
                           }`}
                         >
                           {sentence.text}
                         </p>
                         {total > 0 && (
-                          <span className="mt-0.5 flex flex-wrap gap-1">
+                          <span className="mt-1 flex flex-wrap gap-1">
                             {words.map((w) => (
                               <StatusChip key={w.id} status={w.status} label={w.term} kind="word" />
                             ))}
@@ -150,19 +187,28 @@ export default function ImportReview({
               </section>
             ))}
           </div>
+        </div>
 
-          <div className="lg:sticky lg:top-4 lg:self-start">
-            <ImportDestinationRail
-              language={session.language}
-              wordGroupId={session.wordGroupId}
-              grammarGroupId={session.grammarGroupId}
-              groupBNames={session.groupBNames}
-              onChange={(patch) => onPatch((s) => ({ ...s, ...patch }), true)}
-            />
-            <p className="mt-2 px-1 text-[11px] leading-snug text-gray-600">
-              {t("importDestinationAppliesToNext")}
-            </p>
-          </div>
+        {/* Sentence navigation, pinned on a phone: the focused card is taller than
+            the viewport, so inline controls scroll out of reach while editing. */}
+        <div className="sticky bottom-0 z-20 -mx-3 mt-3 flex items-center gap-2 border-t border-gray-800 bg-gray-900/95 px-3 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:hidden">
+          <button
+            onClick={() => step(-1)}
+            disabled={position <= 0}
+            className="rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-300 disabled:opacity-30"
+          >
+            ◀ {t("importPrevSentence")}
+          </button>
+          <span className="mx-auto font-mono text-xs text-gray-500">
+            {position + 1} / {sentences.length}
+          </span>
+          <button
+            onClick={() => step(1)}
+            disabled={position >= sentences.length - 1}
+            className="rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-300 disabled:opacity-30"
+          >
+            {t("importNextSentence")} ▶
+          </button>
         </div>
       </div>
     </div>
@@ -188,8 +234,10 @@ function StatusChip({
       : done
       ? "border-gray-700 text-gray-500"
       : base;
+  // `max-w-full truncate` matters: a grammar statement is long enough to make an
+  // unbreakable chip wider than a phone, which used to drag the whole page sideways.
   return (
-    <span className={`rounded border px-1.5 py-0.5 text-[10px] ${tone}`}>
+    <span className={`inline-block max-w-full truncate rounded border px-1.5 py-0.5 align-middle text-[10px] ${tone}`}>
       {done && "✓"}
       {status === "failed" && "✗"}
       {label}

@@ -88,12 +88,12 @@ export default function ImportSentenceCard({
       : "";
 
   return (
-    <div className="rounded-xl border border-indigo-800/50 bg-gray-800/60 p-3 sm:p-4">
+    <div className="min-w-0 rounded-xl border border-indigo-800/50 bg-gray-800/60 p-3 sm:p-4">
       <p
         ref={sentenceRef}
         onMouseUp={captureSelection}
         onTouchEnd={captureSelection}
-        className="select-text text-[15px] leading-relaxed text-gray-100"
+        className="select-text break-words text-[17px] leading-relaxed text-gray-100 sm:text-[15px]"
       >
         {sentence.text}
       </p>
@@ -106,7 +106,7 @@ export default function ImportSentenceCard({
             setSelection("");
             window.getSelection()?.removeAllRanges();
           }}
-          className="mt-2 rounded-lg border border-blue-600 bg-blue-950/50 px-3 py-1.5 text-xs text-blue-200 hover:bg-blue-900/60"
+          className="mt-2 w-full break-words rounded-lg border border-blue-600 bg-blue-950/50 px-3 py-2 text-xs text-blue-200 hover:bg-blue-900/60 sm:w-auto sm:py-1.5"
         >
           ＋ 「{selection}」{t("importAddSelectionAsWord")}
         </button>
@@ -121,7 +121,7 @@ export default function ImportSentenceCard({
           <button
             type="button"
             onClick={() => onSetItems((prev) => addWordItem(prev, sentence.index, ""), true)}
-            className="ml-auto text-[11px] text-gray-500 hover:text-blue-300"
+            className="ml-auto shrink-0 whitespace-nowrap rounded px-1 py-1 text-[11px] text-gray-500 hover:text-blue-300"
           >
             ＋ {t("importAddWordRow")}
           </button>
@@ -129,20 +129,20 @@ export default function ImportSentenceCard({
 
         {mergeSelection.length >= 2 && (
           <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-amber-700/60 bg-amber-950/30 px-3 py-2 text-xs">
-            <span className="text-amber-200">
+            <span className="min-w-0 break-words text-amber-200">
               {mergeSelection.length}{t("importMergeCount")} → <b>{mergePreview}</b>
             </span>
             <button
               type="button"
               onClick={handleMerge}
-              className="ml-auto rounded-md bg-amber-600 px-2.5 py-1 text-white hover:bg-amber-500"
+              className="ml-auto shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-white hover:bg-amber-500 sm:px-2.5 sm:py-1"
             >
               {t("importMerge")}
             </button>
             <button
               type="button"
               onClick={() => setMergeIds([])}
-              className="text-gray-400 hover:text-gray-200"
+              className="shrink-0 px-1 py-1.5 text-gray-400 hover:text-gray-200 sm:py-1"
             >
               {t("cancel")}
             </button>
@@ -183,7 +183,7 @@ export default function ImportSentenceCard({
           <button
             type="button"
             onClick={() => onSetItems((prev) => addGrammarItem(prev, sentence.index), true)}
-            className="ml-auto text-[11px] text-gray-500 hover:text-emerald-300"
+            className="ml-auto shrink-0 whitespace-nowrap rounded px-1 py-1 text-[11px] text-gray-500 hover:text-emerald-300"
           >
             ＋ {t("importAddGrammarRow")}
           </button>
@@ -257,19 +257,19 @@ function WordRow({
               if (e.key === "Enter") { e.preventDefault(); onSplitConfirm(); }
               if (e.key === "Escape") onSplitCancel();
             }}
-            className="flex-1 rounded-md border border-amber-700/60 bg-gray-900 px-2 py-1 text-sm text-gray-100 focus:border-amber-400 focus:outline-none"
+            className="w-full min-w-0 rounded-md border border-amber-700/60 bg-gray-900 px-2 py-1.5 text-base text-gray-100 focus:border-amber-400 focus:outline-none sm:w-auto sm:flex-1 sm:py-1 sm:text-sm"
           />
           <button
             type="button"
             onClick={onSplitConfirm}
-            className="rounded-md bg-amber-600 px-2.5 py-1 text-xs text-white hover:bg-amber-500"
+            className="shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-xs text-white hover:bg-amber-500 sm:px-2.5 sm:py-1"
           >
             {t("importSplit")}
           </button>
           <button
             type="button"
             onClick={onSplitCancel}
-            className="text-xs text-gray-400 hover:text-gray-200"
+            className="shrink-0 px-1 py-1.5 text-xs text-gray-400 hover:text-gray-200 sm:py-1"
           >
             {t("cancel")}
           </button>
@@ -278,66 +278,76 @@ function WordRow({
     );
   }
 
+  // Below `sm` the row becomes two stacked blocks — term/reading over the actions —
+  // because term + a fixed-width reading + four controls on one line leaves the term
+  // field about 100px wide on a phone. From `sm` it collapses back to the single row.
   return (
     <li className="rounded-lg bg-gray-900/50 px-2.5 py-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={onToggleMerge}
-          disabled={locked}
-          title={t("importSelectToMerge")}
-          className="h-3.5 w-3.5 accent-amber-500 disabled:opacity-30"
-        />
-        <input
-          value={word.term}
-          onChange={(e) => onPatch({ term: e.target.value })}
-          disabled={locked}
-          placeholder={t("words")}
-          className="min-w-0 flex-1 rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1 text-sm text-gray-100 focus:border-blue-500 focus:outline-none disabled:border-transparent disabled:bg-transparent disabled:text-gray-400"
-        />
-        <input
-          value={word.transliteration ?? ""}
-          onChange={(e) => onPatch({ transliteration: e.target.value })}
-          disabled={locked}
-          placeholder={t("importReading")}
-          className="w-24 rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1 text-xs text-gray-300 focus:border-blue-500 focus:outline-none disabled:border-transparent disabled:bg-transparent"
-        />
-        <StatusControl
-          status={word.status}
-          error={word.error}
-          rescuedAsDraft={word.rescuedAsDraft}
-          addLabel={word.existingWordId ? t("importAddToGroups") : t("importAdd")}
-          onRegister={onRegister}
-        />
-        {!locked && (
-          <>
-            <button
-              type="button"
-              onClick={onStartSplit}
-              title={t("importSplit")}
-              className="rounded px-1.5 py-0.5 text-[11px] text-gray-500 hover:text-amber-300"
-            >
-              {t("importSplit")}
-            </button>
-            <button
-              type="button"
-              onClick={onDelete}
-              title={t("importRemoveRow")}
-              className="rounded px-1.5 py-0.5 text-xs text-gray-600 hover:text-red-400"
-            >
-              ✕
-            </button>
-          </>
-        )}
+      <div className="sm:flex sm:items-center sm:gap-2">
+        <div className="flex items-start gap-2 sm:min-w-0 sm:flex-1 sm:items-center">
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={onToggleMerge}
+            disabled={locked}
+            title={t("importSelectToMerge")}
+            className="mt-2.5 h-4 w-4 shrink-0 accent-amber-500 disabled:opacity-30 sm:mt-0 sm:h-3.5 sm:w-3.5"
+          />
+          <div className="min-w-0 flex-1 space-y-1.5 sm:flex sm:items-center sm:gap-2 sm:space-y-0">
+            <input
+              value={word.term}
+              onChange={(e) => onPatch({ term: e.target.value })}
+              disabled={locked}
+              placeholder={t("words")}
+              className="block w-full min-w-0 rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-base text-gray-100 focus:border-blue-500 focus:outline-none disabled:border-transparent disabled:bg-transparent disabled:text-gray-400 sm:flex-1 sm:py-1 sm:text-sm"
+            />
+            <input
+              value={word.transliteration ?? ""}
+              onChange={(e) => onPatch({ transliteration: e.target.value })}
+              disabled={locked}
+              placeholder={t("importReading")}
+              className="block w-full min-w-0 rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-base text-gray-300 focus:border-blue-500 focus:outline-none disabled:border-transparent disabled:bg-transparent sm:w-24 sm:shrink-0 sm:py-1 sm:text-xs"
+            />
+          </div>
+        </div>
+
+        <div className="mt-2 flex items-center gap-2 pl-6 sm:mt-0 sm:shrink-0 sm:pl-0">
+          <StatusControl
+            status={word.status}
+            error={word.error}
+            rescuedAsDraft={word.rescuedAsDraft}
+            addLabel={word.existingWordId ? t("importAddToGroups") : t("importAdd")}
+            onRegister={onRegister}
+          />
+          {!locked && (
+            <>
+              <button
+                type="button"
+                onClick={onStartSplit}
+                title={t("importSplit")}
+                className="ml-auto shrink-0 whitespace-nowrap rounded px-1.5 py-1.5 text-[11px] text-gray-500 hover:text-amber-300 sm:ml-0 sm:py-0.5"
+              >
+                {t("importSplit")}
+              </button>
+              <button
+                type="button"
+                onClick={onDelete}
+                title={t("importRemoveRow")}
+                className="shrink-0 rounded px-1.5 py-1.5 text-xs text-gray-600 hover:text-red-400 sm:py-0.5"
+              >
+                ✕
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {word.meaning && (
-        <p className="mt-1 pl-6 text-[11px] text-gray-500">{word.meaning}</p>
+        <p className="mt-1 break-words pl-6 text-[11px] text-gray-500">{word.meaning}</p>
       )}
       {sources.length > 0 && (
         <p className="mt-1 flex flex-wrap items-center gap-2 pl-6 text-[11px] text-gray-500">
-          <span>
+          <span className="min-w-0 break-words">
             {word.origin === "merge" ? t("importMergedFrom") : t("importSplitFrom")}:{" "}
             {sources.map((s) => s.term).join(" + ")}
           </span>
@@ -345,7 +355,7 @@ function WordRow({
             <button
               type="button"
               onClick={onUndo}
-              className="text-gray-500 underline hover:text-gray-300"
+              className="shrink-0 py-1 text-gray-500 underline hover:text-gray-300"
             >
               {t("importUndo")}
             </button>
@@ -353,7 +363,7 @@ function WordRow({
         </p>
       )}
       {word.existingWordId && word.status === "pending" && (
-        <p className="mt-1 pl-6 text-[11px] text-green-500/80">{t("importAlreadyInDb")}</p>
+        <p className="mt-1 break-words pl-6 text-[11px] text-green-500/80">{t("importAlreadyInDb")}</p>
       )}
     </li>
   );
@@ -374,37 +384,39 @@ function GrammarRow({
   const locked = isLocked(item);
   return (
     <li className="rounded-lg bg-gray-900/50 px-2.5 py-2">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="sm:flex sm:items-center sm:gap-2">
         <input
           value={item.statement}
           onChange={(e) => onPatch({ statement: e.target.value })}
           disabled={locked}
           placeholder={t("importStatementPlaceholder")}
-          className="min-w-0 flex-1 rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1 text-sm text-gray-100 focus:border-emerald-500 focus:outline-none disabled:border-transparent disabled:bg-transparent disabled:text-gray-400"
+          className="block w-full min-w-0 rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-base text-gray-100 focus:border-emerald-500 focus:outline-none disabled:border-transparent disabled:bg-transparent disabled:text-gray-400 sm:flex-1 sm:py-1 sm:text-sm"
         />
-        <StatusControl
-          status={item.status}
-          error={item.error}
-          rescuedAsDraft={item.rescuedAsDraft}
-          addLabel={t("importAdd")}
-          onRegister={onRegister}
-        />
-        {!locked && (
-          <button
-            type="button"
-            onClick={onDelete}
-            className="rounded px-1.5 py-0.5 text-xs text-gray-600 hover:text-red-400"
-          >
-            ✕
-          </button>
-        )}
+        <div className="mt-2 flex items-center gap-2 sm:mt-0 sm:shrink-0">
+          <StatusControl
+            status={item.status}
+            error={item.error}
+            rescuedAsDraft={item.rescuedAsDraft}
+            addLabel={t("importAdd")}
+            onRegister={onRegister}
+          />
+          {!locked && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="ml-auto shrink-0 rounded px-1.5 py-1.5 text-xs text-gray-600 hover:text-red-400 sm:ml-0 sm:py-0.5"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
       <input
         value={item.description}
         onChange={(e) => onPatch({ description: e.target.value })}
         disabled={locked}
         placeholder={t("importDescriptionPlaceholder")}
-        className="mt-1.5 w-full rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1 text-xs text-gray-300 focus:border-emerald-500 focus:outline-none disabled:border-transparent disabled:bg-transparent"
+        className="mt-1.5 block w-full min-w-0 rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-base text-gray-300 focus:border-emerald-500 focus:outline-none disabled:border-transparent disabled:bg-transparent sm:py-1 sm:text-xs"
       />
     </li>
   );
@@ -431,26 +443,26 @@ function StatusControl({
   const { t } = useI18n();
 
   if (status === "registered") {
-    return <span className="text-xs text-green-400">✓ {t("importRegistered")}</span>;
+    return <span className="whitespace-nowrap text-xs text-green-400">✓ {t("importRegistered")}</span>;
   }
   if (status === "duplicate") {
     return (
-      <span className="text-xs text-gray-400" title={t("importDuplicateHint")}>
+      <span className="whitespace-nowrap text-xs text-gray-400" title={t("importDuplicateHint")}>
         ✓ {t("importAlreadyRegistered")}
       </span>
     );
   }
   if (status === "queued") {
     return (
-      <span className="flex items-center gap-1.5 text-xs text-amber-300">
-        <span className="h-3 w-3 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+      <span className="flex items-center gap-1.5 whitespace-nowrap text-xs text-amber-300">
+        <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
         {t("importRegisteringItem")}
       </span>
     );
   }
   if (status === "failed") {
     return (
-      <span className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
         <span className="text-red-400" title={error}>
           ✗ {t("importAddFailed")}
         </span>
@@ -460,7 +472,7 @@ function StatusControl({
         <button
           type="button"
           onClick={onRegister}
-          className="rounded-md border border-gray-600 px-2 py-0.5 text-[11px] text-gray-300 hover:border-indigo-500 hover:text-indigo-300"
+          className="shrink-0 rounded-md border border-gray-600 px-2 py-1 text-[11px] text-gray-300 hover:border-indigo-500 hover:text-indigo-300 sm:py-0.5"
         >
           {t("importRetry")}
         </button>
@@ -471,7 +483,7 @@ function StatusControl({
     <button
       type="button"
       onClick={onRegister}
-      className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500"
+      className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 sm:px-2.5 sm:py-1"
     >
       {addLabel}
     </button>

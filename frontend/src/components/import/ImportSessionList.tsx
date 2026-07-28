@@ -21,16 +21,14 @@ export default function ImportSessionList({
   const { t } = useI18n();
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl p-4 sm:p-6">
-        <header className="mb-5 flex flex-wrap items-center gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-gray-100">{t("importTitle")}</h2>
-            <p className="mt-1 text-sm text-gray-400">{t("importDescription")}</p>
-          </div>
+    <div className="h-full overflow-y-auto overflow-x-hidden">
+      <div className="mx-auto max-w-3xl px-3 py-4 sm:p-6">
+        <header className="mb-5">
+          <h2 className="text-base font-bold text-gray-100 sm:text-lg">{t("importTitle")}</h2>
+          <p className="mt-1 text-xs text-gray-400 sm:text-sm">{t("importDescription")}</p>
           <button
             onClick={onNew}
-            className="ml-auto rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-500"
+            className="mt-3 w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-500 sm:mt-4 sm:w-auto"
           >
             ＋ {t("importNewSession")}
           </button>
@@ -52,28 +50,27 @@ export default function ImportSessionList({
                 key={s.id}
                 className="rounded-xl border border-gray-700/70 bg-gray-800/50 p-3 sm:p-4"
               >
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    onClick={() => onResume(s.id)}
-                    className="min-w-0 flex-1 text-left"
-                  >
-                    <p className="truncate text-sm text-gray-100">{s.title}</p>
-                    <p className="mt-0.5 text-[11px] text-gray-500">
-                      {new Date(s.updatedAt).toLocaleString()}
-                    </p>
-                  </button>
-                  <span className="font-mono text-xs text-gray-400">
+                {/* Title gets the full width on a phone; the meta and the two
+                    actions drop to a second line rather than crushing it. */}
+                <button onClick={() => onResume(s.id)} className="block w-full text-left">
+                  <p className="truncate text-sm text-gray-100">{s.title}</p>
+                  <p className="mt-0.5 text-[11px] text-gray-500">
+                    {new Date(s.updatedAt).toLocaleString()}
+                  </p>
+                </button>
+                <div className="mt-2 flex items-center gap-3">
+                  <span className="shrink-0 font-mono text-xs text-gray-400">
                     {s.registeredCount}/{s.totalCount}
                   </span>
                   <button
                     onClick={() => onResume(s.id)}
-                    className="rounded-lg border border-indigo-600 px-3 py-1.5 text-xs text-indigo-300 hover:bg-indigo-900/30"
+                    className="ml-auto shrink-0 rounded-lg border border-indigo-600 px-3 py-1.5 text-xs text-indigo-300 hover:bg-indigo-900/30"
                   >
                     {t("importResume")}
                   </button>
                   <button
                     onClick={() => onDelete(s.id)}
-                    className="rounded-lg px-2 py-1.5 text-xs text-gray-600 hover:text-red-400"
+                    className="shrink-0 rounded-lg px-2 py-1.5 text-xs text-gray-600 hover:text-red-400"
                     title={t("importDeleteSession")}
                   >
                     ✕
