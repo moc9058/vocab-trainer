@@ -350,6 +350,14 @@ const translations = {
     languages: "Languages",
     sectionSystem: "System",
     viewMetrics: "LLM Usage & Costs",
+    // Authentication
+    settingsSectionAccount: "Account",
+    signInPrompt: "Sign in to continue",
+    signInWithGoogle: "Sign in with Google",
+    signedInAs: "Signed in as",
+    signOut: "Sign out",
+    authForbidden: "This Google account is not authorized to use this app.",
+    authError: "Sign-in failed. Please try again.",
     // Expressions
     sectionExpressions: "Expressions",
     expressionPhrase: "Phrase",
@@ -717,6 +725,14 @@ const translations = {
     languages: "言語",
     sectionSystem: "システム",
     viewMetrics: "LLM使用量・コスト",
+    // Authentication
+    settingsSectionAccount: "アカウント",
+    signInPrompt: "ログインしてください",
+    signInWithGoogle: "Googleでログイン",
+    signedInAs: "ログイン中",
+    signOut: "ログアウト",
+    authForbidden: "このGoogleアカウントにはアクセス権限がありません。",
+    authError: "ログインに失敗しました。もう一度お試しください。",
     // Expressions
     sectionExpressions: "表現",
     expressionPhrase: "フレーズ",
@@ -1084,6 +1100,14 @@ const translations = {
     languages: "언어",
     sectionSystem: "시스템",
     viewMetrics: "LLM 사용량 및 비용",
+    // Authentication
+    settingsSectionAccount: "계정",
+    signInPrompt: "로그인해 주세요",
+    signInWithGoogle: "Google로 로그인",
+    signedInAs: "로그인 계정",
+    signOut: "로그아웃",
+    authForbidden: "이 Google 계정은 이 앱을 사용할 권한이 없습니다.",
+    authError: "로그인에 실패했습니다. 다시 시도해 주세요.",
     // Expressions
     sectionExpressions: "표현",
     expressionPhrase: "표현",

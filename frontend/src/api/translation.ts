@@ -1,4 +1,4 @@
-import { postJson, fetchJson, deleteRequest } from "./client";
+import { postJson, fetchJson, deleteRequest, CREDENTIALS, notifyIfUnauthorized } from "./client";
 import type { TranslationEntry, TranslationResult } from "../types";
 
 export async function translate(
@@ -43,6 +43,7 @@ export async function translateStream(
 ): Promise<void> {
   const res = await fetch("/api/translation/translate-stream", {
     method: "POST",
+    credentials: CREDENTIALS,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       sourceLanguage,
@@ -55,6 +56,7 @@ export async function translateStream(
   });
 
   if (!res.ok) {
+    notifyIfUnauthorized(res);
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
 

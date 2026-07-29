@@ -9,12 +9,13 @@ case "$(uname -s)" in
 esac
 
 # Deploy vocab-trainer to Google Cloud Run
-# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--word] [--wipe-grammar] [--llm] [--prompts] [--archives] [--example-sentences] [--grammar-examples]
+# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--word] [--wipe-grammar] [--llm] [--auth] [--prompts] [--archives] [--example-sentences] [--grammar-examples]
 #
 # Options:
 #   --word               Run Firestore word data migration after deploying backend
 #   --wipe-grammar       Wipe all grammar collections in Firestore (destructive)
 #   --llm                Upload LLM config (OpenAI key/model names) from .env to Firestore
+#   --auth               Upload Google OAuth config from .env to Firestore (config/auth)
 #   --prompts            Upload speaking/writing + translation config to Firestore
 #   --archives           Upload backup + original archive data to Firestore
 #   --example-sentences  Migrate embedded examples to example_sentences collection
@@ -29,6 +30,7 @@ esac
 MIGRATE_WORD=false
 WIPE_GRAMMAR=false
 MIGRATE_LLM=false
+MIGRATE_AUTH=false
 MIGRATE_PROMPTS=false
 MIGRATE_ARCHIVES=false
 MIGRATE_EXAMPLE_SENTENCES=false
@@ -39,6 +41,7 @@ for arg in "$@"; do
     --word) MIGRATE_WORD=true ;;
     --wipe-grammar) WIPE_GRAMMAR=true ;;
     --llm) MIGRATE_LLM=true ;;
+    --auth) MIGRATE_AUTH=true ;;
     --prompts) MIGRATE_PROMPTS=true ;;
     --archives) MIGRATE_ARCHIVES=true ;;
     --example-sentences) MIGRATE_EXAMPLE_SENTENCES=true ;;
@@ -47,8 +50,8 @@ for arg in "$@"; do
   esac
 done
 
-if [ "$MIGRATE_WORD" = false ] && [ "$WIPE_GRAMMAR" = false ] && [ "$MIGRATE_LLM" = false ] && [ "$MIGRATE_PROMPTS" = false ] && [ "$MIGRATE_ARCHIVES" = false ] && [ "$MIGRATE_EXAMPLE_SENTENCES" = false ] && [ "$MIGRATE_GRAMMAR_EXAMPLES" = false ]; then
-  echo "==> Skipping Firestore migration (use --word, --wipe-grammar, --llm, --prompts, --archives, --example-sentences, and/or --grammar-examples to run)"
+if [ "$MIGRATE_WORD" = false ] && [ "$WIPE_GRAMMAR" = false ] && [ "$MIGRATE_LLM" = false ] && [ "$MIGRATE_AUTH" = false ] && [ "$MIGRATE_PROMPTS" = false ] && [ "$MIGRATE_ARCHIVES" = false ] && [ "$MIGRATE_EXAMPLE_SENTENCES" = false ] && [ "$MIGRATE_GRAMMAR_EXAMPLES" = false ]; then
+  echo "==> Skipping Firestore migration (use --word, --wipe-grammar, --llm, --auth, --prompts, --archives, --example-sentences, and/or --grammar-examples to run)"
 fi
 
 PROJECT_ID="${POSITIONAL[0]:-vocab-trainer-490014}"
@@ -69,7 +72,7 @@ docker build --platform linux/amd64 -t "${BACKEND_IMAGE}" ./backend
 docker push "${BACKEND_IMAGE}"
 
 # Optionally seed Firestore with data from local files (before deploy so configs are available on startup)
-if [ "$MIGRATE_WORD" = true ] || [ "$WIPE_GRAMMAR" = true ] || [ "$MIGRATE_LLM" = true ] || [ "$MIGRATE_PROMPTS" = true ] || [ "$MIGRATE_ARCHIVES" = true ] || [ "$MIGRATE_EXAMPLE_SENTENCES" = true ] || [ "$MIGRATE_GRAMMAR_EXAMPLES" = true ]; then
+if [ "$MIGRATE_WORD" = true ] || [ "$WIPE_GRAMMAR" = true ] || [ "$MIGRATE_LLM" = true ] || [ "$MIGRATE_AUTH" = true ] || [ "$MIGRATE_PROMPTS" = true ] || [ "$MIGRATE_ARCHIVES" = true ] || [ "$MIGRATE_EXAMPLE_SENTENCES" = true ] || [ "$MIGRATE_GRAMMAR_EXAMPLES" = true ]; then
   echo "==> Installing backend dependencies for migration..."
   (cd backend && npm install --silent)
 fi
@@ -87,6 +90,11 @@ if [ "$MIGRATE_LLM" = true ]; then
   echo "==> Uploading LLM config to Firestore..."
   (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
     npx tsx scripts/migrate-llm-config-to-firestore.ts)
+fi
+if [ "$MIGRATE_AUTH" = true ]; then
+  echo "==> Uploading Google OAuth config to Firestore..."
+  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
+    npx tsx scripts/migrate-auth-config-to-firestore.ts)
 fi
 if [ "$MIGRATE_PROMPTS" = true ]; then
   echo "==> Uploading speaking/writing + translation config to Firestore..."

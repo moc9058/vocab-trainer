@@ -1,4 +1,4 @@
-import { fetchJson, postJson, putJson, deleteRequest, deleteJson } from "./client";
+import { fetchJson, postJson, putJson, deleteRequest, deleteJson, CREDENTIALS, notifyIfUnauthorized } from "./client";
 import type { Word, WordDraft, Meaning, PaginatedResult, WordGroup, GroupCategory } from "../types";
 
 interface WordFilters {
@@ -61,9 +61,13 @@ export async function lookupWord(
 ): Promise<{ term: string; id: string; level: string; transliteration: string } | null> {
   const res = await fetch(
     `/api/vocab/${encodeURIComponent(language)}/lookup?term=${encodeURIComponent(term)}`,
+    { credentials: CREDENTIALS },
   );
   if (res.status === 404) return null;
-  if (!res.ok) throw new Error(await res.text());
+  if (!res.ok) {
+    notifyIfUnauthorized(res);
+    throw new Error(await res.text());
+  }
   return res.json();
 }
 

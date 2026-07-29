@@ -10,6 +10,10 @@ server {
         proxy_pass $backend;
         proxy_ssl_server_name on;
         proxy_set_header Host $proxy_host;
+        # Host above is rewritten to the upstream, so the public hostname would
+        # otherwise be lost. The OAuth callback needs it: Cloud Run serves this app
+        # on two hostnames and the flow must return to the one it started on.
+        proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;

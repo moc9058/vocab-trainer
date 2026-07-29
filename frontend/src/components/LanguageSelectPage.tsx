@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
+import { useAuth } from "../auth/context";
 import { fetchJson } from "../api/client";
 import MetricsView from "./MetricsView";
 
@@ -14,6 +15,7 @@ interface LanguageInfo {
 export default function LanguageSelectPage() {
   const { t } = useI18n();
   const { sortByLanguageOrder } = useSettings();
+  const { user, authEnabled, logout } = useAuth();
   const navigate = useNavigate();
   const [languages, setLanguages] = useState<LanguageInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -83,6 +85,19 @@ export default function LanguageSelectPage() {
           >
             {t("viewMetrics") ?? "LLM Usage & Costs"}
           </button>
+          {authEnabled && (
+            <>
+              <p className="mt-3 truncate text-center text-xs text-gray-500">
+                {t("signedInAs") ?? "Signed in as"} {user?.email}
+              </p>
+              <button
+                onClick={logout}
+                className="mt-2 w-full rounded-lg border border-gray-700 px-4 py-2 text-center text-sm text-gray-400 hover:bg-gray-700 hover:text-gray-200 transition-colors"
+              >
+                {t("signOut") ?? "Sign out"}
+              </button>
+            </>
+          )}
         </section>
       </div>
     </div>

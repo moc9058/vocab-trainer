@@ -1,8 +1,17 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 import sensible from "@fastify/sensible";
 import { mkdirSync } from "node:fs";
 import { resolve, join } from "node:path";
+import {
+  loadAuthConfig,
+  getAuthConfig,
+  isEmailAllowed,
+  verifySession,
+  SESSION_COOKIE,
+} from "./auth-config.js";
+import authRoutes from "./routes/auth.js";
 import languagesRoutes from "./routes/languages.js";
 import vocabRoutes from "./routes/vocab.js";
 import quizRoutes from "./routes/quiz.js";
@@ -36,9 +45,53 @@ const fastify = Fastify({
   },
 });
 
-await fastify.register(cors);
+// Eager, before anything is served: the auth hook below has to know the posture
+// up front, and a misconfiguration must stop the boot rather than quietly serving
+// the API unauthenticated. See auth-config.ts for the three outcomes.
+await loadAuthConfig();
+
+// The browser only ever talks to the frontend origin (nginx reverse-proxies /api/),
+// so this allowlist costs nothing and closes the "any website can call the API
+// cross-origin" hole left by the previous bare `register(cors)`.
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "https://vocab-trainer-frontend-olncevthqa-an.a.run.app",
+  "https://vocab-trainer-frontend-839843597381.asia-northeast1.run.app",
+];
+const allowedOrigins = new Set(
+  (process.env.ALLOWED_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean) ??
+    DEFAULT_ALLOWED_ORIGINS),
+);
+
+await fastify.register(cors, {
+  // No Origin header means it is not a CORS request at all (same-origin, curl,
+  // server-to-server) — those are gated by the auth hook, not by CORS.
+  origin: (origin, cb) => cb(null, !origin || allowedOrigins.has(origin)),
+  credentials: true,
+});
+// Registered before the auth hook so request.cookies is populated by the time it runs.
+await fastify.register(cookie);
 await fastify.register(sensible);
 
+const PUBLIC_PATH_PREFIXES = ["/api/auth/"];
+
+fastify.addHook("onRequest", async (request, reply) => {
+  const cfg = getAuthConfig();
+  if (!cfg) return;
+
+  const path = request.url.split("?")[0];
+  if (PUBLIC_PATH_PREFIXES.some((p) => path.startsWith(p))) return;
+
+  const user = verifySession(request.cookies[SESSION_COOKIE], cfg.sessionSecret);
+  // The allowlist is re-checked on every request, not just at sign-in, so removing
+  // an address from config/auth revokes existing sessions immediately.
+  if (!user || !isEmailAllowed(user.email)) {
+    return reply.code(401).send({ error: "Unauthorized", message: "Sign in required." });
+  }
+});
+
+await fastify.register(authRoutes, { prefix: "/api/auth" });
 await fastify.register(languagesRoutes, { prefix: "/api/languages" });
 await fastify.register(vocabRoutes, { prefix: "/api/vocab" });
 await fastify.register(quizRoutes, { prefix: "/api/quiz" });

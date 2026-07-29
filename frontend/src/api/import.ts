@@ -1,4 +1,4 @@
-import { deleteRequest, fetchJson, postJson, putJson } from "./client";
+import { deleteRequest, fetchJson, postJson, putJson, CREDENTIALS, notifyIfUnauthorized } from "./client";
 import type { ImportAnalysisResult, ImportSession, ImportSessionSummary } from "../types";
 
 // ----- Import sessions (paused, resumable article reviews) -----
@@ -60,12 +60,14 @@ export async function analyzeImportStream(
 ): Promise<void> {
   const res = await fetch(`/api/import/${encodeURIComponent(language)}/analyze-stream`, {
     method: "POST",
+    credentials: CREDENTIALS,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text }),
     signal,
   });
 
   if (!res.ok) {
+    notifyIfUnauthorized(res);
     throw new Error(`API error: ${res.status} ${res.statusText} ${await res.text()}`);
   }
 

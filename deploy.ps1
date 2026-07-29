@@ -1,10 +1,11 @@
 # Deploy vocab-trainer to Google Cloud Run
-# Usage: .\deploy.ps1 [<GCP_PROJECT_ID>] [<REGION>] [-Word] [-WipeGrammar] [-Llm] [-Prompts] [-Archives] [-ExampleSentences] [-GrammarExamples]
+# Usage: .\deploy.ps1 [<GCP_PROJECT_ID>] [<REGION>] [-Word] [-WipeGrammar] [-Llm] [-Auth] [-Prompts] [-Archives] [-ExampleSentences] [-GrammarExamples]
 #
 # Options:
 #   -Word               Run Firestore word data migration after deploying backend
 #   -WipeGrammar        Wipe all grammar collections in Firestore (destructive)
 #   -Llm                Upload LLM config (OpenAI key/model names) from .env to Firestore
+#   -Auth               Upload Google OAuth config from .env to Firestore (config/auth)
 #   -Prompts            Upload speaking/writing + translation config to Firestore
 #   -Archives           Upload backup + original archive data to Firestore
 #   -ExampleSentences   Migrate embedded examples to example_sentences collection
@@ -26,6 +27,7 @@ param(
     [switch]$Word,
     [switch]$WipeGrammar,
     [switch]$Llm,
+    [switch]$Auth,
     [switch]$Prompts,
     [switch]$Archives,
     [switch]$ExampleSentences,
@@ -40,8 +42,8 @@ function Invoke-Checked {
     }
 }
 
-if (-not ($Word -or $WipeGrammar -or $Llm -or $Prompts -or $Archives -or $ExampleSentences -or $GrammarExamples)) {
-    Write-Host "==> Skipping Firestore migration (use -Word, -WipeGrammar, -Llm, -Prompts, -Archives, -ExampleSentences, and/or -GrammarExamples to run)"
+if (-not ($Word -or $WipeGrammar -or $Llm -or $Auth -or $Prompts -or $Archives -or $ExampleSentences -or $GrammarExamples)) {
+    Write-Host "==> Skipping Firestore migration (use -Word, -WipeGrammar, -Llm, -Auth, -Prompts, -Archives, -ExampleSentences, and/or -GrammarExamples to run)"
 }
 
 $BackendRepo = "vocab-test-backend"
@@ -63,7 +65,7 @@ docker push "$BackendImage"
 Invoke-Checked "docker push (backend)"
 
 # Optionally seed Firestore with data from local files (before deploy so configs are available on startup)
-if ($Word -or $WipeGrammar -or $Llm -or $Prompts -or $Archives -or $ExampleSentences -or $GrammarExamples) {
+if ($Word -or $WipeGrammar -or $Llm -or $Auth -or $Prompts -or $Archives -or $ExampleSentences -or $GrammarExamples) {
     Write-Host "==> Installing backend dependencies for migration..."
     Push-Location backend
     try {
@@ -108,6 +110,19 @@ if ($Llm) {
         $env:FIRESTORE_DATABASE_ID = "vocab-database"
         npx tsx scripts/migrate-llm-config-to-firestore.ts
         Invoke-Checked "migrate-llm-config-to-firestore.ts"
+    } finally {
+        Pop-Location
+    }
+}
+
+if ($Auth) {
+    Write-Host "==> Uploading Google OAuth config to Firestore..."
+    Push-Location backend
+    try {
+        $env:FIRESTORE_PROJECT = $ProjectId
+        $env:FIRESTORE_DATABASE_ID = "vocab-database"
+        npx tsx scripts/migrate-auth-config-to-firestore.ts
+        Invoke-Checked "migrate-auth-config-to-firestore.ts"
     } finally {
         Pop-Location
     }

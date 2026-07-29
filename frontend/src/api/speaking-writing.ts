@@ -1,4 +1,4 @@
-import { postJson, fetchJson, deleteRequest } from "./client";
+import { postJson, fetchJson, deleteRequest, CREDENTIALS, notifyIfUnauthorized } from "./client";
 import type { SpeakingWritingSession } from "../types";
 
 export async function submitCorrection(
@@ -31,12 +31,14 @@ export async function submitCorrectionStream(
 ): Promise<void> {
   const res = await fetch("/api/speaking-writing/correct-stream", {
     method: "POST",
+    credentials: CREDENTIALS,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ language, mode, useCase, inputText }),
     signal,
   });
 
   if (!res.ok) {
+    notifyIfUnauthorized(res);
     throw new Error(`API error: ${res.status} ${res.statusText}`);
   }
 

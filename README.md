@@ -29,10 +29,10 @@ https://vocab-trainer-frontend-839843597381.asia-northeast1.run.app
 ./deploy.sh vocab-trainer-490014 asia-northeast1
 ```
 
-REGION is optional and defaults to `us-central1`:
+REGION is optional and defaults to `asia-northeast1`:
 
 ```bash
-./deploy.sh vocab-trainer-490014                                     # uses us-central1
+./deploy.sh vocab-trainer-490014                                     # uses asia-northeast1
 ```
 
 To also run Firestore data migrations during deploy:
@@ -103,10 +103,10 @@ cd backend && npx tsx scripts/backfill-empty-example-translations.ts [--language
 LLM-generates translations for `example_sentences` docs whose `translation` is empty or missing one or more target definition languages (e.g. a hand-typed single-language string). Use `--dry-run` to list candidates without calling the LLM or writing.
 
 This will:
-1. Build and push backend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-backend/backend`
+1. Build and push backend image to `asia-northeast1-docker.pkg.dev/vocab-trainer-490014/vocab-test-backend/backend`
 2. Deploy backend to Cloud Run
-3. Run Firestore migration (only with `--word`, `--grammer`, `--llm`, `--prompts`, and/or `--archives`)
-4. Build and push frontend image to `asia-northeast1-docker.pkg.dev/vocab-trainer/vocab-test-frontend/frontend`
+3. Run Firestore migration (only with `--word`, `--grammer`, `--llm`, `--auth`, `--prompts`, and/or `--archives`)
+4. Build and push frontend image to `asia-northeast1-docker.pkg.dev/vocab-trainer-490014/vocab-test-frontend/frontend`
 5. Deploy frontend to Cloud Run with `BACKEND_URL` pointing to the backend service
 
 The script prints both service URLs on completion.
@@ -1098,6 +1098,66 @@ Local JSON files under `backend/DB/` serve as the source for the initial Firesto
 | `OPENAI_MODEL_MINI`    | —                | OpenAI model for fast tasks such as smart-add and segmentation (falls back to Firestore `config/llm`) |
 | `OPENAI_MODEL_FULL`    | —                | OpenAI model for translation/analysis and speaking/writing (falls back to Firestore `config/llm`) |
 | `FIRESTORE_PROJECT`    | —                | Google Cloud project ID (required for Firestore in deployed environments) |
+| `GOOGLE_CLIENT_ID`     | —                | OAuth 2.0 client ID (falls back to Firestore `config/auth`) |
+| `GOOGLE_CLIENT_SECRET` | —                | OAuth 2.0 client secret (falls back to Firestore `config/auth`) |
+| `OAUTH_REDIRECT_URI`   | —                | Must match a registered redirect URI exactly; cannot be inferred from the request |
+| `SESSION_SECRET`       | —                | HMAC key for the session cookie; must be identical across instances |
+| `ALLOWED_EMAILS`       | —                | Comma-separated sign-in allowlist |
+| `ALLOWED_ORIGINS`      | (see `index.ts`) | Comma-separated CORS origin allowlist |
+
+## Authentication (Google OAuth)
+
+The app is gated behind Google sign-in, restricted to an email allowlist. There is no
+per-user data — everyone who is allowed in shares one dataset — so the allowlist is the
+whole access-control model.
+
+**Auth is off until `config/auth` exists in Firestore.** A missing document means "never
+configured" and the app serves as it always did; a *failed read* is treated as unknown and
+the backend refuses to start rather than silently exposing the API.
+
+### One-time setup
+
+1. Create an OAuth 2.0 Client ID (**Web application**) in the
+   [Credentials console](https://console.cloud.google.com/apis/credentials?project=vocab-trainer-490014)
+   for project `vocab-trainer-490014`, with these **Authorized redirect URIs**:
+
+   ```
+   https://vocab-trainer-frontend-olncevthqa-an.a.run.app/api/auth/callback
+   https://vocab-trainer-frontend-839843597381.asia-northeast1.run.app/api/auth/callback
+   http://localhost:5173/api/auth/callback
+   ```
+
+   Leave **Authorized JavaScript origins** empty — this is the server-side authorization-code
+   flow. The URIs point at the *frontend* service because nginx reverse-proxies `/api/`, which
+   keeps the session cookie first-party to the SPA origin.
+
+2. Supply the client ID and secret. The migration script resolves them in this order —
+   **flags → `.env`/environment → interactive prompt**, so no hand-editing is required:
+
+   ```bash
+   # Prompts for both, then saves them to .env so it never asks again
+   cd backend && npx tsx scripts/migrate-auth-config-to-firestore.ts
+
+   # Or pass them non-interactively
+   cd backend && npx tsx scripts/migrate-auth-config-to-firestore.ts \
+     --client-id=...apps.googleusercontent.com --client-secret=GOCSPX-...
+   ```
+
+   With no terminal attached (CI, piped stdin) it exits 1 with instructions rather than hanging.
+   `OAUTH_REDIRECT_URI`, `SESSION_SECRET` and `ALLOWED_EMAILS` are optional — the script defaults
+   them and generates a session secret on first run, preserving it afterwards.
+
+3. Deploy with the `--auth` flag, which uploads the config **and** rolls a new revision
+   (config is read at boot, so a Firestore write alone does not activate it):
+
+   ```bash
+   ./deploy.sh vocab-trainer-490014 asia-northeast1 --auth
+   ```
+
+   Run from an interactive terminal, this prompts for the credentials the first time.
+
+To add or remove a user, change `ALLOWED_EMAILS` and re-run the same command. The allowlist is
+re-checked on every request, so removing an address revokes that person's live session.
 
 ## Docker
 

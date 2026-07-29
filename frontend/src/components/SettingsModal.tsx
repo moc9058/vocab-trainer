@@ -18,6 +18,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
+import { useAuth } from "../auth/context";
 import { DEFAULT_SETTINGS, LANG_LABEL_MAP } from "../settings/defaults";
 import { getGrammarSettings, updateGrammarSettings } from "../api/grammar";
 import { uiLanguages, type TranslationKey } from "../i18n/translations";
@@ -85,6 +86,7 @@ function SortableSection({ id, label }: { id: string; label: string }) {
 export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
   const { t } = useI18n();
   const { settings, updateSettings } = useSettings();
+  const { user, authEnabled, logout } = useAuth();
 
   const [order, setOrder] = useState<string[]>([...settings.languageOrder]);
   const [activeUi, setActiveUi] = useState<Set<string>>(new Set(settings.activeUiLanguages));
@@ -217,6 +219,27 @@ export default function SettingsModal({ onClose, currentLanguageCode }: Props) {
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="mb-5 text-lg font-semibold text-gray-100">{t("settings")}</h2>
+
+        {/* Account Section — only meaningful when the backend has OAuth configured */}
+        {authEnabled && (
+          <div className="mb-6">
+            <h3 className="mb-3 border-b border-gray-700 pb-2 text-base font-semibold text-gray-200">
+              {t("settingsSectionAccount") ?? "Account"}
+            </h3>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs text-gray-400">{t("signedInAs") ?? "Signed in as"}</p>
+                <p className="truncate text-sm text-gray-200">{user?.email}</p>
+              </div>
+              <button
+                onClick={logout}
+                className="shrink-0 rounded-lg border border-gray-600 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+              >
+                {t("signOut") ?? "Sign out"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* General Section */}
         <div className="mb-6">
