@@ -575,7 +575,10 @@ interface ImportItemBase {
   /** Fractional, so a split can insert its parts between neighbours without renumbering. */
   order: number;
   status: ImportItemStatus;
-  origin: "llm" | "merge" | "split" | "manual";
+  /** `gap` rows are not proposals — they are the characters the analysis left
+   *  uncovered, materialized so every character of every sentence has a row. They
+   *  carry no reading or meaning, which is why they are flagged for review. */
+  origin: "llm" | "merge" | "split" | "manual" | "gap";
   /** Rows this one was derived from — drives the hint line and the undo. */
   sourceIds?: string[];
   /** Set on the rows a merge/split consumed. They stay in `items` as `skipped`
@@ -593,7 +596,9 @@ export interface ImportWordItem extends ImportItemBase {
   term: string;
   transliteration?: string;
   meaning?: string;
-  /** Already in the DB — such a word is never re-created, only given group membership. */
+  /** Already in the DB — such a word is never re-created, only given group membership.
+   *  Set from the analysis-time lookup, from a registration, or propagated from a
+   *  sibling row that registered the same term. */
   existingWordId?: string;
 }
 
@@ -601,6 +606,10 @@ export interface ImportGrammarItem extends ImportItemBase {
   kind: "grammar";
   statement: string;
   description: string;
+  /** The grammar item this row registered (or that a sibling row with the identical
+   *  statement registered). Grammar has no analysis-time existence check, so unlike
+   *  `existingWordId` this is only ever learned from a registration in this session. */
+  existingGrammarId?: string;
 }
 
 export type ImportItem = ImportWordItem | ImportGrammarItem;

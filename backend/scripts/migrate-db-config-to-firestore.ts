@@ -10,12 +10,20 @@
  */
 
 import { Firestore } from "@google-cloud/firestore";
+import { config } from "dotenv";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { resolve, dirname, basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DB_DIR = resolve(__dirname, "..", "DB");
+
+// Load .env from project root, as the sibling migration scripts do. Without it
+// `FIRESTORE_PROJECT` is only read from the ambient environment, so the client
+// falls back to whatever project gcloud happens to be defaulting to — and a
+// project without `vocab-database` fails with an opaque `5 NOT_FOUND` on the
+// first write rather than anything that names the real problem.
+config({ path: resolve(__dirname, "../../.env") });
 
 const db = new Firestore({
   projectId: process.env.FIRESTORE_PROJECT || undefined,

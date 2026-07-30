@@ -46,13 +46,32 @@ Fields:
   reader can match it back against the text. For an inflected word give the surface
   form that occurs (「発表した」 → 「発表し」+「た」, not 「発表する」); the dictionary
   form is recovered downstream.
-- `transliteration` — hiragana reading of the term (e.g. "けいざい"). REQUIRED for
-  EVERY entry, particles and auxiliaries included. Never return an empty string.
-- `meaning` — a SHORT Japanese gloss (a few words). REQUIRED for EVERY entry,
-  particles and auxiliaries included (が → 「主格を示す」, た → 「過去・完了」).
-  Never return an empty string.
+- `transliteration` — hiragana reading of the term (e.g. "けいざい"). Particles and
+  auxiliaries included.
+- `meaning` — a SHORT Japanese gloss (a few words). Particles and auxiliaries
+  included (が → 「主格を示す」, た → 「過去・完了」).
 - `sentenceIndex` — the index of the sentence this occurrence belongs to. Every
   word MUST have a valid index.
+
+**Write `transliteration` and `meaning` only ONCE per word.** Fill them in on the
+FIRST entry for that term in the whole article. On every later entry for the SAME
+term, return an empty string `""` for BOTH — the reader copies them from the first
+occurrence. `term` and `sentenceIndex` are still required on every entry.
+
+The ONE exception: if this occurrence genuinely has a different reading or a
+different sense from the first one, write it out in full instead of leaving it
+blank. Japanese needs this often — 行った itta「行く」 vs okonatta「行う」, 人 hito
+「ひと」 vs nin/jin (counter), 一日 tsuitachi「1日」 vs ichinichi「一日中」. Never blank
+a field just because the characters match; blank it only when the reading AND the
+meaning are the same as the first occurrence.
+
+Example, for an article where 「の」 appears in sentences 0, 2 and 5:
+
+```
+{ "term": "の", "transliteration": "の", "meaning": "〜の（連体修飾）", "sentenceIndex": 0 }
+{ "term": "の", "transliteration": "",   "meaning": "",                 "sentenceIndex": 2 }
+{ "term": "の", "transliteration": "",   "meaning": "",                 "sentenceIndex": 5 }
+```
 
 ## 3. `grammar`
 
@@ -60,6 +79,9 @@ Extract the grammar points the text illustrates, sentence by sentence.
 
 - `statement` — pattern notation in the SAME STYLE as the existing entries listed
   below, when any are given. These are concise pattern schemas, not prose.
+  Write every grammatical element abbreviation in LOWERCASE — `s`, `v`, `o`, `c`,
+  `n`, `adj`, `adv`, `aux` and the like. 「n＋を＋v」, never 「N＋を＋V」. This holds
+  even if a style-reference entry below still uses capitals.
 - `description` — a short Japanese explanation of what the pattern means and when
   it is used.
 - `sentenceIndex` — the sentence that illustrates the pattern.

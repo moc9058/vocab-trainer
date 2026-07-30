@@ -29,7 +29,12 @@ import {
   reconcileExampleSegmentRefs,
   lookupWordsByTerms,
 } from "../firestore.js";
-import { callLLMWithSchema, stripMarkdownFences, fillSegmentPinyin } from "../llm.js";
+import {
+  callLLMWithSchema,
+  stripMarkdownFences,
+  fillSegmentPinyin,
+  fillGrammarTransliteration,
+} from "../llm.js";
 import type { Grammar, GrammarDraft, GrammarExample, Meaning, ExampleSentence, GrammarSettings } from "../types.js";
 import {
   needsMoreTranslations,
@@ -332,9 +337,32 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
         };
       });
 
-      const exampleIds = await resolveExamplesToIds(language, body.examples);
+      // Statement pinyin. Only the manual form has a field for it, so every
+      // queue-driven create (article import, drafts, segment chips) would
+      // otherwise store a Chinese grammar item with no reading at all — and the
+      // quiz reveal has nothing to show. Generated only when the user did not
+      // supply one; a failure here must not sink the whole add.
+      const userTransliteration = body.transliteration?.trim() || undefined;
+      const transliterationPromise: Promise<string | undefined> =
+        language === "chinese" && !userTransliteration
+          ? fillGrammarTransliteration([body.statement])
+              .then((filled) => filled.get(0))
+              .catch((err) => {
+                fastify.log.error(
+                  { err, statement: body.statement },
+                  "Failed to generate grammar transliteration; storing without it"
+                );
+                return undefined;
+              })
+          : Promise.resolve(userTransliteration);
+
+      // Runs alongside example resolution, which is itself several round-trips.
+      const [transliteration, exampleIds] = await Promise.all([
+        transliterationPromise,
+        resolveExamplesToIds(language, body.examples),
+      ]);
       const { examples: _legacy, ...rest } = body;
-      const item: Grammar = { ...rest, language, descriptions: mergedDescs };
+      const item: Grammar = { ...rest, language, descriptions: mergedDescs, transliteration };
       await addGrammar(item, { exampleIds });
       return reply.status(201).send({ ...item, exampleIds });
     }

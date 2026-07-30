@@ -46,13 +46,31 @@ Fields:
   reader can match it back against the text. For a conjugated verb give the surface
   form that occurs (발표했다 → 「발표하」+「았다」 as they appear); the dictionary form
   is recovered downstream.
-- `transliteration` — revised-romanization reading (e.g. "gyeongje"). REQUIRED for
-  EVERY entry, particles and endings included. Never return an empty string.
-- `meaning` — a SHORT Japanese gloss (a few words). REQUIRED for EVERY entry,
-  particles and endings included (가 → 「主格を示す」, 습니다 → 「丁寧な断定」).
-  Never return an empty string.
+- `transliteration` — revised-romanization reading (e.g. "gyeongje"). Particles and
+  endings included.
+- `meaning` — a SHORT Japanese gloss (a few words). Particles and endings included
+  (가 → 「主格を示す」, 습니다 → 「丁寧な断定」).
 - `sentenceIndex` — the index of the sentence this occurrence belongs to. Every
   word MUST have a valid index.
+
+**Write `transliteration` and `meaning` only ONCE per word.** Fill them in on the
+FIRST entry for that term in the whole article. On every later entry for the SAME
+term, return an empty string `""` for BOTH — the reader copies them from the first
+occurrence. `term` and `sentenceIndex` are still required on every entry.
+
+The ONE exception: if this occurrence genuinely has a different reading or a
+different sense from the first one, write it out in full instead of leaving it
+blank. This covers homographs such as 말 mal「言葉」 vs 말「馬」 and 눈 nun「目」 vs
+눈「雪」. Never blank a field just because the characters match; blank it only when
+the reading AND the meaning are the same as the first occurrence.
+
+Example, for an article where 「의」 appears in sentences 0, 2 and 5:
+
+```
+{ "term": "의", "transliteration": "ui", "meaning": "〜の（所有）", "sentenceIndex": 0 }
+{ "term": "의", "transliteration": "",   "meaning": "",             "sentenceIndex": 2 }
+{ "term": "의", "transliteration": "",   "meaning": "",             "sentenceIndex": 5 }
+```
 
 ## 3. `grammar`
 
@@ -60,6 +78,9 @@ Extract the grammar points the text illustrates, sentence by sentence.
 
 - `statement` — pattern notation in the SAME STYLE as the existing entries listed
   below, when any are given. These are concise pattern schemas, not prose.
+  Write every grammatical element abbreviation in LOWERCASE — `s`, `v`, `o`, `c`,
+  `n`, `adj`, `adv`, `aux` and the like. 「n＋을/를＋v」, never 「N＋을/를＋V」. This
+  holds even if a style-reference entry below still uses capitals.
 - `description` — a short Japanese explanation of what the pattern means and when
   it is used.
 - `sentenceIndex` — the sentence that illustrates the pattern.

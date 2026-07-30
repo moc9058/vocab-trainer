@@ -46,13 +46,31 @@ Fields:
   substring of that sentence, because the reader matches it back against the text.
   (Chinese has no inflection, so this is also the dictionary form.)
 - `transliteration` — Hanyu Pinyin with tone marks, syllables separated by spaces
-  (e.g. "rén gōng zhì néng"). REQUIRED for EVERY entry, function words included
-  (的 → "de", 了 → "le"). Never return an empty string.
-- `meaning` — a SHORT Japanese gloss (a few words). REQUIRED for EVERY entry,
-  function words included (的 → 「〜の（連体修飾）」, 了 → 「完了・変化を表す」).
-  Never return an empty string.
+  (e.g. "rén gōng zhì néng"). Function words included (的 → "de", 了 → "le").
+- `meaning` — a SHORT Japanese gloss (a few words). Function words included
+  (的 → 「〜の（連体修飾）」, 了 → 「完了・変化を表す」).
 - `sentenceIndex` — the index of the sentence this occurrence belongs to. Every
   word MUST have a valid index.
+
+**Write `transliteration` and `meaning` only ONCE per word.** Fill them in on the
+FIRST entry for that term in the whole article. On every later entry for the SAME
+term, return an empty string `""` for BOTH — the reader copies them from the first
+occurrence. `term` and `sentenceIndex` are still required on every entry.
+
+The ONE exception: if this occurrence genuinely has a different reading or a
+different sense from the first one, write it out in full instead of leaving it
+blank. This matters for 多音字 — 还 hái「まだ」 vs 还 huán「返す」, 了 le「完了」 vs
+了 liǎo「終わる」, 长 cháng「長い」 vs 长 zhǎng「成長する」. Never blank a field just
+because the characters match; blank it only when the reading AND the meaning are
+the same as the first occurrence.
+
+Example, for an article where 的 appears in sentences 0, 2 and 5:
+
+```
+{ "term": "的", "transliteration": "de", "meaning": "〜の（連体修飾）", "sentenceIndex": 0 }
+{ "term": "的", "transliteration": "",   "meaning": "",                 "sentenceIndex": 2 }
+{ "term": "的", "transliteration": "",   "meaning": "",                 "sentenceIndex": 5 }
+```
 
 ## 3. `grammar`
 
@@ -60,6 +78,9 @@ Extract the grammar points the text illustrates, sentence by sentence.
 
 - `statement` — pattern notation in the SAME STYLE as the existing entries listed
   below, when any are given. These are concise pattern schemas, not prose.
+  Write every grammatical element abbreviation in LOWERCASE — `s`, `v`, `o`, `c`,
+  `n`, `adj`, `adv`, `aux` and the like. 「把＋o＋v」, never 「把＋O＋V」. This holds
+  even if a style-reference entry below still uses capitals.
 - `description` — a short Japanese explanation of what the pattern means and when
   it is used.
 - `sentenceIndex` — the sentence that illustrates the pattern.
