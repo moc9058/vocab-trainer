@@ -1,30 +1,29 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP } from "../settings/defaults";
 import {
-  answerCombinedQuestion,
-  getCombinedQuizQuestions,
   updateCombinedQuizWeights,
   type CombinedQuizVariant,
 } from "../api/combined-quiz";
 import { getGroups, removeWordFromGroupB } from "../api/vocab";
 import { getGrammarGroups, removeGrammarFromGroupB } from "../api/grammar";
 import { getFlaggedWordIds, flagWord, unflagWord } from "../api/flagged";
-import { fetchJson } from "../api/client";
 import { isWeightValid, parseWeightInput, scaleWeightRecord } from "../utils/weightInput";
 import RubyText from "./RubyText";
 import GrammarDescriptionsPanel from "./GrammarDescriptionsPanel";
+import QuizLoadState from "./QuizLoadState";
+import QuizSyncBadge from "./QuizSyncBadge";
+import { useQuizPrefetch } from "../hooks/useQuizPrefetch";
+import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
+import { applyCombinedAnswerLocally } from "../utils/quizLocal";
 import type {
   CombinedQuizSession,
   CombinedQuizQuestion,
-  Grammar,
+  CombinedQuizWordQuestion,
 } from "../types";
 
-const BATCH_SIZE = 50;
 const VISIBLE_ANSWER_ITEMS = 4;
-// How many upcoming grammar questions to prefetch item details for.
-const GRAMMAR_PREFETCH = 5;
 /** Reading preference, not session data: kept in localStorage so hiding the
  *  readings once holds for the next question, the next session and both quizzes. */
 const EXAMPLE_PINYIN_PREF_KEY = "quizShowExamplePinyin";
@@ -37,10 +36,6 @@ interface Props {
   /** "groupB" talks to /api/group-b-quiz and swaps the "3" key from flag to
    *  "remove from Group B". Default "combined". */
   variant?: CombinedQuizVariant;
-}
-
-function questionKey(q: CombinedQuizQuestion): string {
-  return q.kind === "word" ? `w:${q.wordId}` : `g:${q.grammarId}`;
 }
 
 function TranslationDisplay({ translation }: { translation: string | Record<string, string> }) {
@@ -109,10 +104,13 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const isGroupB = variant === "groupB";
   const { t } = useI18n();
   const { settings, displayDefEntries, displayGrammarDefEntries } = useSettings();
+  // `currentSession.questions` is the single source of ORDER and is slim; word payloads and
+  // grammar items live in the id-keyed prefetch cache and are merged in at render time.
   const [currentSession, setCurrentSession] = useState(session);
-  const [questions, setQuestions] = useState<CombinedQuizQuestion[]>(session.questions);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    const firstUnanswered = session.questions.findIndex((q) => q.userCorrect === undefined);
+    return firstUnanswered === -1 ? session.questions.length : firstUnanswered;
+  });
   const [showingAnswer, setShowingAnswer] = useState(false);
   const [showAllDefinitions, setShowAllDefinitions] = useState(false);
   const [showAllExamples, setShowAllExamples] = useState(false);
@@ -124,14 +122,14 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       localStorage.setItem(EXAMPLE_PINYIN_PREF_KEY, prev ? "0" : "1");
       return !prev;
     });
-  const [submitting, setSubmitting] = useState(false);
+  // Grading is synchronous now; this only stops a double-tap grading the same card twice.
+  const gradedIndexRef = useRef(-1);
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [alreadyFlaggedIds, setAlreadyFlaggedIds] = useState<Set<string>>(new Set());
   // Group B variant: items the "3" key has dropped from their Group B groups.
   // Purely local feedback — the current session keeps showing them; they simply
   // stop appearing in future Group B sessions.
   const [removedFromBIds, setRemovedFromBIds] = useState<Set<string>>(new Set());
-  const [grammarCache, setGrammarCache] = useState<Map<string, Grammar>>(new Map());
   const [groupNameMap, setGroupNameMap] = useState<Map<string, string>>(new Map());
   const [originalTotal] = useState(() => session.initialTotal ?? session.questions.length);
   const [weightsOpen, setWeightsOpen] = useState(false);
@@ -147,53 +145,23 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const [sessionReviewActive, setSessionReviewActive] = useState(false);
   const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
 
-  const fetchedCountRef = useRef(0);
-  const fetchQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const submittingRef = useRef(false);
-  const totalQuestionsRef = useRef(session.questions.length);
+  const outbox = useAnswerOutbox();
 
-  const fetchBatch = useCallback((offset: number, limit: number) => {
-    const request = fetchQueueRef.current.then(async () => {
-      const { questions: batch, total } = await getCombinedQuizQuestions(session.language, offset, limit, variant);
-      totalQuestionsRef.current = total;
-      fetchedCountRef.current = Math.max(fetchedCountRef.current, offset + batch.length);
-      setQuestions((prev) => {
-        const newQuestions = [...prev];
-        for (let i = 0; i < batch.length; i++) {
-          const idx = offset + i;
-          if (idx >= newQuestions.length) {
-            newQuestions.push(batch[i]);
-          } else {
-            newQuestions[idx] = { ...newQuestions[idx], ...batch[i] } as CombinedQuizQuestion;
-          }
-        }
-        return newQuestions;
-      });
-    });
-    fetchQueueRef.current = request.catch(() => {});
-    return request;
-  }, [session.language]);
-
-  // Initial load: fetch first batch starting at the first unanswered question
-  useEffect(() => {
-    const firstUnanswered = session.questions.findIndex((q) => q.userCorrect === undefined);
-    const startOffset = Math.max(0, firstUnanswered === -1 ? 0 : firstUnanswered);
-    setCurrentIndex(firstUnanswered === -1 ? session.questions.length : firstUnanswered);
-
-    fetchBatch(startOffset, BATCH_SIZE).then(() => setLoading(false));
-  }, [fetchBatch, session.questions]);
-
-  // Prefetch next batch when halfway through the loaded questions
-  useEffect(() => {
-    if (loading) return;
-    const loadedUnanswered = questions.filter((q) => q.userCorrect === undefined).length;
-    const halfway = Math.floor(loadedUnanswered / 2);
-    const answeredSinceLoad = questions.filter((q) => q.userCorrect !== undefined).length - (session.questions.filter((q) => q.userCorrect !== undefined).length);
-
-    if (answeredSinceLoad >= halfway && fetchedCountRef.current < totalQuestionsRef.current) {
-      fetchBatch(fetchedCountRef.current, BATCH_SIZE);
+  // Load BOTH domains' payloads for the whole session up front, soonest cards first, so a
+  // connection drop mid-quiz can't leave a card without its definitions or descriptions.
+  // Computed once and frozen — see the note in `QuizTaking.tsx`.
+  const orderedQuestions = currentSession.questions;
+  const [[prefetchWordIds, prefetchGrammarIds]] = useState<[string[], string[]]>(() => {
+    const wordIds: string[] = [];
+    const grammarIds: string[] = [];
+    for (const q of session.questions) {
+      if (q.userCorrect !== undefined) continue;
+      if (q.kind === "word") wordIds.push(q.wordId);
+      else grammarIds.push(q.grammarId);
     }
-  }, [currentIndex, loading, questions, fetchBatch, session.questions]);
+    return [wordIds, grammarIds];
+  });
+  const prefetch = useQuizPrefetch(currentSession.language, prefetchWordIds, prefetchGrammarIds);
 
   useEffect(() => {
     // The Group B variant has no flag concept — skip the fetch entirely.
@@ -220,36 +188,23 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     });
   }, [session.language, session.wordGroupMembership, session.grammarGroupMembership]);
 
-  // Fetch grammar item details (statement/descriptions) for the current + next few
-  // grammar questions so the answer reveal is instant.
-  useEffect(() => {
-    const upcoming = questions.slice(currentIndex, currentIndex + GRAMMAR_PREFETCH);
-    const ids = [...new Set(
-      upcoming.filter((q) => q.kind === "grammar").map((q) => q.grammarId)
-    )].filter((id) => !grammarCache.has(id));
-    for (const id of ids) {
-      fetchJson<Grammar>(
-        `/api/grammar/${encodeURIComponent(session.language)}/items/${encodeURIComponent(id)}`
-      )
-        .then((item) => {
-          setGrammarCache((prev) => new Map(prev).set(id, item));
-        })
-        .catch(() => {});
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentIndex, questions, session.language]);
-
   // Mobile: the page scrolls when an answer is tall (min-h-full container), so
   // reset to the top on each new question — otherwise the prompt stays off-screen.
   useEffect(() => {
     window.scrollTo({ top: 0 });
   }, [currentIndex, sessionReviewIndex]);
 
-  const question = currentIndex < questions.length ? questions[currentIndex] : null;
+  // The slim entry wins over the cached payload so a stale cache can never overwrite the
+  // session's answer state.
+  const slimQuestion = currentIndex < orderedQuestions.length ? orderedQuestions[currentIndex] : null;
+  const question: CombinedQuizQuestion | null =
+    slimQuestion?.kind === "word"
+      ? ({ ...prefetch.words.get(slimQuestion.wordId), ...slimQuestion } as CombinedQuizWordQuestion)
+      : slimQuestion ?? null;
   const isComplete = currentSession.status === "completed";
   const wordQuestion = question?.kind === "word" ? question : null;
   const grammarQuestion = question?.kind === "grammar" ? question : null;
-  const grammarItem = grammarQuestion ? grammarCache.get(grammarQuestion.grammarId) : null;
+  const grammarItem = grammarQuestion ? prefetch.grammar.get(grammarQuestion.grammarId) : null;
 
   const definitions = wordQuestion?.definitions ?? [];
   const examples = wordQuestion?.examples ?? [];
@@ -262,7 +217,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       word: { remaining: new Set<string>(), total: new Set<string>() },
       grammar: { remaining: new Set<string>(), total: new Set<string>() },
     };
-    for (const q of questions) {
+    for (const q of orderedQuestions) {
       const refId = q.kind === "word" ? q.wordId : q.grammarId;
       stats[q.kind].total.add(refId);
       if (q.userCorrect === undefined) stats[q.kind].remaining.add(refId);
@@ -275,17 +230,17 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         total: stats[kind].total.size,
       }))
       .filter((d) => d.total > 0);
-  }, [questions, t]);
+  }, [orderedQuestions, t]);
 
   // Per-group progress for word groups and grammar groups combined.
   const groupProgress = useMemo(() => {
     const wordMembership = currentSession.wordGroupMembership;
     const grammarMembership = currentSession.grammarGroupMembership;
     const unansweredWordIds = new Set(
-      questions.filter((q) => q.kind === "word" && q.userCorrect === undefined).map((q) => (q as { wordId: string }).wordId)
+      orderedQuestions.filter((q) => q.kind === "word" && q.userCorrect === undefined).map((q) => (q as { wordId: string }).wordId)
     );
     const unansweredGrammarIds = new Set(
-      questions.filter((q) => q.kind === "grammar" && q.userCorrect === undefined).map((q) => (q as { grammarId: string }).grammarId)
+      orderedQuestions.filter((q) => q.kind === "grammar" && q.userCorrect === undefined).map((q) => (q as { grammarId: string }).grammarId)
     );
     const rows: { id: string; kind: "word" | "grammar"; name: string; remaining: number; total: number }[] = [];
     for (const [gid, ids] of Object.entries(wordMembership ?? {})) {
@@ -307,7 +262,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       });
     }
     return rows.length > 0 ? rows : null;
-  }, [currentSession.wordGroupMembership, currentSession.grammarGroupMembership, questions, groupNameMap]);
+  }, [currentSession.wordGroupMembership, currentSession.grammarGroupMembership, orderedQuestions, groupNameMap]);
 
   const hasWordGroups = groupProgress?.some((g) => g.kind === "word") ?? false;
   const hasGrammarGroups = groupProgress?.some((g) => g.kind === "grammar") ?? false;
@@ -380,16 +335,11 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         ...(Object.keys(wordGroupWeights).length > 0 ? { wordGroupWeights } : {}),
         ...(Object.keys(grammarGroupWeights).length > 0 ? { grammarGroupWeights } : {}),
       }, variant);
-      const hydratedByKey = new Map(questions.map((q) => [questionKey(q), q]));
-      setQuestions(
-        updated.questions.map((q) => ({
-          ...hydratedByKey.get(questionKey(q)),
-          ...q,
-        }) as CombinedQuizQuestion)
-      );
       setCurrentSession(updated);
-      totalQuestionsRef.current = updated.questions.length;
       const firstUnanswered = updated.questions.findIndex((q) => q.userCorrect === undefined);
+      // The new order can land the cursor back on an index already graded this session; the
+      // double-tap guard keys off the index, so it must be cleared or that card is unanswerable.
+      gradedIndexRef.current = -1;
       setCurrentIndex(firstUnanswered === -1 ? updated.questions.length : firstUnanswered);
       setShowingAnswer(false);
       resetExpandedAnswers();
@@ -463,46 +413,33 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     );
   }
 
-  async function handleGrade(correct: boolean) {
-    if (!question || submittingRef.current) return;
-    submittingRef.current = true;
-    setSubmitting(true);
+  /** Local-first — see `utils/quizLocal.ts`. The write is queued, never awaited. */
+  function handleGrade(correct: boolean) {
+    if (!question || gradedIndexRef.current === currentIndex) return;
+    gradedIndexRef.current = currentIndex;
+    const refId = question.kind === "word" ? question.wordId : question.grammarId;
     const submittedFlagIds = !isGroupB && question.kind === "word" ? Array.from(flaggedIds) : [];
-    try {
-      const { session: updatedSession } = await answerCombinedQuestion({
-        language: currentSession.language,
-        kind: question.kind,
-        refId: question.kind === "word" ? question.wordId : question.grammarId,
-        correct,
-        flagWordIds: submittedFlagIds.length > 0 ? submittedFlagIds : undefined,
-      }, variant);
 
-      if (submittedFlagIds.length > 0) {
-        setAlreadyFlaggedIds((prev) => new Set([...prev, ...submittedFlagIds]));
-      }
+    outbox.enqueue({
+      domain: "combined",
+      language: currentSession.language,
+      variant,
+      kind: question.kind,
+      refId,
+      correct,
+      ...(submittedFlagIds.length > 0 ? { flagWordIds: submittedFlagIds } : {}),
+    });
 
-      setQuestions((prev) => {
-        const hydratedByKey = new Map(prev.map((q) => [questionKey(q), q]));
-        return updatedSession.questions.map((q) => ({
-          ...hydratedByKey.get(questionKey(q)),
-          ...q,
-        }) as CombinedQuizQuestion);
-      });
-      setCurrentSession(updatedSession);
-      totalQuestionsRef.current = updatedSession.questions.length;
-      setSessionLog((prev) => [...prev, { ...question, userCorrect: correct }]);
-      if (!correct) {
-        await fetchBatch(currentIndex + 1, BATCH_SIZE);
-      }
-
-      setCurrentIndex((i) => i + 1);
-      setShowingAnswer(false);
-      resetExpandedAnswers();
-      setFlaggedIds(new Set());
-    } finally {
-      submittingRef.current = false;
-      setSubmitting(false);
+    if (submittedFlagIds.length > 0) {
+      setAlreadyFlaggedIds((prev) => new Set([...prev, ...submittedFlagIds]));
     }
+
+    setCurrentSession((prev) => applyCombinedAnswerLocally(prev, question.kind, refId, correct));
+    setSessionLog((prev) => [...prev, { ...question, userCorrect: correct }]);
+    setCurrentIndex((i) => i + 1);
+    setShowingAnswer(false);
+    resetExpandedAnswers();
+    setFlaggedIds(new Set());
   }
 
   function endSession() {
@@ -539,7 +476,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         return;
       }
 
-      if (submittingRef.current || event.repeat) return;
+      if (event.repeat) return;
       if (event.key === "1") {
         event.preventDefault();
         void handleGrade(false);
@@ -574,15 +511,8 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [question, showingAnswer, submitting, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, isGroupB]);
+  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, isGroupB]);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-full items-center justify-center">
-        <p className="text-gray-400">Loading questions...</p>
-      </div>
-    );
-  }
 
   if (sessionReviewActive) {
     const reviewQ = sessionReviewIndex < sessionLog.length ? sessionLog[sessionReviewIndex] : null;
@@ -614,7 +544,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
     const reviewWord = reviewQ.kind === "word" ? reviewQ : null;
     const reviewGrammar = reviewQ.kind === "grammar" ? reviewQ : null;
-    const reviewGrammarItem = reviewGrammar ? grammarCache.get(reviewGrammar.grammarId) : null;
+    const reviewGrammarItem = reviewGrammar ? prefetch.grammar.get(reviewGrammar.grammarId) : null;
     const reviewDefs = reviewWord?.definitions ?? [];
     const reviewExamples = reviewWord?.examples ?? [];
 
@@ -748,10 +678,18 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     );
   }
 
-  if (isComplete || (!question && currentIndex >= questions.length)) {
+  if (isComplete || (!question && currentIndex >= orderedQuestions.length)) {
     const { correct } = currentSession.score;
     return (
       <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+        {/* The likeliest moment to close the tab — surface any answers still in flight. */}
+        <QuizSyncBadge
+          prefetch={prefetch}
+          pending={outbox.pending}
+          failed={outbox.failed}
+          onFlush={outbox.flush}
+          onAcknowledgeFailed={outbox.acknowledgeFailed}
+        />
         <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("congratulations")}</h2>
         <p className="text-2xl sm:text-4xl font-semibold text-indigo-400">
           {correct} / {originalTotal}
@@ -774,8 +712,32 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     );
   }
 
+  // Gate on THIS card's payload, whichever domain it belongs to — see the note in
+  // `QuizTaking.tsx`.
+  const cardRefId = question ? (question.kind === "word" ? question.wordId : question.grammarId) : "";
+  const cardCache = question?.kind === "grammar" ? prefetch.grammar : prefetch.words;
+  const cardResolved =
+    !!question && (cardCache.has(cardRefId) || prefetch.missing.has(cardRefId));
+  if (!cardResolved) {
+    return (
+      <QuizLoadState
+        error={prefetch.error}
+        loaded={prefetch.loaded}
+        total={prefetch.total}
+        onRetry={prefetch.retry}
+      />
+    );
+  }
+
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+      <QuizSyncBadge
+        prefetch={prefetch}
+        pending={outbox.pending}
+        failed={outbox.failed}
+        onFlush={outbox.flush}
+        onAcknowledgeFailed={outbox.acknowledgeFailed}
+      />
       <div className="sticky top-0 z-10 -mx-4 flex w-[calc(100%+2rem)] items-center justify-center gap-3 bg-gray-900/95 px-4 py-2 sm:static sm:mx-0 sm:w-auto sm:bg-transparent sm:px-0 sm:py-0">
         <p className="text-sm text-gray-400">
           {currentSession.score.correct} / {originalTotal}
@@ -1188,14 +1150,12 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
           <div className="sticky bottom-0 z-10 -mx-4 flex w-[calc(100%+2rem)] flex-col gap-3 bg-gray-900/95 px-4 py-2 sm:static sm:mx-0 sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:px-0 sm:py-0">
             <button
-              disabled={submitting}
               onClick={() => handleGrade(false)}
               className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-3 sm:py-2 text-white hover:bg-red-700 disabled:opacity-50"
             >
               {t("iWasWrong")}
             </button>
             <button
-              disabled={submitting}
               onClick={() => handleGrade(true)}
               className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-3 sm:py-2 text-white hover:bg-green-700 disabled:opacity-50"
             >
@@ -1244,14 +1204,12 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
           <div className="sticky bottom-0 z-10 -mx-4 flex w-[calc(100%+2rem)] flex-col gap-3 bg-gray-900/95 px-4 py-2 sm:static sm:mx-0 sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:px-0 sm:py-0">
             <button
-              disabled={submitting}
               onClick={() => handleGrade(false)}
               className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-3 sm:py-2 text-white hover:bg-red-700 disabled:opacity-50"
             >
               {t("iWasWrong")}
             </button>
             <button
-              disabled={submitting}
               onClick={() => handleGrade(true)}
               className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-3 sm:py-2 text-white hover:bg-green-700 disabled:opacity-50"
             >

@@ -9,13 +9,20 @@ import {
   sessionCounts,
 } from "../../utils/importSession";
 import { useImportLibraryStatus } from "../../hooks/useImportLibraryStatus";
-import type { ImportItem, ImportSession } from "../../types";
+import type { GrammarGroup, ImportItem, ImportSession, WordGroup } from "../../types";
 import type { SaveStatus } from "../../hooks/useImportSession";
 
 const TRANSLATION_PREF_KEY = "importShowTranslations";
 
 interface Props {
   session: ImportSession;
+  /** From the shared `useImportGroups` read — both the destination selects and the
+   *  membership chips are views of these same documents. */
+  allWordGroups: WordGroup[];
+  allGrammarGroups: GrammarGroup[];
+  /** `entityId → groupIds` from registrations the group read may not have caught
+   *  up with yet. */
+  membershipOverlay: Map<string, string[]>;
   saveStatus: SaveStatus;
   saveError: string | null;
   onRetrySave: () => void;
@@ -28,6 +35,9 @@ interface Props {
 
 export default function ImportReview({
   session,
+  allWordGroups,
+  allGrammarGroups,
+  membershipOverlay,
   saveStatus,
   saveError,
   onRetrySave,
@@ -65,10 +75,13 @@ export default function ImportReview({
     });
   }
 
-  const { inLibrary, groupBByTerm } = useImportLibraryStatus(
+  const { inLibrary, wordGroupsByTerm, grammarGroupsById } = useImportLibraryStatus(
     session.id,
     session.language,
-    session.items
+    session.items,
+    allWordGroups,
+    allGrammarGroups,
+    membershipOverlay
   );
 
   const position = sentences.findIndex((s) => s.index === focused);
@@ -137,6 +150,8 @@ export default function ImportReview({
           <div className="lg:col-start-2 lg:row-start-1 lg:sticky lg:top-4 lg:self-start">
             <ImportDestinationRail
               language={session.language}
+              allWordGroups={allWordGroups}
+              allGrammarGroups={allGrammarGroups}
               wordGroupId={session.wordGroupId}
               grammarGroupId={session.grammarGroupId}
               groupBNames={session.groupBNames}
@@ -177,7 +192,8 @@ export default function ImportReview({
                             onRegister={onRegister}
                             showTranslation={showTranslations}
                             inLibrary={inLibrary}
-                            groupBByTerm={groupBByTerm}
+                            wordGroupsByTerm={wordGroupsByTerm}
+                            grammarGroupsById={grammarGroupsById}
                           />
                           {/* On a phone the same controls live in the sticky bar below. */}
                           <div className="mt-2 hidden items-center gap-3 text-xs lg:flex">
@@ -249,6 +265,10 @@ export default function ImportReview({
                                 status={g.status}
                                 label={g.statement || "—"}
                                 kind="grammar"
+                                // Grammar has no analysis-time existence check, so
+                                // this is only true once a row with this statement
+                                // has been registered in this review.
+                                inGroupA={Boolean(g.existingGrammarId)}
                               />
                             ))}
                           </span>

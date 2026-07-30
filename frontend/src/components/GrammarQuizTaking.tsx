@@ -1,12 +1,19 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { answerGrammarQuestion, getGrammarGroups, updateGrammarQuizWeights } from "../api/grammar";
-import { fetchJson } from "../api/client";
+import { getGrammarGroups, updateGrammarQuizWeights } from "../api/grammar";
 import RubyText from "./RubyText";
 import GrammarDescriptionsPanel from "./GrammarDescriptionsPanel";
-import type { GrammarQuizSession, GrammarQuizQuestion, Grammar } from "../types";
+import QuizLoadState from "./QuizLoadState";
+import QuizSyncBadge from "./QuizSyncBadge";
+import { useQuizPrefetch } from "../hooks/useQuizPrefetch";
+import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
+import { applyGrammarAnswerLocally } from "../utils/quizLocal";
+import type { GrammarQuizSession, GrammarQuizQuestion } from "../types";
 import { isWeightValid, scaleWeightRecord } from "../utils/weightInput";
+
+/** Stable empty array — the grammar quiz has no word questions to prefetch. */
+const EMPTY_IDS: string[] = [];
 
 interface Props {
   session: GrammarQuizSession;
@@ -23,8 +30,8 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
     return idx === -1 ? session.questions.length : idx;
   });
   const [showingAnswer, setShowingAnswer] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [grammarCache, setGrammarCache] = useState<Map<string, Grammar>>(new Map());
+  // Grading is synchronous now; this only stops a double-tap grading the same card twice.
+  const gradedIndexRef = useRef(-1);
   const [originalTotal] = useState(
     session.questions.filter((q) => q.userCorrect === undefined).length || session.questions.length
   );
@@ -39,21 +46,17 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
   const [sessionReviewActive, setSessionReviewActive] = useState(false);
   const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
 
-  // Fetch grammar item details for showing statement/descriptions on answer reveal
-  useEffect(() => {
-    const ids = [...new Set(session.questions.map((q) => q.grammarId))];
-    for (const id of ids) {
-      if (!grammarCache.has(id)) {
-        fetchJson<Grammar>(
-          `/api/grammar/${encodeURIComponent(session.language)}/items/${encodeURIComponent(id)}`
-        )
-          .then((item) => {
-            setGrammarCache((prev) => new Map(prev).set(id, item));
-          })
-          .catch(() => {});
-      }
-    }
-  }, [session.questions, session.language]);
+  const outbox = useAnswerOutbox();
+
+  // Grammar items (descriptions + examples) for the answer reveal, loaded up front in batches.
+  // This used to be one HTTP request per item fired in an unbounded fan-out on mount, with no
+  // in-flight guard and no loading gate — so a card could reveal with nothing on it.
+  // Computed once and frozen — see the note in `QuizTaking.tsx`.
+  const orderedQuestions = currentSession.questions;
+  const [prefetchGrammarIds] = useState(() =>
+    session.questions.filter((q) => q.userCorrect === undefined).map((q) => q.grammarId)
+  );
+  const prefetch = useQuizPrefetch(currentSession.language, EMPTY_IDS, prefetchGrammarIds);
 
   useEffect(() => {
     if (!session.groupMembership || Object.keys(session.groupMembership).length === 0) return;
@@ -69,9 +72,9 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
   }, [currentIndex, sessionReviewIndex]);
 
   const question =
-    currentIndex < currentSession.questions.length ? currentSession.questions[currentIndex] : null;
+    currentIndex < orderedQuestions.length ? orderedQuestions[currentIndex] : null;
   const isComplete = currentSession.status === "completed";
-  const grammar = question ? grammarCache.get(question.grammarId) : null;
+  const grammar = question ? prefetch.grammar.get(question.grammarId) : null;
 
   const groupProgress = useMemo(() => {
     const membership = currentSession.groupMembership;
@@ -118,6 +121,9 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
       const updated = await updateGrammarQuizWeights(currentSession.language, weights, correctWeight);
       setCurrentSession(updated);
       const firstUnanswered = updated.questions.findIndex((q) => q.userCorrect === undefined);
+      // The new order can land the cursor back on an index already graded this session; the
+      // double-tap guard keys off the index, so it must be cleared or that card is unanswerable.
+      gradedIndexRef.current = -1;
       setCurrentIndex(firstUnanswered === -1 ? updated.questions.length : firstUnanswered);
       setShowingAnswer(false);
       setWeightsOpen(false);
@@ -128,22 +134,22 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
     }
   }
 
-  async function handleGrade(correct: boolean) {
-    if (!question || submitting) return;
-    setSubmitting(true);
-    try {
-      const result = await answerGrammarQuestion({
-        language: currentSession.language,
-        grammarId: question.grammarId,
-        correct,
-      });
-      setCurrentSession(result.session);
-      setSessionLog((prev) => [...prev, { ...question, userCorrect: correct }]);
-      setCurrentIndex((i) => i + 1);
-      setShowingAnswer(false);
-    } finally {
-      setSubmitting(false);
-    }
+  /** Local-first — see `utils/quizLocal.ts`. The write is queued, never awaited. */
+  function handleGrade(correct: boolean) {
+    if (!question || gradedIndexRef.current === currentIndex) return;
+    gradedIndexRef.current = currentIndex;
+
+    outbox.enqueue({
+      domain: "grammar",
+      language: currentSession.language,
+      grammarId: question.grammarId,
+      correct,
+    });
+
+    setCurrentSession((prev) => applyGrammarAnswerLocally(prev, question.grammarId, correct));
+    setSessionLog((prev) => [...prev, { ...question, userCorrect: correct }]);
+    setCurrentIndex((i) => i + 1);
+    setShowingAnswer(false);
   }
 
   function endSession() {
@@ -177,7 +183,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
       );
     }
 
-    const reviewGrammar = grammarCache.get(reviewQuestion.grammarId);
+    const reviewGrammar = prefetch.grammar.get(reviewQuestion.grammarId);
     return (
       <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
         <p className="text-sm text-gray-400">
@@ -225,10 +231,18 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
     );
   }
 
-  if (isComplete || (!question && currentIndex >= currentSession.questions.length)) {
+  if (isComplete || (!question && currentIndex >= orderedQuestions.length)) {
     const { correct } = currentSession.score;
     return (
       <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+        {/* The likeliest moment to close the tab — surface any answers still in flight. */}
+        <QuizSyncBadge
+          prefetch={prefetch}
+          pending={outbox.pending}
+          failed={outbox.failed}
+          onFlush={outbox.flush}
+          onAcknowledgeFailed={outbox.acknowledgeFailed}
+        />
         <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("congratulations")}</h2>
         <p className="text-2xl sm:text-4xl font-semibold text-emerald-400">
           {correct} / {originalTotal}
@@ -248,8 +262,31 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
     );
   }
 
+  // Gate on THIS card's item — see the note in `QuizTaking.tsx`. Without it the reveal renders
+  // no descriptions at all (the panel is conditional on `grammar`) while grading stays live.
+  const cardResolved =
+    !!question &&
+    (prefetch.grammar.has(question.grammarId) || prefetch.missing.has(question.grammarId));
+  if (!cardResolved) {
+    return (
+      <QuizLoadState
+        error={prefetch.error}
+        loaded={prefetch.loaded}
+        total={prefetch.total}
+        onRetry={prefetch.retry}
+      />
+    );
+  }
+
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+      <QuizSyncBadge
+        prefetch={prefetch}
+        pending={outbox.pending}
+        failed={outbox.failed}
+        onFlush={outbox.flush}
+        onAcknowledgeFailed={outbox.acknowledgeFailed}
+      />
       <div className="sticky top-0 z-10 flex w-full items-center justify-center gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:bg-transparent sm:py-0">
         <p className="text-sm text-gray-400">
           {currentSession.score.correct} / {originalTotal}
@@ -415,14 +452,12 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
           {/* Self-grade buttons */}
           <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
             <button
-              disabled={submitting}
               onClick={() => handleGrade(true)}
               className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-3 sm:py-2 text-white hover:bg-green-700 disabled:opacity-50"
             >
               {t("iWasCorrect")}
             </button>
             <button
-              disabled={submitting}
               onClick={() => handleGrade(false)}
               className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-3 sm:py-2 text-white hover:bg-red-700 disabled:opacity-50"
             >

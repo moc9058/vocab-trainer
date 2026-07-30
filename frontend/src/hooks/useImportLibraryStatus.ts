@@ -1,21 +1,34 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { checkTerms, getGroups } from "../api/vocab";
-import { categoryGroups, type ImportItem } from "../types";
+import { checkTerms } from "../api/vocab";
+import { categoryGroups, type GrammarGroup, type ImportItem, type WordGroup } from "../types";
 import { registeredTerms } from "../utils/importSession";
 
 /** A term field is looked up once typing settles, not on every keystroke. */
 const LOOKUP_DEBOUNCE_MS = 400;
 
+/** The groups holding one entity, split by meta-group. Names, because that is what
+ *  the review screen shows and what a Group B set is joined by. */
+export interface GroupMembership {
+  a: string[];
+  b: string[];
+}
+
+const NO_GROUPS: GroupMembership = { a: [], b: [] };
+
 export interface ImportLibraryStatus {
   /** Terms known to be in the library. Group A is the universe of all items, so
-   *  this is exactly "already in Group A". */
+   *  this is exactly "already in Group A" — kept as the fallback signal for a term
+   *  whose word ID is not known and whose group names therefore cannot be. */
   inLibrary: Set<string>;
-  /** Category-B group names holding the term — empty when it is in none. */
-  groupBByTerm: Map<string, string[]>;
+  /** Group names holding each extracted term. Empty when the word ID is unknown. */
+  wordGroupsByTerm: Map<string, GroupMembership>;
+  /** Group names holding each registered grammar item, keyed by grammar ID —
+   *  grammar rows carry their ID directly, so no statement→ID map is needed. */
+  grammarGroupsById: Map<string, GroupMembership>;
 }
 
 /**
- * What the review screen knows about each extracted term's place in the library,
+ * What the review screen knows about each extracted item's place in the library,
  * keyed by TERM rather than by row: an article repeats its vocabulary, so
  * registering 「経済」 in sentence 3 must also settle the 「経済」 rows in sentences 7
  * and 12 — and any row a split has just produced.
@@ -24,20 +37,26 @@ export interface ImportLibraryStatus {
  *  1. the analysis, which had every extracted term looked up server-side
  *     (`existingWordId`) — never re-queried, that would cost one lookup per word
  *     of the article on every open;
- *  2. registrations made during this review;
+ *  2. registrations made during this review, which propagate the entity ID onto
+ *     every row sharing the term;
  *  3. a debounced `check-terms` for terms 1 and 2 cannot answer — the parts of a
- *     split, a merged compound, a hand-added row.
+ *     split, a merged compound, a hand-added row, a materialized gap.
  *
- * Group B membership needs the word's ID, so it can only be reported for terms
- * whose ID is known; the group lists are refetched as new IDs come in.
+ * Group membership itself comes from the shared `useImportGroups` read, inverted
+ * here. `overlay` covers the gap between a registration's write returning and that
+ * re-read landing, so a chip never waits on a round trip to appear.
  */
 export function useImportLibraryStatus(
   sessionId: string,
   language: string,
-  items: ImportItem[]
+  items: ImportItem[],
+  wordGroups: WordGroup[],
+  grammarGroups: GrammarGroup[],
+  /** `entityId → groupIds` written by registrations that the group read may not
+   *  have caught up with yet. */
+  overlay: Map<string, string[]>
 ): ImportLibraryStatus {
   const [lookedUp, setLookedUp] = useState<Map<string, string>>(() => new Map());
-  const [groupBWordIds, setGroupBWordIds] = useState<Map<string, string[]>>(() => new Map());
   /** term → the status phase it was last queried in, so a row that gets registered
    *  is asked about again (that is when its ID first becomes learnable). */
   const queriedRef = useRef<Map<string, string>>(new Map());
@@ -49,7 +68,7 @@ export function useImportLibraryStatus(
 
   const knownTerms = useMemo(() => registeredTerms(items), [items]);
 
-  /** Word IDs the analysis already resolved, plus everything looked up since. */
+  /** Word IDs the analysis already resolved, plus everything learned since. */
   const idByTerm = useMemo(() => {
     const map = new Map<string, string>(lookedUp);
     for (const i of items) {
@@ -81,7 +100,9 @@ export function useImportLibraryStatus(
       const term = i.term.trim();
       if (!term || idByTerm.has(term)) continue;
       // An LLM-proposed row was checked server-side at analysis time; only ask
-      // again once it has been registered and therefore has an ID to learn.
+      // again once it has been registered and therefore has an ID to learn. A gap
+      // row was never in that check — the `existing` map only covers terms the
+      // model returned — so it is always a candidate.
       const settled = i.status === "registered" || i.status === "duplicate";
       if (i.origin === "llm" && !settled) continue;
       if (queriedRef.current.get(term) === phaseOf(term)) continue;
@@ -103,40 +124,53 @@ export function useImportLibraryStatus(
     return () => clearTimeout(timer);
   }, [idByTerm, items, language, phaseOf]);
 
-  // ---- Group B membership ----
-  // Refetched whenever a new word ID enters the picture (a registration, a
-  // lookup), since that is the only thing that can change what B holds here.
-  const idSignature = useMemo(() => [...idByTerm.values()].sort().join(","), [idByTerm]);
-  useEffect(() => {
-    let cancelled = false;
-    getGroups(language)
-      .then((groups) => {
-        if (cancelled) return;
-        const map = new Map<string, string[]>();
-        for (const group of categoryGroups(groups, "B")) {
-          for (const wordId of group.wordIds ?? []) {
-            map.set(wordId, [...(map.get(wordId) ?? []), group.name]);
-          }
-        }
-        setGroupBWordIds(map);
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [language, idSignature]);
+  // ---- membership, inverted from the shared group read ----
+  // Both categories, not just B: knowing the actual Group A group names is what
+  // distinguishes "in the library" from "in the group this review is filling".
+  const membershipByEntityId = useMemo(() => {
+    const map = new Map<string, GroupMembership>();
+    const add = (entityId: string, name: string, category: "A" | "B") => {
+      const entry = map.get(entityId) ?? { a: [], b: [] };
+      const bucket = category === "B" ? entry.b : entry.a;
+      if (!bucket.includes(name)) bucket.push(name);
+      map.set(entityId, entry);
+    };
+    for (const category of ["A", "B"] as const) {
+      for (const g of categoryGroups(wordGroups, category)) {
+        for (const wordId of g.wordIds ?? []) add(wordId, g.name, category);
+      }
+      for (const g of categoryGroups(grammarGroups, category)) {
+        for (const grammarId of g.grammarIds ?? []) add(grammarId, g.name, category);
+      }
+    }
+    // The overlay is a union, never a replacement: it holds only what the newest
+    // registrations wrote, while the read above holds everything else.
+    const byId = new Map<string, { name: string; category: "A" | "B" }>();
+    for (const g of wordGroups) byId.set(g.id, { name: g.name, category: g.category ?? "A" });
+    for (const g of grammarGroups) byId.set(g.id, { name: g.name, category: g.category ?? "A" });
+    for (const [entityId, groupIds] of overlay) {
+      for (const groupId of groupIds) {
+        const group = byId.get(groupId);
+        // A group created inline during this registration is not in the read yet;
+        // it arrives with the next one, which the write already scheduled.
+        if (group) add(entityId, group.name, group.category);
+      }
+    }
+    return map;
+  }, [grammarGroups, overlay, wordGroups]);
 
   const inLibrary = useMemo(
     () => new Set([...knownTerms, ...idByTerm.keys()]),
     [idByTerm, knownTerms]
   );
 
-  const groupBByTerm = useMemo(() => {
-    const map = new Map<string, string[]>();
+  const wordGroupsByTerm = useMemo(() => {
+    const map = new Map<string, GroupMembership>();
     for (const [term, wordId] of idByTerm) {
-      const names = groupBWordIds.get(wordId);
-      if (names?.length) map.set(term, names);
+      map.set(term, membershipByEntityId.get(wordId) ?? NO_GROUPS);
     }
     return map;
-  }, [groupBWordIds, idByTerm]);
+  }, [idByTerm, membershipByEntityId]);
 
-  return { inLibrary, groupBByTerm };
+  return { inLibrary, wordGroupsByTerm, grammarGroupsById: membershipByEntityId };
 }

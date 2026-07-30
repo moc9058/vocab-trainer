@@ -2,7 +2,6 @@ import type { FastifyPluginAsync } from "fastify";
 import {
   languageExists,
   getFilteredWords,
-  getWordsByIds,
   getWordProgress,
   updateWordProgress,
   getProgressForLanguage,
@@ -45,8 +44,8 @@ interface GrammarFilterBody {
  * The combined quiz and the Group B quiz are the SAME routes over the same
  * `combined_quiz_sessions` collection, differing only in the Firestore doc key —
  * so both can be in progress for one language at the same time. Everything else
- * (weighted ordering, retry re-queue, paged word hydration, mid-session weight
- * changes) is inherited unchanged.
+ * (weighted ordering, retry re-queue, mid-session weight changes) is inherited
+ * unchanged.
  */
 function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string }): FastifyPluginAsync {
   return async (fastify) => {
@@ -246,8 +245,8 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
 
       await saveCombinedQuizSession(session);
       // Lightweight response: word questions carry only {kind, wordId, term}; the client
-      // pages GET /questions/:language for definitions/examples. Grammar questions are small
-      // (grammarId + statement) and returned as-is.
+      // hydrates definitions/examples by id via POST /api/quiz/hydrate/:language. Grammar
+      // questions are small (grammarId + statement) and returned as-is.
       return reply.status(201).send({
         ...session,
         questions: session.questions.map((q) =>
@@ -257,59 +256,9 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
     }
   );
 
-  // Batch-fetch hydrated questions (word questions get definitions/examples/hanja).
-  fastify.get<{
-    Params: { language: string };
-    Querystring: { offset?: number; limit?: number };
-  }>(
-    "/questions/:language",
-    {
-      schema: {
-        params: {
-          type: "object",
-          required: ["language"],
-          properties: { language: { type: "string" } },
-        },
-        querystring: {
-          type: "object",
-          properties: {
-            offset: { type: "number", minimum: 0 },
-            limit: { type: "number", minimum: 1 },
-          },
-        },
-      },
-    },
-    async (request, reply) => {
-      const { language } = request.params;
-      const offset = request.query.offset ?? 0;
-      const limit = request.query.limit ?? 50;
-
-      const session = await getCombinedQuizSession(opts.sessionKey(language));
-      if (!session) return reply.notFound("No combined quiz session found for this language");
-
-      const slice = session.questions.slice(offset, offset + limit);
-      const wordIds = slice.filter((q) => q.kind === "word").map((q) => (q as CombinedQuizWordQuestion).wordId);
-      const wordsData = wordIds.length > 0 ? await getWordsByIds(wordIds) : [];
-      const wordMap = new Map(wordsData.map((w) => [w.id, w]));
-
-      const hydrated: CombinedQuizQuestion[] = slice.map((q) => {
-        if (q.kind !== "word") return q;
-        const word = wordMap.get(q.wordId);
-        return {
-          kind: "word" as const,
-          wordId: q.wordId,
-          term: word?.term ?? q.term,
-          definitions: word?.definitions ?? [],
-          transliteration: word?.transliteration,
-          examples: word?.examples ?? [],
-          ...(q.userCorrect !== undefined ? { userCorrect: q.userCorrect } : {}),
-          ...(word?.hanjaReadings ? { hanjaReadings: word.hanjaReadings } : {}),
-        };
-      });
-
-      return { questions: hydrated, total: session.questions.length };
-    }
-  );
+  // No hydration endpoint here on purpose: word questions carry the same payload the word
+  // quiz serves, so both variants hydrate through the shared `POST /api/quiz/hydrate/:language`,
+  // and grammar questions hydrate through `POST /api/grammar/:language/items/batch`.
 
   // Submit answer for either kind; wrong answers are re-queued into the tail.
   fastify.post<{

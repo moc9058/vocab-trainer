@@ -17,10 +17,37 @@ function notifyIfUnauthorized(res: Response): void {
   }
 }
 
+/**
+ * Carries the HTTP status alongside the message so callers can tell "the server said no"
+ * from "the request never arrived". `fetch` rejects with a bare `TypeError` when the device
+ * is offline, so anything that is NOT an ApiError is a transport failure — which is how the
+ * quiz screens distinguish "this session doesn't exist" (404) from "you're offline", and how
+ * the answer outbox decides whether retrying could ever help.
+ *
+ * The message format is unchanged, so existing `String(err)` call sites are unaffected.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+/** True for a failure that reaching the network again might fix (offline, timeout, 5xx). */
+export function isRetryableError(err: unknown): boolean {
+  if (err instanceof ApiError) return err.status >= 500 || err.status === 408 || err.status === 429;
+  return true; // no HTTP status at all => the request never completed
+}
+
 async function errorFromResponse(res: Response): Promise<Error> {
   notifyIfUnauthorized(res);
   const body = await res.text().catch(() => "");
-  return new Error(`API error: ${res.status}${body ? ` – ${body}` : ` ${res.statusText}`}`);
+  return new ApiError(
+    res.status,
+    `API error: ${res.status}${body ? ` – ${body}` : ` ${res.statusText}`}`
+  );
 }
 
 /** Exported so the streaming call sites, which bypass these helpers, share the behaviour. */

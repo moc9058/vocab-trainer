@@ -28,7 +28,14 @@ export interface WordCreateOptions {
    */
   onSettled?: (
     result:
-      | { ok: true }
+      | {
+          ok: true;
+          /** The word that was created. Reported because `processItem` already holds
+           *  it — without this the caller has to rediscover the ID with a
+           *  `check-terms` round trip before it can say anything about the word's
+           *  group membership. */
+          wordId?: string;
+        }
       | { ok: false; error: string; duplicate: boolean; rescuedAsDraft: boolean }
   ) => void;
 }
@@ -64,7 +71,8 @@ function withGroupLock<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
-async function processItem(item: QueueItem): Promise<void> {
+/** Resolves to the created word's ID for a `create`, and to undefined for an `update`. */
+async function processItem(item: QueueItem): Promise<string | undefined> {
   if (item.type === "create") {
     const word = await smartAddWord(item.language, item.payload);
     const groupIds = item.payload.groupIds ?? [];
@@ -92,13 +100,14 @@ async function processItem(item: QueueItem): Promise<void> {
     if (item.draftId) {
       await deleteWordDraft(item.language, item.draftId);
     }
-  } else {
-    await updateWord(item.language, item.wordId, item.updates);
-    await Promise.all([
-      ...item.groupsToAdd.map((gid) => modifyGroupMembers(item.language, gid, [item.wordId], "add")),
-      ...item.groupsToRemove.map((gid) => modifyGroupMembers(item.language, gid, [item.wordId], "remove")),
-    ]);
+    return word.id;
   }
+  await updateWord(item.language, item.wordId, item.updates);
+  await Promise.all([
+    ...item.groupsToAdd.map((gid) => modifyGroupMembers(item.language, gid, [item.wordId], "add")),
+    ...item.groupsToRemove.map((gid) => modifyGroupMembers(item.language, gid, [item.wordId], "remove")),
+  ]);
+  return undefined;
 }
 
 // A failed create would silently lose the user's input (segment-chip adds have
@@ -153,8 +162,8 @@ export function useWordQueue() {
 
     for (const item of toStart) {
       processItem(item)
-        .then(() => {
-          if (item.type === "create") item.onSettled?.({ ok: true });
+        .then((wordId) => {
+          if (item.type === "create") item.onSettled?.({ ok: true, wordId });
           setRecentResults((prev) =>
             [{ id: item.id, term: item.term, success: true }, ...prev].slice(0, 5),
           );

@@ -1,16 +1,22 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP } from "../settings/defaults";
-import { answerQuestion, getQuizQuestions, updateQuizWeights } from "../api/quiz";
+import { updateQuizWeights } from "../api/quiz";
 import { getFlaggedWordIds, flagWord, unflagWord } from "../api/flagged";
 import { getGroups } from "../api/vocab";
 import RubyText from "./RubyText";
+import QuizLoadState from "./QuizLoadState";
+import QuizSyncBadge from "./QuizSyncBadge";
+import { useQuizPrefetch } from "../hooks/useQuizPrefetch";
+import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
+import { applyWordAnswerLocally } from "../utils/quizLocal";
 import { displayTranslation, type QuizSession, type QuizQuestion } from "../types";
 import { isWeightValid, scaleWeightRecord } from "../utils/weightInput";
 
-const BATCH_SIZE = 50;
 const VISIBLE_ANSWER_ITEMS = 4;
+/** Stable empty array — the word quiz has no grammar questions to prefetch. */
+const EMPTY_IDS: string[] = [];
 
 interface Props {
   session: QuizSession;
@@ -37,14 +43,20 @@ function TranslationDisplay({ translation }: { translation: string | Record<stri
 export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }: Props) {
   const { t } = useI18n();
   const { settings, displayDefEntries } = useSettings();
+  // `currentSession.questions` is the single source of ORDER, and is slim
+  // (`{wordId, term, userCorrect}`). Word payloads live in the id-keyed prefetch cache below
+  // and are merged in at render time, so re-ordering the session never costs a fetch.
   const [currentSession, setCurrentSession] = useState(session);
-  const [questions, setQuestions] = useState<QuizQuestion[]>(session.questions);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [currentIndex, setCurrentIndex] = useState(() => {
+    const firstUnanswered = session.questions.findIndex((q) => q.userCorrect === undefined);
+    return firstUnanswered === -1 ? session.questions.length : firstUnanswered;
+  });
   const [showingAnswer, setShowingAnswer] = useState(false);
   const [showAllDefinitions, setShowAllDefinitions] = useState(false);
   const [showAllExamples, setShowAllExamples] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  // Grading is synchronous now, so the old in-flight lock is gone. This only stops a
+  // double-tap (or a repeated keypress) from grading the same card twice.
+  const gradedIndexRef = useRef(-1);
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [alreadyFlaggedIds, setAlreadyFlaggedIds] = useState<Set<string>>(new Set());
   const [originalTotal] = useState(() => session.wordIds?.length ?? session.questions.length);
@@ -62,55 +74,21 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   const [sessionReviewActive, setSessionReviewActive] = useState(false);
   const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
 
-  // Track how many questions have been fetched from the server
-  const fetchedCountRef = useRef(0);
-  const fetchQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const submittingRef = useRef(false);
-  const totalQuestionsRef = useRef(session.questions.length);
+  const outbox = useAnswerOutbox();
 
-  const fetchBatch = useCallback((offset: number, limit: number) => {
-    const request = fetchQueueRef.current.then(async () => {
-      const { questions: batch, total } = await getQuizQuestions(session.language, offset, limit);
-      totalQuestionsRef.current = total;
-      fetchedCountRef.current = Math.max(fetchedCountRef.current, offset + batch.length);
-      setQuestions((prev) => {
-        const newQuestions = [...prev];
-        for (let i = 0; i < batch.length; i++) {
-          const idx = offset + i;
-          if (idx >= newQuestions.length) {
-            newQuestions.push(batch[i]);
-          } else {
-            newQuestions[idx] = { ...newQuestions[idx], ...batch[i] };
-          }
-        }
-        return newQuestions;
-      });
-    });
-    fetchQueueRef.current = request.catch(() => {});
-    return request;
-  }, [session.language]);
-
-  // Initial load: fetch first batch
-  useEffect(() => {
-    // Find the first unanswered question index to know where to start fetching
-    const firstUnanswered = session.questions.findIndex((q) => q.userCorrect === undefined);
-    const startOffset = Math.max(0, firstUnanswered === -1 ? 0 : firstUnanswered);
-    setCurrentIndex(firstUnanswered === -1 ? session.questions.length : firstUnanswered);
-
-    fetchBatch(startOffset, BATCH_SIZE).then(() => setLoading(false));
-  }, [fetchBatch, session.questions]);
-
-  // Prefetch next batch when halfway through current loaded questions
-  useEffect(() => {
-    if (loading) return;
-    const loadedUnanswered = questions.filter((q) => q.userCorrect === undefined).length;
-    const halfway = Math.floor(loadedUnanswered / 2);
-    const answeredSinceLoad = questions.filter((q) => q.userCorrect !== undefined).length - (session.questions.filter((q) => q.userCorrect !== undefined).length);
-
-    if (answeredSinceLoad >= halfway && fetchedCountRef.current < totalQuestionsRef.current) {
-      fetchBatch(fetchedCountRef.current, BATCH_SIZE);
-    }
-  }, [currentIndex, loading, questions, fetchBatch, session.questions]);
+  // Load the whole session's word data up front, in the order the user will meet it, so a
+  // connection drop mid-quiz can't leave a card without its definitions.
+  //
+  // Computed ONCE and then frozen: a retry re-queue reuses an id already in this list and no
+  // path ever introduces a new one, so the set is fixed for the life of the session.
+  // Recomputing it per answer would restart the loader for nothing. Answered questions are
+  // excluded — they are never rendered again (the end-of-session review reads `sessionLog`,
+  // which captures the merged question at grade time).
+  const orderedQuestions = currentSession.questions;
+  const [prefetchWordIds] = useState(() =>
+    session.questions.filter((q) => q.userCorrect === undefined).map((q) => q.wordId)
+  );
+  const prefetch = useQuizPrefetch(currentSession.language, prefetchWordIds, EMPTY_IDS);
 
   useEffect(() => {
     getFlaggedWordIds(session.language)
@@ -125,7 +103,12 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
       .catch(() => {});
   }, [session.language, session.groupMembership]);
 
-  const question = currentIndex < questions.length ? questions[currentIndex] : null;
+  // The slim entry wins over the cached payload so a stale cache can never overwrite the
+  // session's answer state.
+  const slimQuestion = currentIndex < orderedQuestions.length ? orderedQuestions[currentIndex] : null;
+  const question: QuizQuestion | null = slimQuestion
+    ? { ...prefetch.words.get(slimQuestion.wordId), ...slimQuestion }
+    : null;
   const isComplete = currentSession.status === "completed";
   const definitions = question?.definitions ?? [];
   const examples = question?.examples ?? [];
@@ -136,7 +119,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     const membership = currentSession.groupMembership;
     if (!membership || Object.keys(membership).length === 0) return null;
     const unansweredWordIds = new Set(
-      questions.filter((q) => q.userCorrect === undefined).map((q) => q.wordId)
+      orderedQuestions.filter((q) => q.userCorrect === undefined).map((q) => q.wordId)
     );
     return Object.entries(membership).map(([gid, wordIds]) => ({
       id: gid,
@@ -144,7 +127,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
       remaining: wordIds.filter((wid) => unansweredWordIds.has(wid)).length,
       total: wordIds.length,
     }));
-  }, [currentSession.groupMembership, questions, groupNameMap]);
+  }, [currentSession.groupMembership, orderedQuestions, groupNameMap]);
 
   function resetExpandedAnswers() {
     setShowAllDefinitions(false);
@@ -166,9 +149,9 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   const hasInvalidWeightDraft =
     Object.keys(weightDraft).some((gid) => !isWeightValid(weightDraft[gid], 0)) || correctDraftInvalid;
 
-  // Apply new group weights mid-session: the server reorders the unanswered
-  // tail and returns the full session; re-sync local order and jump to the
-  // first unanswered question of the new order.
+  // Apply new group weights mid-session: the server reorders the unanswered tail and returns
+  // the full session; adopt the new order and jump to its first unanswered question. The
+  // question payloads are keyed by id in the prefetch cache, so a reorder needs no re-fetch.
   async function applyWeights() {
     if (applyingWeights || hasInvalidWeightDraft) return;
     setApplyingWeights(true);
@@ -181,11 +164,11 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
       const weights = Object.fromEntries(Object.keys(weightDraft).map((gid) => [gid, scaled[gid] ?? 0]));
       const correctWeight = correctActive ? scaled.__correct__ : undefined;
       const updated = await updateQuizWeights(currentSession.language, weights, correctWeight);
-      const hydratedByWordId = new Map(questions.map((q) => [q.wordId, q]));
-      setQuestions(updated.questions.map((q) => ({ ...hydratedByWordId.get(q.wordId), ...q })));
       setCurrentSession(updated);
-      totalQuestionsRef.current = updated.questions.length;
       const firstUnanswered = updated.questions.findIndex((q) => q.userCorrect === undefined);
+      // The new order can land the cursor back on an index already graded this session; the
+      // double-tap guard keys off the index, so it must be cleared or that card is unanswerable.
+      gradedIndexRef.current = -1;
       setCurrentIndex(firstUnanswered === -1 ? updated.questions.length : firstUnanswered);
       setShowingAnswer(false);
       resetExpandedAnswers();
@@ -229,45 +212,35 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     });
   }
 
-  async function handleGrade(correct: boolean) {
-    if (!question || submittingRef.current) return;
-    submittingRef.current = true;
-    setSubmitting(true);
+  /**
+   * Local-first. The session mutation the server would have performed is applied here
+   * (`applyWordAnswerLocally`) and the write is handed to the outbox, so grading never waits
+   * on the network — this used to `await` the POST, and a failure left the quiz frozen on the
+   * current card with no way forward.
+   */
+  function handleGrade(correct: boolean) {
+    if (!question || gradedIndexRef.current === currentIndex) return;
+    gradedIndexRef.current = currentIndex;
     const submittedFlagIds = Array.from(flaggedIds);
-    try {
-      const { session: updatedSession } = await answerQuestion({
-        sessionId: currentSession.sessionId,
-        wordId: question.wordId,
-        correct,
-        flagWordIds: submittedFlagIds.length > 0 ? submittedFlagIds : undefined,
-      });
 
-      if (submittedFlagIds.length > 0) {
-        setAlreadyFlaggedIds((prev) => new Set([...prev, ...submittedFlagIds]));
-      }
+    outbox.enqueue({
+      domain: "word",
+      sessionId: currentSession.sessionId,
+      wordId: question.wordId,
+      correct,
+      ...(submittedFlagIds.length > 0 ? { flagWordIds: submittedFlagIds } : {}),
+    });
 
-      setQuestions((prev) => {
-        const hydratedByWordId = new Map(prev.map((q) => [q.wordId, q]));
-        return updatedSession.questions.map((q) => ({
-          ...hydratedByWordId.get(q.wordId),
-          ...q,
-        }));
-      });
-      setCurrentSession(updatedSession);
-      totalQuestionsRef.current = updatedSession.questions.length;
-      setSessionLog((prev) => [...prev, { ...question, userCorrect: correct }]);
-      if (!correct) {
-        await fetchBatch(currentIndex + 1, BATCH_SIZE);
-      }
-
-      setCurrentIndex((i) => i + 1);
-      setShowingAnswer(false);
-      resetExpandedAnswers();
-      setFlaggedIds(new Set());
-    } finally {
-      submittingRef.current = false;
-      setSubmitting(false);
+    if (submittedFlagIds.length > 0) {
+      setAlreadyFlaggedIds((prev) => new Set([...prev, ...submittedFlagIds]));
     }
+
+    setCurrentSession((prev) => applyWordAnswerLocally(prev, question.wordId, correct));
+    setSessionLog((prev) => [...prev, { ...question, userCorrect: correct }]);
+    setCurrentIndex((i) => i + 1);
+    setShowingAnswer(false);
+    resetExpandedAnswers();
+    setFlaggedIds(new Set());
   }
 
   function endSession() {
@@ -304,13 +277,13 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
         return;
       }
 
-      if (submittingRef.current || event.repeat) return;
+      if (event.repeat) return;
       if (event.key === "1") {
         event.preventDefault();
-        void handleGrade(false);
+        handleGrade(false);
       } else if (event.key === "2") {
         event.preventDefault();
-        void handleGrade(true);
+        handleGrade(true);
       } else if (event.key === "3" && question) {
         event.preventDefault();
         if (alreadyFlaggedIds.has(question.wordId)) {
@@ -327,7 +300,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [question, showingAnswer, submitting, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive]);
+  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive]);
 
   // On mobile the whole page scrolls (see min-h-full container note below), so
   // reset scroll to the top when a new question appears — otherwise the user
@@ -336,13 +309,6 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     window.scrollTo({ top: 0 });
   }, [currentIndex, sessionReviewIndex]);
 
-  if (loading) {
-    return (
-      <div className="flex min-h-full items-center justify-center">
-        <p className="text-gray-400">Loading questions...</p>
-      </div>
-    );
-  }
 
   if (sessionReviewActive) {
     const reviewQuestion = sessionReviewIndex < sessionLog.length ? sessionLog[sessionReviewIndex] : null;
@@ -458,10 +424,18 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     );
   }
 
-  if (isComplete || (!question && currentIndex >= questions.length)) {
+  if (isComplete || (!question && currentIndex >= orderedQuestions.length)) {
     const { correct } = currentSession.score;
     return (
       <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+        {/* The likeliest moment to close the tab — surface any answers still in flight. */}
+        <QuizSyncBadge
+          prefetch={prefetch}
+          pending={outbox.pending}
+          failed={outbox.failed}
+          onFlush={outbox.flush}
+          onAcknowledgeFailed={outbox.acknowledgeFailed}
+        />
         <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("congratulations")}</h2>
         <p className="text-2xl sm:text-4xl font-semibold text-blue-400">
           {correct} / {originalTotal}
@@ -484,8 +458,32 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     );
   }
 
+  // Gate on THIS card's payload, not merely on the first chunk having landed: in a session of
+  // hundreds, card 25 could otherwise reveal with zero definitions while both grade buttons
+  // stayed live, recording an answer for a blank card. `missing` counts as resolved, so a word
+  // deleted mid-session shows its term alone rather than deadlocking here.
+  const cardResolved =
+    !!question && (prefetch.words.has(question.wordId) || prefetch.missing.has(question.wordId));
+  if (!cardResolved) {
+    return (
+      <QuizLoadState
+        error={prefetch.error}
+        loaded={prefetch.loaded}
+        total={prefetch.total}
+        onRetry={prefetch.retry}
+      />
+    );
+  }
+
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+      <QuizSyncBadge
+        prefetch={prefetch}
+        pending={outbox.pending}
+        failed={outbox.failed}
+        onFlush={outbox.flush}
+        onAcknowledgeFailed={outbox.acknowledgeFailed}
+      />
       <div className="sticky top-0 z-10 flex w-full items-center justify-center gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:bg-transparent sm:py-0">
         <p className="text-sm text-gray-400">
           {currentSession.score.correct} / {originalTotal}
@@ -732,14 +730,12 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
 
           <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
             <button
-              disabled={submitting}
               onClick={() => handleGrade(false)}
               className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-3 sm:py-2 text-white hover:bg-red-700 disabled:opacity-50"
             >
               {t("iWasWrong")}
             </button>
             <button
-              disabled={submitting}
               onClick={() => handleGrade(true)}
               className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-3 sm:py-2 text-white hover:bg-green-700 disabled:opacity-50"
             >

@@ -56,17 +56,22 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
     let cancelled = false;
     (async () => {
       try {
-        const [vocabResult, grammarResult, combinedResult, groupBResult] = await Promise.all([
+        // `allSettled`, not `all`: these getters now reject on a transport failure instead of
+        // swallowing everything into `null`, and one domain being unreachable must not hide
+        // the other three resume buttons.
+        const [vocabResult, grammarResult, combinedResult, groupBResult] = await Promise.allSettled([
           getCurrentSession(language),
           getCurrentGrammarSession(language),
           getCurrentCombinedSession(language),
           getCurrentCombinedSession(language, "groupB"),
-        ]);
+        ]).then((results) =>
+          results.map((r) => (r.status === "fulfilled" ? r.value : null))
+        );
         if (!cancelled) {
-          setVocabSession(vocabResult && vocabResult.status === "in-progress" ? vocabResult : null);
-          setGrammarSession(grammarResult && grammarResult.status === "in-progress" ? grammarResult : null);
-          setCombinedSession(combinedResult && combinedResult.status === "in-progress" ? combinedResult : null);
-          setGroupBSession(groupBResult && groupBResult.status === "in-progress" ? groupBResult : null);
+          setVocabSession(vocabResult && vocabResult.status === "in-progress" ? (vocabResult as QuizSession) : null);
+          setGrammarSession(grammarResult && grammarResult.status === "in-progress" ? (grammarResult as GrammarQuizSession) : null);
+          setCombinedSession(combinedResult && combinedResult.status === "in-progress" ? (combinedResult as CombinedQuizSession) : null);
+          setGroupBSession(groupBResult && groupBResult.status === "in-progress" ? (groupBResult as CombinedQuizSession) : null);
         }
       } catch {
         // ignore

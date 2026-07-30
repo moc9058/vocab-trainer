@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import {
   getGrammarItems,
   getGrammarItem,
+  getGrammarItemsByIds,
   addGrammar,
   updateGrammar,
   deleteGrammarItem,
@@ -165,6 +166,39 @@ async function resolveExamplesToIds(
 const grammarRoutes: FastifyPluginAsync = async (fastify) => {
   const grammarConfig = await getGrammarConfig();
 
+  /**
+   * Statement pinyin for a Chinese grammar item.
+   *
+   * Applied at every write path rather than at one of them, so "a stored Chinese
+   * grammar item has a reading" holds regardless of which route the caller used —
+   * only `GrammarFormModal` ever had an input for the field, so anything else
+   * (article import, drafts, a direct API call) would otherwise store nothing and
+   * leave the quiz reveal blank.
+   *
+   * NEVER overwrites: a value already supplied or already stored wins, so a
+   * hand-tuned reading survives an edit. Returns undefined for non-Chinese
+   * languages (the field is Chinese-only) and for a statement with no Chinese
+   * material at all — see `fillGrammarTransliteration`. A failure is logged and
+   * swallowed; losing the reading must not cost the user the write.
+   */
+  async function resolveTransliteration(
+    language: string,
+    statement: string | undefined,
+    existing: string | undefined
+  ): Promise<string | undefined> {
+    const current = existing?.trim() || undefined;
+    if (current || language !== "chinese" || !statement?.trim()) return current;
+    try {
+      return (await fillGrammarTransliteration([statement])).get(0);
+    } catch (err) {
+      fastify.log.error(
+        { err, statement },
+        "Failed to generate grammar transliteration; storing without it"
+      );
+      return undefined;
+    }
+  }
+
   // GET /settings — get grammar-wide settings
   fastify.get("/settings", async () => {
     const settings = await getGrammarSettings();
@@ -223,6 +257,29 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
+  // Bulk fetch by id. The quiz screens hydrate every grammar item of a session up front so
+  // a reveal never needs the network; doing that one-by-one through the route above was one
+  // request (and one Firestore read) per item. Missing ids are omitted, not nulls.
+  fastify.post<{
+    Params: { language: string };
+    Body: { ids: string[] };
+  }>(
+    "/:language/items/batch",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["ids"],
+          properties: { ids: { type: "array", items: { type: "string" } } },
+        },
+      },
+    },
+    async (request) => {
+      const items = await getGrammarItemsByIds(request.body.ids);
+      return { items };
+    }
+  );
+
   // Add grammar item
   fastify.post<{
     Params: { language: string };
@@ -251,9 +308,14 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { language } = request.params;
       const body = request.body;
-      const exampleIds = await resolveExamplesToIds(language, body.examples);
+      // The one LLM call on this otherwise LLM-free route, and only when the
+      // caller sent no reading — the field has no other way to get filled.
+      const [transliteration, exampleIds] = await Promise.all([
+        resolveTransliteration(language, body.statement, body.transliteration),
+        resolveExamplesToIds(language, body.examples),
+      ]);
       const { examples: _legacy, ...rest } = body;
-      const item: Grammar = { ...rest, language };
+      const item: Grammar = { ...rest, language, transliteration };
       await addGrammar(item, { exampleIds });
       return reply.status(201).send({ ...item, exampleIds });
     }
@@ -342,23 +404,9 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
       // otherwise store a Chinese grammar item with no reading at all — and the
       // quiz reveal has nothing to show. Generated only when the user did not
       // supply one; a failure here must not sink the whole add.
-      const userTransliteration = body.transliteration?.trim() || undefined;
-      const transliterationPromise: Promise<string | undefined> =
-        language === "chinese" && !userTransliteration
-          ? fillGrammarTransliteration([body.statement])
-              .then((filled) => filled.get(0))
-              .catch((err) => {
-                fastify.log.error(
-                  { err, statement: body.statement },
-                  "Failed to generate grammar transliteration; storing without it"
-                );
-                return undefined;
-              })
-          : Promise.resolve(userTransliteration);
-
       // Runs alongside example resolution, which is itself several round-trips.
       const [transliteration, exampleIds] = await Promise.all([
-        transliterationPromise,
+        resolveTransliteration(language, body.statement, body.transliteration),
         resolveExamplesToIds(language, body.examples),
       ]);
       const { examples: _legacy, ...rest } = body;
@@ -382,6 +430,16 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
 
       const body = request.body;
       const oldExampleIds = (existing.exampleIds ?? []) as string[];
+
+      // Fills a reading that was never there (the item predates generation, or
+      // came in through a path that had none); a stored or supplied one is
+      // returned untouched, so an edit can't clobber a hand-tuned value.
+      // Started here and awaited at the patch so it overlaps the example work.
+      const transliterationPromise = resolveTransliteration(
+        language,
+        body.statement ?? existing.statement,
+        body.transliteration ?? existing.transliteration
+      );
 
       // If the caller sent `examples`, normalize them. Otherwise keep the old
       // exampleIds untouched (a patch without `examples` shouldn't drop them).
@@ -408,7 +466,14 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       const { examples: _legacy, ...rest } = body;
-      const patch: Partial<Grammar> = { ...rest, id: existing.id, language: existing.language };
+      const patch: Partial<Grammar> = {
+        ...rest,
+        id: existing.id,
+        language: existing.language,
+        // undefined (non-Chinese, or nothing romanizable) is dropped by
+        // `ignoreUndefinedProperties`, leaving whatever is stored alone.
+        transliteration: await transliterationPromise,
+      };
       const updated = await updateGrammar(grammarId, patch, { exampleIds: newExampleIds });
       return updated ?? existing;
     }

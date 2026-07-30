@@ -485,10 +485,20 @@ const GRAMMAR_TRANSLITERATION_SCHEMA = {
         type: "array",
         items: {
           type: "object",
-          required: ["index", "transliteration"],
+          required: ["index", "tokens"],
           properties: {
             index: { type: "integer" },
-            transliteration: { type: "string" },
+            tokens: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["text", "pinyin"],
+                properties: {
+                  text: { type: "string" },
+                  pinyin: { type: "string" },
+                },
+              },
+            },
           },
         },
       },
@@ -496,63 +506,126 @@ const GRAMMAR_TRANSLITERATION_SCHEMA = {
   },
 };
 
+const KANA = /[\p{Script=Hiragana}\p{Script=Katakana}ー]/u;
+const CJK_CHAR = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}ー々〆]/u;
+
+interface StatementPiece {
+  text: string;
+  /** True for a pure-Han run — the only kind that is a romanization candidate. */
+  candidate: boolean;
+}
+
+/**
+ * Cut a statement into maximal CJK and non-CJK runs.
+ *
+ * This is what makes the reading structurally safe: the placeholders, connectors
+ * and Latin text never reach the model at all, so they cannot be dropped,
+ * reordered or re-cased — an earlier whole-string prompt silently ate the leading
+ * "s+" of 「s+使役動詞+人/もの+v」. Only pure-Han runs are candidates; a run holding
+ * any kana is Japanese annotation (「状態を表す述語」) and is kept verbatim.
+ */
+export function splitStatementForReading(statement: string): StatementPiece[] {
+  const pieces: StatementPiece[] = [];
+  let buf = "";
+  let bufIsCjk: boolean | null = null;
+  const flush = () => {
+    if (!buf) return;
+    pieces.push({ text: buf, candidate: bufIsCjk === true && !KANA.test(buf) });
+    buf = "";
+  };
+  for (const ch of statement) {
+    const isCjk = CJK_CHAR.test(ch);
+    if (bufIsCjk !== null && isCjk !== bufIsCjk) flush();
+    bufIsCjk = isCjk;
+    buf += ch;
+  }
+  flush();
+  return pieces;
+}
+
 /**
  * Romanize Chinese grammar `statement`s into the `Grammar.transliteration` field.
  *
  * A statement is pattern notation, not a sentence ("敢+v", "v+得+很+adj"), so this is
- * NOT a plain romanization: only the Chinese lexical material is converted and every
- * other token — the lowercase element placeholders (v/o/s/n/adj…), the connectors
- * (+ ~ / parentheses) and any Japanese metalanguage label — must survive byte-for-byte
- * so the reading still lines up with the pattern it annotates.
+ * NOT a plain romanization: only the Chinese lexical material may be converted, and
+ * the element placeholders (v/o/s/n/adj…), connectors and Japanese metalanguage
+ * labels have to survive byte-for-byte or the reading stops lining up with the
+ * pattern it annotates.
+ *
+ * That alignment is guaranteed STRUCTURALLY, not by prompting: `splitStatementForReading`
+ * cuts the statement in code, only the pure-Han runs are sent to the model, and the
+ * result is reassembled here. The model's sole decision per run is "Chinese → pinyin"
+ * or "Japanese grammatical term → leave it"; it is never in a position to drop or
+ * reorder anything.
  *
  * Batched in one call (like `fillSegmentPinyin`) so a backfill amortizes the cost.
- * Returns a map of input index → transliteration; an index is absent when the model
- * skipped it or returned something unusable.
+ * Returns a map of input index → transliteration. An index is absent when the
+ * statement holds no Chinese at all ("adv+v/adj", "可能補語") — storing an echo of the
+ * statement would print the quiz prompt twice instead of a reading.
  */
 export async function fillGrammarTransliteration(
   statements: string[]
 ): Promise<Map<number, string>> {
   if (statements.length === 0) return new Map();
 
-  const systemPrompt = `You are a Chinese language expert. Each input is a Chinese GRAMMAR PATTERN statement — pattern notation, not a sentence. Produce its pinyin reading.
+  const pieceLists = statements.map(splitStatementForReading);
+  // Only statements with something romanizable cost a slot in the prompt.
+  const asked = pieceLists
+    .map((pieces, index) => ({ index, runs: [...new Set(pieces.filter((p) => p.candidate).map((p) => p.text))] }))
+    .filter((entry) => entry.runs.length > 0);
+  if (asked.length === 0) return new Map();
 
-Rules:
-- Romanize ONLY the Chinese (Han) characters that are part of the pattern itself.
-- ALWAYS use tone marks (ā á ǎ à ē é ě è ī í ǐ ì ō ó ǒ ò ū ú ǔ ù ǖ ǘ ǚ ǜ). NEVER use tone numbers ("hao3") and never leave a toned syllable unmarked ("hao"). A neutral-tone syllable correctly carries no mark (的 → de, 了 → le, 着 → zhe).
-- Keep EVERY non-Chinese token exactly as it is, in the same position: the lowercase grammatical element placeholders (v, o, s, n, c, adj, adv, aux, vp, np …), connectors and punctuation (+ ~ ～ / ( ) 、 ，), digits, and Latin text. Do not reorder, translate, expand or re-case them.
-- Keep Japanese metalanguage labels verbatim — they are annotations, not Chinese to be read. 程度副詞, 名詞, 動詞, 可能補語 and the like stay as-is. A Han run that sits next to kana (「人/もの」, 「状態を表す述語」) belongs to the Japanese annotation: leave the WHOLE slot alone, kanji included.
-- If a statement contains no Chinese material at all (only placeholders and Japanese labels, e.g. "adv+v/adj" or "可能補語"), return an empty string rather than echoing the statement back.
-- Multi-syllable Chinese words are written as one token with the syllables joined (学生 → xuéshēng); separate tokens stay separated by whatever separator the statement uses.
-- Output one entry per input, with the input's index.
+  const systemPrompt = `You are a Chinese language expert. Each input is one Chinese GRAMMAR PATTERN statement together with the Han-character runs that were extracted from it. For every run, decide what it is and answer accordingly.
 
-Examples:
-- "敢+v" → "gǎn+v"
-- "v+得+很+adj" → "v+de+hěn+adj"
-- "v+得+程度副詞+adj" → "v+de+程度副詞+adj"
-- "越来越+adj" → "yuèláiyuè+adj"
-- "能(/可以)+v" → "néng(/kěyǐ)+v"`;
+- If the run is CHINESE material belonging to the pattern, give its Hanyu Pinyin. ALWAYS use tone marks (ā á ǎ à ē é ě è ī í ǐ ì ō ó ǒ ò ū ú ǔ ù ǖ ǘ ǚ ǜ). NEVER use tone numbers ("hao3") and never leave a toned syllable unmarked ("hao"). A neutral-tone syllable correctly carries no mark (的 → de, 了 → le, 着 → zhe). Join the syllables of one word without spaces (越来越 → yuèláiyuè, 学生 → xuéshēng).
+- If the run is JAPANESE metalanguage — grammatical terminology naming a slot rather than Chinese to be read (程度副詞, 可能補語, 名詞句, 使役動詞, 形容詞化, 数量) — return an EMPTY pinyin. Use the surrounding statement to judge: a run standing next to kana or beside other Japanese labels is part of the annotation, not the pattern.
+- Return every run you were given for that statement, with its text copied exactly.`;
 
-  const numbered = statements.map((s, i) => `${i}. ${s}`).join("\n");
-  const userPrompt = `Give the pinyin reading of each grammar statement:\n\n${numbered}`;
+  const userPrompt = asked
+    .map(
+      (entry) =>
+        `${entry.index}. statement: ${statements[entry.index]}\n   runs: ${JSON.stringify(entry.runs)}`
+    )
+    .join("\n");
 
   const raw = await callLLMWithSchema(
     systemPrompt,
-    userPrompt,
+    `Classify and read the Han runs of each grammar statement:\n\n${userPrompt}`,
     GRAMMAR_TRANSLITERATION_SCHEMA,
     "llm/fill-grammar-transliteration"
   );
   const parsed = JSON.parse(stripMarkdownFences(raw));
-  const results = new Map<number, string>();
 
+  // index → (run text → pinyin)
+  const readings = new Map<number, Map<string, string>>();
   for (const entry of parsed.results ?? []) {
-    if (typeof entry?.index !== "number" || !Number.isInteger(entry.index)) continue;
+    if (!Number.isInteger(entry?.index) || !Array.isArray(entry?.tokens)) continue;
     if (entry.index < 0 || entry.index >= statements.length) continue;
-    if (typeof entry.transliteration !== "string") continue;
-    const value = toneMarkNumberedPinyin(entry.transliteration.trim());
-    // An echo of the statement means nothing was romanized — storing it would
-    // display the prompt twice in the quiz rather than its reading.
-    if (!value || value === statements[entry.index].trim()) continue;
-    results.set(entry.index, value);
+    const byText = new Map<string, string>();
+    for (const token of entry.tokens) {
+      if (typeof token?.text !== "string" || typeof token?.pinyin !== "string") continue;
+      const pinyin = toneMarkNumberedPinyin(token.pinyin.trim());
+      if (pinyin) byText.set(token.text, pinyin);
+    }
+    readings.set(entry.index, byText);
+  }
+
+  const results = new Map<number, string>();
+  for (let i = 0; i < statements.length; i++) {
+    const byText = readings.get(i);
+    if (!byText || byText.size === 0) continue;
+    let converted = false;
+    const rebuilt = pieceLists[i]
+      .map((piece) => {
+        const pinyin = piece.candidate ? byText.get(piece.text) : undefined;
+        if (!pinyin) return piece.text;
+        converted = true;
+        return pinyin;
+      })
+      .join("");
+    // Nothing was Chinese after all — leave the field unset rather than storing
+    // the statement as its own reading.
+    if (converted) results.set(i, rebuilt);
   }
 
   return results;

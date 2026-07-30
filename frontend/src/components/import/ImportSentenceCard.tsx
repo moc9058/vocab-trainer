@@ -6,6 +6,7 @@ import {
   addWordItem,
   coverageRuns,
   isLocked,
+  materializeGaps,
   mergeWordItems,
   sentenceCoverage,
   sentenceItems,
@@ -19,6 +20,9 @@ import type {
   ImportSentence,
   ImportWordItem,
 } from "../../types";
+import type { GroupMembership } from "../../hooks/useImportLibraryStatus";
+
+const NO_GROUPS: GroupMembership = { a: [], b: [] };
 
 interface Props {
   /** Backend full-name language ("chinese"), which is what gates the pinyin input. */
@@ -32,10 +36,13 @@ interface Props {
   /** Sentence translation visibility is a per-user preference owned by `ImportReview`. */
   showTranslation: boolean;
   /** Terms already in the library (= in Group A), keyed by term so a word registered
-   *  from one sentence lights up its other occurrences too. */
+   *  from one sentence lights up its other occurrences too. The fallback signal for
+   *  a term whose word ID — and therefore whose group names — is not known. */
   inLibrary: Set<string>;
-  /** Category-B group names already holding a term. */
-  groupBByTerm: Map<string, string[]>;
+  /** Group names already holding a term, split by meta-group. */
+  wordGroupsByTerm: Map<string, GroupMembership>;
+  /** Group names already holding a grammar item, keyed by its ID. */
+  grammarGroupsById: Map<string, GroupMembership>;
 }
 
 export default function ImportSentenceCard({
@@ -47,7 +54,8 @@ export default function ImportSentenceCard({
   onRegister,
   showTranslation,
   inLibrary,
-  groupBByTerm,
+  wordGroupsByTerm,
+  grammarGroupsById,
 }: Props) {
   const { t } = useI18n();
   const { words, grammar } = sentenceItems(items, sentence.index);
@@ -145,7 +153,7 @@ export default function ImportSentenceCard({
       )}
 
       {coverage.required > 0 && (
-        <p className="mt-1.5 text-[11px] leading-snug">
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 text-[11px] leading-snug">
           {coverage.complete ? (
             <span className="text-green-500/80">✓ {t("importCoverageDone")}</span>
           ) : (
@@ -154,7 +162,25 @@ export default function ImportSentenceCard({
                 {coverage.missing}
                 {t("importCoverageMissing")}
               </span>
-              <span className="text-gray-500"> — {t("importCoverageHint")}</span>
+              {/* Editing a row can reopen a gap the analysis had covered. One click
+                  closes it again — except where coverage is only approximate, in
+                  which case the runs are a guess and a human should place them. */}
+              {coverage.approximate ? (
+                <span className="text-gray-500">— {t("importCoverageHint")}</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    onSetItems(
+                      (prev) => materializeGaps(prev, sentence.index, sentence.text),
+                      true
+                    )
+                  }
+                  className="rounded border border-amber-700/60 px-1.5 py-0.5 text-amber-300 hover:border-amber-500 hover:text-amber-200"
+                >
+                  ＋ {t("importCoverageMaterialize")}
+                </button>
+              )}
             </>
           )}
         </p>
@@ -227,7 +253,7 @@ export default function ImportSentenceCard({
                   : undefined
               }
               inGroupA={inLibrary.has(word.term.trim())}
-              groupBNames={groupBByTerm.get(word.term.trim()) ?? []}
+              groups={wordGroupsByTerm.get(word.term.trim()) ?? NO_GROUPS}
               checked={mergeIds.includes(word.id)}
               splitting={splitting?.id === word.id ? splitting.draft : null}
               onToggleMerge={() => toggleMerge(word.id)}
@@ -266,6 +292,9 @@ export default function ImportSentenceCard({
             <GrammarRow
               key={g.id}
               item={g}
+              groups={
+                (g.existingGrammarId && grammarGroupsById.get(g.existingGrammarId)) || NO_GROUPS
+              }
               onPatch={(updates) => onPatchItem(g.id, updates)}
               onDelete={() => onPatchItem(g.id, { status: "skipped" }, true)}
               onRegister={() => onRegister(g.id)}
@@ -288,7 +317,7 @@ function WordRow({
   isChinese,
   onMergeNext,
   inGroupA,
-  groupBNames,
+  groups,
   checked,
   splitting,
   onToggleMerge,
@@ -311,8 +340,9 @@ function WordRow({
   /** Already in the library (= Group A) — the row is toned green so a word the
    *  user already has stands out from the ones still to be added. */
   inGroupA: boolean;
-  /** Group B sets already holding this word; only knowable once its ID is. */
-  groupBNames: string[];
+  /** The groups actually holding this word; only knowable once its ID is, which is
+   *  why `inGroupA` stays the fallback rather than being derived from this. */
+  groups: GroupMembership;
   checked: boolean;
   splitting: string | null;
   onToggleMerge: () => void;
@@ -373,6 +403,10 @@ function WordRow({
       className={`rounded-lg px-2.5 py-2 ${
         inGroupA
           ? "border-l-4 border-emerald-500/70 bg-emerald-950/30"
+          : word.origin === "gap"
+          ? // Not a proposal from the analysis but a hole in it, filled in verbatim:
+            // the run may well be several words, and it has no reading or meaning.
+            "border-l-4 border-amber-600/60 bg-amber-950/20"
           : "bg-gray-900/50"
       }`}
     >
@@ -389,7 +423,10 @@ function WordRow({
           <div className="min-w-0 flex-1 space-y-1.5 sm:flex sm:items-center sm:gap-2 sm:space-y-0">
             <input
               value={word.term}
-              onChange={(e) => onPatch({ term: e.target.value })}
+              // Retyping the term makes this a different word, so the ID that was
+              // resolved for the old one must go with it — otherwise "Add to groups"
+              // would quietly write membership for a word no longer on this row.
+              onChange={(e) => onPatch({ term: e.target.value, existingWordId: undefined })}
               disabled={locked}
               placeholder={t("words")}
               className={`block w-full min-w-0 rounded-md border bg-gray-950/60 px-2 py-1.5 text-base focus:border-blue-500 focus:outline-none disabled:border-transparent disabled:bg-transparent sm:flex-1 sm:py-1 sm:text-sm ${
@@ -498,42 +535,93 @@ function WordRow({
           )}
         </p>
       )}
-      {(inGroupA || groupBNames.length > 0) && (
-        <p className="mt-1 flex flex-wrap items-center gap-1.5 pl-6 text-[11px]">
-          {inGroupA && (
-            <span className="shrink-0 rounded border border-emerald-600/60 bg-emerald-900/40 px-1.5 py-0.5 font-medium text-emerald-300">
-              ✓ {t("importInGroupA")}
-            </span>
-          )}
-          {groupBNames.length > 0 && (
-            <span className="min-w-0 truncate rounded border border-amber-600/60 bg-amber-900/30 px-1.5 py-0.5 font-medium text-amber-300">
-              ✓ {t("importInGroupB")}: {groupBNames.join(", ")}
-            </span>
-          )}
-          {word.existingWordId && word.status === "pending" && (
-            <span className="min-w-0 break-words text-gray-500">{t("importAlreadyInDb")}</span>
-          )}
+      {word.origin === "gap" && !locked && (
+        <p className="mt-1 pl-6 text-[11px] leading-snug text-amber-400/80">
+          {t("importGapRowHint")}
         </p>
       )}
+      <MembershipChips
+        groups={groups}
+        inLibrary={inGroupA}
+        indent
+        note={
+          word.existingWordId && word.status === "pending" ? t("importAlreadyInDb") : undefined
+        }
+      />
     </li>
+  );
+}
+
+/**
+ * Where an item already lives.
+ *
+ * Group NAMES whenever the entity's ID is known, since the group read can then be
+ * inverted for it; the bare "in Group A" flag otherwise. The two are not the same
+ * claim: a term can be in the library and in no Group A group at all, and a word
+ * proven to exist by a 409 whose ID recovery failed has no ID to look names up by.
+ * Collapsing them would either drop the indicator or invent a group.
+ */
+function MembershipChips({
+  groups,
+  inLibrary,
+  indent = false,
+  note,
+}: {
+  groups: GroupMembership;
+  inLibrary: boolean;
+  /** Align under the merge checkbox, as the word rows do. */
+  indent?: boolean;
+  note?: string;
+}) {
+  const { t } = useI18n();
+  const showA = inLibrary || groups.a.length > 0;
+  if (!showA && groups.b.length === 0 && !note) return null;
+  return (
+    <p
+      className={`mt-1 flex flex-wrap items-center gap-1.5 text-[11px] ${indent ? "pl-6" : ""}`}
+    >
+      {showA && (
+        // `max-w-full truncate` because a long group name is otherwise an
+        // unbreakable flex item and pushes the review screen into horizontal scroll.
+        <span className="min-w-0 max-w-full truncate rounded border border-emerald-600/60 bg-emerald-900/40 px-1.5 py-0.5 font-medium text-emerald-300">
+          ✓ {t("importInGroupA")}
+          {groups.a.length > 0 && `: ${groups.a.join(", ")}`}
+        </span>
+      )}
+      {groups.b.length > 0 && (
+        <span className="min-w-0 max-w-full truncate rounded border border-amber-600/60 bg-amber-900/30 px-1.5 py-0.5 font-medium text-amber-300">
+          ✓ {t("importInGroupB")}: {groups.b.join(", ")}
+        </span>
+      )}
+      {note && <span className="min-w-0 break-words text-gray-500">{note}</span>}
+    </p>
   );
 }
 
 function GrammarRow({
   item,
+  groups,
   onPatch,
   onDelete,
   onRegister,
 }: {
   item: ImportGrammarItem;
+  /** Only populated once this statement has been registered in this review —
+   *  grammar has no analysis-time existence check to seed it from. */
+  groups: GroupMembership;
   onPatch: (updates: Partial<ImportGrammarItem>) => void;
   onDelete: () => void;
   onRegister: () => void;
 }) {
   const { t } = useI18n();
   const locked = isLocked(item);
+  const registered = Boolean(item.existingGrammarId);
   return (
-    <li className="rounded-lg bg-gray-900/50 px-2.5 py-2">
+    <li
+      className={`rounded-lg px-2.5 py-2 ${
+        registered ? "border-l-4 border-emerald-500/70 bg-emerald-950/30" : "bg-gray-900/50"
+      }`}
+    >
       <div className="sm:flex sm:items-center sm:gap-2">
         <input
           value={item.statement}
@@ -547,7 +635,9 @@ function GrammarRow({
             status={item.status}
             error={item.error}
             rescuedAsDraft={item.rescuedAsDraft}
-            addLabel={t("importAdd")}
+            // A sibling row already created this pattern; this row can only extend
+            // its group membership, exactly as an existing word's row does.
+            addLabel={registered ? t("importAddToGroups") : t("importAdd")}
             onRegister={onRegister}
           />
           {!locked && (
@@ -567,6 +657,11 @@ function GrammarRow({
         disabled={locked}
         placeholder={t("importDescriptionPlaceholder")}
         className="mt-1.5 block w-full min-w-0 rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-base text-gray-300 focus:border-emerald-500 focus:outline-none disabled:border-transparent disabled:bg-transparent sm:py-1 sm:text-xs"
+      />
+      <MembershipChips
+        groups={groups}
+        inLibrary={registered}
+        note={registered && item.status === "pending" ? t("importAlreadyInDb") : undefined}
       />
     </li>
   );

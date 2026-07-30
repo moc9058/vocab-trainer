@@ -1,4 +1,4 @@
-import { fetchJson, postJson, putJson, deleteRequest, deleteJson } from "./client";
+import { ApiError, fetchJson, postJson, putJson, deleteRequest, deleteJson } from "./client";
 import type {
   Grammar,
   GrammarDraft,
@@ -23,6 +23,18 @@ export function getGrammarItems(
   if (filters?.search) params.set("search", filters.search);
   if (filters?.groupId) params.set("groupId", filters.groupId);
   return fetchJson(`/api/grammar/${encodeURIComponent(language)}/items?${params}`);
+}
+
+/**
+ * Bulk fetch by id. The quiz screens hydrate every grammar item of a session up front so an
+ * answer reveal never needs the network; this used to be one request per item fired from a
+ * bare `fetchJson` inside the components.
+ */
+export function getGrammarItemsByIds(
+  language: string,
+  ids: string[]
+): Promise<{ items: Grammar[] }> {
+  return postJson(`/api/grammar/${encodeURIComponent(language)}/items/batch`, { ids });
 }
 
 export function createGrammarItem(
@@ -182,11 +194,15 @@ export function answerGrammarQuestion(opts: {
   return postJson("/api/grammar-quiz/answer", opts);
 }
 
+/** `null` means "no session" (404) only; other failures rethrow — see `api/quiz.ts`. */
 export async function getCurrentGrammarSession(language: string): Promise<GrammarQuizSession | null> {
   try {
-    return await fetchJson(`/api/grammar-quiz/session/language/${encodeURIComponent(language)}`);
-  } catch {
-    return null;
+    return await fetchJson<GrammarQuizSession>(
+      `/api/grammar-quiz/session/language/${encodeURIComponent(language)}`
+    );
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
   }
 }
 

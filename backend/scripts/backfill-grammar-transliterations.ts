@@ -33,7 +33,7 @@
 // process builds, including the one src/firestore.ts creates at module load.
 import { PROJECT_ID, DATABASE_ID } from "./_project-env.js";
 import { Firestore } from "@google-cloud/firestore";
-import { fillGrammarTransliteration } from "../src/llm.js";
+import { fillGrammarTransliteration, splitStatementForReading } from "../src/llm.js";
 
 const db = new Firestore({
   projectId: PROJECT_ID,
@@ -78,6 +78,26 @@ function parseArgs(): CliArgs {
     else console.warn(`Unknown argument: ${arg}`);
   }
   return args;
+}
+
+/**
+ * Does this reading still line up with its statement?
+ *
+ * Everything that is not a romanization candidate — placeholders, connectors,
+ * spacing, Japanese labels — must survive in order. A reading that fails this
+ * has lost part of the pattern (「s+被/让/叫+行為者+v+結果補語」 stored as just
+ * "bèi/ràng/jiào") and is as unusable as a missing one. Hand-typed legacy values
+ * and output from the earlier whole-string generator both land here; the current
+ * generator cannot produce one, since it reassembles the fixed pieces in code.
+ */
+function readingFitsStatement(statement: string, reading: string): boolean {
+  let cursor = 0;
+  for (const piece of splitStatementForReading(statement).filter((p) => !p.candidate)) {
+    const at = reading.indexOf(piece.text, cursor);
+    if (at === -1) return false;
+    cursor = at + piece.text.length;
+  }
+  return true;
 }
 
 /** Grammar IDs held by groups of the given meta-category (absent category = "A"). */
@@ -152,8 +172,12 @@ async function main(): Promise<void> {
       continue;
     }
     const current: string = (data.transliteration ?? "").trim();
-    // An echo of the statement is not a reading — treat it as missing.
-    const hasReading = current.length > 0 && current !== statement;
+    // An echo of the statement is not a reading, and neither is one that has
+    // lost pieces of the pattern — both are treated as missing.
+    const hasReading =
+      current.length > 0 &&
+      current !== statement &&
+      readingFitsStatement(statement, current);
     if (hasReading && !args.force) {
       skipped++;
       continue;

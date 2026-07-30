@@ -1,7 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../i18n/context";
-import { getGroups } from "../../api/vocab";
-import { getGrammarGroups } from "../../api/grammar";
 import GroupBUnifiedSelect from "../GroupBUnifiedSelect";
 import {
   categoryGroups,
@@ -14,6 +12,11 @@ import {
 interface Props {
   /** Backend full-name language, e.g. "chinese". */
   language: string;
+  /** ALL groups of the language, from the shared `useImportGroups` read. Filtering
+   *  to category A is this component's job — a Group B group is never a Group A
+   *  destination. */
+  allWordGroups: WordGroup[];
+  allGrammarGroups: GrammarGroup[];
   wordGroupId?: string;
   grammarGroupId?: string;
   groupBNames: string[];
@@ -37,6 +40,8 @@ interface Props {
  */
 export default function ImportDestinationRail({
   language,
+  allWordGroups,
+  allGrammarGroups,
   wordGroupId,
   grammarGroupId,
   groupBNames,
@@ -45,38 +50,27 @@ export default function ImportDestinationRail({
   collapsible = false,
 }: Props) {
   const { t } = useI18n();
-  const [wordGroups, setWordGroups] = useState<WordGroup[]>([]);
-  const [grammarGroups, setGrammarGroups] = useState<GrammarGroup[]>([]);
+  const wordGroups = useMemo(() => categoryGroups(allWordGroups, "A"), [allWordGroups]);
+  const grammarGroups = useMemo(() => categoryGroups(allGrammarGroups, "A"), [allGrammarGroups]);
   const [open, setOpen] = useState(false);
 
+  // Seeding only — a `reload()` after a registration must not re-seed and quietly
+  // move the user's chosen destination, so this fires once per language.
+  const seededRef = useRef<string | null>(null);
   useEffect(() => {
-    let cancelled = false;
-    getGroups(language)
-      .then((gs) => {
-        if (cancelled) return;
-        const aGroups = categoryGroups(gs, "A");
-        setWordGroups(aGroups);
-        if (autoSelectLatest) {
-          const latest = latestWordGroup(aGroups);
-          if (latest) onChange({ wordGroupId: latest.id });
-        }
-      })
-      .catch(() => setWordGroups([]));
-    getGrammarGroups(language)
-      .then((gs) => {
-        if (cancelled) return;
-        const aGroups = categoryGroups(gs, "A");
-        setGrammarGroups(aGroups);
-        if (autoSelectLatest) {
-          const latest = latestGrammarGroup(aGroups);
-          if (latest) onChange({ grammarGroupId: latest.id });
-        }
-      })
-      .catch(() => setGrammarGroups([]));
-    return () => { cancelled = true; };
+    if (!autoSelectLatest) return;
+    if (wordGroups.length === 0 && grammarGroups.length === 0) return;
+    if (seededRef.current === language) return;
+    seededRef.current = language;
+    const latestWord = latestWordGroup(wordGroups);
+    const latestGrammar = latestGrammarGroup(grammarGroups);
+    onChange({
+      ...(latestWord ? { wordGroupId: latestWord.id } : {}),
+      ...(latestGrammar ? { grammarGroupId: latestGrammar.id } : {}),
+    });
     // `onChange` is a fresh closure each render; re-running on it would loop.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language, autoSelectLatest]);
+  }, [language, autoSelectLatest, wordGroups, grammarGroups]);
 
   const summary =
     [

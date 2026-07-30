@@ -228,12 +228,24 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Get current grammar quiz session
+  // Get current grammar quiz session. Like the word and combined quizzes, resuming REGENERATES
+  // the remaining questions: the unanswered tail is re-drawn with the stored group weights, so
+  // a refresh or a resume-from-home gives a freshly ordered quiz rather than the stale tail.
   fastify.get<{ Params: { language: string } }>(
     "/session/language/:language",
     async (request, reply) => {
       const session = await getGrammarQuizSession(request.params.language);
       if (!session) return reply.notFound("No grammar quiz session found");
+
+      const answered: GrammarQuizQuestion[] = [];
+      const unanswered: GrammarQuizQuestion[] = [];
+      for (const q of session.questions) {
+        if (q.userCorrect !== undefined) answered.push(q);
+        else unanswered.push(q);
+      }
+      session.questions = [...answered, ...reweightUnansweredGrammar(unanswered, session)];
+      await saveGrammarQuizSession(session);
+
       return session;
     }
   );

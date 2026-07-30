@@ -1,11 +1,17 @@
-import { fetchJson, postJson, putJson } from "./client";
+import { ApiError, fetchJson, postJson, putJson } from "./client";
 import type { QuizSession, QuizQuestion, Word } from "../types";
 
+/**
+ * `null` means "no session for this language" and NOTHING else. Every other failure is
+ * rethrown: this used to swallow them all, so refreshing mid-quiz while offline was
+ * indistinguishable from having no session and bounced the user to the home screen.
+ */
 export async function getCurrentSession(language: string): Promise<QuizSession | null> {
   try {
     return await fetchJson<QuizSession>(`/api/quiz/session/language/${encodeURIComponent(language)}`);
-  } catch {
-    return null;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
   }
 }
 
@@ -24,12 +30,17 @@ export function startQuiz(opts: {
   return postJson<QuizSession>("/api/quiz/start", opts);
 }
 
-export function getQuizQuestions(
+/**
+ * Hydrate questions BY ID. Session order changes constantly (retry re-queues, resume
+ * reweighting, mid-session weight edits) but the set of ids never does, so the client caches
+ * by id and re-orders for free. Shared by the word, Group A and Group B quizzes — the word
+ * payload is identical for all three.
+ */
+export function hydrateQuizQuestions(
   language: string,
-  offset: number,
-  limit: number
-): Promise<{ questions: QuizQuestion[]; total: number }> {
-  return fetchJson(`/api/quiz/questions/${encodeURIComponent(language)}?offset=${offset}&limit=${limit}`);
+  wordIds: string[]
+): Promise<{ questions: QuizQuestion[] }> {
+  return postJson(`/api/quiz/hydrate/${encodeURIComponent(language)}`, { wordIds });
 }
 
 export function sampleWords(opts: {

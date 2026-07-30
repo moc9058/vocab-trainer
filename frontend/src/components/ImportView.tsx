@@ -10,6 +10,7 @@ import { getGrammarSettings } from "../api/grammar";
 import ImportDestinationRail from "./import/ImportDestinationRail";
 import ImportReview from "./import/ImportReview";
 import ImportSessionList from "./import/ImportSessionList";
+import { useImportGroups } from "../hooks/useImportGroups";
 import { useImportSession } from "../hooks/useImportSession";
 import { buildImportItems } from "../utils/importSession";
 import type { ImportSessionSummary } from "../types";
@@ -55,10 +56,15 @@ export default function ImportView({ language, onQueue, onGrammarQueue }: Props)
 
   const abortRef = useRef<AbortController | null>(null);
 
+  // One read of the group collections for the whole screen — the destination
+  // selects and the membership chips are two views of the same documents.
+  const groups = useImportGroups(language);
+
   const {
     session,
     saveStatus,
     saveError,
+    membershipOverlay,
     create,
     load,
     close,
@@ -67,7 +73,13 @@ export default function ImportView({ language, onQueue, onGrammarQueue }: Props)
     patchItem,
     registerItem,
     retrySave,
-  } = useImportSession({ language, onQueue, onGrammarQueue, descriptionLanguage });
+  } = useImportSession({
+    language,
+    onQueue,
+    onGrammarQueue,
+    descriptionLanguage,
+    onMembershipChanged: groups.reload,
+  });
 
   const refreshSessions = useCallback(() => {
     setListLoading(true);
@@ -104,7 +116,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue }: Props)
         text.trim(),
         {
           onDelta: setStreamText,
-          onResult: async (analysis, existing) => {
+          onResult: async (analysis, existing, existingGrammar) => {
             try {
               // Persisted immediately: the analysis is the expensive part, and a
               // session created only on first edit would lose it on a stray back-tap.
@@ -112,7 +124,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue }: Props)
                 title: text.trim().slice(0, 40),
                 text: text.trim(),
                 paragraphs: analysis.paragraphs,
-                items: buildImportItems(analysis, existing),
+                items: buildImportItems(analysis, existing, existingGrammar),
                 wordGroupId: draftDestination.wordGroupId,
                 grammarGroupId: draftDestination.grammarGroupId,
                 groupBNames: draftDestination.groupBNames,
@@ -172,6 +184,9 @@ export default function ImportView({ language, onQueue, onGrammarQueue }: Props)
     return (
       <ImportReview
         session={session}
+        allWordGroups={groups.wordGroups}
+        allGrammarGroups={groups.grammarGroups}
+        membershipOverlay={membershipOverlay}
         saveStatus={saveStatus}
         saveError={saveError}
         onRetrySave={retrySave}
@@ -268,6 +283,8 @@ export default function ImportView({ language, onQueue, onGrammarQueue }: Props)
             <div className="space-y-3">
               <ImportDestinationRail
                 language={language}
+                allWordGroups={groups.wordGroups}
+                allGrammarGroups={groups.grammarGroups}
                 wordGroupId={draftDestination.wordGroupId}
                 grammarGroupId={draftDestination.grammarGroupId}
                 groupBNames={draftDestination.groupBNames}

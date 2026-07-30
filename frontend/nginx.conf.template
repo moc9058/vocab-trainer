@@ -5,6 +5,16 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # The quiz screens hydrate a whole session's questions up front so a mid-quiz
+    # connection drop can't interrupt them. That payload is large, highly repetitive
+    # JSON; gzip is what keeps it cheap on a weak mobile connection.
+    gzip on;
+    gzip_proxied any;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types application/json application/javascript text/css text/plain image/svg+xml;
+    gzip_vary on;
+
     location /api/ {
         set $backend ${BACKEND_URL};
         proxy_pass $backend;

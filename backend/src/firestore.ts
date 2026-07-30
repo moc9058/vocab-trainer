@@ -331,11 +331,20 @@ export async function getWord(wordId: string): Promise<Word | null> {
   return hydrated;
 }
 
+/** Callers pass a quiz's whole question list, which repeats ids (retry re-queues) and can
+ *  run into the hundreds — hence the dedupe and the chunking, mirroring
+ *  `getExampleSentencesByIds` / `lookupWordsByTerms`. Result order is not meaningful;
+ *  every caller maps by id. */
 export async function getWordsByIds(wordIds: string[]): Promise<Word[]> {
-  if (wordIds.length === 0) return [];
-  const refs = wordIds.map((id) => words.doc(id));
-  const docs = await db.getAll(...refs);
-  const rawWords = docs.filter((d) => d.exists).map(docToWord);
+  const unique = [...new Set(wordIds)];
+  if (unique.length === 0) return [];
+  const CHUNK = 100;
+  const chunks: string[][] = [];
+  for (let i = 0; i < unique.length; i += CHUNK) chunks.push(unique.slice(i, i + CHUNK));
+  const batches = await Promise.all(
+    chunks.map((chunk) => db.getAll(...chunk.map((id) => words.doc(id))))
+  );
+  const rawWords = batches.flat().filter((d) => d.exists).map(docToWord);
   return hydrateWords(rawWords);
 }
 
@@ -637,12 +646,18 @@ export async function addExampleSentence(es: ExampleSentence): Promise<void> {
 }
 
 export async function getExampleSentencesByIds(ids: string[]): Promise<ExampleSentence[]> {
-  if (ids.length === 0) return [];
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return [];
   const CHUNK = 100;
+  // Chunks run in parallel: a quiz now hydrates its whole question set at once, and an
+  // awaited loop made latency grow linearly with the number of example sentences.
+  const chunks: string[][] = [];
+  for (let i = 0; i < unique.length; i += CHUNK) chunks.push(unique.slice(i, i + CHUNK));
+  const batches = await Promise.all(
+    chunks.map((chunk) => db.getAll(...chunk.map((id) => exampleSentences.doc(id))))
+  );
   const results: ExampleSentence[] = [];
-  for (let i = 0; i < ids.length; i += CHUNK) {
-    const refs = ids.slice(i, i + CHUNK).map((id) => exampleSentences.doc(id));
-    const docs = await db.getAll(...refs);
+  for (const docs of batches) {
     for (const doc of docs) {
       if (doc.exists) {
         const d = doc.data()!;
@@ -1526,6 +1541,25 @@ export async function getGrammarItem(grammarId: string): Promise<Grammar | null>
   const raw = { id: doc.id, ...doc.data() } as Grammar;
   const [hydrated] = await hydrateGrammarItems([raw]);
   return hydrated;
+}
+
+/** Bulk counterpart of `getGrammarItem`, mirroring `getWordsByIds`. The quiz screens
+ *  hydrate every grammar item of a session up front, which used to be one HTTP request
+ *  (and one Firestore read) per item. */
+export async function getGrammarItemsByIds(ids: string[]): Promise<Grammar[]> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return [];
+  const CHUNK = 100;
+  const chunks: string[][] = [];
+  for (let i = 0; i < unique.length; i += CHUNK) chunks.push(unique.slice(i, i + CHUNK));
+  const batches = await Promise.all(
+    chunks.map((chunk) => db.getAll(...chunk.map((id) => grammarItems.doc(id))))
+  );
+  const raw = batches
+    .flat()
+    .filter((d) => d.exists)
+    .map((d) => ({ id: d.id, ...d.data() } as Grammar));
+  return hydrateGrammarItems(raw);
 }
 
 /**

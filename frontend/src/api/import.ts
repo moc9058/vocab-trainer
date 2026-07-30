@@ -43,7 +43,13 @@ export interface AnalyzeImportCallbacks {
   onStart?: () => void;
   /** Partial (still-growing) raw JSON of the analysis — used for live rendering. */
   onDelta?: (text: string) => void;
-  onResult?: (analysis: ImportAnalysisResult, existing: Record<string, string>) => void;
+  /** `existing` maps term → word ID, `existingGrammar` statement → grammar ID, for
+   *  items already in the library. Both are the server's answer to "is this new?" */
+  onResult?: (
+    analysis: ImportAnalysisResult,
+    existing: Record<string, string>,
+    existingGrammar: Record<string, string>
+  ) => void;
   onDone?: () => void;
   onError?: (err: Error) => void;
 }
@@ -101,7 +107,7 @@ export async function analyzeImportStream(
               callbacks.onDelta?.(data.text);
               break;
             case "analysis-result":
-              callbacks.onResult?.(data.analysis, data.existing ?? {});
+              callbacks.onResult?.(data.analysis, data.existing ?? {}, data.existingGrammar ?? {});
               break;
             case "done":
               terminated = true;

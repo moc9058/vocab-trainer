@@ -196,12 +196,16 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // Batch-fetch hydrated questions for a quiz session
-  fastify.get<{
+  // Hydrate quiz questions BY ID. Keyed by id rather than by session position because a
+  // session's question order changes under the client's feet (retry re-queues, resume
+  // reweighting, mid-session weight edits) while the SET of ids never does — so the client
+  // can cache by id and re-order freely without ever re-fetching. Session-independent, so
+  // the word, Group A and Group B quizzes all share this one endpoint.
+  fastify.post<{
     Params: { language: string };
-    Querystring: { offset?: number; limit?: number };
+    Body: { wordIds: string[] };
   }>(
-    "/questions/:language",
+    "/hydrate/:language",
     {
       schema: {
         params: {
@@ -209,45 +213,34 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
           required: ["language"],
           properties: { language: { type: "string" } },
         },
-        querystring: {
+        body: {
           type: "object",
-          properties: {
-            offset: { type: "number", minimum: 0 },
-            limit: { type: "number", minimum: 1 },
-          },
+          required: ["wordIds"],
+          properties: { wordIds: { type: "array", items: { type: "string" } } },
         },
       },
     },
-    async (request, reply) => {
-      const { language } = request.params;
-      const offset = request.query.offset ?? 0;
-      const limit = request.query.limit ?? 50;
-
-      const session = await getQuizSessionByLanguage(language);
-      if (!session) return reply.notFound("No session found for this language");
-
-      // Get the slice of questions for this batch
-      const slice = session.questions.slice(offset, offset + limit);
-      const wordIds = slice.map((q) => q.wordId);
-
-      // Fetch full word data
-      const wordsData = await getWordsByIds(wordIds);
+    async (request) => {
+      const wordsData = await getWordsByIds(request.body.wordIds);
       const wordMap = new Map(wordsData.map((w) => [w.id, w]));
 
-      const hydrated: QuizQuestion[] = slice.map((q) => {
-        const word = wordMap.get(q.wordId);
-        return {
-          wordId: q.wordId,
-          term: word?.term ?? q.term,
-          definitions: word?.definitions ?? [],
-          transliteration: word?.transliteration,
-          examples: word?.examples ?? [],
-          ...(q.userCorrect !== undefined ? { userCorrect: q.userCorrect } : {}),
-          ...(word?.hanjaReadings ? { hanjaReadings: word.hanjaReadings } : {}),
-        };
-      });
+      // Skip ids with no live word doc rather than emitting an empty-definition question —
+      // the client keeps its slim entry and shows the term alone.
+      const questions: QuizQuestion[] = [];
+      for (const wordId of new Set(request.body.wordIds)) {
+        const word = wordMap.get(wordId);
+        if (!word) continue;
+        questions.push({
+          wordId,
+          term: word.term,
+          definitions: word.definitions ?? [],
+          transliteration: word.transliteration,
+          examples: word.examples ?? [],
+          ...(word.hanjaReadings ? { hanjaReadings: word.hanjaReadings } : {}),
+        });
+      }
 
-      return { questions: hydrated, total: session.questions.length };
+      return { questions };
     }
   );
 
@@ -354,8 +347,9 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // Adjust per-group weights mid-session: store the new weights and reorder the
-  // unanswered tail with them. Returns the full session (stored questions are
-  // hydrated) so the client can re-sync its local order.
+  // unanswered tail with them. Returns the full session, whose questions are SLIM
+  // (`slimQuestions` is all Firestore holds) — the client re-attaches word data from
+  // its own id-keyed cache, so a reorder costs no network.
   fastify.put<{
     Params: { language: string };
     Body: { groupWeights: Record<string, number>; correctWeight?: number };

@@ -30,7 +30,14 @@ export interface GrammarCreateOptions {
    */
   onSettled?: (
     result:
-      | { ok: true }
+      | {
+          ok: true;
+          /** The grammar item that was created — the server-confirmed ID, not the
+           *  client-generated one in the payload. Reported for the same reason the
+           *  word queue reports `wordId`: the caller needs it to say anything about
+           *  the item's group membership without a second round trip. */
+          grammarId?: string;
+        }
       | { ok: false; error: string; duplicate: boolean; rescuedAsDraft: boolean }
   ) => void;
 }
@@ -61,7 +68,8 @@ function withGroupLock<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
-async function processItem(item: QueueItem): Promise<void> {
+/** Resolves to the created item's ID for a `create`, and to undefined for an `update`. */
+async function processItem(item: QueueItem): Promise<string | undefined> {
   if (item.type === "create") {
     const saved = await smartAddGrammarItem(item.language, item.payload);
     if (item.groupIds && item.groupIds.length > 0) {
@@ -91,13 +99,14 @@ async function processItem(item: QueueItem): Promise<void> {
     if (item.draftId) {
       await deleteGrammarDraft(item.language, item.draftId);
     }
-  } else {
-    await updateGrammarItem(item.language, item.grammarId, item.updates);
-    await Promise.all([
-      ...item.groupsToAdd.map((gid) => modifyGrammarGroupMembers(item.language, gid, [item.grammarId], "add")),
-      ...item.groupsToRemove.map((gid) => modifyGrammarGroupMembers(item.language, gid, [item.grammarId], "remove")),
-    ]);
+    return saved.id;
   }
+  await updateGrammarItem(item.language, item.grammarId, item.updates);
+  await Promise.all([
+    ...item.groupsToAdd.map((gid) => modifyGrammarGroupMembers(item.language, gid, [item.grammarId], "add")),
+    ...item.groupsToRemove.map((gid) => modifyGrammarGroupMembers(item.language, gid, [item.grammarId], "remove")),
+  ]);
+  return undefined;
 }
 
 /** Re-insert the user's chip splits as spaces so the Chinese segmentation
@@ -160,8 +169,8 @@ export function useGrammarQueue() {
 
     for (const item of toStart) {
       processItem(item)
-        .then(() => {
-          if (item.type === "create") item.onSettled?.({ ok: true });
+        .then((grammarId) => {
+          if (item.type === "create") item.onSettled?.({ ok: true, grammarId });
           setRecentResults((prev) =>
             [{ id: item.id, statement: item.statement, success: true }, ...prev].slice(0, 5),
           );

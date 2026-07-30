@@ -1,5 +1,5 @@
-import { fetchJson, postJson, putJson } from "./client";
-import type { CombinedQuizQuestion, CombinedQuizSession } from "../types";
+import { ApiError, fetchJson, postJson, putJson } from "./client";
+import type { CombinedQuizSession } from "../types";
 
 /** Which of the two identical route trees to talk to. "groupB" drills only the
  *  category-B groups and keeps its own session per language. */
@@ -9,6 +9,7 @@ function base(variant: CombinedQuizVariant = "combined"): string {
   return variant === "groupB" ? "/api/group-b-quiz" : "/api/combined-quiz";
 }
 
+/** `null` means "no session" (404) only; other failures rethrow — see `api/quiz.ts`. */
 export async function getCurrentCombinedSession(
   language: string,
   variant: CombinedQuizVariant = "combined"
@@ -17,8 +18,9 @@ export async function getCurrentCombinedSession(
     return await fetchJson<CombinedQuizSession>(
       `${base(variant)}/session/language/${encodeURIComponent(language)}`
     );
-  } catch {
-    return null;
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) return null;
+    throw err;
   }
 }
 
@@ -45,16 +47,8 @@ export function startCombinedQuiz(
   return postJson<CombinedQuizSession>(`${base(variant)}/start`, opts);
 }
 
-export function getCombinedQuizQuestions(
-  language: string,
-  offset: number,
-  limit: number,
-  variant: CombinedQuizVariant = "combined"
-): Promise<{ questions: CombinedQuizQuestion[]; total: number }> {
-  return fetchJson(
-    `${base(variant)}/questions/${encodeURIComponent(language)}?offset=${offset}&limit=${limit}`
-  );
-}
+// No hydration helper here: word questions go through the shared `hydrateQuizQuestions`
+// (api/quiz.ts) and grammar questions through `getGrammarItemsByIds` (api/grammar.ts).
 
 // Mid-session weight change: server reorders the unanswered tail and returns
 // the full session in the new order.

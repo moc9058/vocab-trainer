@@ -13,6 +13,7 @@ import BrowseView from "./BrowseView";
 import FlaggedReview from "./FlaggedReview";
 import GrammarQuizTaking from "./GrammarQuizTaking";
 import CombinedQuizTaking from "./CombinedQuizTaking";
+import QuizRecoveryState from "./QuizRecoveryState";
 import CombinedQuizFilterModal from "./CombinedQuizFilterModal";
 import StudyQuizModal, { type StudyQuizTab } from "./StudyQuizModal";
 import SmartAddWordModal from "./SmartAddWordModal";
@@ -72,46 +73,61 @@ export default function Dashboard() {
   const speakingWritingMode: "new" | "resume" | null = subPath === "/speaking-writing" ? (locationMode ?? "resume") : null;
   const [hasTranslationHistory, setHasTranslationHistory] = useState(false);
   const [hasSWSession, setHasSWSession] = useState(false);
+  // A quiz-session refetch failed at the transport level (typically offline). Bumping
+  // `recoveryAttempt` re-runs whichever recovery effect matches the current sub-path.
+  const [recoveryError, setRecoveryError] = useState(false);
+  const [recoveryAttempt, setRecoveryAttempt] = useState(0);
 
-  // Session recovery: navigate to /:language/quiz → fetch active session if state is empty
+  // Session recovery: a refresh (or a deep link) lands on /:language/quiz with no state, so the
+  // session is re-fetched from the server — which also RE-GENERATES it, since every resume
+  // endpoint re-draws the unanswered tail with the stored group weights.
+  //
+  // `null` now means "no such session" and nothing else (see api/quiz.ts). A thrown error is a
+  // transport failure, and must NOT be treated as "no session": doing so used to bounce the
+  // user to the home screen whenever they refreshed on a weak connection, making an
+  // in-progress quiz look like it had vanished.
   useEffect(() => {
     if (subPath !== "/quiz" || activeQuiz) return;
+    setRecoveryError(false);
     getCurrentSession(language ?? "").then(session => {
       if (session) setActiveQuiz(session);
       else navigate(`/${language}`, { replace: true });
-    }).catch(() => navigate(`/${language}`, { replace: true }));
+    }).catch(() => setRecoveryError(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subPath, language]);
+  }, [subPath, language, recoveryAttempt]);
 
   // Session recovery: navigate to /:language/grammar-quiz → fetch active session if state is empty
   useEffect(() => {
     if (subPath !== "/grammar-quiz" || activeGrammarQuiz) return;
+    setRecoveryError(false);
     getCurrentGrammarSession(language ?? "").then(session => {
       if (session) setActiveGrammarQuiz(session);
       else navigate(`/${language}`, { replace: true });
-    }).catch(() => navigate(`/${language}`, { replace: true }));
+    }).catch(() => setRecoveryError(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subPath, language]);
+  }, [subPath, language, recoveryAttempt]);
 
   // Session recovery: navigate to /:language/combined-quiz → fetch active session if state is empty
   useEffect(() => {
     if (subPath !== "/combined-quiz" || activeCombinedQuiz) return;
+    setRecoveryError(false);
     getCurrentCombinedSession(language ?? "").then(session => {
       if (session) setActiveCombinedQuiz(session);
       else navigate(`/${language}`, { replace: true });
-    }).catch(() => navigate(`/${language}`, { replace: true }));
+    }).catch(() => setRecoveryError(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subPath, language]);
+  }, [subPath, language, recoveryAttempt]);
 
   // Session recovery: navigate to /:language/group-b-quiz → fetch active session if state is empty
   useEffect(() => {
     if (subPath !== "/group-b-quiz" || activeGroupBQuiz) return;
+    setRecoveryError(false);
     getCurrentCombinedSession(language ?? "", "groupB").then(session => {
       if (session) setActiveGroupBQuiz(session);
       else navigate(`/${language}`, { replace: true });
-    }).catch(() => navigate(`/${language}`, { replace: true }));
+    }).catch(() => setRecoveryError(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subPath, language]);
+  }, [subPath, language, recoveryAttempt]);
 
 
   // Check for translation history scoped to the current language
@@ -687,9 +703,7 @@ export default function Dashboard() {
               onStartNew={handleStartQuiz}
             />
           ) : (
-            <div className="flex items-center justify-center p-8">
-              <span className="text-gray-400">Loading quiz…</span>
-            </div>
+            <QuizRecoveryState error={recoveryError} onRetry={() => setRecoveryAttempt((n) => n + 1)} onHome={goHome} />
           )
         ) : subPath === "/browse" || subPath === "/grammar" || subPath === "/import" ? (
           <BrowseView
@@ -726,26 +740,27 @@ export default function Dashboard() {
               onStartNew={handleStartGrammarQuiz}
             />
           ) : (
-            <div className="flex items-center justify-center p-8">
-              <span className="text-gray-400">Loading quiz…</span>
-            </div>
+            <QuizRecoveryState error={recoveryError} onRetry={() => setRecoveryAttempt((n) => n + 1)} onHome={goHome} />
           )
         ) : subPath === "/combined-quiz" ? (
           activeCombinedQuiz ? (
+            // `key` is load-bearing: both variants render into the same slot of this ternary,
+            // so without it React reuses the instance across Group A ↔ Group B and the stale
+            // `variant` would post answers to the wrong session.
             <CombinedQuizTaking
+              key="combined"
               session={activeCombinedQuiz}
               onComplete={() => { setActiveCombinedQuiz(null); navigate(`/${language}`); }}
               onBrowse={handleBrowse}
               onStartNew={handleStartCombinedQuiz}
             />
           ) : (
-            <div className="flex items-center justify-center p-8">
-              <span className="text-gray-400">Loading quiz…</span>
-            </div>
+            <QuizRecoveryState error={recoveryError} onRetry={() => setRecoveryAttempt((n) => n + 1)} onHome={goHome} />
           )
         ) : subPath === "/group-b-quiz" ? (
           activeGroupBQuiz ? (
             <CombinedQuizTaking
+              key="groupB"
               session={activeGroupBQuiz}
               variant="groupB"
               onComplete={() => { setActiveGroupBQuiz(null); navigate(`/${language}`); }}
@@ -753,9 +768,7 @@ export default function Dashboard() {
               onStartNew={handleStartGroupBQuiz}
             />
           ) : (
-            <div className="flex items-center justify-center p-8">
-              <span className="text-gray-400">Loading quiz…</span>
-            </div>
+            <QuizRecoveryState error={recoveryError} onRetry={() => setRecoveryAttempt((n) => n + 1)} onHome={goHome} />
           )
         ) : subPath === "/print-worksheet" ? (
           (() => {
