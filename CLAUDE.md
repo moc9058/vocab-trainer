@@ -51,15 +51,21 @@ docker compose up --build      # Run full stack (backend :3000, frontend :5173)
 ### Deploy
 ```bash
 ./deploy.sh PROJECT_ID REGION            # Deploy only
-./deploy.sh PROJECT_ID REGION --word     # Deploy + word migration
-./deploy.sh PROJECT_ID REGION --wipe-grammar  # Deploy + wipe grammar collections (destructive)
-./deploy.sh PROJECT_ID REGION --llm      # Deploy + upload LLM config to Firestore
-./deploy.sh PROJECT_ID REGION --auth     # Deploy + upload Google OAuth config to Firestore (config/auth)
-./deploy.sh PROJECT_ID REGION --prompts  # Deploy + upload speaking/writing & translation config
-./deploy.sh PROJECT_ID REGION --archives # Deploy + upload backup & original archives
-./deploy.sh PROJECT_ID REGION --example-sentences  # Deploy + migrate embedded examples
-./deploy.sh PROJECT_ID REGION --grammar-examples   # Deploy + normalize inline Grammar.examples to example_sentences
+./deploy.sh PROJECT_ID REGION --llm      # Deploy + upload LLM config to config/llm
+./deploy.sh PROJECT_ID REGION --auth     # Deploy + upload Google OAuth config to config/auth
+./deploy.sh PROJECT_ID REGION --prompts  # Deploy + upload prompts/schemas from backend/DB/
+# Windows: .\deploy.ps1 PROJECT_ID REGION [-Llm] [-Auth] [-Prompts] — same three.
 ```
+The deploy scripts carry **config uploads only**, and only because config is read
+once and memoized for the process lifetime (`routes/import.ts`) or at boot
+(`auth-config.ts`) — so pushing it and rolling a revision are one operation. Data
+migrations (`migrate-example-sentences.ts`, `migrate-grammar-examples.ts`,
+`--archives`) and destructive maintenance (`wipe-grammar-firestore.ts`) used to be
+deploy flags and are now run directly; they have no relationship to a release, and
+a wipe reachable from the deploy command is one someone eventually runs by reflex.
+`migrate-to-firestore.ts` (the old word import) reads `backend/DB/word/`, which is
+empty — nothing is uploaded from the local repo any more. An unknown flag is
+rejected rather than silently taken as `PROJECT_ID`.
 
 ### No test or lint commands are configured.
 

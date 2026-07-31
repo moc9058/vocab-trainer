@@ -35,34 +35,50 @@ REGION is optional and defaults to `asia-northeast1`:
 ./deploy.sh vocab-trainer-490014                                     # uses asia-northeast1
 ```
 
-To also run Firestore data migrations during deploy:
+The deploy script takes **three optional flags, and they all do the same kind of
+thing**: push local config into Firestore just before the new revision rolls.
 
 ```bash
-./deploy.sh vocab-trainer-490014 asia-northeast1 --word              # word data only
-./deploy.sh vocab-trainer-490014 asia-northeast1 --grammer           # grammar data only
-./deploy.sh vocab-trainer-490014 asia-northeast1 --llm               # upload LLM config to Firestore
-./deploy.sh vocab-trainer-490014 asia-northeast1 --llm --prompts              # upload LLM config to Firestore
-./deploy.sh vocab-trainer-490014 asia-northeast1 --word --grammer    # both migrations
-./deploy.sh vocab-trainer-490014 asia-northeast1 --word --grammer --llm  # all migrations
-./deploy.sh vocab-trainer-490014 asia-northeast1 --prompts           # speaking/writing + translation config
-./deploy.sh vocab-trainer-490014 asia-northeast1 --archives          # backup + original archives
-./deploy.sh vocab-trainer-490014 asia-northeast1 --example-sentences  # migrate embedded examples to example_sentences collection
+./deploy.sh vocab-trainer-490014 asia-northeast1 --llm       # OpenAI key + model names from .env  -> config/llm
+./deploy.sh vocab-trainer-490014 asia-northeast1 --auth      # Google OAuth client from .env       -> config/auth
+./deploy.sh vocab-trainer-490014 asia-northeast1 --prompts   # prompts + schemas from backend/DB/  -> config/{speaking_writing,translation,vocabulary,grammar,import}
+./deploy.sh vocab-trainer-490014 asia-northeast1 --llm --auth --prompts   # combined
 ```
 
-### Migrate Data Only
+Windows: `.\deploy.ps1 vocab-trainer-490014 asia-northeast1 -Llm -Auth -Prompts`
+(same three, as switches).
 
-Run the Firestore migration without a full deploy:
+**Why these belong in the deploy script and nothing else does.** Every config
+document is read once and then memoized for the life of the process
+(`routes/import.ts`), or read straight at boot (`auth-config.ts`). Editing a prompt
+therefore has no effect on a running instance until one is replaced — so uploading
+the config and rolling a new revision are a single operation. Data migrations have
+no such relationship to a release.
+
+An unrecognised flag is now rejected instead of being taken as the project ID: with
+the old parser, `./deploy.sh --promts` silently tried to deploy to a project called
+`--promts`.
+
+### Data migrations and maintenance (run directly, not via deploy)
+
+These are one-off or destructive, so they are deliberately kept out of the release
+path — a wipe behind a deploy flag is a wipe someone eventually runs by reflex.
 
 ```bash
-./migrate.sh vocab-trainer-490014              # default database "vocab-database"
-./migrate.sh vocab-trainer-490014 my-db-id     # custom database ID
+cd backend && npx tsx scripts/migrate-example-sentences.ts [--dry-run]           # one-off: embedded examples -> example_sentences
+cd backend && npx tsx scripts/migrate-grammar-examples.ts [--dry-run]            # one-off: inline Grammar.examples -> example_sentences
+cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --archives       # backup/ + original/ -> archive_* collections
+cd backend && npx tsx scripts/wipe-grammar-firestore.ts                          # DESTRUCTIVE
 ```
 
-### Migrate Grammar Data Locally
+`scripts/migrate-to-firestore.ts` (the original word import, also reachable through
+`./migrate.sh`) reads `backend/DB/word/`, which is **empty** — Firestore is the
+source of truth for words and grammar, and nothing is uploaded from the local
+repository any more.
 
-```bash
-cd backend && npx tsx scripts/migrate-grammar-to-firestore.ts
-```
+The `archive_backups` / `archive_originals` collections are written by `--archives`
+but are **not read by any code** in `backend/src` or `frontend/src`; they are a
+cold archive of the pre-migration HSK data (~79 MB).
 
 ### Upload LLM Config Locally
 
@@ -102,10 +118,11 @@ cd backend && npx tsx scripts/backfill-empty-example-translations.ts [--language
 
 LLM-generates translations for `example_sentences` docs whose `translation` is empty or missing one or more target definition languages (e.g. a hand-typed single-language string). Use `--dry-run` to list candidates without calling the LLM or writing.
 
-This will:
+`deploy.sh` / `deploy.ps1` will:
 1. Build and push backend image to `asia-northeast1-docker.pkg.dev/vocab-trainer-490014/vocab-test-backend/backend`
-2. Deploy backend to Cloud Run
-3. Run Firestore migration (only with `--word`, `--grammer`, `--llm`, `--auth`, `--prompts`, and/or `--archives`)
+2. Upload config to Firestore — only with `--llm`, `--auth` and/or `--prompts`, and
+   **before** the next step, so the new instance already sees it at boot
+3. Deploy backend to Cloud Run
 4. Build and push frontend image to `asia-northeast1-docker.pkg.dev/vocab-trainer-490014/vocab-test-frontend/frontend`
 5. Deploy frontend to Cloud Run with `BACKEND_URL` pointing to the backend service
 
@@ -251,8 +268,7 @@ vocab-trainer/
 │   ├── tsconfig.json
 │   ├── Dockerfile
 │   ├── scripts/
-│   │   ├── migrate-to-firestore.ts        # JSON → Firestore word migration (backs up to DB/backup/ first)
-│   │   ├── migrate-grammar-to-firestore.ts # Grammar data → Firestore (backs up to DB/backup/ first)
+│   │   ├── migrate-to-firestore.ts        # Historical: JSON → Firestore word migration; DB/word/ is now empty
 │   │   ├── migrate-llm-config-to-firestore.ts # Upload LLM config (.env) → Firestore
 │   │   ├── migrate-db-config-to-firestore.ts  # Upload speaking/writing, translation config & archives → Firestore
 │   │   ├── unify-chinese-levels.ts        # One-off: rewrite granular HSK1/2/.../9 labels to merged buckets
@@ -1082,10 +1098,15 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `config`               | App configuration (`config/llm` for OpenAI API/model settings, `config/speaking_writing` for prompts/schemas/use-cases, `config/translation` for prompts/schemas, `config/vocabulary` for smart-add and segmentation prompts/schemas, `config/grammar` for grammar smart-add prompts/schemas, `config/grammar_settings` for the grammar default definition language) |
 | `token_usage`          | Individual LLM call logs with token counts                |
 | `token_usage_daily`    | Daily aggregates by model                                 |
-| `archive_backups`      | Backup word data and grammar backups (chunked subcollections for large files) |
-| `archive_originals`    | Original HSK files by date folder (chunked subcollections for large files) |
+| `archive_backups`      | Cold archive of pre-migration backup word/grammar data — **never read by the app** (chunked subcollections for large files) |
+| `archive_originals`    | Cold archive of the original HSK files by date folder — **never read by the app** (chunked subcollections for large files) |
 
-Local JSON files under `backend/DB/` serve as the source for the initial Firestore migration (run with `./migrate.sh` or `./deploy.sh ... --migrate`).
+**Firestore is the source of truth for words and grammar**; nothing is uploaded
+from the local repository any more, and `backend/DB/word/` is empty. What remains
+under `backend/DB/` is config the app does read — prompts and schemas
+(`speaking&writing/`, `translation/`, `vocabulary/`, `grammer/`, `import/`), pushed
+with `./deploy.sh … --prompts` — plus the `backup/` and `original/` archives, which
+only the standalone `migrate-db-config-to-firestore.ts --archives` touches.
 
 ## Configuration
 

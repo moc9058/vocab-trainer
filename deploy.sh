@@ -9,50 +9,55 @@ case "$(uname -s)" in
 esac
 
 # Deploy vocab-trainer to Google Cloud Run
-# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--word] [--wipe-grammar] [--llm] [--auth] [--prompts] [--archives] [--example-sentences] [--grammar-examples]
+# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--llm] [--auth] [--prompts]
 #
-# Options:
-#   --word               Run Firestore word data migration after deploying backend
-#   --wipe-grammar       Wipe all grammar collections in Firestore (destructive)
-#   --llm                Upload LLM config (OpenAI key/model names) from .env to Firestore
-#   --auth               Upload Google OAuth config from .env to Firestore (config/auth)
-#   --prompts            Upload speaking/writing + translation config to Firestore
-#   --archives           Upload backup + original archive data to Firestore
-#   --example-sentences  Migrate embedded examples to example_sentences collection
-#   --grammar-examples   Normalize inline Grammar.examples into example_sentences + back-refs
+# The optional flags push LOCAL CONFIG into Firestore just before the new revision
+# rolls. That timing is the only reason they belong in a deploy script at all: every
+# config document is read once and memoized for the life of the process
+# (`routes/import.ts:169`) or read straight at boot (`auth-config.ts`), so an edit
+# does not reach a running instance until one is replaced.
 #
-# Flags can be used together.
+#   --llm      OpenAI key + model names from .env  -> config/llm
+#   --auth     Google OAuth client from .env       -> config/auth
+#   --prompts  Prompts + schemas from backend/DB/  -> config/{speaking_writing,
+#              translation,vocabulary,grammar,import}
+#
+# Flags can be combined.
+#
+# NOT here, on purpose: one-off data migrations and destructive maintenance. They
+# are not tied to a release, and burying a wipe behind a deploy flag invites running
+# it by reflex. Invoke them directly instead:
+#   cd backend && npx tsx scripts/migrate-example-sentences.ts
+#   cd backend && npx tsx scripts/migrate-grammar-examples.ts
+#   cd backend && npx tsx scripts/wipe-grammar-firestore.ts          # destructive
+#   cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts --archives
+# (`migrate-to-firestore.ts`, the old word import, reads backend/DB/word/ — now
+#  empty, since Firestore is the source of truth for words.)
 #
 # Prerequisites:
 #   - gcloud CLI installed and authenticated
 #   - Artifact Registry API and Cloud Run API enabled
 
-MIGRATE_WORD=false
-WIPE_GRAMMAR=false
-MIGRATE_LLM=false
-MIGRATE_AUTH=false
-MIGRATE_PROMPTS=false
-MIGRATE_ARCHIVES=false
-MIGRATE_EXAMPLE_SENTENCES=false
-MIGRATE_GRAMMAR_EXAMPLES=false
+USAGE="Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--llm] [--auth] [--prompts]"
+
+# Each entry is "label|script and its arguments".
+UPLOADS=()
 POSITIONAL=()
 for arg in "$@"; do
   case "$arg" in
-    --word) MIGRATE_WORD=true ;;
-    --wipe-grammar) WIPE_GRAMMAR=true ;;
-    --llm) MIGRATE_LLM=true ;;
-    --auth) MIGRATE_AUTH=true ;;
-    --prompts) MIGRATE_PROMPTS=true ;;
-    --archives) MIGRATE_ARCHIVES=true ;;
-    --example-sentences) MIGRATE_EXAMPLE_SENTENCES=true ;;
-    --grammar-examples) MIGRATE_GRAMMAR_EXAMPLES=true ;;
+    --llm)     UPLOADS+=("LLM config|migrate-llm-config-to-firestore.ts") ;;
+    --auth)    UPLOADS+=("Google OAuth config|migrate-auth-config-to-firestore.ts") ;;
+    --prompts) UPLOADS+=("prompt & schema config|migrate-db-config-to-firestore.ts --prompts") ;;
+    # Without this, a typo like `--promts` falls through to POSITIONAL and is used
+    # as the PROJECT_ID — deploying, silently, somewhere nobody meant.
+    -*)
+      echo "Unknown option: $arg" >&2
+      echo "$USAGE" >&2
+      exit 1
+      ;;
     *) POSITIONAL+=("$arg") ;;
   esac
 done
-
-if [ "$MIGRATE_WORD" = false ] && [ "$WIPE_GRAMMAR" = false ] && [ "$MIGRATE_LLM" = false ] && [ "$MIGRATE_AUTH" = false ] && [ "$MIGRATE_PROMPTS" = false ] && [ "$MIGRATE_ARCHIVES" = false ] && [ "$MIGRATE_EXAMPLE_SENTENCES" = false ] && [ "$MIGRATE_GRAMMAR_EXAMPLES" = false ]; then
-  echo "==> Skipping Firestore migration (use --word, --wipe-grammar, --llm, --auth, --prompts, --archives, --example-sentences, and/or --grammar-examples to run)"
-fi
 
 PROJECT_ID="${POSITIONAL[0]:-vocab-trainer-490014}"
 REGION="${POSITIONAL[1]:-asia-northeast1}"
@@ -71,52 +76,23 @@ echo "==> Building and pushing backend..."
 docker build --platform linux/amd64 -t "${BACKEND_IMAGE}" ./backend
 docker push "${BACKEND_IMAGE}"
 
-# Optionally seed Firestore with data from local files (before deploy so configs are available on startup)
-if [ "$MIGRATE_WORD" = true ] || [ "$WIPE_GRAMMAR" = true ] || [ "$MIGRATE_LLM" = true ] || [ "$MIGRATE_AUTH" = true ] || [ "$MIGRATE_PROMPTS" = true ] || [ "$MIGRATE_ARCHIVES" = true ] || [ "$MIGRATE_EXAMPLE_SENTENCES" = true ] || [ "$MIGRATE_GRAMMAR_EXAMPLES" = true ]; then
-  echo "==> Installing backend dependencies for migration..."
+# Upload config BEFORE the new revision starts, so it is already in place when the
+# fresh instance reads it.
+if [ "${#UPLOADS[@]}" -gt 0 ]; then
+  echo "==> Installing backend dependencies for the config upload..."
   (cd backend && npm install --silent)
+  for entry in "${UPLOADS[@]}"; do
+    label="${entry%%|*}"
+    # Unquoted on purpose: the value may carry its own flag (`… --prompts`), and
+    # every one of them is a literal defined above.
+    script="${entry#*|}"
+    echo "==> Uploading ${label} to Firestore..."
+    (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
+      npx tsx scripts/${script})
+  done
+else
+  echo "==> No config upload requested (use --llm, --auth and/or --prompts)"
 fi
-if [ "$MIGRATE_WORD" = true ]; then
-  echo "==> Running Firestore word migration..."
-  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
-    npx tsx scripts/migrate-to-firestore.ts)
-fi
-if [ "$WIPE_GRAMMAR" = true ]; then
-  echo "==> Wiping grammar collections in Firestore..."
-  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
-    npx tsx scripts/wipe-grammar-firestore.ts)
-fi
-if [ "$MIGRATE_LLM" = true ]; then
-  echo "==> Uploading LLM config to Firestore..."
-  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
-    npx tsx scripts/migrate-llm-config-to-firestore.ts)
-fi
-if [ "$MIGRATE_AUTH" = true ]; then
-  echo "==> Uploading Google OAuth config to Firestore..."
-  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
-    npx tsx scripts/migrate-auth-config-to-firestore.ts)
-fi
-if [ "$MIGRATE_PROMPTS" = true ]; then
-  echo "==> Uploading speaking/writing + translation config to Firestore..."
-  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
-    npx tsx scripts/migrate-db-config-to-firestore.ts --prompts)
-fi
-if [ "$MIGRATE_ARCHIVES" = true ]; then
-  echo "==> Uploading backup + original archives to Firestore..."
-  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
-    npx tsx scripts/migrate-db-config-to-firestore.ts --archives)
-fi
-if [ "$MIGRATE_EXAMPLE_SENTENCES" = true ]; then
-  echo "==> Migrating embedded examples to example_sentences collection..."
-  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
-    npx tsx scripts/migrate-example-sentences.ts)
-fi
-if [ "$MIGRATE_GRAMMAR_EXAMPLES" = true ]; then
-  echo "==> Migrating inline grammar examples to example_sentences collection..."
-  (cd backend && FIRESTORE_PROJECT="${PROJECT_ID}" FIRESTORE_DATABASE_ID=vocab-database \
-    npx tsx scripts/migrate-grammar-examples.ts)
-fi
-
 
 # Deploy backend to Cloud Run
 echo "==> Deploying backend to Cloud Run..."
