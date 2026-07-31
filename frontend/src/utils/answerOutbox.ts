@@ -19,6 +19,7 @@ import { isRetryableError } from "../api/client";
 import { answerQuestion } from "../api/quiz";
 import { answerCombinedQuestion, type CombinedQuizVariant } from "../api/combined-quiz";
 import { answerGrammarQuestion } from "../api/grammar";
+import { answerExpressionRecallQuestion } from "../api/expression-recall-quiz";
 
 export type PendingAnswer =
   | {
@@ -42,6 +43,12 @@ export type PendingAnswer =
       refId: string;
       correct: boolean;
       flagWordIds?: string[];
+    }
+  | {
+      domain: "expressionRecall";
+      language: string;
+      expressionId: string;
+      correct: boolean;
     };
 
 export interface OutboxState {
@@ -112,6 +119,12 @@ function send(item: PendingAnswer): Promise<unknown> {
         },
         item.variant
       );
+    case "expressionRecall":
+      return answerExpressionRecallQuestion({
+        language: item.language,
+        expressionId: item.expressionId,
+        correct: item.correct,
+      });
   }
 }
 

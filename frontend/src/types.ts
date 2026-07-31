@@ -402,6 +402,42 @@ export interface ExpressionQuizSubsession {
   groupFilter?: string[];
 }
 
+// ========== Expression recall quiz (flashcard) ==========
+//
+// Distinct from ExpressionQuizSubsession above, which is the LLM-graded WRITING
+// quiz: there you compose a sentence and get it corrected. This one is plain
+// recall — see one side, self-grade the other — and so lives in its own
+// collection rather than riding on the speaking&writing session document.
+
+/** Which face of the card is the prompt. `phrase-to-context` is recognition
+ *  ("what does this mean / when is it used?"); the reverse is production recall
+ *  ("in this situation, what do you say?"). */
+export type ExpressionQuizDirection = "phrase-to-context" | "context-to-phrase";
+
+export interface ExpressionRecallQuestion {
+  expressionId: string;
+  /** The prompt face, denormalized so the question renders before hydration. */
+  prompt: string;
+  userCorrect?: boolean;
+}
+
+export interface ExpressionRecallSession {
+  sessionId: string;
+  /** ISO code — expressions are stored under ISO codes, unlike words/grammar. */
+  language: string;
+  startedAt: string;
+  completedAt?: string;
+  status: "in-progress" | "completed";
+  score: QuizScore;
+  questions: ExpressionRecallQuestion[];
+  direction: ExpressionQuizDirection;
+  purposeFilter?: ("speaking" | "writing")[];
+  groupFilter?: string[];
+  groupWeights?: Record<string, number>;
+  /** groupId -> expressionIds, so resume can re-weight the unanswered tail. */
+  groupMembership?: Record<string, string[]>;
+}
+
 // ========== Import (analyze an external article into words + grammar) ==========
 
 export interface ImportSentence {
@@ -461,6 +497,10 @@ interface ImportItemBase {
   /** Fractional, so a split can insert its parts between neighbours without renumbering. */
   order: number;
   status: ImportItemStatus;
+  /** Which destination the in-flight (or last) registration was aimed at. A row can
+   *  be added to its Group A destination and its Group B destination independently,
+   *  so `status` alone cannot say which of the two buttons is spinning or failed. */
+  target?: "A" | "B";
   /** `gap` rows are not proposals — they are the characters the analysis left
    *  uncovered, materialized so every character of every sentence has a row. They
    *  carry no reading or meaning, which is why they are flagged for review. */

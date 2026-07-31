@@ -21,6 +21,7 @@ import GrammarFormModal from "./GrammarFormModal";
 import TranslationView from "./TranslationView";
 import SpeakingWritingView from "./SpeakingWritingView";
 import ExpressionQuizView from "./ExpressionQuizView";
+import ExpressionRecallQuizView from "./ExpressionRecallQuizView";
 import ExpressionList from "./ExpressionList";
 import type { QuizFilters } from "./QuizFilterModal";
 import type { CombinedQuizFilters } from "./CombinedQuizFilterModal";
@@ -480,6 +481,11 @@ export default function Dashboard() {
     navigate(`/${language}/speaking-writing`, { state: { mode: "new", subMode: "expression-quiz" } });
   }
 
+  function handleStartExpressionRecall() {
+    if (!language) return;
+    navigate(`/${language}/expression-recall`);
+  }
+
   function handleBrowseExpressions() {
     if (!language) return;
     navigate(`/${language}/expressions`);
@@ -790,6 +796,11 @@ export default function Dashboard() {
               />
             );
           })()
+        ) : subPath === "/expression-recall" ? (
+          // A real sub-path, unlike the writing quiz next door, which rides on
+          // `location.state.subMode` and so cannot survive a refresh.
+          // `isoCode`, NOT `language`: expressions are stored under ISO codes.
+          <ExpressionRecallQuizView language={isoCode} onBack={() => navigate(`/${language}`)} />
         ) : subPath === "/expressions" ? (
           <ExpressionList
             language={isoCode}
@@ -830,6 +841,7 @@ export default function Dashboard() {
             onResumeSpeakingWriting={() => navigate(`/${language}/speaking-writing`, { state: { mode: "resume" } })}
             hasSWSession={hasSWSession}
             onStartExpressionQuiz={handleStartExpressionQuiz}
+            onStartExpressionRecall={handleStartExpressionRecall}
             onBrowseExpressions={handleBrowseExpressions}
             onAddExpression={() => navigate(`/${language}/expressions`)}
           />

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../i18n/context";
 import ImportDestinationRail from "./ImportDestinationRail";
-import ImportSentenceCard from "./ImportSentenceCard";
+import ImportSentenceCard, { type ImportDestination } from "./ImportSentenceCard";
 import {
   flattenSentences,
   sentenceCoverage,
@@ -29,7 +29,8 @@ interface Props {
   onPatch: (updater: (s: ImportSession) => ImportSession, immediate?: boolean) => void;
   onSetItems: (updater: (items: ImportItem[]) => ImportItem[], immediate?: boolean) => void;
   onPatchItem: (id: string, updates: Partial<ImportItem>, immediate?: boolean) => void;
-  onRegister: (id: string) => void;
+  /** One press writes ONE destination: the Group A lesson group or the Group B set. */
+  onRegister: (id: string, target: "A" | "B") => void;
   onExit: () => void;
 }
 
@@ -82,6 +83,26 @@ export default function ImportReview({
     allWordGroups,
     allGrammarGroups,
     membershipOverlay
+  );
+
+  /** The two destinations, resolved to display names for the row buttons. Only this
+   *  component holds the group documents, and the labels must track the rail live —
+   *  changing the destination mid-review re-labels every button. */
+  const destination = useMemo<ImportDestination>(
+    () => ({
+      wordGroupId: session.wordGroupId,
+      wordGroupName: allWordGroups.find((g) => g.id === session.wordGroupId)?.name,
+      grammarGroupId: session.grammarGroupId,
+      grammarGroupName: allGrammarGroups.find((g) => g.id === session.grammarGroupId)?.name,
+      groupBNames: session.groupBNames,
+    }),
+    [
+      allGrammarGroups,
+      allWordGroups,
+      session.grammarGroupId,
+      session.groupBNames,
+      session.wordGroupId,
+    ]
   );
 
   const position = sentences.findIndex((s) => s.index === focused);
@@ -190,6 +211,7 @@ export default function ImportReview({
                             onSetItems={onSetItems}
                             onPatchItem={onPatchItem}
                             onRegister={onRegister}
+                            destination={destination}
                             showTranslation={showTranslations}
                             inLibrary={inLibrary}
                             wordGroupsByTerm={wordGroupsByTerm}

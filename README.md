@@ -88,6 +88,12 @@ cd backend && FIRESTORE_PROJECT=vocab-trainer-490014 npx tsx scripts/migrate-llm
 
 Reads OpenAI API and model settings from `.env` and writes them to Firestore `config/llm`. The backend will automatically fetch LLM config from Firestore when `.env` is not available (e.g., in deployed environments).
 
+Note this uploads only the API key and the two **tier defaults**. Per-feature model
+assignment lives in a separate document, `config/llm_models`, which is edited from the
+in-app **LLM Models** screen (language-select page → System) and takes effect within
+30 seconds without a redeploy. Keeping them apart is deliberate: this script does a full
+`.set()` on `config/llm`, which would otherwise wipe the assignments on every `--llm` deploy.
+
 ### Upload Speaking/Writing + Translation Config
 
 ```bash
@@ -478,6 +484,12 @@ Returns all word groups for the language, sorted by creation time.
 
 **Body:** `{ "wordIds": ["1", "2"], "action": "add" | "remove" }`  
 **Response:** updated `WordGroup`.
+
+Adding to a **category-A** group is a **move**: a word belongs to at most one Group A
+group (they are the lesson structure, not overlapping tags), so the server strips the
+words from every other category-A group of the language. Category B is untouched — a
+Group B set is the not-yet-memorized subset drawn on top of A, and several may hold the
+same word. Grammar groups have no such rule.
 
 #### `POST /api/vocab/:language/file` — Create new language file
 
@@ -1095,7 +1107,8 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `combined_quiz_sessions` | One combined word+grammar quiz session per language (word questions stored slim; re-hydrated via the paged questions endpoint) |
 | `translation_history`  | Translation/analysis entries with structured LLM results (including the optional user context) |
 | `speaking_writing_sessions` | One speaking/writing correction session per language |
-| `config`               | App configuration (`config/llm` for OpenAI API/model settings, `config/speaking_writing` for prompts/schemas/use-cases, `config/translation` for prompts/schemas, `config/vocabulary` for smart-add and segmentation prompts/schemas, `config/grammar` for grammar smart-add prompts/schemas, `config/grammar_settings` for the grammar default definition language) |
+| `expression_recall_sessions` | One expression **recall** (flashcard) quiz session per language. The LLM-graded expression *writing* quiz is not here — it is a subfield of `speaking_writing_sessions`. |
+| `config`               | App configuration (`config/llm` for the OpenAI API key and tier-default models, `config/llm_models` for the model catalog and per-feature assignments, `config/speaking_writing` for prompts/schemas/use-cases, `config/translation` for prompts/schemas, `config/vocabulary` for smart-add and segmentation prompts/schemas, `config/grammar` for grammar smart-add prompts/schemas, `config/grammar_settings` for the grammar default definition language) |
 | `token_usage`          | Individual LLM call logs with token counts                |
 | `token_usage_daily`    | Daily aggregates by model                                 |
 | `archive_backups`      | Cold archive of pre-migration backup word/grammar data — **never read by the app** (chunked subcollections for large files) |
@@ -1116,8 +1129,8 @@ only the standalone `migrate-db-config-to-firestore.ts --archives` touches.
 | `HOST`                | `0.0.0.0`       | Server listening address           |
 | `FIRESTORE_DATABASE_ID` | `vocab-database` | Firestore database ID            |
 | `OPENAI_API_KEY`       | —                | OpenAI API key (falls back to Firestore `config/llm`) |
-| `OPENAI_MODEL_MINI`    | —                | OpenAI model for fast tasks such as smart-add and segmentation (falls back to Firestore `config/llm`) |
-| `OPENAI_MODEL_FULL`    | —                | OpenAI model for translation/analysis and speaking/writing (falls back to Firestore `config/llm`) |
+| `OPENAI_MODEL_MINI`    | —                | Default model for fast tasks such as smart-add and segmentation (falls back to Firestore `config/llm`; overridden by `config/llm_models` if set there) |
+| `OPENAI_MODEL_FULL`    | —                | Default model for translation/analysis and speaking/writing (falls back to Firestore `config/llm`; overridden by `config/llm_models` if set there) |
 | `FIRESTORE_PROJECT`    | —                | Google Cloud project ID (required for Firestore in deployed environments) |
 | `GOOGLE_CLIENT_ID`     | —                | OAuth 2.0 client ID (falls back to Firestore `config/auth`) |
 | `GOOGLE_CLIENT_SECRET` | —                | OAuth 2.0 client secret (falls back to Firestore `config/auth`) |

@@ -31,11 +31,12 @@ interface Props {
   onResumeSpeakingWriting: () => void;
   hasSWSession: boolean;
   onStartExpressionQuiz: () => void;
+  onStartExpressionRecall: () => void;
   onBrowseExpressions: () => void;
   onAddExpression: () => void;
 }
 
-export default function EmptyState({ language, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onResumeGroupB, onGroupBQuiz, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onImport, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onBrowseExpressions, onAddExpression }: Props) {
+export default function EmptyState({ language, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onResumeGroupB, onGroupBQuiz, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onImport, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onStartExpressionRecall, onBrowseExpressions, onAddExpression }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const isoCode = urlLanguageToIsoCode(language) ?? language;
@@ -262,6 +263,14 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
                 </button>
                 {isoCode !== "zh" && (
                   <>
+                    {/* Two expression quizzes: recall (flashcard, no LLM) and the
+                        original writing quiz (compose a sentence, LLM-graded). */}
+                    <button
+                      onClick={onStartExpressionRecall}
+                      className="sm:col-span-2 rounded-lg bg-amber-600 px-5 py-3 text-center font-medium text-white hover:bg-amber-500 transition-colors"
+                    >
+                      {t("startExpressionRecallQuiz")}
+                    </button>
                     <button
                       onClick={onStartExpressionQuiz}
                       className="sm:col-span-2 rounded-lg bg-orange-600 px-5 py-3 text-center font-medium text-white hover:bg-orange-500 transition-colors"

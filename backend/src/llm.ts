@@ -4,8 +4,9 @@ import { Firestore } from "@google-cloud/firestore";
 import { config } from "dotenv";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import { TOPICS, type Word, type Topic } from "./types.js";
-import { logTokenUsage, ensureModelInCostConfig } from "./firestore.js";
+import { TOPICS, type Word, type Topic, type LLMTier, type LLMModelConfig } from "./types.js";
+import { logTokenUsage, ensureModelInCostConfig, getLLMModelConfig } from "./firestore.js";
+import { ROUTE_TO_FEATURE } from "./llm-features.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -80,6 +81,13 @@ async function ensureInit(): Promise<void> {
       modelMini = process.env.OPENAI_MODEL_MINI;
       modelFull = process.env.OPENAI_MODEL_FULL ?? "";
     })();
+    // A rejected promise would otherwise stay cached for the process lifetime,
+    // so a first call made before the config was reachable would keep rethrowing
+    // the same stale error even after the config was fixed. Clearing lets the
+    // next caller retry.
+    initPromise.catch(() => {
+      initPromise = null;
+    });
   }
   return initPromise;
 }
@@ -96,6 +104,82 @@ export async function getModelMini(): Promise<string> {
 
 export async function getModelFull(): Promise<string> {
   await ensureInit();
+  if (!modelFull) {
+    throw new Error("OPENAI_MODEL_FULL is not configured");
+  }
+  return modelFull;
+}
+
+// --- Per-feature model assignments (config/llm_models) ---
+//
+// Read through a SHORT TTL rather than memoized like `initPromise`: the settings
+// screen writes this document at runtime, and Cloud Run serves several
+// instances, so invalidating only the one that handled the PUT would leave the
+// others on the old model until the next deploy. 30s is the worst-case lag for
+// an instance that did not serve the write.
+const MODEL_CONFIG_TTL_MS = 30_000;
+let modelConfigCache: { data: LLMModelConfig | null; at: number } | null = null;
+let modelConfigInFlight: Promise<LLMModelConfig | null> | null = null;
+
+/**
+ * NEVER THROWS. Seven code paths now depend on this read that previously needed
+ * no Firestore at all, so a transient failure must degrade to the env defaults
+ * rather than take every LLM call down — the same posture `loadLLMConfig` takes.
+ */
+async function readModelConfig(): Promise<LLMModelConfig | null> {
+  const now = Date.now();
+  if (modelConfigCache && now - modelConfigCache.at < MODEL_CONFIG_TTL_MS) {
+    return modelConfigCache.data;
+  }
+  // Share one refresh between concurrent callers: the smart-add queue runs 4 at
+  // a time, and without this each would fire its own read the moment the TTL
+  // lapses.
+  if (modelConfigInFlight) return modelConfigInFlight;
+
+  modelConfigInFlight = (async () => {
+    try {
+      const data = await getLLMModelConfig();
+      modelConfigCache = { data, at: Date.now() };
+      return data;
+    } catch (err) {
+      console.error("Failed to read config/llm_models, using previous value:", err);
+      return modelConfigCache?.data ?? null;
+    } finally {
+      modelConfigInFlight = null;
+    }
+  })();
+  return modelConfigInFlight;
+}
+
+/** Called by `PUT /api/llm-config` so the writing instance reflects its own
+ *  change immediately instead of waiting out the TTL. */
+export function invalidateModelConfigCache(): void {
+  modelConfigCache = null;
+}
+
+/**
+ * Pick the model for one call.
+ *
+ * Order: explicit per-feature assignment -> tier default from the settings UI ->
+ * the env / `config/llm` value.
+ *
+ * Note this INVERTS the rule in `loadLLMConfig`, where env always wins. That is
+ * deliberate: per-feature assignment has no env equivalent, and a settings
+ * screen whose saved value silently does nothing is broken. `.env` remains the
+ * bootstrap fallback.
+ */
+export async function resolveModel(tier: LLMTier, route: string): Promise<string> {
+  await ensureInit();
+  const cfg = await readModelConfig();
+
+  const featureKey = ROUTE_TO_FEATURE.get(route);
+  const assigned = featureKey ? cfg?.features?.[featureKey] : undefined;
+  if (assigned) return assigned;
+
+  const tierDefault = cfg?.defaults?.[tier];
+  if (tierDefault) return tierDefault;
+
+  if (tier === "mini") return modelMini;
   if (!modelFull) {
     throw new Error("OPENAI_MODEL_FULL is not configured");
   }
@@ -128,7 +212,7 @@ async function recordUsage(
 
 export async function callLLM(systemPrompt: string, userPrompt: string, route = "unknown"): Promise<string> {
   const cl = await createOpenAIClient();
-  const model = await getModelMini();
+  const model = await resolveModel("mini", route);
   const response = await cl.chat.completions.create({
     model,
     messages: [
@@ -143,7 +227,7 @@ export async function callLLM(systemPrompt: string, userPrompt: string, route = 
 
 export async function callLLMFull(systemPrompt: string, userPrompt: string, route = "unknown"): Promise<string> {
   const cl = await createOpenAIClient();
-  const model = await getModelFull();
+  const model = await resolveModel("full", route);
   const response = await cl.chat.completions.create({
     model,
     messages: [
@@ -163,7 +247,7 @@ export async function callLLMWithSchema(
   route = "unknown"
 ): Promise<string> {
   const cl = await createOpenAIClient();
-  const model = await getModelMini();
+  const model = await resolveModel("mini", route);
   const response = await cl.chat.completions.create({
     model,
     messages: [
@@ -186,7 +270,7 @@ export async function callLLMFullWithSchema(
   route = "unknown"
 ): Promise<string> {
   const cl = await createOpenAIClient();
-  const model = await getModelFull();
+  const model = await resolveModel("full", route);
   const response = await cl.chat.completions.create({
     model,
     messages: [
@@ -209,7 +293,7 @@ export async function streamLLMFull(
   route = "unknown"
 ): Promise<string> {
   const cl = await createOpenAIClient();
-  const model = await getModelFull();
+  const model = await resolveModel("full", route);
   const abortController = new AbortController();
   const stream = await cl.chat.completions.create({
     model,
@@ -255,7 +339,7 @@ export async function streamLLMFullWithSchema(
   route = "unknown"
 ): Promise<string> {
   const cl = await createOpenAIClient();
-  const model = await getModelFull();
+  const model = await resolveModel("full", route);
   const abortController = new AbortController();
   const stream = await cl.chat.completions.create({
     model,
@@ -304,7 +388,7 @@ export async function streamLLMWithSchema(
   route = "unknown"
 ): Promise<string> {
   const cl = await createOpenAIClient();
-  const model = await getModelMini();
+  const model = await resolveModel("mini", route);
   const abortController = new AbortController();
   const stream = await cl.chat.completions.create({
     model,

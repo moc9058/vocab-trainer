@@ -25,8 +25,10 @@ import translationRoutes from "./routes/translation.js";
 import speakingWritingRoutes from "./routes/speaking-writing.js";
 import expressionRoutes from "./routes/expressions.js";
 import expressionQuizRoutes from "./routes/expression-quiz.js";
+import expressionRecallQuizRoutes from "./routes/expression-recall-quiz.js";
 import metricsRoutes from "./routes/metrics.js";
 import importRoutes from "./routes/import.js";
+import llmConfigRoutes from "./routes/llm-config.js";
 
 const LOG_DIR = resolve(import.meta.dirname, "..", "logs");
 mkdirSync(LOG_DIR, { recursive: true });
@@ -106,8 +108,10 @@ await fastify.register(translationRoutes, { prefix: "/api/translation" });
 await fastify.register(speakingWritingRoutes, { prefix: "/api/speaking-writing" });
 await fastify.register(expressionRoutes, { prefix: "/api/expressions" });
 await fastify.register(expressionQuizRoutes, { prefix: "/api/expression-quiz" });
+await fastify.register(expressionRecallQuizRoutes, { prefix: "/api/expression-recall-quiz" });
 await fastify.register(metricsRoutes, { prefix: "/api/metrics" });
 await fastify.register(importRoutes, { prefix: "/api/import" });
+await fastify.register(llmConfigRoutes, { prefix: "/api/llm-config" });
 
 const port = parseInt(process.env.PORT ?? "3000", 10);
 const host = process.env.HOST ?? "0.0.0.0";

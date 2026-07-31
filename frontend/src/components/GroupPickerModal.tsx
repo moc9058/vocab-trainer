@@ -143,7 +143,14 @@ export default function GroupPickerModal({
     setBusy(group.id);
     try {
       const updated = (await api.modify(language, group.id, itemIds, "add")) as AnyGroup;
-      const next = groups.map((g) => (g.id === group.id ? updated : g));
+      // Adding to a category-A WORD group MOVES the item there — the server strips it
+      // from every other A group — so patching just this one locally would leave the
+      // source group's member count stale. Re-read, falling back to the patch if that
+      // read fails (the add itself already succeeded).
+      const next = await api
+        .list(language)
+        .then((gs) => gs as AnyGroup[])
+        .catch(() => groups.map((g) => (g.id === group.id ? updated : g)));
       setGroups(next);
       onDone(next);
       onClose();

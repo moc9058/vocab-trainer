@@ -17,6 +17,8 @@
 import type {
   CombinedQuizQuestion,
   CombinedQuizSession,
+  ExpressionRecallQuestion,
+  ExpressionRecallSession,
   GrammarQuizQuestion,
   GrammarQuizSession,
   QuizQuestion,
@@ -163,6 +165,43 @@ export function applyCombinedAnswerLocally(
                 : membership.grammarIds,
           },
         }),
+    ...(questions.every((q) => q.userCorrect !== undefined)
+      ? { status: "completed" as const, completedAt: new Date().toISOString() }
+      : {}),
+  };
+}
+
+// ---------- expression recall quiz ----------
+
+export function applyExpressionRecallAnswerLocally(
+  session: ExpressionRecallSession,
+  expressionId: string,
+  correct: boolean
+): ExpressionRecallSession {
+  const questions = session.questions.map((q) => ({ ...q }));
+  const index = firstUnansweredIndex(questions, (q) => q.expressionId === expressionId);
+  if (index === -1) return session;
+
+  questions[index].userCorrect = correct;
+  const score = {
+    correct: session.score.correct + (correct ? 1 : 0),
+    total: session.score.total,
+  };
+
+  if (!correct) {
+    // APPENDS, like the grammar quiz (`routes/expression-recall-quiz.ts` does the
+    // same) — the word and combined quizzes splice into the tail instead. The two
+    // sides must agree on which.
+    const retry: ExpressionRecallQuestion = { ...questions[index] };
+    delete retry.userCorrect;
+    questions.push(retry);
+    score.total += 1;
+  }
+
+  return {
+    ...session,
+    questions,
+    score,
     ...(questions.every((q) => q.userCorrect !== undefined)
       ? { status: "completed" as const, completedAt: new Date().toISOString() }
       : {}),

@@ -31,7 +31,9 @@ import type {
   GroupCategory,
   Expression,
   ExpressionGroup,
+  ExpressionRecallSession,
   ImportSession,
+  LLMModelConfig,
 } from "./types.js";
 
 const db = new Firestore({
@@ -1989,6 +1991,54 @@ export async function saveGrammarQuizSession(session: GrammarQuizSession): Promi
   await grammarQuizSessions.doc(session.language).set(clean);
 }
 
+// ========== Expression Recall Quiz Sessions (keyed by language) ==========
+//
+// Its OWN collection, unlike the LLM-graded writing quiz which is a subfield of
+// the speaking&writing session doc. That co-tenancy means a full-document
+// overwrite from either side can clobber the other, and
+// `DELETE /api/speaking-writing/session/:language` destroys an in-progress quiz
+// as collateral. Not a pattern worth repeating.
+
+const expressionRecallSessions = db.collection("expression_recall_sessions");
+
+export async function getExpressionRecallSession(
+  language: string
+): Promise<ExpressionRecallSession | null> {
+  const doc = await expressionRecallSessions.doc(language).get();
+  if (!doc.exists) return null;
+  const d = doc.data()!;
+  return {
+    sessionId: doc.id,
+    language: d.language,
+    startedAt: d.startedAt,
+    completedAt: d.completedAt,
+    status: d.status,
+    score: d.score,
+    questions: d.questions,
+    direction: d.direction,
+    purposeFilter: d.purposeFilter,
+    groupFilter: d.groupFilter,
+    groupWeights: d.groupWeights,
+    groupMembership: d.groupMembership,
+  };
+}
+
+export async function saveExpressionRecallSession(
+  session: ExpressionRecallSession
+): Promise<void> {
+  const data: Record<string, unknown> = { ...session };
+  delete data.sessionId;
+  const clean = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
+  await expressionRecallSessions.doc(session.language).set(clean);
+}
+
+export async function deleteExpressionRecallSession(language: string): Promise<boolean> {
+  const doc = await expressionRecallSessions.doc(language).get();
+  if (!doc.exists) return false;
+  await expressionRecallSessions.doc(language).delete();
+  return true;
+}
+
 // ========== Combined Quiz Sessions (words + grammar, keyed by language) ==========
 
 const combinedQuizSessions = db.collection("combined_quiz_sessions");
@@ -2210,6 +2260,18 @@ export async function getAllExpressions(language: string): Promise<Expression[]>
 export async function getExpression(id: string): Promise<Expression | null> {
   const doc = await expressionItems.doc(id).get();
   return doc.exists ? docToExpression(doc) : null;
+}
+
+/** Bulk hydration for the recall quiz. Chunked at 10 because that is Firestore's
+ *  `in` limit — same shape as the group filter in `getExpressions`. */
+export async function getExpressionsByIds(ids: string[]): Promise<Expression[]> {
+  if (ids.length === 0) return [];
+  const out: Expression[] = [];
+  for (let i = 0; i < ids.length; i += 10) {
+    const snap = await expressionItems.where("id", "in", ids.slice(i, i + 10)).get();
+    out.push(...snap.docs.map(docToExpression));
+  }
+  return out;
 }
 
 export async function addExpression(expr: Expression): Promise<void> {
@@ -2454,6 +2516,20 @@ export async function clearTokenUsage(): Promise<void> {
   }
 }
 
+// ========== Config: LLM model assignments ==========
+
+/** Deliberately NOT `config/llm` — that doc holds the API key and is replaced
+ *  wholesale by `migrate-llm-config-to-firestore.ts` on every `--llm` deploy. */
+export async function getLLMModelConfig(): Promise<LLMModelConfig | null> {
+  const doc = await db.collection("config").doc("llm_models").get();
+  if (!doc.exists) return null;
+  return doc.data() as LLMModelConfig;
+}
+
+export async function setLLMModelConfig(config: LLMModelConfig): Promise<void> {
+  await db.collection("config").doc("llm_models").set(config);
+}
+
 // ========== Config: Speaking & Writing ==========
 
 export async function getSpeakingWritingConfig(): Promise<{
@@ -2638,7 +2714,7 @@ export async function modifyWordGroupMembers(
   wordIds: string[],
   action: "add" | "remove"
 ): Promise<WordGroup> {
-  return db.runTransaction(async (tx) => {
+  const group = await db.runTransaction(async (tx) => {
     const ref = wordGroups.doc(groupId);
     const doc = await tx.get(ref);
     if (!doc.exists) throw new Error(`Group '${groupId}' not found`);
@@ -2663,6 +2739,50 @@ export async function modifyWordGroupMembers(
       ...(doc.data()!.category === "B" ? { category: "B" as const } : {}),
     };
   });
+
+  // Category A is EXCLUSIVE: adding a word to an A group MOVES it there. The A
+  // groups are the lesson structure — a partition of the library, not overlapping
+  // tags — so a word that reappears in a later lesson belongs to that lesson only.
+  // Category B is untouched: a B group is the not-yet-memorized subset drawn ON TOP
+  // of A, and several of them may hold the same word.
+  //
+  // Every add path in the app (smart-add queue, chips, drafts, the group picker, the
+  // word editor, the article importer) funnels through this one function, which is
+  // why the invariant needs no cooperation from the callers.
+  if (action === "add" && group.category !== "B" && wordIds.length > 0) {
+    await removeWordsFromOtherCategoryAGroups(group.language, wordIds, group.id);
+  }
+  return group;
+}
+
+/**
+ * Drop `wordIds` from every category-A group of `language` except `keepGroupId`.
+ * Returns the affected group IDs.
+ *
+ * Deliberately outside the caller's transaction, mirroring
+ * `removeWordFromCategoryBGroups`: Firestore requires all of a transaction's reads
+ * before its first write, while "which other A groups hold this word" is only
+ * knowable after the target group's document has been read. Losing the race with a
+ * concurrent add leaves a word in two groups — which the next add repairs on its
+ * own, and which `scripts/dedupe-word-group-membership.ts` sweeps in bulk.
+ */
+export async function removeWordsFromOtherCategoryAGroups(
+  language: string,
+  wordIds: string[],
+  keepGroupId: string
+): Promise<string[]> {
+  const ids = new Set(wordIds);
+  const groups = await getWordGroups(language);
+  const affected = groups.filter(
+    (g) => g.id !== keepGroupId && g.category !== "B" && g.wordIds.some((id) => ids.has(id))
+  );
+  if (affected.length === 0) return [];
+  const batch = db.batch();
+  for (const g of affected) {
+    batch.update(wordGroups.doc(g.id), { wordIds: g.wordIds.filter((id) => !ids.has(id)) });
+  }
+  await batch.commit();
+  return affected.map((g) => g.id);
 }
 
 /** Drop `wordId` from every category-B group of `language`. Returns the affected group IDs. */

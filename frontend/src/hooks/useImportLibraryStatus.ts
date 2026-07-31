@@ -11,9 +11,15 @@ const LOOKUP_DEBOUNCE_MS = 400;
 export interface GroupMembership {
   a: string[];
   b: string[];
+  /** IDs of the category-A groups holding the entity. The Group A destination is
+   *  chosen by ID, so "is it already in the destination?" — which is what decides
+   *  whether the row still offers an A button — has to be answered by ID. The name
+   *  lists above are what the chips render. Group B needs no equivalent: a B study
+   *  set is joined across domains by NAME, so `b` is already the right key. */
+  aIds: string[];
 }
 
-const NO_GROUPS: GroupMembership = { a: [], b: [] };
+const NO_GROUPS: GroupMembership = { a: [], b: [], aIds: [] };
 
 export interface ImportLibraryStatus {
   /** Terms known to be in the library. Group A is the universe of all items, so
@@ -129,31 +135,36 @@ export function useImportLibraryStatus(
   // distinguishes "in the library" from "in the group this review is filling".
   const membershipByEntityId = useMemo(() => {
     const map = new Map<string, GroupMembership>();
-    const add = (entityId: string, name: string, category: "A" | "B") => {
-      const entry = map.get(entityId) ?? { a: [], b: [] };
+    const add = (entityId: string, group: { id: string; name: string }, category: "A" | "B") => {
+      const entry = map.get(entityId) ?? { a: [], b: [], aIds: [] };
       const bucket = category === "B" ? entry.b : entry.a;
-      if (!bucket.includes(name)) bucket.push(name);
+      if (!bucket.includes(group.name)) bucket.push(group.name);
+      if (category === "A" && !entry.aIds.includes(group.id)) entry.aIds.push(group.id);
       map.set(entityId, entry);
     };
     for (const category of ["A", "B"] as const) {
       for (const g of categoryGroups(wordGroups, category)) {
-        for (const wordId of g.wordIds ?? []) add(wordId, g.name, category);
+        for (const wordId of g.wordIds ?? []) add(wordId, g, category);
       }
       for (const g of categoryGroups(grammarGroups, category)) {
-        for (const grammarId of g.grammarIds ?? []) add(grammarId, g.name, category);
+        for (const grammarId of g.grammarIds ?? []) add(grammarId, g, category);
       }
     }
     // The overlay is a union, never a replacement: it holds only what the newest
     // registrations wrote, while the read above holds everything else.
-    const byId = new Map<string, { name: string; category: "A" | "B" }>();
-    for (const g of wordGroups) byId.set(g.id, { name: g.name, category: g.category ?? "A" });
-    for (const g of grammarGroups) byId.set(g.id, { name: g.name, category: g.category ?? "A" });
+    const byId = new Map<string, { id: string; name: string; category: "A" | "B" }>();
+    for (const g of wordGroups) {
+      byId.set(g.id, { id: g.id, name: g.name, category: g.category ?? "A" });
+    }
+    for (const g of grammarGroups) {
+      byId.set(g.id, { id: g.id, name: g.name, category: g.category ?? "A" });
+    }
     for (const [entityId, groupIds] of overlay) {
       for (const groupId of groupIds) {
         const group = byId.get(groupId);
         // A group created inline during this registration is not in the read yet;
         // it arrives with the next one, which the write already scheduled.
-        if (group) add(entityId, group.name, group.category);
+        if (group) add(entityId, group, group.category);
       }
     }
     return map;

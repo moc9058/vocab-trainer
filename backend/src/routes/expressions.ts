@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from "fastify";
 import {
   getExpressions,
   getExpression,
+  getExpressionsByIds,
   addExpression,
   updateExpression,
   deleteExpression,
@@ -25,6 +26,25 @@ const expressionRoutes: FastifyPluginAsync = async (fastify) => {
     const limit = Math.max(1, Math.min(100, parseInt(request.query.limit ?? "50", 10) || 50));
     return await getExpressions(language, { search, purpose, groupId }, { page, limit });
   });
+
+  // Bulk fetch by id — one call hydrates a whole recall-quiz session.
+  // Declared before the `/:expressionId` route so "batch" isn't taken as an id.
+  fastify.post<{ Params: { language: string }; Body: { ids: string[] } }>(
+    "/:language/items/batch",
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["ids"],
+          properties: { ids: { type: "array", items: { type: "string" } } },
+        },
+      },
+    },
+    async (request) => {
+      const items = await getExpressionsByIds(request.body.ids);
+      return { items };
+    }
+  );
 
   // Get single expression
   fastify.get<{ Params: { language: string; expressionId: string } }>(

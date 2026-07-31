@@ -5,6 +5,7 @@ import { useSettings } from "../settings/context";
 import { useAuth } from "../auth/context";
 import { fetchJson } from "../api/client";
 import MetricsView from "./MetricsView";
+import LLMModelsView from "./LLMModelsView";
 
 interface LanguageInfo {
   filename: string;
@@ -19,7 +20,9 @@ export default function LanguageSelectPage() {
   const navigate = useNavigate();
   const [languages, setLanguages] = useState<LanguageInfo[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showMetrics, setShowMetrics] = useState(false);
+  // Language-agnostic admin screens. This page is the only place they belong —
+  // everything under /:language is scoped to one study language.
+  const [systemView, setSystemView] = useState<null | "metrics" | "models">(null);
 
   useEffect(() => {
     fetchJson<LanguageInfo[]>("/api/languages/")
@@ -33,19 +36,19 @@ export default function LanguageSelectPage() {
     navigate(`/${key}`);
   }
 
-  if (showMetrics) {
+  if (systemView) {
     return (
       <div className="flex min-h-screen flex-col bg-gray-900">
         <div className="flex items-center gap-3 border-b border-gray-700 px-4 py-3">
           <button
-            onClick={() => setShowMetrics(false)}
+            onClick={() => setSystemView(null)}
             className="rounded-lg border border-gray-600 px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 transition-colors"
           >
             ← {t("back") ?? "Back"}
           </button>
           <span className="text-sm font-medium text-gray-400">{t("sectionSystem") ?? "System"}</span>
         </div>
-        <MetricsView />
+        {systemView === "metrics" ? <MetricsView /> : <LLMModelsView />}
       </div>
     );
   }
@@ -80,10 +83,16 @@ export default function LanguageSelectPage() {
             {t("sectionSystem") ?? "System"}
           </h3>
           <button
-            onClick={() => setShowMetrics(true)}
+            onClick={() => setSystemView("metrics")}
             className="w-full rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
           >
             {t("viewMetrics") ?? "LLM Usage & Costs"}
+          </button>
+          <button
+            onClick={() => setSystemView("models")}
+            className="mt-2 w-full rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
+          >
+            {t("viewLLMModels") ?? "LLM Models"}
           </button>
           {authEnabled && (
             <>

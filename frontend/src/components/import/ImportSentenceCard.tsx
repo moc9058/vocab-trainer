@@ -22,7 +22,29 @@ import type {
 } from "../../types";
 import type { GroupMembership } from "../../hooks/useImportLibraryStatus";
 
-const NO_GROUPS: GroupMembership = { a: [], b: [] };
+const NO_GROUPS: GroupMembership = { a: [], b: [], aIds: [] };
+
+/**
+ * Where this review is filing things, resolved to display names.
+ *
+ * Group A is per-domain (a word group and a grammar group are unrelated sets) while
+ * Group B is ONE cross-domain study set chosen by name — which is why the A half is
+ * split in two here and the B half is not.
+ */
+export interface ImportDestination {
+  wordGroupId?: string;
+  wordGroupName?: string;
+  grammarGroupId?: string;
+  grammarGroupName?: string;
+  groupBNames: string[];
+}
+
+/** One row's view of the destinations — the A side already picked for its domain. */
+interface RowDestination {
+  aGroupId?: string;
+  aGroupName?: string;
+  bNames: string[];
+}
 
 interface Props {
   /** Backend full-name language ("chinese"), which is what gates the pinyin input. */
@@ -32,7 +54,10 @@ interface Props {
   items: ImportItem[];
   onSetItems: (updater: (items: ImportItem[]) => ImportItem[], immediate?: boolean) => void;
   onPatchItem: (id: string, updates: Partial<ImportItem>, immediate?: boolean) => void;
-  onRegister: (id: string) => void;
+  /** One press writes ONE destination: the Group A lesson group or the Group B set. */
+  onRegister: (id: string, target: "A" | "B") => void;
+  /** Live from the destination rail — changing it mid-review re-labels every button. */
+  destination: ImportDestination;
   /** Sentence translation visibility is a per-user preference owned by `ImportReview`. */
   showTranslation: boolean;
   /** Terms already in the library (= in Group A), keyed by term so a word registered
@@ -52,6 +77,7 @@ export default function ImportSentenceCard({
   onSetItems,
   onPatchItem,
   onRegister,
+  destination,
   showTranslation,
   inLibrary,
   wordGroupsByTerm,
@@ -59,6 +85,16 @@ export default function ImportSentenceCard({
 }: Props) {
   const { t } = useI18n();
   const { words, grammar } = sentenceItems(items, sentence.index);
+  const wordDestination: RowDestination = {
+    aGroupId: destination.wordGroupId,
+    aGroupName: destination.wordGroupName,
+    bNames: destination.groupBNames,
+  };
+  const grammarDestination: RowDestination = {
+    aGroupId: destination.grammarGroupId,
+    aGroupName: destination.grammarGroupName,
+    bNames: destination.groupBNames,
+  };
   const [mergeIds, setMergeIds] = useState<string[]>([]);
   const [splitting, setSplitting] = useState<{ id: string; draft: string } | null>(null);
   const [selection, setSelection] = useState("");
@@ -254,6 +290,7 @@ export default function ImportSentenceCard({
               }
               inGroupA={inLibrary.has(word.term.trim())}
               groups={wordGroupsByTerm.get(word.term.trim()) ?? NO_GROUPS}
+              destination={wordDestination}
               checked={mergeIds.includes(word.id)}
               splitting={splitting?.id === word.id ? splitting.draft : null}
               onToggleMerge={() => toggleMerge(word.id)}
@@ -264,7 +301,7 @@ export default function ImportSentenceCard({
               onPatch={(updates) => onPatchItem(word.id, updates)}
               onUndo={() => onSetItems((prev) => undoDerivation(prev, word.id), true)}
               onDelete={() => onPatchItem(word.id, { status: "skipped" }, true)}
-              onRegister={() => onRegister(word.id)}
+              onRegister={(target) => onRegister(word.id, target)}
             />
           ))}
           {words.length === 0 && (
@@ -295,9 +332,10 @@ export default function ImportSentenceCard({
               groups={
                 (g.existingGrammarId && grammarGroupsById.get(g.existingGrammarId)) || NO_GROUPS
               }
+              destination={grammarDestination}
               onPatch={(updates) => onPatchItem(g.id, updates)}
               onDelete={() => onPatchItem(g.id, { status: "skipped" }, true)}
-              onRegister={() => onRegister(g.id)}
+              onRegister={(target) => onRegister(g.id, target)}
             />
           ))}
           {grammar.length === 0 && (
@@ -318,6 +356,7 @@ function WordRow({
   onMergeNext,
   inGroupA,
   groups,
+  destination,
   checked,
   splitting,
   onToggleMerge,
@@ -343,6 +382,7 @@ function WordRow({
   /** The groups actually holding this word; only knowable once its ID is, which is
    *  why `inGroupA` stays the fallback rather than being derived from this. */
   groups: GroupMembership;
+  destination: RowDestination;
   checked: boolean;
   splitting: string | null;
   onToggleMerge: () => void;
@@ -353,7 +393,7 @@ function WordRow({
   onPatch: (updates: Partial<ImportWordItem>) => void;
   onUndo: () => void;
   onDelete: () => void;
-  onRegister: () => void;
+  onRegister: (target: "A" | "B") => void;
 }) {
   const { t } = useI18n();
   const locked = isLocked(word);
@@ -461,12 +501,15 @@ function WordRow({
           </div>
         </div>
 
-        <div className="mt-2 flex items-center gap-2 pl-6 sm:mt-0 sm:shrink-0 sm:pl-0">
-          <StatusControl
+        <div className="mt-2 flex flex-wrap items-center gap-2 pl-6 sm:mt-0 sm:shrink-0 sm:pl-0">
+          <RegisterControls
             status={word.status}
             error={word.error}
             rescuedAsDraft={word.rescuedAsDraft}
-            addLabel={word.existingWordId ? t("importAddToGroups") : t("importAdd")}
+            target={word.target}
+            destination={destination}
+            groups={groups}
+            inLibrary={inGroupA}
             onRegister={onRegister}
           />
           {!locked && (
@@ -601,6 +644,7 @@ function MembershipChips({
 function GrammarRow({
   item,
   groups,
+  destination,
   onPatch,
   onDelete,
   onRegister,
@@ -609,9 +653,10 @@ function GrammarRow({
   /** Only populated once this statement has been registered in this review —
    *  grammar has no analysis-time existence check to seed it from. */
   groups: GroupMembership;
+  destination: RowDestination;
   onPatch: (updates: Partial<ImportGrammarItem>) => void;
   onDelete: () => void;
-  onRegister: () => void;
+  onRegister: (target: "A" | "B") => void;
 }) {
   const { t } = useI18n();
   const locked = isLocked(item);
@@ -630,14 +675,17 @@ function GrammarRow({
           placeholder={t("importStatementPlaceholder")}
           className="block w-full min-w-0 rounded-md border border-gray-700 bg-gray-950/60 px-2 py-1.5 text-base text-gray-100 focus:border-emerald-500 focus:outline-none disabled:border-transparent disabled:bg-transparent disabled:text-gray-400 sm:flex-1 sm:py-1 sm:text-sm"
         />
-        <div className="mt-2 flex items-center gap-2 sm:mt-0 sm:shrink-0">
-          <StatusControl
+        <div className="mt-2 flex flex-wrap items-center gap-2 sm:mt-0 sm:shrink-0">
+          <RegisterControls
             status={item.status}
             error={item.error}
             rescuedAsDraft={item.rescuedAsDraft}
-            // A sibling row already created this pattern; this row can only extend
-            // its group membership, exactly as an existing word's row does.
-            addLabel={registered ? t("importAddToGroups") : t("importAdd")}
+            target={item.target}
+            destination={destination}
+            groups={groups}
+            // A sibling row may already have created this pattern; such a row can
+            // only extend group membership, exactly as an existing word's row does.
+            inLibrary={registered}
             onRegister={onRegister}
           />
           {!locked && (
@@ -668,44 +716,158 @@ function GrammarRow({
 }
 
 /**
- * The add button and, once pressed, an honest account of what happened. `queued`
- * is deliberately not a checkmark: the write may still fail, and a session
- * reloaded mid-flight cannot know either way until it is reconciled.
+ * One button per destination, and once pressed an honest account of what happened.
+ *
+ * Group A and Group B are separate presses because they mean different things: A is
+ * the lesson the item belongs to, B is the not-yet-memorized set being drilled. A
+ * single button could not express "already in A, still needs B" — the ordinary state
+ * of an article that repeats vocabulary the user already owns — and it forced every
+ * add to write both destinations at once.
+ *
+ * The ✓ is read from ACTUAL membership (the group documents, plus the optimistic
+ * overlay of writes the re-read has not caught up with), not from `status`: status is
+ * the outcome of the last write THIS review made, whereas what the user needs to know
+ * is where the item sits now. `status` is only consulted for the transient states —
+ * which button is spinning, which one failed — and that is what `target` disambiguates.
  */
-function StatusControl({
+function RegisterControls({
   status,
   error,
   rescuedAsDraft,
-  addLabel,
+  target,
+  destination,
+  groups,
+  inLibrary,
   onRegister,
 }: {
   status: ImportItem["status"];
   error?: string;
   rescuedAsDraft?: boolean;
-  addLabel: string;
+  /** Which destination the last (or in-flight) write was aimed at. */
+  target?: "A" | "B";
+  destination: RowDestination;
+  groups: GroupMembership;
+  /** Known to be in the library but with no ID to look group names up by — the
+   *  fallback for deciding "A is done" when no A destination is selected. */
+  inLibrary: boolean;
+  onRegister: (target: "A" | "B") => void;
+}) {
+  const { t } = useI18n();
+  const busy = status === "queued";
+
+  // With a destination chosen, "done" is a membership question and the group read
+  // answers it. Without one, the press only creates the item, so the write's own
+  // outcome is all there is to go on.
+  const doneA = destination.aGroupId
+    ? groups.aIds.includes(destination.aGroupId)
+    : status === "registered" || status === "duplicate" || inLibrary;
+  const doneB =
+    destination.bNames.length > 0 && destination.bNames.every((name) => groups.b.includes(name));
+
+  // Already in a DIFFERENT Group A group: the add is a move, since a word belongs to
+  // exactly one lesson. Spelled out in the tooltip so it is never a surprise.
+  const movesFrom = !doneA && destination.aGroupName ? groups.a : [];
+
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+      <DestinationButton
+        badge="A"
+        tone="a"
+        name={destination.aGroupName}
+        fallbackLabel={t("importAdd")}
+        title={
+          movesFrom.length > 0
+            ? `${t("importAddToDestA")}: ${movesFrom.join(", ")} → ${destination.aGroupName}`
+            : t("importAddToDestA")
+        }
+        done={doneA}
+        busy={busy && target === "A"}
+        failed={status === "failed" && target === "A"}
+        disabled={busy}
+        error={error}
+        rescuedAsDraft={rescuedAsDraft}
+        onRegister={() => onRegister("A")}
+      />
+      {/* Nothing to add to until a Group B set is picked in the destination rail. */}
+      {destination.bNames.length > 0 && (
+        <DestinationButton
+          badge="B"
+          tone="b"
+          name={destination.bNames.join(" · ")}
+          fallbackLabel={t("importAdd")}
+          title={t("importAddToDestB")}
+          done={doneB}
+          busy={busy && target === "B"}
+          failed={status === "failed" && target === "B"}
+          disabled={busy}
+          error={error}
+          rescuedAsDraft={rescuedAsDraft}
+          onRegister={() => onRegister("B")}
+        />
+      )}
+    </span>
+  );
+}
+
+/**
+ * One destination's control, in whichever of its four states applies. `queued` is
+ * deliberately not a checkmark: the write may still fail, and a session reloaded
+ * mid-flight cannot know either way until it is reconciled.
+ */
+function DestinationButton({
+  badge,
+  tone,
+  name,
+  fallbackLabel,
+  title,
+  done,
+  busy,
+  failed,
+  disabled,
+  error,
+  rescuedAsDraft,
+  onRegister,
+}: {
+  badge: string;
+  /** Matches the destination rail's dots: Group A indigo, Group B amber. */
+  tone: "a" | "b";
+  name?: string;
+  /** Shown when no group is selected — the press then only creates the item. */
+  fallbackLabel: string;
+  title: string;
+  done: boolean;
+  busy: boolean;
+  failed: boolean;
+  disabled: boolean;
+  error?: string;
+  rescuedAsDraft?: boolean;
   onRegister: () => void;
 }) {
   const { t } = useI18n();
+  const accent =
+    tone === "a"
+      ? "border-indigo-700/60 bg-indigo-950/40 text-indigo-300"
+      : "border-amber-700/60 bg-amber-950/30 text-amber-300";
 
-  if (status === "registered") {
-    return <span className="whitespace-nowrap text-xs text-green-400">✓ {t("importRegistered")}</span>;
-  }
-  if (status === "duplicate") {
+  if (done) {
     return (
-      <span className="whitespace-nowrap text-xs text-gray-400" title={t("importDuplicateHint")}>
-        ✓ {t("importAlreadyRegistered")}
+      <span
+        title={name ? `${badge}: ${name}` : t("importRegistered")}
+        className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border px-1.5 py-1 text-[11px] ${accent}`}
+      >
+        ✓ {badge}
       </span>
     );
   }
-  if (status === "queued") {
+  if (busy) {
     return (
-      <span className="flex items-center gap-1.5 whitespace-nowrap text-xs text-amber-300">
+      <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs text-amber-300">
         <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
         {t("importRegisteringItem")}
       </span>
     );
   }
-  if (status === "failed") {
+  if (failed) {
     return (
       <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
         <span className="text-red-400" title={error}>
@@ -719,7 +881,7 @@ function StatusControl({
           onClick={onRegister}
           className="shrink-0 rounded-md border border-gray-600 px-2 py-1 text-[11px] text-gray-300 hover:border-indigo-500 hover:text-indigo-300 sm:py-0.5"
         >
-          {t("importRetry")}
+          {badge} {t("importRetry")}
         </button>
       </span>
     );
@@ -728,9 +890,22 @@ function StatusControl({
     <button
       type="button"
       onClick={onRegister}
-      className="shrink-0 whitespace-nowrap rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-500 sm:px-2.5 sm:py-1"
+      disabled={disabled}
+      title={title}
+      className={`inline-flex min-w-0 shrink items-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium text-white disabled:opacity-40 sm:py-1 ${
+        tone === "a" ? "bg-indigo-600 hover:bg-indigo-500" : "bg-amber-600 hover:bg-amber-500"
+      }`}
     >
-      {addLabel}
+      {name ? (
+        <>
+          <span className="shrink-0 rounded bg-black/25 px-1 text-[10px] leading-4">{badge}</span>
+          {/* Capped and truncated: a long group name is otherwise an unbreakable
+              flex item and drags the review screen into horizontal scroll. */}
+          <span className="min-w-0 max-w-[6.5rem] truncate">{name}</span>
+        </>
+      ) : (
+        <span className="whitespace-nowrap">{fallbackLabel}</span>
+      )}
     </button>
   );
 }

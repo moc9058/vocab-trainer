@@ -268,12 +268,12 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
                       key={group.id}
                       type="button"
                       onClick={() => {
-                        setSelectedGroupIds((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(group.id)) next.delete(group.id);
-                          else next.add(group.id);
-                          return next;
-                        });
+                        // Single-select: a word belongs to at most ONE category-A
+                        // group and the server enforces it on write, so letting two
+                        // be checked here would only promise what the save cannot keep.
+                        setSelectedGroupIds((prev) =>
+                          prev.has(group.id) ? new Set() : new Set([group.id])
+                        );
                       }}
                       className={`rounded-full px-2 py-0.5 text-xs ${
                         selected

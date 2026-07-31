@@ -121,3 +121,11 @@ export async function getCurrentExpressionSession(
     return null;
   }
 }
+
+/** Bulk hydration for the recall quiz — one call covers a whole session. */
+export function getExpressionsByIds(
+  language: string,
+  ids: string[]
+): Promise<{ items: Expression[] }> {
+  return postJson(`/api/expressions/${encodeURIComponent(language)}/items/batch`, { ids });
+}

@@ -7,7 +7,7 @@ import {
 import { checkTerms, modifyGroupMembers } from "../api/vocab";
 import { modifyGrammarGroupMembers } from "../api/grammar";
 import { resolveGroupBTargets } from "../utils/groupB";
-import { flattenSentences, isLive, isLocked } from "../utils/importSession";
+import { flattenSentences, isLive } from "../utils/importSession";
 import type { ImportItem, ImportSession, ImportWordItem } from "../types";
 import type { useWordQueue } from "./useWordQueue";
 import type { useGrammarQueue } from "./useGrammarQueue";
@@ -325,17 +325,20 @@ export function useImportSession({
    * flush, costing a second PUT for one logical change.
    */
   const applySettle = useCallback(
-    (id: string, result: SettleResult) => {
+    (id: string, destination: "A" | "B", result: SettleResult) => {
       setItems((items) => {
         const target = items.find((i) => i.id === id);
         if (!target) return items;
         const key = itemKey(target);
         const idField = target.kind === "word" ? "existingWordId" : "existingGrammarId";
+        // `target` rides along so the row knows WHICH of its two buttons this
+        // outcome belongs to — a failed Group B write must not put the ✗ on the
+        // Group A button, which may well have succeeded a minute earlier.
         const terminal = result.ok
-          ? { status: "registered" as const, error: undefined }
+          ? { status: "registered" as const, error: undefined, target: destination }
           : result.duplicate
-          ? { status: "duplicate" as const, error: undefined }
-          : { status: "failed" as const, error: result.error };
+          ? { status: "duplicate" as const, error: undefined, target: destination }
+          : { status: "failed" as const, error: result.error, target: destination };
 
         return items.map((i) => {
           const learnedId =
@@ -368,32 +371,48 @@ export function useImportSession({
     [onMembershipChanged, setItems]
   );
 
-  /** Hands ONE item to the shared add queue and records its real outcome. */
+  /**
+   * Hands ONE item to the shared add queue for ONE destination and records its real
+   * outcome. A row is registered into its Group A destination and its Group B
+   * destination by two separate presses, so this is called once per destination.
+   */
   const registerItem = useCallback(
-    async (id: string) => {
+    async (id: string, target: "A" | "B" = "A") => {
       const current = sessionRef.current;
       const item = current?.items.find((i) => i.id === id);
-      if (!current || !item || isLocked(item)) return;
+      // NOT `isLocked`: that also covers `registered`, and a row already added to
+      // Group A must still accept a Group B press. Only an in-flight write (which
+      // would race itself) and a deleted row are refused here; `isLocked` stays the
+      // rule for EDITING the row's text.
+      if (!current || !item || item.status === "queued" || item.status === "skipped") return;
       const key = itemKey(item);
       if (!key) return;
 
-      // An identical row already in flight will settle this one through sibling
-      // propagation. Enqueueing a second write for the same term would race the
-      // first (the queue runs 4 at a time) and at best come back 409 — which skips
-      // the group work entirely.
+      // An identical row already in flight for the SAME destination will settle this
+      // one through sibling propagation. Enqueueing a second write for the same term
+      // would race the first (the queue runs 4 at a time) and at best come back 409 —
+      // which skips the group work entirely. A press for the OTHER destination has to
+      // go through, since the leader is not writing those groups; if the entity is
+      // still being created, that lands as a 409 whose recovery branch below writes
+      // the membership anyway.
       const piggyback = current.items.some(
         (i) =>
           i.id !== id &&
           isLive(i) &&
           i.status === "queued" &&
+          i.target === target &&
           i.kind === item.kind &&
           itemKey(i) === key
       );
 
-      patchItem(id, { status: "queued", error: undefined, rescuedAsDraft: undefined }, true);
+      patchItem(
+        id,
+        { status: "queued", target, error: undefined, rescuedAsDraft: undefined },
+        true
+      );
       if (piggyback) return;
 
-      const settle = (result: SettleResult) => applySettle(id, result);
+      const settle = (result: SettleResult) => applySettle(id, target, result);
       const fail = (err: unknown) =>
         settle({
           ok: false,
@@ -402,18 +421,41 @@ export function useImportSession({
           rescuedAsDraft: false,
         });
 
-      let groupBIds: string[];
-      try {
-        groupBIds = await groupBIdsFor(item.kind);
-      } catch (err) {
-        fail(err);
-        return;
+      /**
+       * The groups THIS press writes.
+       *
+       * "A" writes the Group A destination alone. "B" writes the Group B set — plus
+       * the Group A destination when the entity does not exist yet, because a Group B
+       * group is the not-yet-memorized SUBSET of Group A rather than an independent
+       * set: an item created into B alone would be missing from the browse lists and
+       * from every Group A quiz. An item already in the library is left where it is,
+       * so pressing B never moves a word out of the lesson group it belongs to.
+       *
+       * Resolving the B side only for a B press also matters: `groupBIdsFor` CREATES
+       * the missing half of a Group B study set, and an A press has no business
+       * materializing one.
+       */
+      const aGroupId = item.kind === "word" ? current.wordGroupId : current.grammarGroupId;
+      const alreadyInLibrary = Boolean(
+        item.kind === "word" ? item.existingWordId : item.existingGrammarId
+      );
+      let groupBIds: string[] = [];
+      if (target === "B") {
+        try {
+          groupBIds = await groupBIdsFor(item.kind);
+        } catch (err) {
+          fail(err);
+          return;
+        }
       }
+      const groupIds = [
+        ...new Set([
+          ...(aGroupId && (target === "A" || !alreadyInLibrary) ? [aGroupId] : []),
+          ...groupBIds,
+        ]),
+      ];
 
       if (item.kind === "word") {
-        const groupIds = [
-          ...new Set([...(current.wordGroupId ? [current.wordGroupId] : []), ...groupBIds]),
-        ];
         /** Group membership for a word already in the DB. Firestore's group add is
          *  set-based, so re-adding a word that is already a member is a no-op. */
         const addToGroups = async (wordId: string) => {
@@ -489,9 +531,6 @@ export function useImportSession({
       }
 
       const sentence = sentenceText(item.sentenceIndex);
-      const groupIds = [
-        ...new Set([...(current.grammarGroupId ? [current.grammarGroupId] : []), ...groupBIds]),
-      ];
 
       // The same pattern is usually illustrated by several sentences, so the article
       // yields several rows for it. Once one of them has been registered its ID is on
