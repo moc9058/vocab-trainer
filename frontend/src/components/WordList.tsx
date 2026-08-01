@@ -1453,6 +1453,12 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           onClose={() => setShowGroupPicker(null)}
           onDone={(updatedGroups) => {
             setGroups(categoryGroups(updatedGroups as WordGroup[], "A"));
+            // Normalizing re-files words, so it changes which rows a `groupId`
+            // filter matches — and any group edit changes the counts in the filter
+            // select. One query per group edit is cheaper than reasoning about
+            // which edits need it.
+            silentRefreshRef.current = true;
+            fetchData();
           }}
         />
       )}

@@ -99,9 +99,41 @@ export interface WordGroup {
   name: string;
   wordIds: string[];
   createdAt: string;
+  /** Priority AND display order; 0 is the highest. See `firestore.ts:compareWordGroups`. */
   order?: number;
   /** Meta-group. Absent = "A" (all words). "B" = not-yet-memorized subset. */
   category?: GroupCategory;
+}
+
+/** Per-group effect of one normalize run. Mirrors `backend/src/types.ts`. */
+export interface GroupNormalizeChange {
+  groupId: string;
+  name: string;
+  /** 0-based rank among category-A groups. */
+  priority: number;
+  /** Duplicate memberships dropped — the word is kept in a higher-priority group. */
+  removedCount: number;
+  /** Ungrouped words absorbed. Only ever > 0 for the top-priority group. */
+  addedCount: number;
+  before: number;
+  after: number;
+}
+
+export interface GroupNormalizeResult {
+  language: string;
+  /** false for a dry run and for a language with no category-A groups. */
+  applied: boolean;
+  groupCount: number;
+  /** null iff the language has no category-A group to absorb into. */
+  topGroup: { id: string; name: string } | null;
+  totalWords: number;
+  /** DISTINCT words that lost at least one lower-priority membership. */
+  movedWords: number;
+  addedWords: number;
+  unchangedGroups: number;
+  changes: GroupNormalizeChange[];
+  /** Post-state list (BOTH categories, priority order). Present only when `applied`. */
+  groups?: WordGroup[];
 }
 
 /**

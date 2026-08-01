@@ -1,5 +1,13 @@
 import { fetchJson, postJson, putJson, deleteRequest, deleteJson, CREDENTIALS, notifyIfUnauthorized } from "./client";
-import type { Word, WordDraft, Meaning, PaginatedResult, WordGroup, GroupCategory } from "../types";
+import type {
+  Word,
+  WordDraft,
+  Meaning,
+  PaginatedResult,
+  WordGroup,
+  GroupCategory,
+  GroupNormalizeResult,
+} from "../types";
 
 interface WordFilters {
   search?: string;
@@ -166,4 +174,23 @@ export function modifyGroupMembers(
     `/api/vocab/${encodeURIComponent(language)}/groups/${encodeURIComponent(groupId)}/words`,
     { wordIds, action }
   );
+}
+
+/**
+ * Re-file every word by category-A group priority: a word in several A groups keeps
+ * only its highest-priority membership, a word in none joins the top group, and
+ * category B is untouched. `dryRun` previews the same result without writing.
+ *
+ * `expectedGroupIds` asserts the priority the preview was computed against is still
+ * in force; the server answers 409 (an `ApiError`) if another tab reordered since.
+ * A body is always sent — Fastify rejects a bodyless `application/json` POST.
+ */
+export function normalizeGroups(
+  language: string,
+  opts: { dryRun?: boolean; expectedGroupIds?: string[] } = {}
+): Promise<GroupNormalizeResult> {
+  return postJson(`/api/vocab/${encodeURIComponent(language)}/groups/normalize`, {
+    dryRun: opts.dryRun ?? false,
+    ...(opts.expectedGroupIds ? { expectedGroupIds: opts.expectedGroupIds } : {}),
+  });
 }

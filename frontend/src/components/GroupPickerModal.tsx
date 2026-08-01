@@ -33,6 +33,7 @@ import {
   modifyGrammarGroupMembers,
 } from "../api/grammar";
 import { categoryGroups, type WordGroup, type GrammarGroup, type GroupCategory } from "../types";
+import GroupNormalizePanel from "./GroupNormalizePanel";
 
 type AnyGroup = WordGroup | GrammarGroup;
 
@@ -111,10 +112,17 @@ export default function GroupPickerModal({
   // Every mutating handler here used to be try…finally with no catch — a failed
   // request surfaced as nothing but a stopped spinner (unhandled rejection).
   const [actionError, setActionError] = useState<string | null>(null);
+  // Set while a normalize is being written: it re-files every word of the language,
+  // so the modal must not be dismissable mid-flight.
+  const [normalizeBusy, setNormalizeBusy] = useState(false);
   const newInputRef = useRef<HTMLInputElement>(null);
 
   const isManageMode = itemIds.length === 0;
   const canReorder = kind === "word" && isManageMode;
+  // The drag order IS the category-A priority, so the rank badges and the normalize
+  // action only make sense for word groups in category A. Group B keeps plain
+  // reordering (cosmetic there) and grammar has no `order` at all.
+  const isWordGroupAManage = kind === "word" && isManageMode && category === "A";
   const visibleGroups = categoryGroups(groups, category);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -273,7 +281,7 @@ export default function GroupPickerModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
-      onClick={onClose}
+      onClick={() => { if (!normalizeBusy) onClose(); }}
     >
       <div
         className="w-full max-w-sm rounded-xl bg-gray-800 p-4 sm:p-6 shadow-xl"
@@ -291,6 +299,10 @@ export default function GroupPickerModal({
           )}
         </div>
 
+        {isWordGroupAManage && !loading && visibleGroups.length > 0 && (
+          <p className="mb-2 text-xs text-gray-500">{t("groupPriorityHint")}</p>
+        )}
+
         {loading ? (
           <p className="text-sm text-gray-400">Loading…</p>
         ) : (
@@ -303,7 +315,7 @@ export default function GroupPickerModal({
                 {visibleGroups.length === 0 && (
                   <li className="text-sm text-gray-500 px-1">No groups yet.</li>
                 )}
-                {visibleGroups.map((group) => {
+                {visibleGroups.map((group, index) => {
                   const ids = memberIds(group);
                   const containedCount = itemIds.filter((id) => ids.includes(id)).length;
                   const allSelectedContained = itemIds.length > 0 && containedCount === itemIds.length;
@@ -313,7 +325,16 @@ export default function GroupPickerModal({
                       : `${containedCount}/${itemIds.length} selected already in group`;
 
                   return (
-                    <SortableGroupRow key={group.id} id={group.id} enabled={canReorder && !reordering}>
+                    <SortableGroupRow
+                      key={group.id}
+                      id={group.id}
+                      enabled={canReorder && !reordering && !normalizeBusy}
+                    >
+                  {isWordGroupAManage && (
+                    <span className="w-4 shrink-0 text-right text-xs tabular-nums text-gray-500">
+                      {index + 1}
+                    </span>
+                  )}
                   {editingId === group.id ? (
                     <>
                       <input
@@ -366,6 +387,14 @@ export default function GroupPickerModal({
                         <span className="flex-1 min-w-0 truncate text-sm text-gray-200 px-1">
                           {group.name}
                           <span className="ml-2 text-xs text-gray-500">{ids.length} {itemNoun}s</span>
+                          {/* Priority #1 is also where every "add a word" flow files by
+                              default (types.ts:defaultWordGroup). Saying so here is the
+                              only place that relationship is visible. */}
+                          {isWordGroupAManage && index === 0 && (
+                            <span className="ml-2 rounded-full border border-indigo-700/50 bg-indigo-950/40 px-1.5 py-0.5 text-[11px] text-indigo-300">
+                              {t("defaultAddTarget")}
+                            </span>
+                          )}
                         </span>
                       )}
                       {isManageMode && (
@@ -403,6 +432,20 @@ export default function GroupPickerModal({
 
         {actionError && <p className="mb-2 text-xs text-red-400">{actionError}</p>}
 
+        {isWordGroupAManage && !loading && visibleGroups.length > 0 && (
+          <GroupNormalizePanel
+            language={language}
+            aGroups={visibleGroups as WordGroup[]}
+            busy={reordering}
+            onBusyChange={setNormalizeBusy}
+            onError={setActionError}
+            onApplied={(saved) => {
+              setGroups(saved);
+              onDone(saved);
+            }}
+          />
+        )}
+
         {/* New group input */}
         <div className="flex gap-2">
           <input
@@ -425,7 +468,8 @@ export default function GroupPickerModal({
         <div className="mt-4 flex justify-end">
           <button
             onClick={onClose}
-            className="rounded-lg px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
+            disabled={normalizeBusy}
+            className="rounded-lg px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-50"
           >
             {t("cancel")}
           </button>
