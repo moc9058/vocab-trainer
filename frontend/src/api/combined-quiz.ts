@@ -1,12 +1,15 @@
 import { ApiError, fetchJson, postJson, putJson } from "./client";
 import type { CombinedQuizSession } from "../types";
 
-/** Which of the two identical route trees to talk to. "groupB" drills only the
- *  category-B groups and keeps its own session per language. */
-export type CombinedQuizVariant = "combined" | "groupB";
+/** Which of the three identical route trees to talk to. "groupB" drills only the
+ *  category-B groups; "mixed" spans both categories in one session. Each keeps its own
+ *  session per language, so all three can be in progress at once. */
+export type CombinedQuizVariant = "combined" | "groupB" | "mixed";
 
 function base(variant: CombinedQuizVariant = "combined"): string {
-  return variant === "groupB" ? "/api/group-b-quiz" : "/api/combined-quiz";
+  if (variant === "groupB") return "/api/group-b-quiz";
+  if (variant === "mixed") return "/api/mixed-quiz";
+  return "/api/combined-quiz";
 }
 
 /** `null` means "no session" (404) only; other failures rethrow — see `api/quiz.ts`. */

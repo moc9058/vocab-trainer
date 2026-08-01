@@ -63,6 +63,11 @@ export default function Dashboard() {
   const [showGroupBSetup, setShowGroupBSetup] = useState(false);
   const [groupBResumePrompt, setGroupBResumePrompt] = useState<CombinedQuizSession | null>(null);
   const [pendingGroupBFilters, setPendingGroupBFilters] = useState<CombinedQuizFilters | null>(null);
+  // Mixed A+B quiz — same machinery again, spanning both meta-groups in one session.
+  const [activeMixedQuiz, setActiveMixedQuiz] = useState<CombinedQuizSession | null>(null);
+  const [showMixedSetup, setShowMixedSetup] = useState(false);
+  const [mixedResumePrompt, setMixedResumePrompt] = useState<CombinedQuizSession | null>(null);
+  const [pendingMixedFilters, setPendingMixedFilters] = useState<CombinedQuizFilters | null>(null);
   // Smart Add Word / Grammar state
   const [showSmartAdd, setShowSmartAdd] = useState(false);
   const [grammarFormLanguage, setGrammarFormLanguage] = useState<string | null>(null);
@@ -125,6 +130,17 @@ export default function Dashboard() {
     setRecoveryError(false);
     getCurrentCombinedSession(language ?? "", "groupB").then(session => {
       if (session) setActiveGroupBQuiz(session);
+      else navigate(`/${language}`, { replace: true });
+    }).catch(() => setRecoveryError(true));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subPath, language, recoveryAttempt]);
+
+  // Session recovery: navigate to /:language/mixed-quiz → fetch active session if state is empty
+  useEffect(() => {
+    if (subPath !== "/mixed-quiz" || activeMixedQuiz) return;
+    setRecoveryError(false);
+    getCurrentCombinedSession(language ?? "", "mixed").then(session => {
+      if (session) setActiveMixedQuiz(session);
       else navigate(`/${language}`, { replace: true });
     }).catch(() => setRecoveryError(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -283,6 +299,10 @@ export default function Dashboard() {
     setShowGroupBSetup(false);
     setGroupBResumePrompt(null);
     setPendingGroupBFilters(null);
+    setActiveMixedQuiz(null);
+    setShowMixedSetup(false);
+    setMixedResumePrompt(null);
+    setPendingMixedFilters(null);
     setShowSmartAdd(false);
     setGrammarFormLanguage(null);
     navigate(`/${language}`);
@@ -476,6 +496,70 @@ export default function Dashboard() {
     }
   }
 
+  function handleStartMixedQuiz() {
+    if (!language) return;
+    setShowMixedSetup(true);
+  }
+
+  async function doStartMixed(filters: CombinedQuizFilters) {
+    if (!language) return;
+    const session = await startCombinedQuiz({
+      language,
+      domainWeights: filters.domainWeights,
+      correctWeight: filters.correctWeight,
+      word: filters.word,
+      grammar: filters.grammar,
+    }, "mixed");
+    setActiveMixedQuiz(session);
+    navigate(`/${language}/mixed-quiz`);
+  }
+
+  async function handleMixedFiltersSelected(filters: CombinedQuizFilters) {
+    if (starting || !language) return;
+    setStarting(true);
+    try {
+      const existing = await getCurrentCombinedSession(language, "mixed");
+      if (existing && existing.status === "in-progress") {
+        setPendingMixedFilters(filters);
+        setMixedResumePrompt(existing);
+        return;
+      }
+      setShowMixedSetup(false);
+      await doStartMixed(filters);
+    } catch (err) {
+      console.error("Failed to start Group A+B quiz:", err);
+      alert(String(err));
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  function handleResumeMixed() {
+    if (!mixedResumePrompt) return;
+    setActiveMixedQuiz(mixedResumePrompt);
+    setMixedResumePrompt(null);
+    setPendingMixedFilters(null);
+    setShowMixedSetup(false);
+    setStarting(false);
+    navigate(`/${language}/mixed-quiz`);
+  }
+
+  async function handleStartNewMixed() {
+    if (!language || !pendingMixedFilters) return;
+    const filters = pendingMixedFilters;
+    setMixedResumePrompt(null);
+    setShowMixedSetup(false);
+    setPendingMixedFilters(null);
+    try {
+      await doStartMixed(filters);
+    } catch (err) {
+      console.error("Failed to start Group A+B quiz:", err);
+      alert(String(err));
+    } finally {
+      setStarting(false);
+    }
+  }
+
   function handleStartExpressionQuiz() {
     if (!language) return;
     navigate(`/${language}/speaking-writing`, { state: { mode: "new", subMode: "expression-quiz" } });
@@ -594,6 +678,39 @@ export default function Dashboard() {
           onStart={handleGroupBFiltersSelected}
           onClose={() => setShowGroupBSetup(false)}
         />
+      )}
+      {showMixedSetup && !mixedResumePrompt && language && (
+        <CombinedQuizFilterModal
+          language={language}
+          groupCategory="AB"
+          showFlaggedToggle={false}
+          onStart={handleMixedFiltersSelected}
+          onClose={() => setShowMixedSetup(false)}
+        />
+      )}
+      {mixedResumePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-gray-800 p-5 shadow-lg sm:p-6">
+            <p className="mb-4 text-gray-300">{t("existingMixedQuizFound")}</p>
+            <p className="mb-4 text-lg font-semibold text-fuchsia-400">
+              {mixedResumePrompt.score.correct} / {mixedResumePrompt.initialTotal ?? mixedResumePrompt.questions.length}
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={handleResumeMixed}
+                className="flex-1 rounded-lg bg-fuchsia-600 px-4 py-3 text-white hover:bg-fuchsia-500 sm:py-2"
+              >
+                {t("resumeQuiz")}
+              </button>
+              <button
+                onClick={handleStartNewMixed}
+                className="flex-1 rounded-lg bg-gray-700 px-4 py-3 text-gray-300 hover:bg-gray-600 sm:py-2"
+              >
+                {t("startNewQuiz")}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
       {groupBResumePrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -776,6 +893,19 @@ export default function Dashboard() {
           ) : (
             <QuizRecoveryState error={recoveryError} onRetry={() => setRecoveryAttempt((n) => n + 1)} onHome={goHome} />
           )
+        ) : subPath === "/mixed-quiz" ? (
+          activeMixedQuiz ? (
+            <CombinedQuizTaking
+              key="mixed"
+              session={activeMixedQuiz}
+              variant="mixed"
+              onComplete={() => { setActiveMixedQuiz(null); navigate(`/${language}`); }}
+              onBrowse={handleBrowse}
+              onStartNew={handleStartMixedQuiz}
+            />
+          ) : (
+            <QuizRecoveryState error={recoveryError} onRetry={() => setRecoveryAttempt((n) => n + 1)} onHome={goHome} />
+          )
         ) : subPath === "/print-worksheet" ? (
           (() => {
             const st = (location.state as {
@@ -826,6 +956,8 @@ export default function Dashboard() {
             onCombinedQuiz={handleStartCombinedQuiz}
             onResumeGroupB={(session) => { setActiveGroupBQuiz(session); navigate(`/${language}/group-b-quiz`); }}
             onGroupBQuiz={handleStartGroupBQuiz}
+            onResumeMixed={(session) => { setActiveMixedQuiz(session); navigate(`/${language}/mixed-quiz`); }}
+            onMixedQuiz={handleStartMixedQuiz}
             onStartNew={handleStartQuiz}
             onBrowse={handleBrowse}
             onFlaggedReview={handleFlaggedReview}

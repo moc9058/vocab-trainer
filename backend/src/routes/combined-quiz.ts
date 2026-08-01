@@ -174,7 +174,26 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       let grammarGroupMembership: Record<string, string[]> | undefined;
       let knownGrammarItems: Grammar[] = [];
       if (grammarWeight > 0 || useCorrect) {
-        const pool = await getAllGrammarItems(language);
+        // Scope the pool to the selected groups BEFORE the mastered split, mirroring the word
+        // side (whose `getFilteredWords(groupIds)` already did it) and routes/grammar-quiz.ts.
+        // Without it the "already-correct" bucket draws mastered grammar from groups the user
+        // never selected. The group docs are fetched once here and reused for the membership
+        // build below, so this costs no extra reads.
+        const scopedGroupIds = grammar?.groupIds?.length ? grammar.groupIds : null;
+        const [allItems, groupDocs] = await Promise.all([
+          getAllGrammarItems(language),
+          scopedGroupIds
+            ? Promise.all(scopedGroupIds.map((id) => getGrammarGroup(id)))
+            : Promise.resolve(null),
+        ]);
+        let pool = allItems;
+        if (groupDocs) {
+          const union = new Set<string>();
+          for (const g of groupDocs) {
+            if (g) for (const id of g.grammarIds) union.add(id);
+          }
+          pool = pool.filter((it) => union.has(it.id));
+        }
         let freshPool = pool;
         if (useCorrect) {
           knownGrammarItems = pool.filter((it) => isMastered(grammarProgress![it.id]));
@@ -182,11 +201,15 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
         }
         if (grammarWeight > 0) {
           let ordered: Grammar[];
-          if (grammar?.groupIds && grammar.groupIds.length > 0) {
-            const membership = await buildGrammarMembership(grammar.groupIds, freshPool);
+          if (scopedGroupIds && groupDocs) {
+            const membership = assignMembership(
+              scopedGroupIds,
+              groupDocs.map((g) => (g ? { id: g.id, memberIds: g.grammarIds } : null)),
+              freshPool
+            );
             ordered = weightedInterleave(
-              grammar.groupIds.map((id) => ({
-                weight: grammar.groupWeights?.[id] ?? 1,
+              scopedGroupIds.map((id) => ({
+                weight: grammar?.groupWeights?.[id] ?? 1,
                 items: membership[id] ?? [],
               }))
             );
@@ -477,6 +500,10 @@ const combinedQuizRoutes = makeCombinedQuizRoutes({ sessionKey: (l) => l });
 /** Group B quiz — same handlers, session stored under `${language}__groupB`
  *  ("__" cannot occur in a language name, so the keys never collide). */
 export const groupBQuizRoutes = makeCombinedQuizRoutes({ sessionKey: (l) => `${l}__groupB` });
+/** Mixed A+B quiz — one session spanning both meta-groups. Nothing here knows about
+ *  categories: the client simply sends category-A and category-B `groupIds` in one array
+ *  (B first, so `assignMembership`'s first-wins rule gives a shared word B's weight). */
+export const mixedQuizRoutes = makeCombinedQuizRoutes({ sessionKey: (l) => `${l}__mixed` });
 
 // Reorder the unanswered tail by the session's current domain + group weights,
 // keeping answered questions in place. Shared by resume (GET session) and the
@@ -537,17 +564,8 @@ async function buildWordMembership(
   );
 }
 
-async function buildGrammarMembership(
-  groupIds: string[],
-  pool: Grammar[]
-): Promise<Record<string, Grammar[]>> {
-  const groupDocs = await Promise.all(groupIds.map((id) => getGrammarGroup(id)));
-  return assignMembership(
-    groupIds,
-    groupDocs.map((g) => (g ? { id: g.id, memberIds: g.grammarIds } : null)),
-    pool
-  );
-}
+// (The grammar side has no `buildGrammarMembership` twin: /start already holds the group docs
+// it fetched to scope the pool, and calls `assignMembership` with them directly.)
 
 function assignMembership<T extends { id: string }>(
   groupIds: string[],

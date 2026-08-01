@@ -3,8 +3,9 @@ import { useI18n } from "../i18n/context";
 import { getGroups } from "../api/vocab";
 import { getGrammarGroups } from "../api/grammar";
 import { getFlaggedWordIds } from "../api/flagged";
-import { categoryGroups, type WordGroup, type GrammarGroup, type GroupCategory } from "../types";
+import { groupCategory as categoryOf, type WordGroup, type GrammarGroup, type GroupCategory } from "../types";
 import { isWeightValid, parseWeightInput, scaleWeightRecord } from "../utils/weightInput";
+import { applyCategoryRatio, scopedGroups, type QuizGroupScope } from "../utils/quizGroupScope";
 
 export interface CombinedQuizFilters {
   domainWeights: { word: number; grammar: number };
@@ -28,8 +29,8 @@ interface Props {
   language: string;
   onStart: (filters: CombinedQuizFilters) => void;
   onClose: () => void;
-  /** Which meta-group bucket to draw the pool from. Default "A" (the normal combined quiz). */
-  groupCategory?: GroupCategory;
+  /** Which meta-group bucket(s) to draw the pool from. Default "A" (the normal combined quiz). */
+  groupCategory?: QuizGroupScope;
   /** The Group B quiz has no flag concept — hide the toggle and force `flaggedOnly: false`. */
   showFlaggedToggle?: boolean;
 }
@@ -65,6 +66,20 @@ function DomainWeightInput({
   );
 }
 
+/** Which meta-group a row belongs to. Only rendered in the mixed quiz, where the list holds
+ *  both; the single-category setups already say so in their title. */
+function CategoryBadge({ category }: { category: GroupCategory }) {
+  return (
+    <span
+      className={`shrink-0 rounded px-1 py-0.5 text-[10px] font-semibold leading-none ${
+        category === "B" ? "bg-amber-900/60 text-amber-300" : "bg-indigo-900/60 text-indigo-300"
+      }`}
+    >
+      {category}
+    </span>
+  );
+}
+
 export default function CombinedQuizFilterModal({
   language,
   onStart,
@@ -87,18 +102,23 @@ export default function CombinedQuizFilterModal({
   const [flaggedScope, setFlaggedScope] = useState(false);
   const [flaggedIds, setFlaggedIds] = useState<Set<string> | null>(null);
   const [loading, setLoading] = useState(true);
+  // Mixed quiz only: how often the two meta-groups are drawn relative to each other.
+  // 1:1 already leans hard on B, since B is a small subset of A and empties first.
+  const isMixed = groupCategory === "AB";
+  const [categoryAWeight, setCategoryAWeight] = useState("1");
+  const [categoryBWeight, setCategoryBWeight] = useState("1");
 
   useEffect(() => {
     Promise.allSettled([getGroups(language), getGrammarGroups(language)])
       .then(([groupsResult, grammarGroupsResult]) => {
         if (groupsResult.status === "fulfilled") {
-          const wg = categoryGroups(groupsResult.value as WordGroup[], groupCategory);
+          const wg = scopedGroups(groupsResult.value as WordGroup[], groupCategory);
           setAllWordGroups(wg);
           setSelectedWordGroupIds(new Set(wg.map((g: WordGroup) => g.id)));
           setWordGroupWeights(Object.fromEntries(wg.map((g: WordGroup) => [g.id, "1"])));
         }
         if (grammarGroupsResult.status === "fulfilled") {
-          const gg = categoryGroups(grammarGroupsResult.value as GrammarGroup[], groupCategory);
+          const gg = scopedGroups(grammarGroupsResult.value as GrammarGroup[], groupCategory);
           setAllGrammarGroups(gg);
           setSelectedGrammarGroupIds(new Set(gg.map((g) => g.id)));
           setGrammarGroupWeights(Object.fromEntries(gg.map((g) => [g.id, "1"])));
@@ -155,12 +175,27 @@ export default function CombinedQuizFilterModal({
     const domainRaw: Record<string, string> = { word: wordWeight, grammar: grammarWeight };
     if (correctWeightActive) domainRaw.correct = correctWeightDraft;
     const d = scaleWeightRecord(domainRaw);
-    const wordGroupWeightsOut = scaleWeightRecord(
-      Object.fromEntries([...selectedWordGroupIds].map((id) => [id, wordGroupWeights[id] ?? "1"]))
-    );
-    const grammarGroupWeightsOut = scaleWeightRecord(
-      Object.fromEntries([...selectedGrammarGroupIds].map((id) => [id, grammarGroupWeights[id] ?? "1"]))
-    );
+    const catWeights = {
+      A: (isMixed ? parseWeightInput(categoryAWeight) : 1) ?? 0,
+      B: (isMixed ? parseWeightInput(categoryBWeight) : 1) ?? 0,
+    };
+    const weightsFor = (
+      groups: { id: string; category?: GroupCategory }[],
+      selected: Set<string>,
+      raw: Record<string, string>
+    ) =>
+      scaleWeightRecord(
+        isMixed
+          ? applyCategoryRatio(groups, selected, raw, catWeights)
+          : Object.fromEntries(
+              groups.filter((g) => selected.has(g.id)).map((g) => [g.id, raw[g.id] ?? "1"])
+            )
+      );
+    // Send ids in `allGroups` order, NOT Set-iteration order: a Set reorders a group to the end
+    // when it is unchecked and rechecked, which would break the B-first rule the mixed quiz
+    // relies on. Deterministic for the single-category scopes too.
+    const orderedIds = (groups: { id: string }[], selected: Set<string>) =>
+      groups.filter((g) => selected.has(g.id)).map((g) => g.id);
     return {
       domainWeights: { word: d.word, grammar: d.grammar },
       ...(correctWeightActive ? { correctWeight: d.correct } : {}),
@@ -168,27 +203,34 @@ export default function CombinedQuizFilterModal({
         topics: [],
         categories: [],
         levels: [],
-        groupIds: [...selectedWordGroupIds],
-        groupWeights: wordGroupWeightsOut,
+        groupIds: orderedIds(allWordGroups, selectedWordGroupIds),
+        groupWeights: weightsFor(allWordGroups, selectedWordGroupIds, wordGroupWeights),
         flaggedOnly: showFlaggedToggle ? flaggedScope : false,
       },
       grammar: {
-        groupIds: [...selectedGrammarGroupIds],
-        groupWeights: grammarGroupWeightsOut,
+        groupIds: orderedIds(allGrammarGroups, selectedGrammarGroupIds),
+        groupWeights: weightsFor(allGrammarGroups, selectedGrammarGroupIds, grammarGroupWeights),
       },
     };
   }
 
   const allZero = !wordDomainActive && !grammarDomainActive && !correctDomainActive;
-  // A Group B pool IS its group selection — with none selected the quiz would be
-  // empty, so require at least one group per active domain.
-  const missingGroupBSelection =
-    groupCategory === "B" &&
+  // Outside the plain Group A quiz the pool IS the group selection: an empty word selection
+  // falls back to the whole library and an empty grammar selection to every grammar item in
+  // the language, so require at least one group per active domain.
+  const missingGroupSelection =
+    groupCategory !== "A" &&
     ((wordDomainActive && selectedWordGroupIds.size === 0) ||
       (grammarDomainActive && selectedGrammarGroupIds.size === 0));
+  const categoryWeightsInvalid =
+    isMixed &&
+    (!isWeightValid(categoryAWeight, 0) ||
+      !isWeightValid(categoryBWeight, 0) ||
+      ((parseWeightInput(categoryAWeight) ?? 0) <= 0 && (parseWeightInput(categoryBWeight) ?? 0) <= 0));
   const canStart =
     !allZero &&
-    !missingGroupBSelection &&
+    !missingGroupSelection &&
+    !categoryWeightsInvalid &&
     !hasInvalidDomainWeight &&
     !hasInvalidWordGroupWeight &&
     !hasInvalidGrammarGroupWeight &&
@@ -205,8 +247,36 @@ export default function CombinedQuizFilterModal({
       >
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-gray-100">
-            {t(groupCategory === "B" ? "selectGroupBFilters" : "selectCombinedFilters")}
+            {t(
+              groupCategory === "B"
+                ? "selectGroupBFilters"
+                : isMixed
+                  ? "selectMixedFilters"
+                  : "selectCombinedFilters"
+            )}
           </h2>
+          {isMixed && (
+            <div
+              className="flex items-center gap-1.5 rounded-md border border-gray-700 bg-gray-900/40 px-2 py-1"
+              title={t("categoryWeightHint")}
+            >
+              <span className="text-xs font-medium text-indigo-300">A</span>
+              <DomainWeightInput
+                value={categoryAWeight}
+                onChange={setCategoryAWeight}
+                label={`Group A ${t("groupWeight")}`}
+                invalid={!isWeightValid(categoryAWeight, 0)}
+              />
+              <span className="select-none text-xs text-gray-500">⇄</span>
+              <span className="text-xs font-medium text-amber-300">B</span>
+              <DomainWeightInput
+                value={categoryBWeight}
+                onChange={setCategoryBWeight}
+                label={`Group B ${t("groupWeight")}`}
+                invalid={!isWeightValid(categoryBWeight, 0)}
+              />
+            </div>
+          )}
           <label className="flex items-center gap-1.5 text-xs text-gray-300" title={t("alreadyCorrectHint")}>
             <span className="whitespace-nowrap">✅ {t("alreadyCorrect")}</span>
             <input
@@ -293,6 +363,7 @@ export default function CombinedQuizFilterModal({
                                     onChange={() => toggle(selectedWordGroupIds, setSelectedWordGroupIds, group.id)}
                                     className="h-4 w-4 shrink-0 accent-blue-600"
                                   />
+                                  {isMixed && <CategoryBadge category={categoryOf(group)} />}
                                   <span className="flex-1 min-w-0 truncate">{group.name}</span>
                                   {selectedWordGroupIds.has(group.id) && (
                                     <input
@@ -374,6 +445,7 @@ export default function CombinedQuizFilterModal({
                                   onChange={() => toggle(selectedGrammarGroupIds, setSelectedGrammarGroupIds, group.id)}
                                   className="h-4 w-4 shrink-0 accent-emerald-600"
                                 />
+                                {isMixed && <CategoryBadge category={categoryOf(group)} />}
                                 <span className="flex-1 min-w-0 truncate">{group.name}</span>
                                 {selectedGrammarGroupIds.has(group.id) && (
                                   <input
@@ -410,8 +482,11 @@ export default function CombinedQuizFilterModal({
         {(hasInvalidDomainWeight || hasInvalidWordGroupWeight || hasInvalidGrammarGroupWeight || correctWeightInvalid) && (
           <p className="mt-1 text-xs text-red-400">{t("groupWeightRequiredHint")}</p>
         )}
-        {missingGroupBSelection && (
+        {missingGroupSelection && (
           <p className="mt-1 text-xs text-amber-400">{t("groupBNeedsGroup")}</p>
+        )}
+        {categoryWeightsInvalid && (
+          <p className="mt-1 text-xs text-red-400">{t("categoryWeightRequiredHint")}</p>
         )}
         <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
           <button
@@ -425,7 +500,13 @@ export default function CombinedQuizFilterModal({
             disabled={loading || !canStart}
             className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm text-white hover:bg-indigo-500 disabled:opacity-50 sm:w-auto sm:py-1.5"
           >
-            {t(groupCategory === "B" ? "startGroupBQuiz" : "startCombinedQuiz")}
+            {t(
+              groupCategory === "B"
+                ? "startGroupBQuiz"
+                : isMixed
+                  ? "startMixedQuiz"
+                  : "startCombinedQuiz"
+            )}
           </button>
         </div>
       </div>

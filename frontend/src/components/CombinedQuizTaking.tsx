@@ -101,7 +101,10 @@ function ExamplesHeader({ showPinyin, onToggle }: { showPinyin: boolean; onToggl
 }
 
 export default function CombinedQuizTaking({ session, onComplete, onBrowse, onStartNew, variant = "combined" }: Props) {
-  const isGroupB = variant === "groupB";
+  // The Group B and mixed A+B quizzes both bind "3" to "retire this from Group B" — the
+  // productive gesture once an item is memorized. Only the plain Group A quiz uses "3" to
+  // flag a word, so flagging is skipped entirely in the other two.
+  const usesGroupBControls = variant === "groupB" || variant === "mixed";
   const { t } = useI18n();
   const { settings, displayDefEntries, displayGrammarDefEntries } = useSettings();
   // `currentSession.questions` is the single source of ORDER and is slim; word payloads and
@@ -126,7 +129,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const gradedIndexRef = useRef(-1);
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [alreadyFlaggedIds, setAlreadyFlaggedIds] = useState<Set<string>>(new Set());
-  // Group B variant: items the "3" key has dropped from their Group B groups.
+  // Group B / mixed variants: items the "3" key has dropped from their Group B groups.
   // Purely local feedback — the current session keeps showing them; they simply
   // stop appearing in future Group B sessions.
   const [removedFromBIds, setRemovedFromBIds] = useState<Set<string>>(new Set());
@@ -164,12 +167,12 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const prefetch = useQuizPrefetch(currentSession.language, prefetchWordIds, prefetchGrammarIds);
 
   useEffect(() => {
-    // The Group B variant has no flag concept — skip the fetch entirely.
-    if (isGroupB) return;
+    // The Group B and mixed variants have no flag concept — skip the fetch entirely.
+    if (usesGroupBControls) return;
     getFlaggedWordIds(session.language)
       .then(({ wordIds }) => setAlreadyFlaggedIds(new Set(wordIds)))
       .catch(() => setAlreadyFlaggedIds(new Set()));
-  }, [session.language, isGroupB]);
+  }, [session.language, usesGroupBControls]);
 
   // Fetch group names for the per-group progress badges (word + grammar groups).
   useEffect(() => {
@@ -385,7 +388,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
   // Group B: "3"-key equivalent as a clickable control, plus the post-removal badge.
   function GroupBExcludeControl({ refId, kind }: { refId: string; kind: "word" | "grammar" }) {
-    if (!isGroupB) return null;
+    if (!usesGroupBControls) return null;
     if (removedFromBIds.has(refId)) {
       return (
         <p className="w-full max-w-lg rounded-md border border-amber-700/50 bg-amber-950/30 px-3 py-2.5 text-center text-sm text-amber-300 sm:py-1.5 sm:text-left sm:text-xs">
@@ -418,7 +421,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     if (!question || gradedIndexRef.current === currentIndex) return;
     gradedIndexRef.current = currentIndex;
     const refId = question.kind === "word" ? question.wordId : question.grammarId;
-    const submittedFlagIds = !isGroupB && question.kind === "word" ? Array.from(flaggedIds) : [];
+    const submittedFlagIds = !usesGroupBControls && question.kind === "word" ? Array.from(flaggedIds) : [];
 
     outbox.enqueue({
       domain: "combined",
@@ -483,7 +486,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       } else if (event.key === "2") {
         event.preventDefault();
         void handleGrade(true);
-      } else if (event.key === "3" && isGroupB && question) {
+      } else if (event.key === "3" && usesGroupBControls && question) {
         // Group B: "3" retires the item from every Group B group it belongs to
         // (both domains), instead of flagging. It stays in the current session.
         event.preventDefault();
@@ -494,7 +497,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             : removeGrammarFromGroupB(currentSession.language, refId);
         void call.catch(() => {});
         setRemovedFromBIds((prev) => new Set([...prev, refId]));
-      } else if (event.key === "3" && !isGroupB && question?.kind === "word") {
+      } else if (event.key === "3" && !usesGroupBControls && question?.kind === "word") {
         event.preventDefault();
         const wordId = question.wordId;
         if (alreadyFlaggedIds.has(wordId)) {
@@ -511,7 +514,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, isGroupB]);
+  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, usesGroupBControls]);
 
 
   if (sessionReviewActive) {
@@ -1117,7 +1120,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
           <GroupBExcludeControl refId={wordQuestion.wordId} kind="word" />
 
-          <div className={`w-full max-w-lg space-y-1 ${isGroupB ? "hidden" : ""}`}>
+          <div className={`w-full max-w-lg space-y-1 ${usesGroupBControls ? "hidden" : ""}`}>
             <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
               <input
                 type="checkbox"

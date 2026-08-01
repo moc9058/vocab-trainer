@@ -15,6 +15,8 @@ interface Props {
   onCombinedQuiz: () => void;
   onResumeGroupB: (session: CombinedQuizSession) => void;
   onGroupBQuiz: () => void;
+  onResumeMixed: (session: CombinedQuizSession) => void;
+  onMixedQuiz: () => void;
   onStartNew: () => void;
   onBrowse: () => void;
   onFlaggedReview: () => void;
@@ -36,16 +38,19 @@ interface Props {
   onAddExpression: () => void;
 }
 
-export default function EmptyState({ language, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onResumeGroupB, onGroupBQuiz, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onImport, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onStartExpressionRecall, onBrowseExpressions, onAddExpression }: Props) {
+export default function EmptyState({ language, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onResumeGroupB, onGroupBQuiz, onResumeMixed, onMixedQuiz, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onImport, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onStartExpressionRecall, onBrowseExpressions, onAddExpression }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const isoCode = urlLanguageToIsoCode(language) ?? language;
   const showGrammar = isoCode !== "en";
+  // The mixed Group A+B quiz is Chinese-only for now.
+  const showMixed = isoCode === "zh";
   const sectionOrder: string[] = (settings.sectionOrder ?? ["word-grammar", "speaking-writing", "translation"]).filter(s => s !== "expressions");
   const [vocabSession, setVocabSession] = useState<QuizSession | null>(null);
   const [grammarSession, setGrammarSession] = useState<GrammarQuizSession | null>(null);
   const [combinedSession, setCombinedSession] = useState<CombinedQuizSession | null>(null);
   const [groupBSession, setGroupBSession] = useState<CombinedQuizSession | null>(null);
+  const [mixedSession, setMixedSession] = useState<CombinedQuizSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [wordGrammarTab, setWordGrammarTab] = useState<"word" | "grammar">("word");
 
@@ -59,12 +64,15 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
       try {
         // `allSettled`, not `all`: these getters now reject on a transport failure instead of
         // swallowing everything into `null`, and one domain being unreachable must not hide
-        // the other three resume buttons.
-        const [vocabResult, grammarResult, combinedResult, groupBResult] = await Promise.allSettled([
+        // the other resume buttons.
+        const [vocabResult, grammarResult, combinedResult, groupBResult, mixedResult] = await Promise.allSettled([
           getCurrentSession(language),
           getCurrentGrammarSession(language),
           getCurrentCombinedSession(language),
           getCurrentCombinedSession(language, "groupB"),
+          // The mixed quiz is Chinese-only, so don't spend a request looking for a session
+          // that can never exist elsewhere.
+          showMixed ? getCurrentCombinedSession(language, "mixed") : Promise.resolve(null),
         ]).then((results) =>
           results.map((r) => (r.status === "fulfilled" ? r.value : null))
         );
@@ -73,6 +81,7 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
           setGrammarSession(grammarResult && grammarResult.status === "in-progress" ? (grammarResult as GrammarQuizSession) : null);
           setCombinedSession(combinedResult && combinedResult.status === "in-progress" ? (combinedResult as CombinedQuizSession) : null);
           setGroupBSession(groupBResult && groupBResult.status === "in-progress" ? (groupBResult as CombinedQuizSession) : null);
+          setMixedSession(mixedResult && mixedResult.status === "in-progress" ? (mixedResult as CombinedQuizSession) : null);
         }
       } catch {
         // ignore
@@ -81,7 +90,7 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
       }
     })();
     return () => { cancelled = true; };
-  }, [language]);
+  }, [language, showMixed]);
 
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
@@ -131,6 +140,28 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
                   >
                     {t("groupBQuiz")}
                   </button>
+                  {/* Group A+B — one session spanning both meta-groups. Chinese only for now. */}
+                  {showMixed && (
+                    <>
+                      {!loading && mixedSession && (
+                        <button
+                          onClick={() => onResumeMixed(mixedSession)}
+                          className="w-full rounded-lg border border-fuchsia-700 bg-fuchsia-900/30 px-4 py-3 text-left hover:border-fuchsia-500 hover:bg-fuchsia-800/40 transition-colors"
+                        >
+                          <p className="font-semibold text-sm text-fuchsia-300">{t("resumeMixedQuiz")}</p>
+                          <p className="mt-0.5 text-xs text-fuchsia-400">
+                            {mixedSession.score.correct} / {mixedSession.initialTotal ?? mixedSession.questions.length} {t("questionsAnswered")}
+                          </p>
+                        </button>
+                      )}
+                      <button
+                        onClick={onMixedQuiz}
+                        className="w-full rounded-lg bg-gradient-to-r from-indigo-600 to-amber-600 px-5 py-3 text-center font-medium text-white hover:from-indigo-500 hover:to-amber-500 transition-colors"
+                      >
+                        {t("mixedQuiz")}
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
               {showGrammar && (
