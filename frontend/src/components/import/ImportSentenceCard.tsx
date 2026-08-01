@@ -158,35 +158,72 @@ export default function ImportSentenceCard({
 
   return (
     <div className="min-w-0 rounded-xl border border-indigo-800/50 bg-gray-800/60 p-3 sm:p-4">
-      <p
-        ref={sentenceRef}
-        onMouseUp={captureSelection}
-        onTouchEnd={captureSelection}
-        className="select-text break-words text-[17px] leading-relaxed text-gray-100 sm:text-[15px]"
-      >
-        {runs.map((run, i) =>
-          run.gap ? (
-            <span
-              key={i}
-              className="rounded-sm bg-amber-500/15 text-amber-200 underline decoration-amber-500/70 decoration-dotted underline-offset-4"
-            >
-              {run.text}
-            </span>
-          ) : (
-            <span key={i}>{run.text}</span>
-          )
-        )}
-      </p>
+      {/*
+        The sentence is PINNED to the top of the card while its rows scroll under it.
+        Extraction is exhaustive — every character of the sentence gets a word row —
+        so a single sentence routinely opens into 10–20 rows, and editing a reading
+        near the bottom used to mean the sentence itself had scrolled out of view:
+        the reader was fixing a word with no sight of the context that defines it.
 
-      {/* The sentence's own translation, read alongside the text it belongs to.
-          Set apart by a left rule so it is never mistaken for the source. */}
-      {showTranslation && (
-        <p className="mt-2 break-words border-l-2 border-indigo-500/40 pl-2.5 text-[14px] leading-relaxed text-indigo-100/80 sm:text-[13px]">
-          {sentence.translation?.trim() || (
-            <span className="text-gray-600">{t("importNoTranslation")}</span>
+        `sticky` binds to the review's scrollport (`ImportReview`'s
+        `overflow-y-auto` container) but is bounded by THIS card's box, so it
+        releases naturally once the card is scrolled past — collapsed sentences are
+        untouched. The negative margins cancel the card's own `p-3 sm:p-4` so the bar
+        spans the full width (the padding is re-applied inside), and the background
+        must be opaque because the card is `bg-gray-800/60` and the rows would
+        otherwise show through — same `bg-…/95 + backdrop-blur + z-20` treatment as
+        the mobile prev/next bar in `ImportReview`. `PinyinInput`'s floating palette
+        is `z-30`, so it still opens over this bar. `max-h-[40vh]` is a safety valve
+        for a very long sentence plus its translation; ordinary sentences never
+        reach it.
+      */}
+      <div className="sticky top-0 z-20 -mx-3 -mt-3 mb-1 max-h-[40vh] overflow-y-auto overscroll-contain rounded-t-xl border-b border-gray-700/60 bg-gray-800/95 px-3 pb-2 pt-3 backdrop-blur sm:-mx-4 sm:-mt-4 sm:px-4 sm:pt-4">
+        <p
+          ref={sentenceRef}
+          onMouseUp={captureSelection}
+          onTouchEnd={captureSelection}
+          className="select-text break-words text-[17px] leading-relaxed text-gray-100 sm:text-[15px]"
+        >
+          {runs.map((run, i) =>
+            run.gap ? (
+              <span
+                key={i}
+                className="rounded-sm bg-amber-500/15 text-amber-200 underline decoration-amber-500/70 decoration-dotted underline-offset-4"
+              >
+                {run.text}
+              </span>
+            ) : (
+              <span key={i}>{run.text}</span>
+            )
           )}
         </p>
-      )}
+
+        {/* The sentence's own translation, read alongside the text it belongs to.
+            Set apart by a left rule so it is never mistaken for the source. */}
+        {showTranslation && (
+          <p className="mt-2 break-words border-l-2 border-indigo-500/40 pl-2.5 text-[14px] leading-relaxed text-indigo-100/80 sm:text-[13px]">
+            {sentence.translation?.trim() || (
+              <span className="text-gray-600">{t("importNoTranslation")}</span>
+            )}
+          </p>
+        )}
+
+        {/* Pinned WITH the sentence: a selection made while scrolled deep into the
+            rows would otherwise offer its button at the card's top, off screen. */}
+        {selection && (
+          <button
+            type="button"
+            onClick={() => {
+              onSetItems((prev) => addWordItem(prev, sentence.index, selection), true);
+              setSelection("");
+              window.getSelection()?.removeAllRanges();
+            }}
+            className="mt-2 w-full break-words rounded-lg border border-blue-600 bg-blue-950/50 px-3 py-2 text-xs text-blue-200 hover:bg-blue-900/60 sm:w-auto sm:py-1.5"
+          >
+            ＋ 「{selection}」{t("importAddSelectionAsWord")}
+          </button>
+        )}
+      </div>
 
       {coverage.required > 0 && (
         <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 text-[11px] leading-snug">
@@ -220,20 +257,6 @@ export default function ImportSentenceCard({
             </>
           )}
         </p>
-      )}
-
-      {selection && (
-        <button
-          type="button"
-          onClick={() => {
-            onSetItems((prev) => addWordItem(prev, sentence.index, selection), true);
-            setSelection("");
-            window.getSelection()?.removeAllRanges();
-          }}
-          className="mt-2 w-full break-words rounded-lg border border-blue-600 bg-blue-950/50 px-3 py-2 text-xs text-blue-200 hover:bg-blue-900/60 sm:w-auto sm:py-1.5"
-        >
-          ＋ 「{selection}」{t("importAddSelectionAsWord")}
-        </button>
       )}
 
       {/* ---- Words ---- */}
