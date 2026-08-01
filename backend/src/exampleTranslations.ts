@@ -93,6 +93,12 @@ export async function generateMissingExampleTranslations(
   if (translLangs.length === 0) return applied;
 
   const langSpec = translLangs.map((l) => `"${l}": "..."`).join(", ");
+  // Each response entry ECHOES its sentence and results are matched by it —
+  // not by array position. A purely positional mapping silently shifted every
+  // later translation onto the wrong example doc whenever the model dropped or
+  // reordered an entry (hanja.ts rejects positional mapping for the same
+  // reason). Position is used only as a fallback when the echo doesn't match
+  // verbatim AND the counts line up, where it is trustworthy.
   const translSchema = {
     name: "example_translations",
     strict: true,
@@ -103,8 +109,11 @@ export async function generateMissingExampleTranslations(
           type: "array",
           items: {
             type: "object",
-            properties: Object.fromEntries(translLangs.map((l) => [l, { type: "string" }])),
-            required: translLangs,
+            properties: {
+              sentence: { type: "string" },
+              ...Object.fromEntries(translLangs.map((l) => [l, { type: "string" }])),
+            },
+            required: ["sentence", ...translLangs],
             additionalProperties: false,
           },
         },
@@ -113,28 +122,46 @@ export async function generateMissingExampleTranslations(
       additionalProperties: false,
     },
   };
-  const systemPrompt = `You are a translation assistant. For each input sentence, provide a translation object with keys: { ${langSpec} }. Return an array with one object per sentence, in the same order as the input.`;
+  const systemPrompt = `You are a translation assistant. For each input sentence, return an object holding the ORIGINAL sentence verbatim under "sentence" plus its translations: { "sentence": "...", ${langSpec} }. Return an array with one object per input sentence.`;
   const route = opts?.route ?? "vocab/translate-examples";
 
   for (let start = 0; start < items.length; start += LLM_BATCH_SIZE) {
     const batch = items.slice(start, start + LLM_BATCH_SIZE);
     const userPrompt = JSON.stringify(batch.map((n) => n.sentence));
+    let translArr: Record<string, string>[];
     try {
       const raw = await callLLMWithSchema(systemPrompt, userPrompt, translSchema, route);
       const result = JSON.parse(stripMarkdownFences(raw)) as { translations: Record<string, string>[] };
-      const translArr = result.translations ?? [];
-      for (let ti = 0; ti < batch.length; ti++) {
-        const trans = translArr[ti];
-        if (trans && Object.keys(trans).length > 0) {
-          if (!opts?.dryRun) {
-            await updateExampleSentence(batch[ti].exampleId, { translation: trans });
-          }
-          applied.set(batch[ti].exampleId, trans);
-        }
-      }
+      translArr = result.translations ?? [];
     } catch (err) {
       opts?.log?.error({ err }, "Failed to generate example translations");
       // Non-fatal: examples are saved, just without translations
+      continue;
+    }
+    const bySentence = new Map(
+      translArr.filter((t) => typeof t.sentence === "string").map((t) => [t.sentence, t]),
+    );
+    for (let ti = 0; ti < batch.length; ti++) {
+      const matched =
+        bySentence.get(batch[ti].sentence) ??
+        (translArr.length === batch.length ? translArr[ti] : undefined);
+      if (!matched) continue;
+      const { sentence: _echo, ...trans } = matched;
+      if (Object.keys(trans).length === 0) continue;
+      // Per-item write with its own catch: a Firestore failure used to be
+      // swallowed by the same block as an LLM failure (indistinguishable in
+      // the logs) and aborted the rest of the chunk with it.
+      try {
+        if (!opts?.dryRun) {
+          await updateExampleSentence(batch[ti].exampleId, { translation: trans });
+        }
+        applied.set(batch[ti].exampleId, trans);
+      } catch (err) {
+        opts?.log?.error(
+          { err, exampleId: batch[ti].exampleId },
+          "Failed to WRITE example translation (LLM succeeded)",
+        );
+      }
     }
   }
   return applied;
