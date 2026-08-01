@@ -14,6 +14,10 @@
  * Default chunk size: 50 sentences per segmentation LLM call, 20 per translation call
  */
 
+// Must stay the FIRST import: it fixes the project for every Firestore client the
+// process builds — without it the client resolves to gcloud's default project,
+// which has no `vocab-database`, and every query dies with a bare `5 NOT_FOUND`.
+import { PROJECT_ID, DATABASE_ID } from "./_project-env.js";
 import "dotenv/config";
 import { Firestore, FieldValue } from "@google-cloud/firestore";
 import { segmentBatch, callLLMFull } from "../src/llm.js";
@@ -35,7 +39,8 @@ const TRANSLATION_TARGETS: Record<string, string[]> = {
 };
 
 const db = new Firestore({
-  databaseId: process.env.FIRESTORE_DATABASE_ID || "vocab-database",
+  projectId: PROJECT_ID,
+  databaseId: DATABASE_ID,
   ignoreUndefinedProperties: true,
 });
 

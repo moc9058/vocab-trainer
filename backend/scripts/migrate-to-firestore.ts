@@ -7,6 +7,11 @@
  * Requires GOOGLE_APPLICATION_CREDENTIALS or Application Default Credentials.
  */
 
+// Must stay the FIRST import: it publishes FIRESTORE_PROJECT to the environment
+// before the Firestore client below reads it — without it the client resolves to
+// gcloud's default project, which has no `vocab-database`, and every query dies
+// with a bare `5 NOT_FOUND`.
+import "./_project-env.js";
 import { Firestore } from "@google-cloud/firestore";
 import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { resolve, join } from "node:path";

@@ -12,6 +12,11 @@
  *   cd backend && npx tsx scripts/unify-chinese-levels.ts
  */
 
+// Must stay the FIRST import: it publishes FIRESTORE_PROJECT to the environment
+// before the Firestore client below reads it — without it the client resolves to
+// gcloud's default project, which has no `vocab-database`, and every query dies
+// with a bare `5 NOT_FOUND`.
+import "./_project-env.js";
 import { Firestore } from "@google-cloud/firestore";
 
 const db = new Firestore({

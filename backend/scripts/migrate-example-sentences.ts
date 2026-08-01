@@ -15,6 +15,10 @@
  * Idempotent: skips words that already have `exampleIds`.
  */
 
+// Must stay the FIRST import: it fixes the project for every Firestore client the
+// process builds — without it the client resolves to gcloud's default project,
+// which has no `vocab-database`, and every query dies with a bare `5 NOT_FOUND`.
+import { PROJECT_ID, DATABASE_ID } from "./_project-env.js";
 import { Firestore, FieldPath, FieldValue } from "@google-cloud/firestore";
 import { createHash } from "crypto";
 import type { ExampleSentence } from "../src/types.js";
@@ -22,7 +26,8 @@ import type { ExampleSentence } from "../src/types.js";
 const dryRun = process.argv.includes("--dry-run");
 
 const db = new Firestore({
-  databaseId: process.env.FIRESTORE_DATABASE_ID || "vocab-database",
+  projectId: PROJECT_ID,
+  databaseId: DATABASE_ID,
   ignoreUndefinedProperties: true,
 });
 

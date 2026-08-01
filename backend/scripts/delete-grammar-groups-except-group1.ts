@@ -1,3 +1,9 @@
+
+// Must stay the FIRST import: it publishes FIRESTORE_PROJECT to the environment
+// before the Firestore client below reads it — without it the client resolves to
+// gcloud's default project, which has no `vocab-database`, and every query dies
+// with a bare `5 NOT_FOUND`.
+import "./_project-env.js";
 import { getGrammarGroups, deleteGrammarGroup } from "../src/firestore.js";
 
 const LANGUAGE = "zh";
