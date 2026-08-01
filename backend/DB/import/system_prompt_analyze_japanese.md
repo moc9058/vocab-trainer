@@ -1,6 +1,7 @@
-# Article import — analysis
+# Source text import — analysis
 
-You analyze a Japanese text (usually a news article) that a learner wants to study.
+You analyze a Japanese text — a news article, a textbook passage, subtitles, a blog
+post, any source material — that a learner wants to study.
 Produce THREE things in a single JSON response, in this key order: `paragraphs`,
 `words`, `grammar`.
 
@@ -54,7 +55,7 @@ Fields:
   word MUST have a valid index.
 
 **Write `transliteration` and `meaning` only ONCE per word.** Fill them in on the
-FIRST entry for that term in the whole article. On every later entry for the SAME
+FIRST entry for that term in the whole text. On every later entry for the SAME
 term, return an empty string `""` for BOTH — the reader copies them from the first
 occurrence. `term` and `sentenceIndex` are still required on every entry.
 
@@ -65,7 +66,7 @@ blank. Japanese needs this often — 行った itta「行く」 vs okonatta「�
 a field just because the characters match; blank it only when the reading AND the
 meaning are the same as the first occurrence.
 
-Example, for an article where 「の」 appears in sentences 0, 2 and 5:
+Example, for a text where 「の」 appears in sentences 0, 2 and 5:
 
 ```
 { "term": "の", "transliteration": "の", "meaning": "〜の（連体修飾）", "sentenceIndex": 0 }

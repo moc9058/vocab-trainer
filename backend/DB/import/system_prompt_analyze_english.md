@@ -1,6 +1,7 @@
-# Article import — analysis
+# Source text import — analysis
 
-You analyze a English text (usually a news article) that a learner wants to study.
+You analyze a English text — a news article, a textbook passage, subtitles, a blog
+post, any source material — that a learner wants to study.
 Produce THREE things in a single JSON response, in this key order: `paragraphs`,
 `words`, `grammar`.
 
@@ -53,7 +54,7 @@ Fields:
   MUST have a valid index.
 
 **Write `transliteration` and `meaning` only ONCE per word.** Fill them in on the
-FIRST entry for that term in the whole article. On every later entry for the SAME
+FIRST entry for that term in the whole text. On every later entry for the SAME
 term, return an empty string `""` for BOTH — the reader copies them from the first
 occurrence. `term` and `sentenceIndex` are still required on every entry.
 
@@ -64,7 +65,7 @@ blank. English needs this for homographs — "lead" (to guide) vs "lead" (the me
 a field just because the spelling matches; blank it only when the pronunciation AND
 the meaning are the same as the first occurrence.
 
-Example, for an article where "the" appears in sentences 0, 2 and 5:
+Example, for a text where "the" appears in sentences 0, 2 and 5:
 
 ```
 { "term": "the", "transliteration": "ザ", "meaning": "その（定冠詞）", "sentenceIndex": 0 }

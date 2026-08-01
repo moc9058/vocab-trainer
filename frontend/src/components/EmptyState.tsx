@@ -261,12 +261,16 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
                 </>
               )}
               {/* Feeds BOTH domains at once, so it sits below the word/grammar tab
-                  split rather than inside either tab. */}
+                  split rather than inside either tab. Solid, not dashed: it opens a
+                  standing list of saved sources, so it is a real destination rather
+                  than a placeholder — the same tinted-panel tier as the resume
+                  buttons above, which keeps it clear of the primary quiz CTA. */}
               <button
                 onClick={onImport}
-                className="mt-3 w-full rounded-lg border border-dashed border-indigo-700/70 px-4 py-2.5 text-center text-sm text-indigo-300 transition-colors hover:border-indigo-500 hover:bg-indigo-900/20"
+                className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-indigo-600 bg-indigo-900/40 px-4 py-2.5 text-center text-sm font-medium text-indigo-200 transition-colors hover:border-indigo-400 hover:bg-indigo-800/50"
               >
-                ＋ {t("importFromSource")}
+                {t("importFromSource")}
+                <span aria-hidden="true" className="text-indigo-400">→</span>
               </button>
             </section>
           );

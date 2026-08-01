@@ -96,7 +96,7 @@ export default function BrowseView({
               : "border-gray-600 text-gray-400 hover:border-indigo-500/60 hover:text-indigo-300"
           }`}
         >
-          ＋ <span className="sm:hidden">{t("importFromSourceShort")}</span>
+          <span className="sm:hidden">{t("importFromSourceShort")}</span>
           <span className="hidden sm:inline">{t("importFromSource")}</span>
         </button>
       </div>
