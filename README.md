@@ -268,6 +268,10 @@ vocab-trainer/
 ├── migrate.sh                   # Standalone Firestore data migration
 ├── export.sh                    # Export data from Firestore
 ├── docker-compose.yml           # Docker orchestration
+├── docs/
+│   ├── draft-json-format.md     # Upload format for word-drafts / grammar-drafts JSON
+│   ├── word-grammar-crud.md     # Word/Grammar storage model, Group A/B semantics, CRUD route table + verification report
+│   └── group-ab-crud-audit.md   # Group A/B CRUD + interruption-consistency audit (2026-08-01) and its fixes
 ├── backend/
 │   ├── package.json
 │   ├── package-lock.json
@@ -286,6 +290,10 @@ vocab-trainer/
 │   │   ├── validate-invariant-all.ts      # Read-only deep validator: invariant + dangling refs + orphans
 │   │   ├── backfill-hanja-readings.ts     # One-off: generate Korean hanja (simplifiedChar/traditionalChar/hunEum) via LLM MINI
 │   │   ├── backfill-empty-example-translations.ts # One-off: LLM-fill example sentences with empty/partial translations
+│   │   ├── dedupe-word-group-membership.ts # Enforce one word = at most one category-A group (keeps the newest group)
+│   │   ├── sweep-dangling-group-members.ts # Drop group member ids whose word/grammar doc no longer exists
+│   │   ├── sweep-orphaned-word-index.ts   # Repair orphaned/mislinked word_index entries
+│   │   ├── reprioritize-word-groups-newest-first.ts # One-off: rewrite legacy `order` (creation sequence) as priority
 │   │   └── export-from-firestore.ts       # Export words, grammar & progress from Firestore to JSON
 │   ├── src/
 │   │   ├── index.ts             # Fastify server entry point
@@ -295,6 +303,7 @@ vocab-trainer/
 │   │   ├── exampleTranslations.ts # Shared missing-translation LLM fallback (vocab/grammar routes + backfill script)
 │   │   ├── quiz-utils.ts        # Shared quiz ordering helpers (shuffle, weightedInterleave, weightedMerge, insertRetryQuestion)
 │   │   └── routes/
+│   │       ├── auth.ts          # /api/auth (Google OAuth, session cookie)
 │   │       ├── languages.ts     # /api/languages
 │   │       ├── vocab.ts         # /api/vocab
 │   │       ├── progress.ts      # /api/progress
@@ -303,7 +312,13 @@ vocab-trainer/
 │   │       ├── grammar.ts       # /api/grammar
 │   │       ├── grammar-quiz.ts  # /api/grammar-quiz
 │   │       ├── grammar-progress.ts # /api/grammar-progress
-│   │       ├── combined-quiz.ts # /api/combined-quiz, /api/group-b-quiz, /api/mixed-quiz
+│   │       ├── combined-quiz.ts # /api/combined-quiz, /api/group-b-quiz, /api/mixed-quiz, /api/import-quiz-a, /api/import-quiz-b
+│   │       ├── import.ts        # /api/import (article analysis + import sessions)
+│   │       ├── expressions.ts   # /api/expressions
+│   │       ├── expression-quiz.ts # /api/expression-quiz (writing)
+│   │       ├── expression-recall-quiz.ts # /api/expression-recall-quiz (flashcard)
+│   │       ├── llm-config.ts    # /api/llm-config (model catalog + per-feature assignment)
+│   │       ├── metrics.ts       # /api/metrics (token usage & costs)
 │   │       ├── translation.ts  # /api/translation
 │   │       └── speaking-writing.ts # /api/speaking-writing
 │   └── DB/                      # Vocabulary and grammar JSON files
@@ -436,9 +451,21 @@ For Chinese examples, `examples[].segments` are preserved from the previously st
 
 Example sentences (brand-new or existing/dedup-matched) that have no stored translation and receive no user-provided translation trigger an LLM call (MINI model) to generate multi-language translations before the word document is updated. Existing example sentences that are dedup-matched also have their translations upgraded: if the incoming multi-language translation contains language keys absent from the stored translation, the two objects are merged (existing non-empty values take priority).
 
+The request body is a **whitelist**: `term`, `transliteration`, `definitions`, `examples`,
+`topics`, `level`, `notes`. Anything else (`language`, `appearsInIds`, `exampleIds`, `id`) is
+stripped rather than written to the document. Renaming `term` onto a term another live word
+already holds is refused with `409` and nothing is written — the rename would otherwise have
+silently repointed that word's `word_index` entry.
+
 #### `DELETE /api/vocab/:language/:wordId` — Delete word
 
 **Response:** `204 No Content`
+
+The delete cascades in one batch: the word document, its `word_index` entry, its
+`flagged_words` and `progress` documents, and its membership in **every** group that holds it
+(`word_groups.wordIds`). Example sentences are orphan-deleted first, and only when no other
+word *and* no grammar item still references them. `deleteGrammarItem` mirrors the group half
+for `grammar_groups.grammarIds`.
 
 #### `POST /api/vocab/:language/:wordId/unlink-segment` — Unlink a word from an example sentence
 
@@ -464,21 +491,56 @@ For each example sentence ID in the request body, looks up all segment texts in 
 
 #### `GET /api/vocab/:language/groups` — List word groups
 
-Returns all word groups for the language, sorted by creation time.
+Returns all word groups for the language (**both** categories), sorted by `order` —
+which for category A **is the priority**, highest first — with creation time (newest
+first) as the fallback for a language that has never been reordered. The top A group is
+the default target of every "add a word" flow and the absorb target of `…/groups/normalize`
+below.
 
 #### `POST /api/vocab/:language/groups` — Create word group
 
-**Body:** `{ "name": "My Group" }`  
+**Body:** `{ "name": "My Group", "category": "A" | "B" }` (`category` optional, default A)  
 **Response:** `201` with the new `WordGroup`.
+
+A blank or whitespace-only name is rejected with `400`. **Creating a category-B group is
+idempotent by (language, trimmed name)**: if one already exists the response is `200` with
+that group instead of a second document. A Group B set is joined across `word_groups` and
+`grammar_groups` **by name**, so a duplicate name there is lossy — the client's name-keyed
+merge would hide one of them and its members would vanish from the study set. Category A is
+deliberately create-always: its identity is the id, and two same-named lessons may be intentional.
 
 #### `PUT /api/vocab/:language/groups/:groupId` — Rename word group
 
 **Body:** `{ "name": "New Name" }`  
-**Response:** updated `WordGroup`.
+**Response:** updated `WordGroup`. `404` if the group does not exist **or belongs to another
+language** (group ids are globally unique, so the `:language` segment is checked against the
+stored `language`).
+
+#### `PUT /api/vocab/:language/groups/order` — Set the category-A priority
+
+**Body:** `{ "groupIds": ["id1", "id2", …] }` — must list **every** group of the language
+exactly once, including the hidden category-B ones (`GroupPickerModal` appends them for this
+reason); anything else is `400`. Writes `order` as `0..n-1`, so the first id becomes the
+highest-priority A group.
+
+#### `POST /api/vocab/:language/groups/normalize` — Re-file the language by priority
+
+Enforces "one word belongs to at most one category-A group" across the whole language in one
+call: a word held by several A groups keeps only its **highest-priority** membership, and a
+word in no A group at all (including one sitting only in a Group B set) is absorbed into the
+top group.
+
+**Body:** `{ "dryRun": false, "expectedGroupIds": ["id1", …] }` — both optional.
+`expectedGroupIds` is the category-A priority the caller previewed; if the real order has
+changed since, the call is rejected with `409` rather than acting on a stale plan.  
+**Response:** `GroupNormalizeResult` — `{ language, applied, groupCount, topGroup, totalWords,
+movedWords, addedWords, unchangedGroups, changes[] }`. `applied` is `false` for a dry run and
+for a language with no category-A group (`topGroup: null`).
 
 #### `DELETE /api/vocab/:language/groups/:groupId` — Delete word group
 
-**Response:** `204 No Content`
+**Response:** `204 No Content`. `404` if the group does not exist or belongs to another
+language. Deleting a group does not touch the words themselves.
 
 #### `POST /api/vocab/:language/groups/:groupId/words` — Add or remove group members
 
@@ -750,10 +812,18 @@ Same body as `POST /items`; the LLM fills `descriptions[].text` for all four def
 #### Grammar groups
 
 - `GET /api/grammar/:language/groups` — list groups
-- `POST /api/grammar/:language/groups` — create group (`{ name }`)
+- `POST /api/grammar/:language/groups` — create group (`{ name, category?: "A" | "B" }`); names are
+  trimmed and a blank one is `400`. Creating a **category-B** group is idempotent by
+  (language, name) exactly as on the vocab side — a B set is name-joined across the two
+  collections, so a stray duplicate (or an untrimmed trailing space) would split it into two
+  half-sets
 - `PUT /api/grammar/:language/groups/:groupId` — rename group (`{ name }`)
 - `DELETE /api/grammar/:language/groups/:groupId` — delete group
 - `POST /api/grammar/:language/groups/:groupId/grammar` — add/remove members (`{ grammarIds, action: "add" | "remove" }`)
+
+The three `:groupId` routes return `404` when the group does not exist or belongs to another
+language. Grammar groups have **no** `order` and no reorder/normalize endpoint: priority and
+A-exclusivity are word-side concepts (a grammar item may sit in several A groups).
 
 ---
 
@@ -1105,14 +1175,14 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `id_maps`            | Term → word ID mappings and next ID counter            |
 | `progress`           | Per-word progress (times seen, correct rate)            |
 | `word_index`         | Fast term → {id, level, transliteration} lookup (composite key: `{language}_{term}`) |
-| `word_groups`        | User-defined word groups per language (id, language, name, wordIds[], createdAt); used to scope quiz and word list |
+| `word_groups`        | User-defined word groups per language (id, language, name, wordIds[], createdAt, `order?`, `category?: "B"`); used to scope quiz and word list. `order` is the category-A priority (highest first); absent `category` means A |
 | `quiz_sessions`      | One word quiz session per language (keyed by language name)  |
 | `flagged_words`      | Flagged words for review                              |
 | `grammar_chapters`   | Grammar chapter metadata (per language)               |
 | `grammar_items`      | Grammar items (statement + multi-language descriptions, `exampleIds` into `example_sentences`) |
 | `grammar_progress`   | Per-component grammar progress                        |
 | `grammar_quiz_sessions` | One grammar quiz session per language              |
-| `combined_quiz_sessions` | Word+grammar quiz sessions, keyed `language` (Group A), `${language}__groupB` and `${language}__mixed` — up to three per language. Word questions stored slim; re-hydrated by id via `POST /api/quiz/hydrate/:language` |
+| `combined_quiz_sessions` | Word+grammar quiz sessions, keyed `language` (Group A), `${language}__groupB`, `${language}__mixed`, `${language}__importA` and `${language}__importB` — up to five per language, all coexisting. Word questions stored slim; re-hydrated by id via `POST /api/quiz/hydrate/:language` |
 | `translation_history`  | Translation/analysis entries with structured LLM results (including the optional user context) |
 | `speaking_writing_sessions` | One speaking/writing correction session per language |
 | `expression_recall_sessions` | One expression **recall** (flashcard) quiz session per language. The LLM-graded expression *writing* quiz is not here — it is a subfield of `speaking_writing_sessions`. |
