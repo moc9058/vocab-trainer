@@ -445,6 +445,25 @@ export async function updateWord(
     });
   }
 
+  // Term-rename collision check MUST precede the doc write. When it lived in
+  // the index-sync block below, the doc update had already committed by the
+  // time the check threw — the word carried the stolen term while both index
+  // entries still described the old world, so the "409, nothing changed"
+  // contract was a lie (caught live: the renamed doc kept the other word's
+  // term). Refuses only a LIVE entry owned by another word; stale/orphaned
+  // entries stay overwritable, same semantics as sweep-orphaned-word-index.ts.
+  if (updates.term && updates.term !== (oldData.term as string)) {
+    const newDoc = await wordIndex.doc(`${language}_${updates.term}`).get();
+    if (newDoc.exists && newDoc.data()!.id !== wordId) {
+      const d = newDoc.data()!;
+      const entry: WordIndexEntry = { term: d.term, id: d.id, level: d.level, transliteration: d.transliteration ?? d.pinyin };
+      const otherWord = await words.doc(entry.id).get();
+      if (wordEntryIsLive(entry, otherWord)) {
+        throw new DuplicateTermError(`Word '${updates.term}' already exists in ${language}`);
+      }
+    }
+  }
+
   await words.doc(wordId).update(data);
 
   const updated = await words.doc(wordId).get();
@@ -459,25 +478,10 @@ export async function updateWord(
     const newTerm = updates.term ?? oldTerm;
     const termChanged = Boolean(updates.term) && updates.term !== oldTerm;
 
-    if (termChanged) {
-      // Refuse to repoint a LIVE entry owned by another word: the unconditional
-      // .set() here is how MISLINKED entries were minted (renaming onto an
-      // existing term silently stole its index entry). A stale/orphaned entry
-      // is overwritten — same semantics as sweep-orphaned-word-index.ts.
-      const newDoc = await wordIndex.doc(`${language}_${newTerm}`).get();
-      if (newDoc.exists && newDoc.data()!.id !== wordId) {
-        const d = newDoc.data()!;
-        const entry: WordIndexEntry = { term: d.term, id: d.id, level: d.level, transliteration: d.transliteration ?? d.pinyin };
-        const otherWord = await words.doc(entry.id).get();
-        if (wordEntryIsLive(entry, otherWord)) {
-          throw new DuplicateTermError(`Word '${newTerm}' already exists in ${language}`);
-        }
-      }
-    }
-
     // Old-entry delete + new-entry set commit atomically — a crash between the
-    // two left the term unfindable. A concurrent rename to the same term can
-    // still slip past the read above; sweep-orphaned-word-index.ts repairs that.
+    // two left the term unfindable. The rename collision check ran BEFORE the
+    // doc write above; a concurrent rename to the same term can still slip
+    // past it, and sweep-orphaned-word-index.ts repairs that.
     const updatedWord = docToWord(updated);
     const batch = db.batch();
     if (termChanged) {
