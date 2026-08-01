@@ -36,12 +36,15 @@ import {
   updateWordDraft,
   deleteWordDraft,
   getWordGroups,
+  getWordGroup,
   createWordGroup,
   removeWordFromCategoryBGroups,
   updateWordGroup,
   reorderWordGroups,
   deleteWordGroup,
   modifyWordGroupMembers,
+  GroupNotFoundError,
+  DuplicateTermError,
 } from "../firestore.js";
 import type { Word, WordDraft, Example, ExampleSentence, HanjaReading } from "../types.js";
 import { TOPICS } from "../types.js";
@@ -379,7 +382,15 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Parse segments from LLM response (Chinese only — segments are included in Call 1)
       const examplesWithSegments: Example[] = merged.examples.map((ex: any) => {
-        if (!isChinese || !Array.isArray(ex.segments)) return ex as Example;
+        if (!isChinese) {
+          // Non-Chinese words must not carry segments at all: the schema still
+          // exposes the key, and a stray LLM- or client-sent array would get
+          // seg.id stamped and reconciled into appearsInIds links that no
+          // non-Chinese code path maintains afterwards.
+          const { segments: _drop, ...rest } = ex;
+          return rest as Example;
+        }
+        if (!Array.isArray(ex.segments)) return ex as Example;
         const segments: Segment[] = [];
         for (const seg of ex.segments) {
           if (typeof seg?.text !== "string" || seg.text.length === 0) continue;
@@ -424,7 +435,14 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         }
         for (const def of merged.definitions as { text: Record<string, string> }[]) {
           if (def.text && typeof def.text === "object") {
-            delete def.text[sourceLangCode];
+            // Keep the own-language gloss when it is all the definition has:
+            // stripping it would store `text: {}` (the en-only fallback above
+            // hits this for English words). A redundant gloss beats an empty
+            // definition.
+            const hasOther = Object.entries(def.text).some(
+              ([lang, text]) => lang !== sourceLangCode && text && text.trim() !== "",
+            );
+            if (hasOther) delete def.text[sourceLangCode];
           }
         }
       }
@@ -558,6 +576,9 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Reverse-link: find existing example sentences where this word appears as a segment.
       // Run fire-and-forget so the 201 response is not blocked by the full collection scan.
+      // A run lost to an instance shutdown self-repairs via POST
+      // /:language/sync-segment-links or scripts/backfill-word-appears-in.ts
+      // (see docs/group-ab-crud-audit.md).
       linkWordToExistingExamples(language, id, merged.term).catch((e) =>
         fastify.log.error({ err: e, wordId: id, term: merged.term }, "linkWordToExistingExamples failed")
       );
@@ -573,6 +594,29 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
   // Update word
   fastify.put<{ Params: { language: string; wordId: string }; Body: Partial<Word> }>(
     "/:language/:wordId",
+    {
+      schema: {
+        body: {
+          type: "object",
+          // Whitelist of client-editable fields. With Fastify's default AJV
+          // (removeAdditional), additionalProperties:false silently STRIPS
+          // anything else — a client-sent language/appearsInIds/exampleIds/id
+          // used to flow straight into words.doc().update(). Inner arrays stay
+          // loose on purpose (translation is string | Record, examples carry
+          // segments/userSplits) — same convention as the draft PUT schema.
+          additionalProperties: false,
+          properties: {
+            term: { type: "string", minLength: 1 },
+            transliteration: { type: "string" },
+            definitions: { type: "array" },
+            examples: { type: "array" },
+            topics: { type: "array", items: { type: "string" } },
+            level: { type: "string" },
+            notes: { type: "string" },
+          },
+        },
+      },
+    },
     async (request, reply) => {
       const { language, wordId } = request.params;
       if (!(await languageExists(language))) {
@@ -766,24 +810,37 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
           // Build a merged result map keyed by original needsResegment index.
           const mergedSegMap = new Map<number, Segment[]>();
 
+          // Example docs, indexes and appearsInIds links are already written by
+          // the loop above — an LLM failure here must degrade (the sentence
+          // keeps its old segments or none; backfill-missing-segments.ts covers
+          // it later), not 500 the PUT mid-write and strand orphaned examples
+          // the word doc never gets to reference.
           if (withoutUserSplits.length > 0) {
-            const segMap = await segmentBatch(
-              withoutUserSplits.map((r) => r.newSentence),
-              segmentConfig,
-            );
-            for (let j = 0; j < withoutUserSplits.length; j++) {
-              const segs = segMap.get(j);
-              if (segs) mergedSegMap.set(withoutUserSplits[j].origIdx, segs);
+            try {
+              const segMap = await segmentBatch(
+                withoutUserSplits.map((r) => r.newSentence),
+                segmentConfig,
+              );
+              for (let j = 0; j < withoutUserSplits.length; j++) {
+                const segs = segMap.get(j);
+                if (segs) mergedSegMap.set(withoutUserSplits[j].origIdx, segs);
+              }
+            } catch (err) {
+              fastify.log.error({ err }, "segmentBatch failed; keeping prior segments");
             }
           }
 
           if (withUserSplits.length > 0) {
-            const fillMap = await fillSegmentPinyin(
-              withUserSplits.map((r) => ({ sentence: r.newSentence, splits: r.userSplits! })),
-            );
-            for (let j = 0; j < withUserSplits.length; j++) {
-              const segs = fillMap.get(j);
-              if (segs) mergedSegMap.set(withUserSplits[j].origIdx, segs);
+            try {
+              const fillMap = await fillSegmentPinyin(
+                withUserSplits.map((r) => ({ sentence: r.newSentence, splits: r.userSplits! })),
+              );
+              for (let j = 0; j < withUserSplits.length; j++) {
+                const segs = fillMap.get(j);
+                if (segs) mergedSegMap.set(withUserSplits[j].origIdx, segs);
+              }
+            } catch (err) {
+              fastify.log.error({ err }, "fillSegmentPinyin failed; keeping prior segments");
             }
           }
 
@@ -846,7 +903,13 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
 
         // Remove examples from the update body — stored via exampleIds now
         const { examples: _, ...rest } = body;
-        const updated = await updateWord(language, wordId, rest, { exampleIds: newExampleIds });
+        let updated: Word | null;
+        try {
+          updated = await updateWord(language, wordId, rest, { exampleIds: newExampleIds });
+        } catch (err) {
+          if (err instanceof DuplicateTermError) return reply.conflict(err.message);
+          throw err;
+        }
         if (!updated) return reply.notFound(`Word '${wordId}' not found`);
 
         // updateWord only unions into appearsInIds; it never prunes. For each
@@ -885,7 +948,13 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         return updated;
       }
 
-      const updated = await updateWord(language, wordId, body);
+      let updated: Word | null;
+      try {
+        updated = await updateWord(language, wordId, body);
+      } catch (err) {
+        if (err instanceof DuplicateTermError) return reply.conflict(err.message);
+        throw err;
+      }
       if (!updated) return reply.notFound(`Word '${wordId}' not found`);
       return updated;
     }
@@ -1163,7 +1232,23 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       const { language } = request.params;
       const { name, category } = request.body;
       if (!(await languageExists(language))) return reply.notFound(`Language '${language}' not found`);
-      const group = await createWordGroup(language, name.trim(), category);
+      const trimmed = name.trim();
+      if (!trimmed) return reply.badRequest("Group name must not be blank");
+      // Category B creation is idempotent by (language, name): B sets are
+      // name-joined across word_groups and grammar_groups, so a duplicate-named
+      // B group is actively destructive — loadGroupBGroups' name-keyed merge
+      // hides one of them and its members vanish from the study set. A retry
+      // after a half-failed pair create must therefore find, not duplicate.
+      // Category A stays create-always: its identity is the id, and two
+      // same-named lessons may be intentional. Oldest match wins so retries are
+      // deterministic even against pre-existing duplicates.
+      if (category === "B") {
+        const existing = (await getWordGroups(language))
+          .filter((g) => g.category === "B" && g.name === trimmed)
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+        if (existing) return existing;
+      }
+      const group = await createWordGroup(language, trimmed, category);
       reply.code(201);
       return group;
     }
@@ -1216,12 +1301,22 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { groupId } = request.params;
+      const { language, groupId } = request.params;
       const { name } = request.body;
-      try {
-        return await updateWordGroup(groupId, { name: name.trim() });
-      } catch {
+      const trimmed = name.trim();
+      if (!trimmed) return reply.badRequest("Group name must not be blank");
+      // Ownership check: group doc ids are globally unique, so without the
+      // language comparison any /:language/ segment could rename (or below,
+      // delete) another language's group.
+      const group = await getWordGroup(groupId);
+      if (!group || group.language !== language) {
         return reply.notFound(`Group '${groupId}' not found`);
+      }
+      try {
+        return await updateWordGroup(groupId, { name: trimmed });
+      } catch (err) {
+        request.log.error({ err, groupId }, "word group rename failed");
+        return reply.internalServerError("Failed to rename group");
       }
     }
   );
@@ -1229,7 +1324,11 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { language: string; groupId: string } }>(
     "/:language/groups/:groupId",
     async (request, reply) => {
-      const { groupId } = request.params;
+      const { language, groupId } = request.params;
+      const group = await getWordGroup(groupId);
+      if (!group || group.language !== language) {
+        return reply.notFound(`Group '${groupId}' not found`);
+      }
       await deleteWordGroup(groupId);
       reply.code(204);
     }
@@ -1253,12 +1352,25 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
-      const { groupId } = request.params;
+      const { language, groupId } = request.params;
       const { wordIds, action } = request.body;
+      const group = await getWordGroup(groupId);
+      if (!group || group.language !== language) {
+        return reply.notFound(`Group '${groupId}' not found`);
+      }
       try {
         return await modifyWordGroupMembers(groupId, wordIds, action);
-      } catch {
-        return reply.notFound(`Group '${groupId}' not found`);
+      } catch (err) {
+        // The pre-fetch above covers the normal not-found; GroupNotFoundError
+        // here means a delete raced between the check and the transaction.
+        // Anything else is a real failure and must not masquerade as 404 —
+        // the old blanket catch reported "not found" even when the add had
+        // already committed.
+        if (err instanceof GroupNotFoundError) {
+          return reply.notFound(`Group '${groupId}' not found`);
+        }
+        request.log.error({ err, groupId }, "group membership update failed");
+        return reply.internalServerError("Failed to update group membership");
       }
     }
   );

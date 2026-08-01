@@ -13,11 +13,13 @@ import {
   addGrammarDrafts,
   deleteGrammarDraft,
   getGrammarGroups,
+  getGrammarGroup,
   createGrammarGroup,
   removeGrammarFromCategoryBGroups,
   updateGrammarGroup,
   deleteGrammarGroup,
   modifyGrammarGroupMembers,
+  GroupNotFoundError,
   getGrammarConfig,
   getGrammarSettings,
   setGrammarSettings,
@@ -629,18 +631,30 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
           type: "object",
           required: ["name"],
           properties: {
-            name: { type: "string" },
+            // minLength + trim below: Group B sets are name-joined across
+            // word_groups and grammar_groups, so a stray trailing space here
+            // silently split a B set into two half-sets (vocab always trimmed).
+            name: { type: "string", minLength: 1 },
             category: { type: "string", enum: ["A", "B"] },
           },
         },
       },
     },
     async (request, reply) => {
-      const group = await createGrammarGroup(
-        request.params.language,
-        request.body.name,
-        request.body.category
-      );
+      const { language } = request.params;
+      const { category } = request.body;
+      const trimmed = request.body.name.trim();
+      if (!trimmed) return reply.badRequest("Group name must not be blank");
+      // Category B creation is idempotent by (language, name) — mirrors the
+      // vocab route; see the comment there for why a duplicate-named B group
+      // is destructive. Oldest match wins for determinism.
+      if (category === "B") {
+        const existing = (await getGrammarGroups(language))
+          .filter((g) => g.category === "B" && g.name === trimmed)
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+        if (existing) return existing;
+      }
+      const group = await createGrammarGroup(language, trimmed, category);
       return reply.status(201).send(group);
     }
   );
@@ -667,19 +681,41 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
         body: {
           type: "object",
           required: ["name"],
-          properties: { name: { type: "string" } },
+          properties: { name: { type: "string", minLength: 1 } },
         },
       },
     },
-    async (request) => {
-      return await updateGrammarGroup(request.params.groupId, { name: request.body.name });
+    async (request, reply) => {
+      const { language, groupId } = request.params;
+      const trimmed = request.body.name.trim();
+      if (!trimmed) return reply.badRequest("Group name must not be blank");
+      // Ownership check (mirrors vocab): group doc ids are globally unique, so
+      // without the language comparison any /:language/ segment could rename
+      // (or below, delete) another language's group. Also turns the missing-
+      // group case into a 404 — updateGrammarGroup's bare .update() used to
+      // escape as a 500.
+      const group = await getGrammarGroup(groupId);
+      if (!group || group.language !== language) {
+        return reply.notFound(`Grammar group '${groupId}' not found`);
+      }
+      try {
+        return await updateGrammarGroup(groupId, { name: trimmed });
+      } catch (err) {
+        request.log.error({ err, groupId }, "grammar group rename failed");
+        return reply.internalServerError("Failed to rename group");
+      }
     }
   );
 
   fastify.delete<{ Params: { language: string; groupId: string } }>(
     "/:language/groups/:groupId",
-    async (request) => {
-      await deleteGrammarGroup(request.params.groupId);
+    async (request, reply) => {
+      const { language, groupId } = request.params;
+      const group = await getGrammarGroup(groupId);
+      if (!group || group.language !== language) {
+        return reply.notFound(`Grammar group '${groupId}' not found`);
+      }
+      await deleteGrammarGroup(groupId);
       return { deleted: true };
     }
   );
@@ -701,12 +737,27 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     },
-    async (request) => {
-      return await modifyGrammarGroupMembers(
-        request.params.groupId,
-        request.body.grammarIds,
-        request.body.action
-      );
+    async (request, reply) => {
+      const { language, groupId } = request.params;
+      const group = await getGrammarGroup(groupId);
+      if (!group || group.language !== language) {
+        return reply.notFound(`Grammar group '${groupId}' not found`);
+      }
+      try {
+        return await modifyGrammarGroupMembers(
+          groupId,
+          request.body.grammarIds,
+          request.body.action
+        );
+      } catch (err) {
+        // Pre-fetch covers the normal not-found; this fires only when a delete
+        // races between the check and the transaction (mirrors vocab).
+        if (err instanceof GroupNotFoundError) {
+          return reply.notFound(`Grammar group '${groupId}' not found`);
+        }
+        request.log.error({ err, groupId }, "grammar group membership update failed");
+        return reply.internalServerError("Failed to update group membership");
+      }
     }
   );
 
