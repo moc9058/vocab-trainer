@@ -116,9 +116,23 @@ export default function ImportReview({
     if (next) focus(next.index);
   }
 
-  // Keep the expanded card in view when moving with the prev/next controls.
+  /** Bring the newly focused sentence to the TOP of the scrollport.
+   *
+   *  `block: "nearest"` was wrong here: tapping a collapsed one-liner replaces it
+   *  with a card that is many times taller, and "nearest" scrolls just far enough
+   *  to get that card's BOTTOM into view — so on a phone the page lurches down and
+   *  the sentence the user pressed ends up above the fold. "start" anchors the top
+   *  of the card (plus `scroll-mt-4`), which is what "move to the sentence I
+   *  pressed" actually means, and it is stable if the card grows afterwards.
+   *  The first run is instant: on resume the focused sentence should simply be
+   *  where the screen opens, not somewhere it smooth-scrolls away to. */
+  const hasScrolledRef = useRef(false);
   useEffect(() => {
-    focusRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    focusRef.current?.scrollIntoView({
+      block: "start",
+      behavior: hasScrolledRef.current ? "smooth" : "auto",
+    });
+    hasScrolledRef.current = true;
   }, [focused]);
 
   return (

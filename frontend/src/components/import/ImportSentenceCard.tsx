@@ -503,10 +503,7 @@ function WordRow({
 
         <div className="mt-2 flex flex-wrap items-center gap-2 pl-6 sm:mt-0 sm:shrink-0 sm:pl-0">
           <RegisterControls
-            status={word.status}
-            error={word.error}
-            rescuedAsDraft={word.rescuedAsDraft}
-            target={word.target}
+            item={word}
             destination={destination}
             groups={groups}
             inLibrary={inGroupA}
@@ -677,10 +674,7 @@ function GrammarRow({
         />
         <div className="mt-2 flex flex-wrap items-center gap-2 sm:mt-0 sm:shrink-0">
           <RegisterControls
-            status={item.status}
-            error={item.error}
-            rescuedAsDraft={item.rescuedAsDraft}
-            target={item.target}
+            item={item}
             destination={destination}
             groups={groups}
             // A sibling row may already have created this pattern; such a row can
@@ -727,24 +721,18 @@ function GrammarRow({
  * The ✓ is read from ACTUAL membership (the group documents, plus the optimistic
  * overlay of writes the re-read has not caught up with), not from `status`: status is
  * the outcome of the last write THIS review made, whereas what the user needs to know
- * is where the item sits now. `status` is only consulted for the transient states —
- * which button is spinning, which one failed — and that is what `target` disambiguates.
+ * is where the item sits now. Status is only consulted for the transient states —
+ * which button is spinning, which one failed — and those are read PER DESTINATION from
+ * `item.registrations`, so the two writes never speak for each other.
  */
 function RegisterControls({
-  status,
-  error,
-  rescuedAsDraft,
-  target,
+  item,
   destination,
   groups,
   inLibrary,
   onRegister,
 }: {
-  status: ImportItem["status"];
-  error?: string;
-  rescuedAsDraft?: boolean;
-  /** Which destination the last (or in-flight) write was aimed at. */
-  target?: "A" | "B";
+  item: ImportItem;
   destination: RowDestination;
   groups: GroupMembership;
   /** Known to be in the library but with no ID to look group names up by — the
@@ -753,7 +741,20 @@ function RegisterControls({
   onRegister: (target: "A" | "B") => void;
 }) {
   const { t } = useI18n();
-  const busy = status === "queued";
+  const { status, error, rescuedAsDraft } = item;
+
+  /**
+   * This destination's own write state. Falls back to the row-level summary for
+   * sessions saved before `registrations` existed, so a review paused across the
+   * change still shows its last outcome on the right button.
+   */
+  const stateFor = (d: "A" | "B") =>
+    item.registrations?.[d] ??
+    (item.target === d && status !== "pending" && status !== "skipped"
+      ? { status, error, rescuedAsDraft }
+      : undefined);
+  const stateA = stateFor("A");
+  const stateB = stateFor("B");
 
   // With a destination chosen, "done" is a membership question and the group read
   // answers it. Without one, the press only creates the item, so the write's own
@@ -781,11 +782,14 @@ function RegisterControls({
             : t("importAddToDestA")
         }
         done={doneA}
-        busy={busy && target === "A"}
-        failed={status === "failed" && target === "A"}
-        disabled={busy}
-        error={error}
-        rescuedAsDraft={rescuedAsDraft}
+        busy={stateA?.status === "queued"}
+        failed={stateA?.status === "failed"}
+        // Only its OWN write disables it. Group A and Group B are independent presses
+        // and both can be queued at once; gating either on the other is what used to
+        // make the second button dead until the first finished.
+        disabled={stateA?.status === "queued"}
+        error={stateA?.error}
+        rescuedAsDraft={stateA?.rescuedAsDraft}
         onRegister={() => onRegister("A")}
       />
       {/* Nothing to add to until a Group B set is picked in the destination rail. */}
@@ -797,11 +801,11 @@ function RegisterControls({
           fallbackLabel={t("importAdd")}
           title={t("importAddToDestB")}
           done={doneB}
-          busy={busy && target === "B"}
-          failed={status === "failed" && target === "B"}
-          disabled={busy}
-          error={error}
-          rescuedAsDraft={rescuedAsDraft}
+          busy={stateB?.status === "queued"}
+          failed={stateB?.status === "failed"}
+          disabled={stateB?.status === "queued"}
+          error={stateB?.error}
+          rescuedAsDraft={stateB?.rescuedAsDraft}
           onRegister={() => onRegister("B")}
         />
       )}

@@ -610,6 +610,14 @@ export type ImportItemStatus =
   | "failed"
   | "skipped";
 
+/** One destination's registration state. Terminal values mirror `ImportItemStatus`;
+ *  `pending`/`skipped` are row-level facts and never appear here. */
+export interface ImportRegistrationState {
+  status: "queued" | "registered" | "duplicate" | "failed";
+  error?: string;
+  rescuedAsDraft?: boolean;
+}
+
 interface ImportItemBase {
   /** Stable across edits, merges and reloads; assigned client-side. */
   id: string;
@@ -621,6 +629,18 @@ interface ImportItemBase {
    *  be added to its Group A destination and its Group B destination independently,
    *  so `status` alone cannot say which of the two buttons is spinning or failed. */
   target?: "A" | "B";
+  /**
+   * Per-destination registration state — the real record; `status`/`target`/`error`
+   * above are a DERIVED summary of it (`summarizeRegistrations`), kept because the
+   * progress counter, `isLocked`, the load-time reconciliation and the backend's
+   * `registeredCount` all read them.
+   *
+   * It exists because Group A and Group B are independent writes that must be able to
+   * be in flight AT THE SAME TIME. A single status could only describe one of them, so
+   * pressing A locked B out until A settled, and "A failed while B succeeded" had no
+   * representation at all.
+   */
+  registrations?: Partial<Record<"A" | "B", ImportRegistrationState>>;
   /** `gap` rows are not proposals — they are the characters the analysis left
    *  uncovered, materialized so every character of every sentence has a row. They
    *  carry no reading or meaning, which is why they are flagged for review. */

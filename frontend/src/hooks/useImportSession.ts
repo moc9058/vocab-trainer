@@ -7,8 +7,18 @@ import {
 import { checkTerms, modifyGroupMembers } from "../api/vocab";
 import { modifyGrammarGroupMembers } from "../api/grammar";
 import { resolveGroupBTargets } from "../utils/groupB";
-import { flattenSentences, isLive } from "../utils/importSession";
-import type { ImportItem, ImportSession, ImportWordItem } from "../types";
+import {
+  flattenSentences,
+  isLive,
+  pendingTargets,
+  withRegistration,
+} from "../utils/importSession";
+import type {
+  ImportItem,
+  ImportRegistrationState,
+  ImportSession,
+  ImportWordItem,
+} from "../types";
 import type { useWordQueue } from "./useWordQueue";
 import type { useGrammarQueue } from "./useGrammarQueue";
 
@@ -79,6 +89,17 @@ export function useImportSession({
   const pendingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
+  /**
+   * `kind term` → the CREATE currently running for it.
+   *
+   * Group A and Group B are independent presses, and both can be aimed at a row whose
+   * word does not exist yet. Without this they would each call smart-add for the same
+   * term and race — the server's duplicate check can pass both, storing the word twice.
+   * The second press waits here instead, then finds the id the first one learned and
+   * only has group membership left to write. A ref, not state: it coordinates callbacks
+   * that run outside the render flow and must never trigger one.
+   */
+  const createChain = useRef(new Map<string, Promise<void>>());
 
   const setSession = useCallback((next: ImportSession | null) => {
     sessionRef.current = next;
@@ -202,11 +223,21 @@ export function useImportSession({
             language,
             [...new Set(queuedWords.map((w) => w.term.trim()).filter(Boolean))]
           );
-          items = items.map((i) =>
-            i.kind === "word" && i.status === "queued" && existing[i.term.trim()]
-              ? { ...i, status: "registered" as const, existingWordId: existing[i.term.trim()] }
-              : i
-          );
+          items = items.map((i) => {
+            if (i.kind !== "word" || i.status !== "queued") return i;
+            const wordId = existing[i.term.trim()];
+            if (!wordId) return i;
+            const base = { ...i, existingWordId: wordId } as ImportItem;
+            // The write died with the tab that started it, but `check-terms` proves it
+            // landed — so every destination still marked in flight is settled, not just
+            // the row summary. A row left spinning would keep its button disabled.
+            const stillPending = pendingTargets(base);
+            if (stillPending.length === 0) return { ...base, status: "registered" as const };
+            return stillPending.reduce<ImportItem>(
+              (acc, d) => withRegistration(acc, d, { status: "registered" }),
+              base
+            );
+          });
         } catch {
           // Reconciliation is best-effort; unresolved rows stay visibly unverified.
         }
@@ -260,6 +291,24 @@ export function useImportSession({
       setItems(
         (items) => items.map((i) => (i.id === id ? ({ ...i, ...updates } as ImportItem) : i)),
         immediate
+      );
+    },
+    [setItems]
+  );
+
+  /**
+   * Set one destination's registration state, always `immediate`.
+   *
+   * Goes through `withRegistration` so the row-level `status`/`target`/`error` summary
+   * is re-derived in the same update — everything downstream (`isLocked`, the progress
+   * counter, the load-time reconciliation, the backend's `registeredCount`) still reads
+   * that triple, and it must never drift from the per-destination record it summarizes.
+   */
+  const patchRegistration = useCallback(
+    (id: string, target: "A" | "B", state: ImportRegistrationState) => {
+      setItems(
+        (items) => items.map((i) => (i.id === id ? withRegistration(i, target, state) : i)),
+        true
       );
     },
     [setItems]
@@ -331,30 +380,32 @@ export function useImportSession({
         if (!target) return items;
         const key = itemKey(target);
         const idField = target.kind === "word" ? "existingWordId" : "existingGrammarId";
-        // `target` rides along so the row knows WHICH of its two buttons this
-        // outcome belongs to — a failed Group B write must not put the ✗ on the
-        // Group A button, which may well have succeeded a minute earlier.
+        // Recorded against `destination` alone, so a failed Group B write never puts the
+        // ✗ on the Group A button — which may have succeeded a minute earlier, or may
+        // still be in flight beside it.
         const terminal = result.ok
-          ? { status: "registered" as const, error: undefined, target: destination }
+          ? { status: "registered" as const, error: undefined }
           : result.duplicate
-          ? { status: "duplicate" as const, error: undefined, target: destination }
-          : { status: "failed" as const, error: result.error, target: destination };
+          ? { status: "duplicate" as const, error: undefined }
+          : { status: "failed" as const, error: result.error };
 
         return items.map((i) => {
           const learnedId =
             result.ok && result.entityId ? { [idField]: result.entityId } : {};
           if (i.id === id) {
-            return {
-              ...i,
+            // Only the row that actually attempted the write can claim the rescue.
+            return withRegistration({ ...i, ...learnedId } as ImportItem, destination, {
               ...terminal,
-              ...learnedId,
-              // Only the row that actually attempted the write can claim the rescue.
               ...(result.ok ? {} : { rescuedAsDraft: result.rescuedAsDraft }),
-            } as ImportItem;
+            });
           }
           if (!isLive(i) || i.kind !== target.kind || itemKey(i) !== key) return i;
           const withId = { ...i, ...learnedId } as ImportItem;
-          return i.status === "queued" ? ({ ...withId, ...terminal } as ImportItem) : withId;
+          // Only a sibling parked by the piggyback guard for THIS destination is waiting
+          // on this outcome. One parked for the other destination has its own write.
+          return i.registrations?.[destination]?.status === "queued"
+            ? withRegistration(withId, destination, terminal)
+            : withId;
         });
       }, true);
 
@@ -379,40 +430,78 @@ export function useImportSession({
   const registerItem = useCallback(
     async (id: string, target: "A" | "B" = "A") => {
       const current = sessionRef.current;
-      const item = current?.items.find((i) => i.id === id);
-      // NOT `isLocked`: that also covers `registered`, and a row already added to
-      // Group A must still accept a Group B press. Only an in-flight write (which
-      // would race itself) and a deleted row are refused here; `isLocked` stays the
-      // rule for EDITING the row's text.
-      if (!current || !item || item.status === "queued" || item.status === "skipped") return;
-      const key = itemKey(item);
+      const started = current?.items.find((i) => i.id === id);
+      // Refused only for THIS destination: Group A and Group B are separate writes, so a
+      // press for one must not be swallowed while the other is running — that is what
+      // made the second button dead until the first finished. NOT `isLocked` either,
+      // which covers `registered`: a row already in Group A must still accept a Group B
+      // press. `isLocked` stays the rule for EDITING the row's text.
+      if (!current || !started || started.status === "skipped") return;
+      if (started.registrations?.[target]?.status === "queued") return;
+      const key = itemKey(started);
       if (!key) return;
 
       // An identical row already in flight for the SAME destination will settle this
       // one through sibling propagation. Enqueueing a second write for the same term
       // would race the first (the queue runs 4 at a time) and at best come back 409 —
       // which skips the group work entirely. A press for the OTHER destination has to
-      // go through, since the leader is not writing those groups; if the entity is
-      // still being created, that lands as a 409 whose recovery branch below writes
-      // the membership anyway.
+      // go through, since the leader is not writing those groups.
+      // Read from the entry snapshot, so this call never sees the `queued` it is about
+      // to set on itself.
       const piggyback = current.items.some(
         (i) =>
           i.id !== id &&
           isLive(i) &&
-          i.status === "queued" &&
-          i.target === target &&
-          i.kind === item.kind &&
+          i.registrations?.[target]?.status === "queued" &&
+          i.kind === started.kind &&
           itemKey(i) === key
       );
 
-      patchItem(
-        id,
-        { status: "queued", target, error: undefined, rescuedAsDraft: undefined },
-        true
-      );
+      // In flight before any await, so the button spins immediately and a second press
+      // for the same destination is refused by the guard above.
+      patchRegistration(id, target, { status: "queued" });
       if (piggyback) return;
 
-      const settle = (result: SettleResult) => applySettle(id, target, result);
+      /**
+       * Wait for any CREATE already running for this term — from this row's other
+       * destination or from a sibling row.
+       *
+       * This is what makes the two buttons safe to press together. Both presses on a row
+       * whose entity does not exist yet would otherwise each call smart-add for the same
+       * term; the two race, and the server's duplicate check can let both through, which
+       * stores the word twice. Waiting costs nothing and turns the second press into the
+       * cheap group-add path, because by then the id has been learned.
+       *
+       * Group adds are set-based and idempotent, so they are NOT chained — only creates.
+       */
+      const chainKey = `${started.kind} ${key}`;
+      const runningCreate = createChain.current.get(chainKey);
+      if (runningCreate) await runningCreate;
+
+      // Re-read after the await: the create may have learned the entity id, and the row
+      // may have been settled by sibling propagation or deleted while we waited.
+      const session = sessionRef.current;
+      const item = session?.items.find((i) => i.id === id);
+      if (!session || !item || item.status === "skipped") return;
+      if (item.registrations?.[target]?.status !== "queued") return;
+
+      // Released when this call's own create settles; a no-op for the group-add paths,
+      // which never claim the chain.
+      let releaseCreate: (() => void) | undefined;
+      const claimCreateChain = () => {
+        const promise = new Promise<void>((resolve) => {
+          releaseCreate = () => {
+            if (createChain.current.get(chainKey) === promise) createChain.current.delete(chainKey);
+            resolve();
+          };
+        });
+        createChain.current.set(chainKey, promise);
+      };
+
+      const settle = (result: SettleResult) => {
+        releaseCreate?.();
+        applySettle(id, target, result);
+      };
       const fail = (err: unknown) =>
         settle({
           ok: false,
@@ -474,59 +563,67 @@ export function useImportSession({
           return;
         }
         const sentence = sentenceText(item.sentenceIndex);
-        onQueue(
-          item.term.trim(),
-          language,
-          {
-            term: item.term.trim(),
-            ...(item.transliteration?.trim()
-              ? { transliteration: item.transliteration.trim() }
-              : {}),
-            // The row's gloss is an ANCHOR, not the final definition: smart-add still
-            // asks the LLM for all four languages. It is what makes the meaning the
-            // user typed after a split or a merge actually reach the new word.
-            ...(item.meaning?.trim()
-              ? {
-                  definitions: [
-                    { partOfSpeech: "", text: { [descriptionLanguage]: item.meaning.trim() } },
-                  ],
-                }
-              : {}),
-            ...(sentence ? { examples: [{ sentence, translation: "" }] } : {}),
-            ...(groupIds.length > 0 ? { groupIds } : {}),
-          },
-          {
-            onSettled: (result) => {
-              if (result.ok) {
-                settle({ ok: true, entityId: result.wordId, groupIds });
-                return;
-              }
-              if (!result.duplicate) {
-                settle(result);
-                return;
-              }
-              // A 409 means the word IS in the DB but smart-add threw before the
-              // queue's group work, so nothing was written. The row's whole purpose
-              // was the group membership, so recover the ID and finish the job
-              // rather than reporting a dead end. Stays `queued` (spinner) meanwhile.
-              const term = item.term.trim();
-              void (async () => {
-                try {
-                  const { existing } = await checkTerms(language, [term]);
-                  const wordId = existing[term];
-                  if (!wordId) {
-                    settle(result);
-                    return;
+        // A throw here would leave the chain claimed and every later press for this term
+        // waiting on a promise nobody will resolve, so `fail` (which releases it) has to
+        // cover the enqueue itself, not just the queue's own outcome.
+        try {
+          claimCreateChain();
+          onQueue(
+            item.term.trim(),
+            language,
+            {
+              term: item.term.trim(),
+              ...(item.transliteration?.trim()
+                ? { transliteration: item.transliteration.trim() }
+                : {}),
+              // The row's gloss is an ANCHOR, not the final definition: smart-add still
+              // asks the LLM for all four languages. It is what makes the meaning the
+              // user typed after a split or a merge actually reach the new word.
+              ...(item.meaning?.trim()
+                ? {
+                    definitions: [
+                      { partOfSpeech: "", text: { [descriptionLanguage]: item.meaning.trim() } },
+                    ],
                   }
-                  await addToGroups(wordId);
-                  settle({ ok: true, entityId: wordId, groupIds });
-                } catch {
-                  settle(result);
-                }
-              })();
+                : {}),
+              ...(sentence ? { examples: [{ sentence, translation: "" }] } : {}),
+              ...(groupIds.length > 0 ? { groupIds } : {}),
             },
-          }
-        );
+            {
+              onSettled: (result) => {
+                if (result.ok) {
+                  settle({ ok: true, entityId: result.wordId, groupIds });
+                  return;
+                }
+                if (!result.duplicate) {
+                  settle(result);
+                  return;
+                }
+                // A 409 means the word IS in the DB but smart-add threw before the
+                // queue's group work, so nothing was written. The row's whole purpose
+                // was the group membership, so recover the ID and finish the job
+                // rather than reporting a dead end. Stays `queued` (spinner) meanwhile.
+                const term = item.term.trim();
+                void (async () => {
+                  try {
+                    const { existing } = await checkTerms(language, [term]);
+                    const wordId = existing[term];
+                    if (!wordId) {
+                      settle(result);
+                      return;
+                    }
+                    await addToGroups(wordId);
+                    settle({ ok: true, entityId: wordId, groupIds });
+                  } catch {
+                    settle(result);
+                  }
+                })();
+              },
+            }
+          );
+        } catch (err) {
+          fail(err);
+        }
         return;
       }
 
@@ -550,25 +647,30 @@ export function useImportSession({
         return;
       }
 
-      onGrammarQueue(
-        item.statement.trim(),
-        language,
-        {
-          id: `grammar-${language}-${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
-          statement: item.statement.trim(),
-          descriptions: [
-            { partOfSpeech: "", text: { [descriptionLanguage]: item.description.trim() } },
-          ],
-          ...(sentence ? { examples: [{ sentence, translation: "" }] } : {}),
-        },
-        {
-          ...(groupIds.length > 0 ? { groupIds } : {}),
-          // Grammar smart-add never returns 409 (no duplicate check server-side), so
-          // there is no duplicate branch to recover here.
-          onSettled: (result) =>
-            settle(result.ok ? { ok: true, entityId: result.grammarId, groupIds } : result),
-        }
-      );
+      try {
+        claimCreateChain();
+        onGrammarQueue(
+          item.statement.trim(),
+          language,
+          {
+            id: `grammar-${language}-${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
+            statement: item.statement.trim(),
+            descriptions: [
+              { partOfSpeech: "", text: { [descriptionLanguage]: item.description.trim() } },
+            ],
+            ...(sentence ? { examples: [{ sentence, translation: "" }] } : {}),
+          },
+          {
+            ...(groupIds.length > 0 ? { groupIds } : {}),
+            // Grammar smart-add never returns 409 (no duplicate check server-side), so
+            // there is no duplicate branch to recover here.
+            onSettled: (result) =>
+              settle(result.ok ? { ok: true, entityId: result.grammarId, groupIds } : result),
+          }
+        );
+      } catch (err) {
+        fail(err);
+      }
     },
     [
       applySettle,
@@ -577,7 +679,7 @@ export function useImportSession({
       language,
       onGrammarQueue,
       onQueue,
-      patchItem,
+      patchRegistration,
       sentenceText,
     ]
   );
