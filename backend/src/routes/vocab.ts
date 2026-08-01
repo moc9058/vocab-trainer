@@ -43,6 +43,7 @@ import {
   reorderWordGroups,
   deleteWordGroup,
   modifyWordGroupMembers,
+  normalizeWordGroupMembership,
   GroupNotFoundError,
   DuplicateTermError,
 } from "../firestore.js";
@@ -1285,6 +1286,64 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         return await reorderWordGroups(language, request.body.groupIds);
       } catch (error) {
         return reply.badRequest(error instanceof Error ? error.message : "Invalid group order");
+      }
+    }
+  );
+
+  /**
+   * Re-file every word of the language according to category-A group PRIORITY:
+   * a word in several A groups keeps only its highest-priority membership, and a word
+   * in none is added to the top-priority group. Category B is untouched.
+   *
+   * `dryRun` computes the same result without writing — the UI previews it before the
+   * user confirms, since the write is not reversible.
+   *
+   * `expectedGroupIds` is a PRECONDITION, not a second reorder path: it asserts that
+   * the priority the preview was computed against is still the priority being applied,
+   * so a reorder from another tab turns into a 409 instead of a surprising outcome.
+   * Reordering itself stays with `PUT /groups/order`.
+   */
+  fastify.post<{
+    Params: { language: string };
+    Body?: { dryRun?: boolean; expectedGroupIds?: string[] };
+  }>(
+    "/:language/groups/normalize",
+    {
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            dryRun: { type: "boolean" },
+            expectedGroupIds: { type: "array", items: { type: "string" } },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { language } = request.params;
+      if (!(await languageExists(language))) return reply.notFound(`Language '${language}' not found`);
+      // Fastify leaves `body` undefined for a bodyless POST.
+      const { dryRun = false, expectedGroupIds } = request.body ?? {};
+
+      if (expectedGroupIds) {
+        const current = (await getWordGroups(language))
+          .filter((g) => g.category !== "B")
+          .map((g) => g.id);
+        if (
+          current.length !== expectedGroupIds.length
+          || current.some((id, i) => id !== expectedGroupIds[i])
+        ) {
+          return reply.conflict("Group priority changed since the preview was computed");
+        }
+      }
+
+      try {
+        return await normalizeWordGroupMembership(language, { dryRun });
+      } catch (err) {
+        request.log.error({ err, language }, "word group normalize failed");
+        return reply.internalServerError(
+          err instanceof Error ? err.message : "Failed to normalize groups"
+        );
       }
     }
   );

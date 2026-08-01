@@ -29,6 +29,8 @@ import type {
   GrammarSettings,
   WordGroup,
   GroupCategory,
+  GroupNormalizeChange,
+  GroupNormalizeResult,
   Expression,
   ExpressionGroup,
   ExpressionRecallSession,
@@ -250,6 +252,22 @@ export async function getWords(
 export async function getAllWords(language: string): Promise<Word[]> {
   const snap = await words.where("language", "==", language).get();
   return hydrateWords(snap.docs.map(docToWord));
+}
+
+/**
+ * Every word id of a language, and nothing else. `addWord` does `delete data.id`
+ * before `words.doc(word.id).set(data)`, so the id lives ONLY as the document name —
+ * a zero-field projection (`__name__` only) is both the cheapest read and the
+ * authoritative one. Mirrors the projections in `updateLanguageMeta` and
+ * `getAllGrammarStatements`.
+ *
+ * Deliberately not `getAllWords` (full documents plus a `hydrateWords` fan-out into
+ * `example_sentences`) and not `word_index` (a derived index that drifts — see
+ * `scripts/sweep-orphaned-word-index.ts`).
+ */
+export async function getAllWordIds(language: string): Promise<string[]> {
+  const snap = await words.where("language", "==", language).select().get();
+  return snap.docs.map((d) => d.id);
 }
 
 export async function getFilteredWords(
@@ -2922,6 +2940,174 @@ export async function removeWordFromCategoryBGroups(
   }
   await batch.commit();
   return affected.map((g) => g.id);
+}
+
+/** Firestore caps a WriteBatch at 500 ops (same constant as `scripts/`). */
+const NORMALIZE_MAX_BATCH = 400;
+/** Elements per array transform, so one write payload stays small. */
+const NORMALIZE_ARRAY_CHUNK = 2_000;
+/**
+ * Refuse to drive one group document toward Firestore's 1 MiB limit. Word ids run
+ * ~11-13 bytes each, so the true ceiling is ~80k; stop well short, because this is
+ * the one operation that deliberately concentrates every ungrouped word into a
+ * single document.
+ */
+const NORMALIZE_MAX_GROUP_WORD_IDS = 20_000;
+
+/**
+ * Enforce "one word = exactly one category-A group" over a whole language, using the
+ * user's group PRIORITY (`compareWordGroups`) to decide which membership survives:
+ *
+ *  - a word in several A groups is kept in the highest-priority one and dropped from
+ *    the rest;
+ *  - a word in no A group at all — including one that only sits in a Group B set,
+ *    which violates the "a B item is always also in A" invariant — is added to the
+ *    top-priority group;
+ *  - category B is never touched.
+ *
+ * This is `scripts/dedupe-word-group-membership.ts` driven by user intent instead of
+ * `createdAt`, plus the ungrouped sweep, reachable from the UI. Idempotent: a second
+ * run reports zero changes, which is what makes every race below self-healing.
+ *
+ * Dangling ids (a word deleted long ago) are NOT pruned here — `deleteWord` now strips
+ * membership in the same batch as the delete, and the backlog belongs to
+ * `scripts/sweep-dangling-group-members.ts`. A dangling id in `claimed` is harmless:
+ * `toAdd` is computed as `liveIds - claimed`, so it can only ever fail to add a word
+ * that does not exist.
+ *
+ * NO cache invalidation is needed and none should be added: `wordFiltersCache` holds
+ * topics/categories/levels read off WORD documents, `updateLanguageMeta` tracks word
+ * counts, and neither is affected by group membership. Group member counts are not
+ * cached anywhere — the UI reads `wordIds.length` off the documents this returns.
+ */
+export async function normalizeWordGroupMembership(
+  language: string,
+  opts: { dryRun?: boolean } = {}
+): Promise<GroupNormalizeResult> {
+  // READ ORDER IS LOAD-BEARING — do NOT collapse these two into a Promise.all.
+  //
+  // Groups first, then words. A word created BETWEEN the two reads is then absent
+  // from the group snapshot but present in `liveIds`, so it reads as "ungrouped":
+  // it gets added to the top group while its real add lands too, leaving a transient
+  // duplicate membership that the next add, a re-run, or the dedupe script repairs.
+  //
+  // Reading words first would invert that into data loss: the same word would be in
+  // a later group snapshot and absent from `liveIds`, so it would read as a deleted
+  // word's leftover and be removed from the group it had just been added to.
+  const groups = await getWordGroups(language);
+  const aGroups = groups.filter((g) => g.category !== "B");
+  const liveIds = new Set(await getAllWordIds(language));
+
+  if (aGroups.length === 0) {
+    return {
+      language,
+      applied: false,
+      groupCount: 0,
+      topGroup: null,
+      totalWords: liveIds.size,
+      movedWords: 0,
+      addedWords: 0,
+      unchangedGroups: 0,
+      changes: [],
+    };
+  }
+
+  // ONE pass in priority order. `getWordGroups` already sorted, so "the first group
+  // that claims a word" IS "the highest-priority group holding it" — no per-word
+  // scoring, no second sort.
+  const claimed = new Set<string>();
+  const movedWordIds = new Set<string>();
+  const toRemove = new Map<string, string[]>();
+
+  for (const g of aGroups) {
+    const remove: string[] = [];
+    for (const wid of g.wordIds) {
+      if (claimed.has(wid)) {
+        // A lower-priority duplicate. Note `claimed` only ever holds ids seen in an
+        // EARLIER group, so a value repeated inside this same group's array is not
+        // collected — `arrayRemove` deletes every copy of a value and would take the
+        // keeper with it. Set-union writes mean that state should not arise, and if
+        // it does it only inflates a count until the next add normalizes it.
+        remove.push(wid);
+        movedWordIds.add(wid);
+      } else {
+        claimed.add(wid);
+      }
+    }
+    if (remove.length > 0) toRemove.set(g.id, remove);
+  }
+
+  const top = aGroups[0];
+  // Sorted so a re-run produces byte-identical writes.
+  const toAdd = [...liveIds].filter((id) => !claimed.has(id)).sort();
+
+  const changes: GroupNormalizeChange[] = [];
+  aGroups.forEach((g, priority) => {
+    const removedCount = toRemove.get(g.id)?.length ?? 0;
+    const addedCount = g.id === top.id ? toAdd.length : 0;
+    if (removedCount === 0 && addedCount === 0) return;
+    changes.push({
+      groupId: g.id,
+      name: g.name,
+      priority,
+      removedCount,
+      addedCount,
+      before: g.wordIds.length,
+      after: g.wordIds.length - removedCount + addedCount,
+    });
+  });
+
+  const result: GroupNormalizeResult = {
+    language,
+    applied: false,
+    groupCount: aGroups.length,
+    topGroup: { id: top.id, name: top.name },
+    totalWords: liveIds.size,
+    movedWords: movedWordIds.size,
+    addedWords: toAdd.length,
+    unchangedGroups: aGroups.length - changes.length,
+    changes,
+  };
+
+  if (opts.dryRun || changes.length === 0) return result;
+
+  const projectedTop = top.wordIds.length - (toRemove.get(top.id)?.length ?? 0) + toAdd.length;
+  if (projectedTop > NORMALIZE_MAX_GROUP_WORD_IDS) {
+    throw new Error(
+      `Top-priority group '${top.name}' would hold ${projectedTop} words, over the `
+      + `${NORMALIZE_MAX_GROUP_WORD_IDS} limit. Split it, or move a smaller group to the top first.`
+    );
+  }
+
+  // Phase 1 — removals. Array transforms, not filtered-array overwrites: the reads
+  // above are already stale, and a whole-array write would erase anything added
+  // concurrently (see removeWordsFromOtherCategoryAGroups).
+  let batch = db.batch();
+  let ops = 0;
+  for (const [groupId, ids] of toRemove) {
+    for (let s = 0; s < ids.length; s += NORMALIZE_ARRAY_CHUNK) {
+      batch.update(wordGroups.doc(groupId), {
+        wordIds: FieldValue.arrayRemove(...ids.slice(s, s + NORMALIZE_ARRAY_CHUNK)),
+      });
+      if (++ops >= NORMALIZE_MAX_BATCH) {
+        await batch.commit();
+        batch = db.batch();
+        ops = 0;
+      }
+    }
+  }
+  if (ops > 0) await batch.commit();
+
+  // Phase 2 — the top group's additions, in their own commits. A batch must not carry
+  // two writes for one document, and the top group may need both a removal above and
+  // an addition here.
+  for (let s = 0; s < toAdd.length; s += NORMALIZE_ARRAY_CHUNK) {
+    await wordGroups.doc(top.id).update({
+      wordIds: FieldValue.arrayUnion(...toAdd.slice(s, s + NORMALIZE_ARRAY_CHUNK)),
+    });
+  }
+
+  return { ...result, applied: true, groups: await getWordGroups(language) };
 }
 
 // ========== Import Sessions ==========
