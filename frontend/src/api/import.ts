@@ -1,11 +1,21 @@
 import { deleteRequest, fetchJson, postJson, putJson, CREDENTIALS, notifyIfUnauthorized } from "./client";
-import type { ImportAnalysisResult, ImportSession, ImportSessionSummary } from "../types";
+import type {
+  ImportAnalysisResult,
+  ImportQuizPool,
+  ImportSession,
+  ImportSessionSummary,
+} from "../types";
 
 // ----- Import sessions (paused, resumable article reviews) -----
 
 type NewImportSession = Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt">;
 
-export function listImportSessions(language: string): Promise<ImportSessionSummary[]> {
+/** The list carries the article quizzes' `pool` alongside the summaries: the handler
+ *  already reads every session document in full, so deriving it there costs nothing,
+ *  whereas a second endpoint would re-read the same heavy docs on one screen load. */
+export function listImportSessions(
+  language: string
+): Promise<{ sessions: ImportSessionSummary[]; pool: ImportQuizPool }> {
   return fetchJson(`/api/import/${encodeURIComponent(language)}/sessions`);
 }
 

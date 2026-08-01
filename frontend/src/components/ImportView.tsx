@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n/context";
 import {
   analyzeImportStream,
@@ -13,7 +13,8 @@ import ImportSessionList from "./import/ImportSessionList";
 import { useImportGroups } from "../hooks/useImportGroups";
 import { useImportSession } from "../hooks/useImportSession";
 import { buildImportItems } from "../utils/importSession";
-import type { ImportSessionSummary } from "../types";
+import { deriveArticleQuizPools, poolSize } from "../utils/importQuizPool";
+import type { ImportQuizPool, ImportSessionSummary } from "../types";
 import type { useWordQueue } from "../hooks/useWordQueue";
 import type { useGrammarQueue } from "../hooks/useGrammarQueue";
 
@@ -22,11 +23,16 @@ interface Props {
   language: string;
   onQueue: ReturnType<typeof useWordQueue>["enqueue"];
   onGrammarQueue: ReturnType<typeof useGrammarQueue>["enqueue"];
+  /** Start an article quiz over every saved article. Optional so this view still renders
+   *  in a host that has no quiz routes. */
+  onArticleQuiz?: (category: "A" | "B", pool: ImportQuizPool) => void;
 }
 
 type Phase = "sessions" | "input" | "analyzing" | "review";
 
 const MAX_TEXT = 8000;
+/** Stable identity so the pool memo doesn't re-run on every render before the fetch lands. */
+const EMPTY_POOL: ImportQuizPool = { wordIds: [], grammarIds: [] };
 /**
  * Past roughly this much text, exhaustive per-sentence segmentation produces more
  * JSON than the model will emit in one response and the analysis comes back
@@ -36,7 +42,7 @@ const MAX_TEXT = 8000;
 const LONG_TEXT_WARNING = 1500;
 
 /** Phase router for the article importer; all session state lives in `useImportSession`. */
-export default function ImportView({ language, onQueue, onGrammarQueue }: Props) {
+export default function ImportView({ language, onQueue, onGrammarQueue, onArticleQuiz }: Props) {
   const { t } = useI18n();
   const [phase, setPhase] = useState<Phase>("sessions");
   const [text, setText] = useState("");
@@ -46,6 +52,8 @@ export default function ImportView({ language, onQueue, onGrammarQueue }: Props)
 
   const [sessions, setSessions] = useState<ImportSessionSummary[]>([]);
   const [listLoading, setListLoading] = useState(true);
+  // Rides along with the session list — see `api/import.ts:listImportSessions`.
+  const [quizPool, setQuizPool] = useState<ImportQuizPool>(EMPTY_POOL);
 
   // Destination for a session that does not exist yet; carried into `create`.
   const [draftDestination, setDraftDestination] = useState<{
@@ -84,10 +92,23 @@ export default function ImportView({ language, onQueue, onGrammarQueue }: Props)
   const refreshSessions = useCallback(() => {
     setListLoading(true);
     listImportSessions(language)
-      .then(setSessions)
-      .catch(() => setSessions([]))
+      .then(({ sessions: rows, pool }) => {
+        setSessions(rows);
+        setQuizPool(pool);
+      })
+      .catch(() => {
+        setSessions([]);
+        setQuizPool(EMPTY_POOL);
+      })
       .finally(() => setListLoading(false));
   }, [language]);
+
+  // The group documents are already loaded for the destination rail, so splitting the
+  // article union into its Group A and Group B halves costs no extra request.
+  const articlePools = useMemo(
+    () => deriveArticleQuizPools(quizPool, groups.wordGroups, groups.grammarGroups),
+    [quizPool, groups.wordGroups, groups.grammarGroups]
+  );
 
   useEffect(() => {
     refreshSessions();
@@ -319,6 +340,11 @@ export default function ImportView({ language, onQueue, onGrammarQueue }: Props)
         onResume={handleResume}
         onDelete={handleDelete}
         onNew={() => { setError(null); setPhase("input"); }}
+        quizCounts={{ a: poolSize(articlePools.a), b: poolSize(articlePools.b) }}
+        onQuiz={
+          onArticleQuiz &&
+          ((category) => onArticleQuiz(category, category === "A" ? articlePools.a : articlePools.b))
+        }
       />
     </>
   );

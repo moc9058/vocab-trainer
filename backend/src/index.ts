@@ -19,7 +19,12 @@ import progressRoutes from "./routes/progress.js";
 import flaggedRoutes from "./routes/flagged.js";
 import grammarRoutes from "./routes/grammar.js";
 import grammarQuizRoutes from "./routes/grammar-quiz.js";
-import combinedQuizRoutes, { groupBQuizRoutes, mixedQuizRoutes } from "./routes/combined-quiz.js";
+import combinedQuizRoutes, {
+  groupBQuizRoutes,
+  mixedQuizRoutes,
+  importQuizARoutes,
+  importQuizBRoutes,
+} from "./routes/combined-quiz.js";
 import grammarProgressRoutes from "./routes/grammar-progress.js";
 import translationRoutes from "./routes/translation.js";
 import speakingWritingRoutes from "./routes/speaking-writing.js";
@@ -104,6 +109,8 @@ await fastify.register(grammarQuizRoutes, { prefix: "/api/grammar-quiz" });
 await fastify.register(combinedQuizRoutes, { prefix: "/api/combined-quiz" });
 await fastify.register(groupBQuizRoutes, { prefix: "/api/group-b-quiz" });
 await fastify.register(mixedQuizRoutes, { prefix: "/api/mixed-quiz" });
+await fastify.register(importQuizARoutes, { prefix: "/api/import-quiz-a" });
+await fastify.register(importQuizBRoutes, { prefix: "/api/import-quiz-b" });
 await fastify.register(grammarProgressRoutes, { prefix: "/api/grammar-progress" });
 await fastify.register(translationRoutes, { prefix: "/api/translation" });
 await fastify.register(speakingWritingRoutes, { prefix: "/api/speaking-writing" });

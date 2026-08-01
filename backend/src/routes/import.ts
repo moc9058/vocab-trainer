@@ -13,6 +13,7 @@ import {
 } from "../firestore.js";
 import type {
   ImportAnalysisResult,
+  ImportQuizPool,
   ImportSession,
   ImportSessionSummary,
 } from "../types.js";
@@ -296,20 +297,48 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
     "/:language/sessions",
     async (request) => {
       const sessions = await getImportSessions(request.params.language);
+
+      // The article quizzes drill every saved article at once, so their pool is the union
+      // of the entities these sessions point at. It rides along with the list rather than
+      // living on its own endpoint because this handler ALREADY reads every session
+      // document in full — a sibling route would read the same heavy docs a second time on
+      // one screen load. (Same call `useImportGroups` makes on the client: one read, two
+      // consumers.) Which item went to Group A vs Group B is deliberately NOT decided here:
+      // the session records a destination, not per-item membership, so the client
+      // intersects these ids against the group documents it already holds.
+      const wordIds = new Set<string>();
+      const grammarIds = new Set<string>();
+      for (const s of sessions) {
+        for (const item of s.items ?? []) {
+          // Merges and splits leave their sources behind as `skipped` tombstones so the
+          // operation stays undoable; they are not live rows. Mirrors `isLive` in
+          // frontend/src/utils/importSession.ts, which has no backend twin to import.
+          if (item.status === "skipped") continue;
+          if (item.kind === "word") {
+            if (item.existingWordId) wordIds.add(item.existingWordId);
+          } else if (item.existingGrammarId) {
+            grammarIds.add(item.existingGrammarId);
+          }
+        }
+      }
+
       // Projected summary: the resume list never needs text/paragraphs/items, and
       // shipping them would make listing cost as much as opening every session.
-      return sessions.map(
-        (s): ImportSessionSummary => ({
-          id: s.id,
-          language: s.language,
-          title: s.title,
-          totalCount: s.items?.length ?? 0,
-          registeredCount: (s.items ?? []).filter((i) => i.status === "registered").length,
-          status: s.status,
-          createdAt: s.createdAt,
-          updatedAt: s.updatedAt,
-        })
-      );
+      return {
+        sessions: sessions.map(
+          (s): ImportSessionSummary => ({
+            id: s.id,
+            language: s.language,
+            title: s.title,
+            totalCount: s.items?.length ?? 0,
+            registeredCount: (s.items ?? []).filter((i) => i.status === "registered").length,
+            status: s.status,
+            createdAt: s.createdAt,
+            updatedAt: s.updatedAt,
+          })
+        ),
+        pool: { wordIds: [...wordIds], grammarIds: [...grammarIds] } satisfies ImportQuizPool,
+      };
     }
   );
 

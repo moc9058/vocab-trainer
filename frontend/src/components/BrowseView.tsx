@@ -5,6 +5,7 @@ import GrammarList from "./GrammarList";
 import ImportView from "./ImportView";
 import type { useWordQueue } from "../hooks/useWordQueue";
 import type { useGrammarQueue } from "../hooks/useGrammarQueue";
+import type { ImportQuizPool } from "../types";
 
 type WordEnqueue = ReturnType<typeof useWordQueue>["enqueue"];
 type WordEnqueueUpdate = ReturnType<typeof useWordQueue>["enqueueUpdate"];
@@ -31,6 +32,9 @@ interface Props {
   pendingDraftIds: Set<string>;
   grammarPendingTerms: Set<string>;
   grammarPendingDraftIds: Set<string>;
+  /** Pass-through for the import tab's article-quiz buttons; the session lives in
+   *  Dashboard like every other quiz. */
+  onArticleQuiz?: (category: "A" | "B", pool: ImportQuizPool) => void;
 }
 
 export default function BrowseView({
@@ -51,6 +55,7 @@ export default function BrowseView({
   pendingDraftIds,
   grammarPendingTerms,
   grammarPendingDraftIds,
+  onArticleQuiz,
 }: Props) {
   const { t } = useI18n();
   const [tab, setTab] = useState<BrowseTab>(initialTab);
@@ -97,7 +102,12 @@ export default function BrowseView({
       </div>
       <div className="min-h-0 flex-1">
         {tab === "import" ? (
-          <ImportView language={language} onQueue={onQueue} onGrammarQueue={onGrammarQueue} />
+          <ImportView
+            language={language}
+            onQueue={onQueue}
+            onGrammarQueue={onGrammarQueue}
+            onArticleQuiz={onArticleQuiz}
+          />
         ) : tab === "word" ? (
           <WordList
             language={language}

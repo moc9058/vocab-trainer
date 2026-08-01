@@ -7,6 +7,11 @@ interface Props {
   onResume: (sessionId: string) => void;
   onDelete: (sessionId: string) => void;
   onNew: () => void;
+  /** How many items each article quiz would ask — the pools span EVERY listed article,
+   *  not the row they sit under, which is why they live in the header. */
+  quizCounts: { a: number; b: number };
+  /** Absent when the host didn't wire quiz navigation; the buttons are then hidden. */
+  onQuiz?: (category: "A" | "B") => void;
 }
 
 /** Landing screen when unfinished imports exist — picking one back up is the
@@ -17,8 +22,31 @@ export default function ImportSessionList({
   onResume,
   onDelete,
   onNew,
+  quizCounts,
+  onQuiz,
 }: Props) {
   const { t } = useI18n();
+
+  // Same colours as the destination rail's dots — indigo is the Group A lesson group,
+  // amber the Group B study set — so the buttons read as "drill THAT" without a legend.
+  function QuizButton({ category, count }: { category: "A" | "B"; count: number }) {
+    return (
+      <button
+        onClick={() => onQuiz?.(category)}
+        disabled={count === 0}
+        // Both class strings are spelled out because Tailwind scans source text —
+        // an interpolated `border-${hue}-600` is never generated.
+        className={`flex-1 rounded-lg border px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+          category === "A"
+            ? "border-indigo-600 text-indigo-300 hover:bg-indigo-900/30"
+            : "border-amber-600 text-amber-300 hover:bg-amber-900/30"
+        }`}
+      >
+        {category === "A" ? t("importQuizA") : t("importQuizB")}
+        <span className="ml-1.5 font-mono text-[11px] opacity-70">{count}</span>
+      </button>
+    );
+  }
 
   return (
     <div className="h-full overflow-y-auto overflow-x-hidden">
@@ -32,6 +60,19 @@ export default function ImportSessionList({
           >
             ＋ {t("importNewSession")}
           </button>
+
+          {/* Review, not intake — so it is separated from "new import" by a rule. The pool
+              spans every article below, which is why one pair of buttons sits here rather
+              than a pair on each row. */}
+          {onQuiz && (
+            <div className="mt-4 border-t border-gray-700/70 pt-3">
+              <p className="mb-2 text-[11px] text-gray-500">{t("importQuizHint")}</p>
+              <div className="flex gap-2">
+                <QuizButton category="A" count={quizCounts.a} />
+                <QuizButton category="B" count={quizCounts.b} />
+              </div>
+            </div>
+          )}
         </header>
 
         {loading && <p className="text-sm text-gray-500">…</p>}

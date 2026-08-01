@@ -321,6 +321,13 @@ export interface CombinedQuizSession {
   /** Word/grammar IDs classified as mastered when the session was built (or on-demand). */
   correctMembership?: { wordIds: string[]; grammarIds: string[] };
   flaggedOnly?: boolean;
+  /**
+   * Order the whole session by one uniform shuffle of the word+grammar union instead of
+   * merging the two domains by weight. `weightedMerge` picks a BUCKET per draw, so at 1:1
+   * a small grammar pool drains first and clusters at the front — not what "random" means.
+   * Sticky on the session because resume re-orders the unanswered tail too.
+   */
+  randomOrder?: boolean;
 }
 
 // ========== Translation ==========
@@ -681,6 +688,14 @@ export interface ImportSession {
 
 /** Row shape for the resume list — omits `text`/`paragraphs`/`items` so listing
  *  many sessions stays cheap. */
+/** The article quizzes' pool: every entity the saved import sessions of one language
+ *  point at, deduped across articles. Which of these belong to Group A vs Group B is
+ *  resolved against the group documents, not stored on the sessions. */
+export interface ImportQuizPool {
+  wordIds: string[];
+  grammarIds: string[];
+}
+
 export interface ImportSessionSummary {
   id: string;
   language: string;

@@ -7,7 +7,9 @@ import {
   getProgressForLanguage,
   flagWord,
   getWordGroup,
+  getWordsByIds,
   getAllGrammarItems,
+  getGrammarItemsByIds,
   getGrammarGroup,
   getGrammarComponentProgress,
   updateGrammarComponentProgress,
@@ -33,11 +35,21 @@ interface WordFilterBody {
   groupIds?: string[];
   groupWeights?: Record<string, number>;
   flaggedOnly?: boolean;
+  /**
+   * An explicit pool, bypassing every other word filter. The caller has already decided
+   * which words belong — the article quizzes resolve that client-side, where the import
+   * sessions' entity ids and the group documents both already are — so this reads the ids
+   * directly instead of scanning the language's whole word collection. Cheaper than the
+   * filter path, not more expensive. An EMPTY array means an empty pool, not "everything".
+   */
+  wordIds?: string[];
 }
 
 interface GrammarFilterBody {
   groupIds?: string[];
   groupWeights?: Record<string, number>;
+  /** Explicit grammar pool — the `wordIds` counterpart. */
+  grammarIds?: string[];
 }
 
 /**
@@ -57,6 +69,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       language: string;
       domainWeights?: { word?: number; grammar?: number };
       correctWeight?: number;
+      randomOrder?: boolean;
       word?: WordFilterBody;
       grammar?: GrammarFilterBody;
     };
@@ -77,6 +90,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
               },
             },
             correctWeight: { type: "number", minimum: 0 },
+            randomOrder: { type: "boolean" },
             word: {
               type: "object",
               properties: {
@@ -86,6 +100,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
                 groupIds: { type: "array", items: { type: "string" } },
                 groupWeights: { type: "object", additionalProperties: { type: "number" } },
                 flaggedOnly: { type: "boolean" },
+                wordIds: { type: "array", items: { type: "string" } },
               },
             },
             grammar: {
@@ -93,6 +108,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
               properties: {
                 groupIds: { type: "array", items: { type: "string" } },
                 groupWeights: { type: "object", additionalProperties: { type: "number" } },
+                grammarIds: { type: "array", items: { type: "string" } },
               },
             },
           },
@@ -100,7 +116,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       },
     },
     async (request, reply) => {
-      const { language, domainWeights, correctWeight, word, grammar } = request.body;
+      const { language, domainWeights, correctWeight, randomOrder, word, grammar } = request.body;
       const wordWeight = Math.max(0, domainWeights?.word ?? 1);
       const grammarWeight = Math.max(0, domainWeights?.grammar ?? 1);
       const useCorrect = correctWeight !== undefined;
@@ -137,13 +153,18 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       let wordGroupMembership: Record<string, string[]> | undefined;
       let knownWordItems: Word[] = [];
       if (wordWeight > 0 || useCorrect) {
-        const pool = await getFilteredWords(language, {
-          topics: word?.topics,
-          categories: word?.categories,
-          levels: word?.levels,
-          groupIds: word?.groupIds,
-          flaggedOnly: word?.flaggedOnly,
-        });
+        // An explicit id list IS the pool — reading those docs directly skips the
+        // whole-collection scan `getFilteredWords` does. Ids with no document (the word was
+        // deleted since the caller built the list) simply drop out rather than erroring.
+        const pool = word?.wordIds
+          ? await getWordsByIds(word.wordIds)
+          : await getFilteredWords(language, {
+              topics: word?.topics,
+              categories: word?.categories,
+              levels: word?.levels,
+              groupIds: word?.groupIds,
+              flaggedOnly: word?.flaggedOnly,
+            });
         let freshPool = pool;
         if (useCorrect) {
           knownWordItems = pool.filter((w) => isMastered(wordProgress!.words[w.id]));
@@ -180,8 +201,12 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
         // never selected. The group docs are fetched once here and reused for the membership
         // build below, so this costs no extra reads.
         const scopedGroupIds = grammar?.groupIds?.length ? grammar.groupIds : null;
+        // Same as the word side: an explicit id list replaces the read of every grammar
+        // item in the language.
         const [allItems, groupDocs] = await Promise.all([
-          getAllGrammarItems(language),
+          grammar?.grammarIds
+            ? getGrammarItemsByIds(grammar.grammarIds)
+            : getAllGrammarItems(language),
           scopedGroupIds
             ? Promise.all(scopedGroupIds.map((id) => getGrammarGroup(id)))
             : Promise.resolve(null),
@@ -235,7 +260,15 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
         { weight: grammarWeight, items: grammarQuestions },
       ];
       if (useCorrect) buckets.push({ weight: correctWeight ?? 0, items: knownQuestions });
-      const questions: CombinedQuizQuestion[] = weightedMerge<CombinedQuizQuestion>(buckets);
+      // `weightedMerge` draws a BUCKET per pick, not an item, so even at 1:1 the smaller
+      // domain drains first and clumps at the front — with 200 words against 20 grammar
+      // items every grammar card lands in the first ~40 positions. One shuffle of the union
+      // is the only thing that actually means "random". A zero weight still drops its
+      // bucket outright: that is how "skip this domain" is expressed, and randomness is
+      // about ORDER, not membership.
+      const questions: CombinedQuizQuestion[] = randomOrder
+        ? shuffle(buckets.filter((b) => b.weight > 0).flatMap((b) => b.items))
+        : weightedMerge<CombinedQuizQuestion>(buckets);
 
       if (questions.length === 0) {
         return reply.badRequest("No words or grammar items match the given filters");
@@ -264,6 +297,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
             }
           : {}),
         ...(word?.flaggedOnly ? { flaggedOnly: true } : {}),
+        ...(randomOrder ? { randomOrder: true } : {}),
       };
 
       await saveCombinedQuizSession(session);
@@ -449,6 +483,9 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       const session = await getCombinedQuizSession(opts.sessionKey(request.params.language));
       if (!session) return reply.notFound("No combined quiz session found for this language");
       if (session.status === "completed") return reply.badRequest("Session already completed");
+      // The client hides the weights panel for these sessions; refuse anyway, or the stored
+      // weights would disagree with the order `reorderUnansweredTail` actually produces.
+      if (session.randomOrder) return reply.badRequest("This session is unweighted (random order)");
 
       const { domainWeights, wordGroupWeights, grammarGroupWeights, correctWeight } = request.body;
       if (correctWeight !== undefined) {
@@ -504,6 +541,16 @@ export const groupBQuizRoutes = makeCombinedQuizRoutes({ sessionKey: (l) => `${l
  *  categories: the client simply sends category-A and category-B `groupIds` in one array
  *  (B first, so `assignMembership`'s first-wins rule gives a shared word B's weight). */
 export const mixedQuizRoutes = makeCombinedQuizRoutes({ sessionKey: (l) => `${l}__mixed` });
+/**
+ * Article quizzes — the vocabulary and grammar of every saved import session, drilled as
+ * one pool. Two registrations rather than one shared `__import` key so a Group A and a
+ * Group B article drill can be in progress at once, and so "resume" is never ambiguous
+ * about which of the two it means. The pool arrives as explicit `wordIds`/`grammarIds`
+ * (the client owns the article↔group intersection), and `randomOrder` is what makes the
+ * two domains one shuffled pile instead of a weighted interleave.
+ */
+export const importQuizARoutes = makeCombinedQuizRoutes({ sessionKey: (l) => `${l}__importA` });
+export const importQuizBRoutes = makeCombinedQuizRoutes({ sessionKey: (l) => `${l}__importB` });
 
 // Reorder the unanswered tail by the session's current domain + group weights,
 // keeping answered questions in place. Shared by resume (GET session) and the
@@ -514,6 +561,13 @@ function reorderUnansweredTail(session: CombinedQuizSession): void {
   for (const q of session.questions) {
     if (q.userCorrect !== undefined) answered.push(q);
     else unanswered.push(q);
+  }
+
+  // A random-order session has no buckets to re-weight — resume must not quietly
+  // reintroduce the domain interleave the session was built to avoid.
+  if (session.randomOrder) {
+    session.questions = [...answered, ...shuffle(unanswered)];
+    return;
   }
 
   const useCorrect = session.correctWeight !== undefined;

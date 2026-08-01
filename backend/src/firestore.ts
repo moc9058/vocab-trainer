@@ -2088,6 +2088,7 @@ export async function getCombinedQuizSession(sessionKey: string): Promise<Combin
     correctWeight: d.correctWeight,
     correctMembership: d.correctMembership,
     flaggedOnly: d.flaggedOnly,
+    randomOrder: d.randomOrder,
   };
 }
 

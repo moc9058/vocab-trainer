@@ -6,7 +6,11 @@ import { useSettings } from "../settings/context";
 import SettingsModal from "./SettingsModal";
 import { getCurrentSession, startQuiz } from "../api/quiz";
 import { startGrammarQuiz, getCurrentGrammarSession } from "../api/grammar";
-import { startCombinedQuiz, getCurrentCombinedSession } from "../api/combined-quiz";
+import {
+  startCombinedQuiz,
+  getCurrentCombinedSession,
+  type CombinedQuizVariant,
+} from "../api/combined-quiz";
 import EmptyState from "./EmptyState";
 import QuizTaking from "./QuizTaking";
 import BrowseView from "./BrowseView";
@@ -31,7 +35,20 @@ import { getSpeakingWritingSession } from "../api/speaking-writing";
 import { urlLanguageToIsoCode } from "../settings/defaults";
 import { useWordQueue } from "../hooks/useWordQueue";
 import { useGrammarQueue } from "../hooks/useGrammarQueue";
-import type { QuizSession, GrammarQuizSession, CombinedQuizSession } from "../types";
+import type { QuizSession, GrammarQuizSession, CombinedQuizSession, ImportQuizPool } from "../types";
+
+/** The two article quizzes: every saved import session's vocabulary and grammar, split by
+ *  meta-group. "A" is everything those articles put in the library; "B" is the subset also
+ *  marked not-yet-memorized. */
+type ArticleQuizCategory = "A" | "B";
+
+function articleQuizVariant(category: ArticleQuizCategory): CombinedQuizVariant {
+  return category === "A" ? "importA" : "importB";
+}
+
+function articleQuizPath(language: string, category: ArticleQuizCategory): string {
+  return `/${language}/import-quiz-${category === "A" ? "a" : "b"}`;
+}
 
 export default function Dashboard() {
   const { language } = useParams<{ language: string }>();
@@ -39,6 +56,10 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
   const subPath = location.pathname.replace(`/${language}`, "") || "/";
+  // Which article quiz this URL is, or null. Derived from the path rather than stored, so
+  // the rendered category and the route can never disagree.
+  const articleQuizCategory: ArticleQuizCategory | null =
+    subPath === "/import-quiz-a" ? "A" : subPath === "/import-quiz-b" ? "B" : null;
   const { t, language: uiLang, setLanguage } = useI18n();
   const { settings } = useSettings();
   const { enqueue, enqueueUpdate, pendingTerms, queueLength, processingTerms, succeededTerms, pendingDraftIds, activeCount, recentResults, clearResults, refreshSignal } = useWordQueue();
@@ -68,6 +89,20 @@ export default function Dashboard() {
   const [showMixedSetup, setShowMixedSetup] = useState(false);
   const [mixedResumePrompt, setMixedResumePrompt] = useState<CombinedQuizSession | null>(null);
   const [pendingMixedFilters, setPendingMixedFilters] = useState<CombinedQuizFilters | null>(null);
+  // Article quizzes — the same combined machinery over every saved import session. Both
+  // categories share one state record keyed by "A"/"B" rather than the per-variant
+  // quartets above: they differ only in which pool is sent, and the rendered category is
+  // read from the URL, so a record cannot go stale against the route the way a single
+  // `category` field could.
+  const [activeArticleQuizzes, setActiveArticleQuizzes] = useState<
+    Partial<Record<ArticleQuizCategory, CombinedQuizSession>>
+  >({});
+  const [articleResumePrompt, setArticleResumePrompt] = useState<
+    { category: ArticleQuizCategory; session: CombinedQuizSession } | null
+  >(null);
+  const [pendingArticleQuiz, setPendingArticleQuiz] = useState<
+    { category: ArticleQuizCategory; pool: ImportQuizPool } | null
+  >(null);
   // Smart Add Word / Grammar state
   const [showSmartAdd, setShowSmartAdd] = useState(false);
   const [grammarFormLanguage, setGrammarFormLanguage] = useState<string | null>(null);
@@ -141,6 +176,19 @@ export default function Dashboard() {
     setRecoveryError(false);
     getCurrentCombinedSession(language ?? "", "mixed").then(session => {
       if (session) setActiveMixedQuiz(session);
+      else navigate(`/${language}`, { replace: true });
+    }).catch(() => setRecoveryError(true));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subPath, language, recoveryAttempt]);
+
+  // Session recovery: /:language/import-quiz-a|b → fetch that category's active session.
+  // One effect for both, since the category is derived from the path.
+  useEffect(() => {
+    if (!articleQuizCategory || activeArticleQuizzes[articleQuizCategory]) return;
+    const category = articleQuizCategory;
+    setRecoveryError(false);
+    getCurrentCombinedSession(language ?? "", articleQuizVariant(category)).then(session => {
+      if (session) setActiveArticleQuizzes(prev => ({ ...prev, [category]: session }));
       else navigate(`/${language}`, { replace: true });
     }).catch(() => setRecoveryError(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -303,6 +351,9 @@ export default function Dashboard() {
     setShowMixedSetup(false);
     setMixedResumePrompt(null);
     setPendingMixedFilters(null);
+    setActiveArticleQuizzes({});
+    setArticleResumePrompt(null);
+    setPendingArticleQuiz(null);
     setShowSmartAdd(false);
     setGrammarFormLanguage(null);
     navigate(`/${language}`);
@@ -560,6 +611,74 @@ export default function Dashboard() {
     }
   }
 
+  // ----- Article quizzes (every saved import session, Group A or Group B) -----
+  // No filter modal: the pool is decided in the import screen, and the whole point of the
+  // mode is that there is nothing to configure — one uniform shuffle, no weights.
+
+  async function doStartArticleQuiz(category: ArticleQuizCategory, pool: ImportQuizPool) {
+    if (!language) return;
+    const session = await startCombinedQuiz(
+      {
+        language,
+        // Both domains present and equal, but `randomOrder` is what actually decides the
+        // sequence — weightedMerge would drain the smaller domain first even at 1:1.
+        domainWeights: { word: 1, grammar: 1 },
+        randomOrder: true,
+        word: { wordIds: pool.wordIds },
+        grammar: { grammarIds: pool.grammarIds },
+      },
+      articleQuizVariant(category)
+    );
+    setActiveArticleQuizzes(prev => ({ ...prev, [category]: session }));
+    navigate(articleQuizPath(language, category));
+  }
+
+  async function handleArticleQuiz(category: ArticleQuizCategory, pool: ImportQuizPool) {
+    if (starting || !language) return;
+    setStarting(true);
+    try {
+      // `/start` overwrites the session under a fixed key, so an in-progress drill has to
+      // be offered back rather than silently discarded — same contract as every other quiz.
+      const existing = await getCurrentCombinedSession(language, articleQuizVariant(category));
+      if (existing && existing.status === "in-progress") {
+        setPendingArticleQuiz({ category, pool });
+        setArticleResumePrompt({ category, session: existing });
+        return;
+      }
+      await doStartArticleQuiz(category, pool);
+    } catch (err) {
+      console.error("Failed to start article quiz:", err);
+      alert(String(err));
+    } finally {
+      setStarting(false);
+    }
+  }
+
+  function handleResumeArticleQuiz() {
+    if (!articleResumePrompt || !language) return;
+    const { category, session } = articleResumePrompt;
+    setActiveArticleQuizzes(prev => ({ ...prev, [category]: session }));
+    setArticleResumePrompt(null);
+    setPendingArticleQuiz(null);
+    setStarting(false);
+    navigate(articleQuizPath(language, category));
+  }
+
+  async function handleStartNewArticleQuiz() {
+    if (!pendingArticleQuiz) return;
+    const { category, pool } = pendingArticleQuiz;
+    setArticleResumePrompt(null);
+    setPendingArticleQuiz(null);
+    try {
+      await doStartArticleQuiz(category, pool);
+    } catch (err) {
+      console.error("Failed to start article quiz:", err);
+      alert(String(err));
+    } finally {
+      setStarting(false);
+    }
+  }
+
   function handleStartExpressionQuiz() {
     if (!language) return;
     navigate(`/${language}/speaking-writing`, { state: { mode: "new", subMode: "expression-quiz" } });
@@ -712,6 +831,39 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      {articleResumePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-gray-800 p-5 shadow-lg sm:p-6">
+            <p className="mb-4 text-gray-300">
+              {t(articleResumePrompt.category === "A" ? "existingImportQuizAFound" : "existingImportQuizBFound")}
+            </p>
+            <p className={`mb-4 text-lg font-semibold ${
+              articleResumePrompt.category === "A" ? "text-indigo-400" : "text-amber-400"
+            }`}>
+              {articleResumePrompt.session.score.correct} /{" "}
+              {articleResumePrompt.session.initialTotal ?? articleResumePrompt.session.questions.length}
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                onClick={handleResumeArticleQuiz}
+                className={`flex-1 rounded-lg px-4 py-3 text-white sm:py-2 ${
+                  articleResumePrompt.category === "A"
+                    ? "bg-indigo-600 hover:bg-indigo-500"
+                    : "bg-amber-600 hover:bg-amber-500"
+                }`}
+              >
+                {t("resumeQuiz")}
+              </button>
+              <button
+                onClick={handleStartNewArticleQuiz}
+                className="flex-1 rounded-lg bg-gray-700 px-4 py-3 text-gray-300 hover:bg-gray-600 sm:py-2"
+              >
+                {t("startNewQuiz")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {groupBResumePrompt && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-sm rounded-xl bg-gray-800 p-5 shadow-lg sm:p-6">
@@ -849,6 +1001,7 @@ export default function Dashboard() {
             pendingDraftIds={pendingDraftIds}
             grammarPendingTerms={grammarPendingTerms}
             grammarPendingDraftIds={grammarPendingDraftIds}
+            onArticleQuiz={handleArticleQuiz}
           />
         ) : subPath === "/flagged" ? (
           <FlaggedReview
@@ -902,6 +1055,26 @@ export default function Dashboard() {
               onComplete={() => { setActiveMixedQuiz(null); navigate(`/${language}`); }}
               onBrowse={handleBrowse}
               onStartNew={handleStartMixedQuiz}
+            />
+          ) : (
+            <QuizRecoveryState error={recoveryError} onRetry={() => setRecoveryAttempt((n) => n + 1)} onHome={goHome} />
+          )
+        ) : articleQuizCategory ? (
+          activeArticleQuizzes[articleQuizCategory] ? (
+            <CombinedQuizTaking
+              // Keyed by category for the same reason as the three branches above: they all
+              // render into this one ternary slot, and a reused instance would post its
+              // answers into whichever session it was mounted with.
+              key={`import${articleQuizCategory}`}
+              session={activeArticleQuizzes[articleQuizCategory]!}
+              variant={articleQuizVariant(articleQuizCategory)}
+              onComplete={() => {
+                const category = articleQuizCategory;
+                setActiveArticleQuizzes(prev => ({ ...prev, [category]: undefined }));
+                navigate(`/${language}`);
+              }}
+              onBrowse={handleBrowse}
+              onStartNew={() => navigate(`/${language}/import`)}
             />
           ) : (
             <QuizRecoveryState error={recoveryError} onRetry={() => setRecoveryAttempt((n) => n + 1)} onHome={goHome} />

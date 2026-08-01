@@ -1,15 +1,25 @@
 import { ApiError, fetchJson, postJson, putJson } from "./client";
 import type { CombinedQuizSession } from "../types";
 
-/** Which of the three identical route trees to talk to. "groupB" drills only the
- *  category-B groups; "mixed" spans both categories in one session. Each keeps its own
- *  session per language, so all three can be in progress at once. */
-export type CombinedQuizVariant = "combined" | "groupB" | "mixed";
+/** Which of the identical route trees to talk to. "groupB" drills only the category-B
+ *  groups; "mixed" spans both categories in one session; "importA"/"importB" drill the
+ *  vocabulary and grammar of every saved article. Each keeps its own session per language,
+ *  so all five can be in progress at once. */
+export type CombinedQuizVariant = "combined" | "groupB" | "mixed" | "importA" | "importB";
+
+/** A total map rather than an if-chain with a fallback: a variant added to the union but
+ *  not given a path is a compile error here, instead of silently posting its answers into
+ *  the plain Group A session. */
+const VARIANT_BASE: Record<CombinedQuizVariant, string> = {
+  combined: "/api/combined-quiz",
+  groupB: "/api/group-b-quiz",
+  mixed: "/api/mixed-quiz",
+  importA: "/api/import-quiz-a",
+  importB: "/api/import-quiz-b",
+};
 
 function base(variant: CombinedQuizVariant = "combined"): string {
-  if (variant === "groupB") return "/api/group-b-quiz";
-  if (variant === "mixed") return "/api/mixed-quiz";
-  return "/api/combined-quiz";
+  return VARIANT_BASE[variant];
 }
 
 /** `null` means "no session" (404) only; other failures rethrow — see `api/quiz.ts`. */
@@ -32,6 +42,9 @@ export function startCombinedQuiz(
     language: string;
     domainWeights: { word: number; grammar: number };
     correctWeight?: number;
+    /** Order the union by one uniform shuffle instead of merging the two domains by
+     *  weight — see `CombinedQuizSession.randomOrder`. */
+    randomOrder?: boolean;
     word?: {
       topics?: string[];
       categories?: string[];
@@ -39,10 +52,14 @@ export function startCombinedQuiz(
       groupIds?: string[];
       groupWeights?: Record<string, number>;
       flaggedOnly?: boolean;
+      /** Explicit pool, bypassing every other word filter. */
+      wordIds?: string[];
     };
     grammar?: {
       groupIds?: string[];
       groupWeights?: Record<string, number>;
+      /** Explicit pool, bypassing the group scoping. */
+      grammarIds?: string[];
     };
   },
   variant: CombinedQuizVariant = "combined"

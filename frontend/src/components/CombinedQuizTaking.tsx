@@ -17,6 +17,7 @@ import QuizSyncBadge from "./QuizSyncBadge";
 import { useQuizPrefetch } from "../hooks/useQuizPrefetch";
 import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
 import { applyCombinedAnswerLocally } from "../utils/quizLocal";
+import { categoryGroups } from "../types";
 import type {
   CombinedQuizSession,
   CombinedQuizQuestion,
@@ -104,6 +105,9 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   // The Group B and mixed A+B quizzes both bind "3" to "retire this from Group B" — the
   // productive gesture once an item is memorized. Only the plain Group A quiz uses "3" to
   // flag a word, so flagging is skipped entirely in the other two.
+  // The article quizzes ("importA"/"importB") are deliberately NOT in this list: they are
+  // specified to match the plain Group A quiz, keeping the flag key and offering no
+  // remove-from-Group-B, even for the Group B article drill.
   const usesGroupBControls = variant === "groupB" || variant === "mixed";
   const { t } = useI18n();
   const { settings, displayDefEntries, displayGrammarDefEntries } = useSettings();
@@ -134,7 +138,18 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   // stop appearing in future Group B sessions.
   const [removedFromBIds, setRemovedFromBIds] = useState<Set<string>>(new Set());
   const [groupNameMap, setGroupNameMap] = useState<Map<string, string>>(new Map());
+  // Which items actually sit in a category-B group, per domain. The mixed A+B quiz draws
+  // from the UNION of both categories, so most of its cards are A-only and must NOT offer
+  // "remove from Group B" — the DELETE would remove nothing while the UI claimed success.
+  // `null` = not known yet (still loading, or the groups fetch failed) and fails OPEN, so a
+  // blip can't make the control disappear from the Group B quiz, where every card is in B.
+  const [groupBIds, setGroupBIds] = useState<{ words: Set<string>; grammar: Set<string> } | null>(
+    null
+  );
   const [originalTotal] = useState(() => session.initialTotal ?? session.questions.length);
+  /** A random-order session has no buckets to weight — the whole union is one shuffle,
+   *  and `PUT …/weights` rejects it — so the ⚖ control has nothing to offer. */
+  const weightsAdjustable = !currentSession.randomOrder;
   const [weightsOpen, setWeightsOpen] = useState(false);
   const [wordGroupsOpen, setWordGroupsOpen] = useState(false);
   const [grammarGroupsOpen, setGrammarGroupsOpen] = useState(false);
@@ -174,22 +189,39 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       .catch(() => setAlreadyFlaggedIds(new Set()));
   }, [session.language, usesGroupBControls]);
 
-  // Fetch group names for the per-group progress badges (word + grammar groups).
+  // One groups fetch, two consumers: the names behind the per-group progress badges, and
+  // the category-B membership sets that gate the remove-from-Group-B control. The group
+  // docs own membership (`wordIds`/`grammarIds`), so both fall out of the same response.
   useEffect(() => {
     const hasWordGroups =
       session.wordGroupMembership && Object.keys(session.wordGroupMembership).length > 0;
     const hasGrammarGroups =
       session.grammarGroupMembership && Object.keys(session.grammarGroupMembership).length > 0;
-    if (!hasWordGroups && !hasGrammarGroups) return;
+    // The mixed quiz has cards of both kinds regardless of which membership maps came back,
+    // so the B gate needs both domains whenever the Group B controls are in play.
+    const needWords = hasWordGroups || usesGroupBControls;
+    const needGrammar = hasGrammarGroups || usesGroupBControls;
+    if (!needWords && !needGrammar) return;
     Promise.all([
-      hasWordGroups ? getGroups(session.language).catch(() => []) : Promise.resolve([]),
-      hasGrammarGroups ? getGrammarGroups(session.language).catch(() => []) : Promise.resolve([]),
+      needWords ? getGroups(session.language).catch(() => null) : Promise.resolve([]),
+      needGrammar ? getGrammarGroups(session.language).catch(() => null) : Promise.resolve([]),
     ]).then(([wordGroups, grammarGroups]) => {
       setGroupNameMap(
-        new Map([...wordGroups, ...grammarGroups].map((g) => [g.id, g.name]))
+        new Map([...(wordGroups ?? []), ...(grammarGroups ?? [])].map((g) => [g.id, g.name]))
       );
+      // A failed fetch leaves `groupBIds` null rather than claiming "in no B group".
+      if (!wordGroups || !grammarGroups) return;
+      setGroupBIds({
+        words: new Set(categoryGroups(wordGroups, "B").flatMap((g) => g.wordIds)),
+        grammar: new Set(categoryGroups(grammarGroups, "B").flatMap((g) => g.grammarIds)),
+      });
     });
-  }, [session.language, session.wordGroupMembership, session.grammarGroupMembership]);
+  }, [
+    session.language,
+    session.wordGroupMembership,
+    session.grammarGroupMembership,
+    usesGroupBControls,
+  ]);
 
   // Mobile: the page scrolls when an answer is tall (min-h-full container), so
   // reset to the top on each new question — otherwise the prompt stays off-screen.
@@ -386,16 +418,26 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     });
   }
 
+  /** Unknown membership (`groupBIds === null`) counts as "in B" so the control never
+   *  vanishes from the Group B quiz because a groups request was slow or failed. */
+  function isInGroupB(refId: string, kind: "word" | "grammar") {
+    if (!groupBIds) return true;
+    return kind === "word" ? groupBIds.words.has(refId) : groupBIds.grammar.has(refId);
+  }
+
   // Group B: "3"-key equivalent as a clickable control, plus the post-removal badge.
   function GroupBExcludeControl({ refId, kind }: { refId: string; kind: "word" | "grammar" }) {
     if (!usesGroupBControls) return null;
     if (removedFromBIds.has(refId)) {
+      // Keep the confirmation even though the item is no longer in B — it is the receipt
+      // for the removal this session just made.
       return (
         <p className="w-full max-w-lg rounded-md border border-amber-700/50 bg-amber-950/30 px-3 py-2.5 text-center text-sm text-amber-300 sm:py-1.5 sm:text-left sm:text-xs">
           ✓ {t("removedFromGroupB")}
         </p>
       );
     }
+    if (!isInGroupB(refId, kind)) return null;
     return (
       <button
         type="button"
@@ -491,6 +533,9 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         // (both domains), instead of flagging. It stays in the current session.
         event.preventDefault();
         const refId = question.kind === "word" ? question.wordId : question.grammarId;
+        // Same gate as the on-screen control: the mixed quiz's A-only cards are not in B,
+        // and the key must not do what the button declines to offer.
+        if (!isInGroupB(refId, question.kind)) return;
         const call =
           question.kind === "word"
             ? removeWordFromGroupB(currentSession.language, refId)
@@ -514,7 +559,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, usesGroupBControls]);
+  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, usesGroupBControls, groupBIds]);
 
 
   if (sessionReviewActive) {
@@ -795,17 +840,21 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
               🏷 {t("grammarGroupsToggle")}
             </button>
           )}
-          <button
-            onClick={() => (weightsOpen ? setWeightsOpen(false) : openWeightsPanel())}
-            className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 sm:py-1"
-          >
-            ⚖ {t("adjustWeights")}
-          </button>
+          {/* A random-order session has no weights to adjust — the server rejects the PUT
+              too. Keyed off the session rather than `variant` so it is self-describing. */}
+          {weightsAdjustable && (
+            <button
+              onClick={() => (weightsOpen ? setWeightsOpen(false) : openWeightsPanel())}
+              className="rounded-full border border-gray-600 bg-gray-800 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 sm:py-1"
+            >
+              ⚖ {t("adjustWeights")}
+            </button>
+          )}
         </div>
       )}
 
       {/* Mid-session domain + group weight editor */}
-      {weightsOpen && (
+      {weightsOpen && weightsAdjustable && (
         <div className="w-full max-w-lg rounded-lg border border-gray-600 bg-gray-800 p-4 space-y-2">
           <p className="text-sm font-medium text-gray-300">{t("adjustWeights")}</p>
 
