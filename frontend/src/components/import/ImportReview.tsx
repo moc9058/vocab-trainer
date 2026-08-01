@@ -62,7 +62,10 @@ export default function ImportReview({
     return map;
   }, [sentences, session.items]);
   const focused = session.focusedSentenceIndex;
-  const focusRef = useRef<HTMLDivElement>(null);
+  /** The focused sentence, whichever shape it is in — the open card's wrapper or,
+   *  once folded, its collapsed row. Assigned through a callback ref so both
+   *  element types can carry it. */
+  const focusRef = useRef<HTMLElement | null>(null);
 
   // Reading preference, not session data — kept in localStorage so it survives
   // moving between articles.
@@ -107,13 +110,27 @@ export default function ImportReview({
 
   const position = sentences.findIndex((s) => s.index === focused);
 
+  /** Pressing the focused sentence again folds its rows away — the sentence stays
+   *  the current one (prev/next keeps working from it), it just collapses back to
+   *  the one-liner. Purely a view state: `focusedSentenceIndex` is session data and
+   *  is required on the wire (`ImportSession`), so "which sentence" and "open or
+   *  shut" are kept apart rather than smuggling a -1 into the saved document. */
+  const [collapsed, setCollapsed] = useState(false);
+
   function focus(index: number) {
+    if (index === focused) {
+      setCollapsed((prev) => !prev);
+      return;
+    }
+    setCollapsed(false);
     onPatch((s) => ({ ...s, focusedSentenceIndex: index }));
   }
 
   function step(delta: number) {
     const next = sentences[position + delta];
-    if (next) focus(next.index);
+    if (!next) return;
+    setCollapsed(false);
+    onPatch((s) => ({ ...s, focusedSentenceIndex: next.index }));
   }
 
   /** Bring the newly focused sentence to the TOP of the scrollport.
@@ -125,7 +142,11 @@ export default function ImportReview({
    *  of the card (plus `scroll-mt-4`), which is what "move to the sentence I
    *  pressed" actually means, and it is stable if the card grows afterwards.
    *  The first run is instant: on resume the focused sentence should simply be
-   *  where the screen opens, not somewhere it smooth-scrolls away to. */
+   *  where the screen opens, not somewhere it smooth-scrolls away to.
+   *
+   *  `collapsed` is a dependency because folding a card removes hundreds of pixels
+   *  from ABOVE the current scroll position — without a re-scroll the reader is left
+   *  staring at some unrelated paragraph further down. */
   const hasScrolledRef = useRef(false);
   useEffect(() => {
     focusRef.current?.scrollIntoView({
@@ -133,12 +154,27 @@ export default function ImportReview({
       behavior: hasScrolledRef.current ? "smooth" : "auto",
     });
     hasScrolledRef.current = true;
-  }, [focused]);
+  }, [focused, collapsed]);
 
   return (
-    // `overflow-x-hidden` is a hard stop: nothing in a review should ever be able
-    // to scroll the page sideways on a phone.
-    <div className="h-full overflow-y-auto overflow-x-hidden">
+    /*
+     * NOT a scroll container — the document is. `Dashboard`'s shell is
+     * `min-h-screen` with a `flex-1` main, and a flex item's default
+     * `min-height: auto` lets it grow to its content, so the page itself is what
+     * scrolls (the same note `QuizTaking` carries). This screen used to be
+     * `h-full overflow-y-auto`, which under that shell resolved to "exactly as tall
+     * as its content" — an overflow container that never scrolled — and since
+     * `position: sticky` anchors to its nearest SCROLLPORT ancestor, every sticky in
+     * the importer was silently inert: the pinned sentence, the mobile prev/next bar
+     * and the `lg` destination rail all just scrolled away with the page.
+     *
+     * `overflow-x-clip`, not `overflow-x-hidden`: `hidden` on one axis promotes the
+     * other axis's `visible` to `auto` per the CSS overflow spec, which is precisely
+     * what created that dead scrollport. `clip` is the one value that coexists with
+     * `visible` — it stops sideways overflow (the hard rule for this screen at
+     * 360px) without establishing a scroll container at all.
+     */
+    <div className="min-h-full overflow-x-clip">
       <div className="mx-auto max-w-5xl px-3 pb-2 pt-4 sm:p-6">
         <header className="mb-4 flex items-start gap-3">
           <div className="min-w-0 flex-1">
@@ -211,11 +247,13 @@ export default function ImportReview({
                   {paragraph.sentences.map((sentence) => {
                     const isFocused = sentence.index === focused;
                     const { words, grammar } = sentenceItems(session.items, sentence.index);
-                    if (isFocused) {
+                    if (isFocused && !collapsed) {
                       return (
                         <div
                           key={sentence.index}
-                          ref={focusRef}
+                          ref={(el) => {
+                            focusRef.current = el;
+                          }}
                           className="scroll-mt-4 scroll-mb-24 lg:scroll-mb-4"
                         >
                           <ImportSentenceCard
@@ -225,6 +263,7 @@ export default function ImportReview({
                             onSetItems={onSetItems}
                             onPatchItem={onPatchItem}
                             onRegister={onRegister}
+                            onCollapse={() => setCollapsed(true)}
                             destination={destination}
                             showTranslation={showTranslations}
                             inLibrary={inLibrary}
@@ -259,8 +298,22 @@ export default function ImportReview({
                     return (
                       <button
                         key={sentence.index}
+                        // The focused sentence lands here too once it is folded: it
+                        // keeps the ref (so collapsing re-scrolls to it) and a ring,
+                        // since it is still what prev/next steps from.
+                        ref={
+                          isFocused
+                            ? (el) => {
+                                focusRef.current = el;
+                              }
+                            : undefined
+                        }
                         onClick={() => focus(sentence.index)}
-                        className="block w-full rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-gray-800/60"
+                        className={`block w-full rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-gray-800/60 ${
+                          isFocused
+                            ? "scroll-mt-4 bg-gray-800/40 ring-1 ring-indigo-700/60"
+                            : ""
+                        }`}
                       >
                         {/* Two lines on a phone: one ellipsized line is too little to
                             tell sentences apart when picking the next one. */}

@@ -56,6 +56,8 @@ interface Props {
   onPatchItem: (id: string, updates: Partial<ImportItem>, immediate?: boolean) => void;
   /** One press writes ONE destination: the Group A lesson group or the Group B set. */
   onRegister: (id: string, target: "A" | "B") => void;
+  /** Fold the rows away again — pressing the sentence a second time, or the ▲. */
+  onCollapse: () => void;
   /** Live from the destination rail — changing it mid-review re-labels every button. */
   destination: ImportDestination;
   /** Sentence translation visibility is a per-user preference owned by `ImportReview`. */
@@ -77,6 +79,7 @@ export default function ImportSentenceCard({
   onSetItems,
   onPatchItem,
   onRegister,
+  onCollapse,
   destination,
   showTranslation,
   inLibrary,
@@ -103,22 +106,48 @@ export default function ImportSentenceCard({
   const byId = new Map(items.map((i) => [i.id, i]));
   const mergeSelection = mergeIds.filter((id) => words.some((w) => w.id === id));
 
+  /** Mirrors `selection` for the click handler below: mouseup fires first and its
+   *  `setSelection` may not have re-rendered by the time the click arrives, so the
+   *  state read from the closure can be a step behind. */
+  const selectionRef = useRef("");
+
   /** Reads a selection only when it lies inside the sentence text itself — this
    *  also rejects text selected inside one of the row inputs. */
   function captureSelection() {
     const sel = window.getSelection();
     const node = sentenceRef.current;
     if (!sel || sel.isCollapsed || !node || sel.rangeCount === 0) {
-      setSelection("");
+      applySelection("");
       return;
     }
     const range = sel.getRangeAt(0);
     if (!node.contains(range.commonAncestorContainer)) {
-      setSelection("");
+      applySelection("");
       return;
     }
     const text = sel.toString().trim();
-    setSelection(text.length > 0 && text.length <= 30 ? text : "");
+    applySelection(text.length > 0 && text.length <= 30 ? text : "");
+  }
+
+  function applySelection(text: string) {
+    selectionRef.current = text;
+    setSelection(text);
+  }
+
+  /**
+   * Tapping the sentence folds the card shut — the counterpart to tapping a
+   * collapsed row to open it. Selecting a term to add is the same gesture on the
+   * same element, so two guards come first: a live selection is left alone, and a
+   * tap that only dismisses a pending "add as a word" offer spends itself on that.
+   */
+  function handleSentenceClick() {
+    const sel = window.getSelection();
+    if (sel && !sel.isCollapsed) return;
+    if (selectionRef.current) {
+      applySelection("");
+      return;
+    }
+    onCollapse();
   }
 
   function merge(ids: string[]) {
@@ -178,25 +207,39 @@ export default function ImportSentenceCard({
         reach it.
       */}
       <div className="sticky top-0 z-20 -mx-3 -mt-3 mb-1 max-h-[40vh] overflow-y-auto overscroll-contain rounded-t-xl border-b border-gray-700/60 bg-gray-800/95 px-3 pb-2 pt-3 backdrop-blur sm:-mx-4 sm:-mt-4 sm:px-4 sm:pt-4">
-        <p
-          ref={sentenceRef}
-          onMouseUp={captureSelection}
-          onTouchEnd={captureSelection}
-          className="select-text break-words text-[17px] leading-relaxed text-gray-100 sm:text-[15px]"
-        >
-          {runs.map((run, i) =>
-            run.gap ? (
-              <span
-                key={i}
-                className="rounded-sm bg-amber-500/15 text-amber-200 underline decoration-amber-500/70 decoration-dotted underline-offset-4"
-              >
-                {run.text}
-              </span>
-            ) : (
-              <span key={i}>{run.text}</span>
-            )
-          )}
-        </p>
+        <div className="flex items-start gap-2">
+          <p
+            ref={sentenceRef}
+            onMouseUp={captureSelection}
+            onTouchEnd={captureSelection}
+            onClick={handleSentenceClick}
+            className="min-w-0 flex-1 select-text break-words text-[17px] leading-relaxed text-gray-100 sm:text-[15px]"
+          >
+            {runs.map((run, i) =>
+              run.gap ? (
+                <span
+                  key={i}
+                  className="rounded-sm bg-amber-500/15 text-amber-200 underline decoration-amber-500/70 decoration-dotted underline-offset-4"
+                >
+                  {run.text}
+                </span>
+              ) : (
+                <span key={i}>{run.text}</span>
+              )
+            )}
+          </p>
+          {/* The same fold as tapping the sentence, spelled out — and the way out
+              when a selection is live, which the tap deliberately refuses. */}
+          <button
+            type="button"
+            onClick={onCollapse}
+            title={t("importCollapseSentence")}
+            aria-label={t("importCollapseSentence")}
+            className="-mr-1 shrink-0 rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-700/60 hover:text-gray-200"
+          >
+            ▲
+          </button>
+        </div>
 
         {/* The sentence's own translation, read alongside the text it belongs to.
             Set apart by a left rule so it is never mistaken for the source. */}
@@ -215,7 +258,7 @@ export default function ImportSentenceCard({
             type="button"
             onClick={() => {
               onSetItems((prev) => addWordItem(prev, sentence.index, selection), true);
-              setSelection("");
+              applySelection("");
               window.getSelection()?.removeAllRanges();
             }}
             className="mt-2 w-full break-words rounded-lg border border-blue-600 bg-blue-950/50 px-3 py-2 text-xs text-blue-200 hover:bg-blue-900/60 sm:w-auto sm:py-1.5"
