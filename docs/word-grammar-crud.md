@@ -115,7 +115,8 @@ against this list — the frontend uses these paths and no others.
 | DELETE | `/api/vocab/:language/:wordId` | ✅ 7.3, C3.1 | 204; second call 404 |
 | GET/POST | `/api/vocab/:language/groups` | ✅ 2.1, 2.2, 3.1 | |
 | PUT | `/api/vocab/:language/groups/:groupId` | ✅ 2.5 | rename only |
-| PUT | `/api/vocab/:language/groups/order` | ✅ 4.1–4.3 | |
+| PUT | `/api/vocab/:language/groups/order` | ✅ 4.1–4.3 | the order IS the category-A priority |
+| POST | `/api/vocab/:language/groups/normalize` | ✅ 2026-08-01 | re-file the language by priority; `{dryRun?, expectedGroupIds?}`, 409 on a stale order |
 | POST | `/api/vocab/:language/groups/:groupId/words` | ✅ 2.3, 4.4 | `action: add \| remove` |
 | DELETE | `/api/vocab/:language/groups/:groupId` | ✅ 7.6 | 204 |
 | DELETE | `/api/vocab/:language/group-b/members/:wordId` | ✅ 3.3–3.5 | |

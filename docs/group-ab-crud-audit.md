@@ -112,3 +112,42 @@ reports 0.
   delete → 404; create the same B name twice → one group per side; kill the network right
   after a queued smart-add resolves → no spurious draft, retry finishes the groups; "3" in
   the Group B quiz while offline → error, no ✓ receipt.
+
+---
+
+## Follow-up (2026-08-01) — group order became a priority
+
+`word_groups.order` was a display order; it is now the category-A **priority**, and the
+top A group is simultaneously the default target of every "add a word" flow
+(`frontend/src/types.ts:defaultWordGroup`) and the absorb target of the new
+`POST /api/vocab/:language/groups/normalize`. Three consequences worth recording here,
+since they touch the same invariants this audit covers:
+
+- **A third enforcement point for A-exclusivity.** Alongside `modifyWordGroupMembers`
+  (per write) and `scripts/dedupe-word-group-membership.ts` (bulk), the normalize
+  endpoint repairs a whole language on demand — and it also closes the "a B item is
+  always also in A" hole from the other direction, since a word sitting only in a
+  Group B set counts as ungrouped and joins the top A group. The two repair paths pick
+  **different survivors**: the script keeps the most recently created group, the
+  endpoint keeps the highest-priority one. Prefer the endpoint; the script remains a
+  useful independent duplicate *detector*.
+- **No dangling-id pruning in the endpoint.** F1 is fixed, so the backlog belongs to
+  `scripts/sweep-dangling-group-members.ts`. A dangling id cannot corrupt the result:
+  the ungrouped set is computed as `liveIds - claimed`.
+- **Read order is load-bearing.** The routine reads group documents *before* word ids.
+  A word created between the two reads then looks ungrouped and merely gains a
+  transient duplicate membership, which the next add, a re-run, or the dedupe script
+  repairs. Reading words first would invert that into data loss — the same word would
+  look like a deleted word's leftover and be stripped from the group it had just been
+  added to. Writes are `arrayRemove`/`arrayUnion`, matching the helpers hardened above.
+
+Legacy `order` values encoded the old append behaviour (literally the creation
+sequence), which would have handed the default add target to the *oldest* group. One-time
+repair: `scripts/reprioritize-word-groups-newest-first.ts`, guarded to skip any language
+whose order is not plain creation order.
+
+Verified live against `vocab-trainer-490014` / `vocab-database`: dry run on `chinese`
+(1887 words, 1722 grouped, 0 duplicates, 165 ungrouped) left every group byte-identical;
+409 on a stale `expectedGroupIds`; a language with no A groups returns 200 with
+`topGroup: null`; a seeded duplicate on `english` was resolved to the higher-priority
+group with both ungrouped words absorbed, Group B untouched, and a second run reported 0.
