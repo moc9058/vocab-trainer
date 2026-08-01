@@ -173,6 +173,11 @@ against this list — the frontend uses these paths and no others.
 
 ### F1 — Deleting a word or grammar item leaves a dangling id in every group it belonged to · **Medium**
 
+> **FIXED (2026-08-01)** — `deleteWord` / `deleteGrammarItem` now strip the id from every group
+> (plus, for words, the `flagged_words` and `progress` docs) in the same batch as the doc delete,
+> and `scripts/sweep-dangling-group-members.ts` repairs ids already stranded. See
+> `docs/group-ab-crud-audit.md` (A1). The record below describes the pre-fix behavior.
+
 `firestore.ts:deleteWord` cleans up example sentences, segment back-references and the `word_index`
 entry, then deletes the doc. It never touches `word_groups`. `deleteGrammarItem` has the same gap for
 `grammar_groups`. Group A and Group B are equally affected.
@@ -282,6 +287,12 @@ justifies. The repo already ships the repair path — see the `validate-and-modi
 skill / `backfill-word-appears-in.ts` + `cleanup-dangling-example-refs.ts`.
 
 ### F6 — Duplicate group names are accepted · **Low**
+
+> **FIXED for category B (2026-08-01)** — `POST /:language/groups` is now idempotent by
+> (language, trimmed name) when `category === "B"` on both the vocab and grammar routes, and
+> `createGroupBGroup` re-checks the server before creating either half. Category A deliberately
+> stays create-always (two same-named lessons may be intentional; the id is the identity).
+> See `docs/group-ab-crud-audit.md` (A7). The record below describes the pre-fix behavior.
 
 `createWordGroup`/`createGrammarGroup` do not check for an existing name. For Group A that is merely
 confusing; for Group B it is lossy, because `loadGroupBGroups` merges the two domains **by name** into
