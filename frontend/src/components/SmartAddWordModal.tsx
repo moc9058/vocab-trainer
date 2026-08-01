@@ -4,7 +4,7 @@ import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP, urlLanguageToIsoCode } from "../settings/defaults";
 import { LEVEL_OPTIONS } from "../constants/levels";
 import { smartAddWord, lookupWord, checkTerms, getGroups, createGroup, modifyGroupMembers } from "../api/vocab";
-import { categoryGroups, displayTranslation, latestWordGroup, type Word, type WordDraft, type WordGroup } from "../types";
+import { categoryGroups, displayTranslation, defaultWordGroup, type Word, type WordDraft, type WordGroup } from "../types";
 import GroupBSelect from "./GroupBSelect";
 import PinyinInput from "./PinyinInput";
 
@@ -182,8 +182,8 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           setSelectedGroupIds(new Set(loadedGroups.filter((g) => names.has(g.name)).map((g) => g.id)));
           return;
         }
-        const latestGroup = latestWordGroup(loadedGroups);
-        setSelectedGroupIds(latestGroup ? new Set([latestGroup.id]) : new Set());
+        const defaultGroup = defaultWordGroup(loadedGroups);
+        setSelectedGroupIds(defaultGroup ? new Set([defaultGroup.id]) : new Set());
       })
       .catch(() => setGroups([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -373,8 +373,8 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     setGrammaticalCategory("");
     setLevel("");
     setTopics([]);
-    const latestGroup = latestWordGroup(groups);
-    setSelectedGroupIds(latestGroup ? new Set([latestGroup.id]) : new Set());
+    const defaultGroup = defaultWordGroup(groups);
+    setSelectedGroupIds(defaultGroup ? new Set([defaultGroup.id]) : new Set());
     setExamples([{ sentence: "", translation: "" }]);
     setExistingWord(null);
     setError("");

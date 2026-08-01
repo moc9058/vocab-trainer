@@ -9,7 +9,7 @@ import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord }
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
 import SmartAddWordModal from "./SmartAddWordModal";
-import { categoryGroups, displayTranslation, latestWordGroup, type Word, type WordDraft, type PaginatedResult, type WordGroup } from "../types";
+import { categoryGroups, displayTranslation, defaultWordGroup, type Word, type WordDraft, type PaginatedResult, type WordGroup } from "../types";
 import { urlLanguageToIsoCode } from "../settings/defaults";
 
 type SmartAddPayload = {
@@ -173,11 +173,12 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     }
   }
 
-  // Keep the draft registration target on the latest group until the user picks
-  // one (also re-defaults when the language, and so the group list, changes).
+  // Keep the draft registration target on the highest-priority group until the
+  // user picks one (also re-defaults when the language, and so the group list,
+  // changes).
   useEffect(() => {
     if (draftGroupTouchedRef.current) return;
-    setDraftGroupId(latestWordGroup(groups)?.id ?? "");
+    setDraftGroupId(defaultWordGroup(groups)?.id ?? "");
   }, [groups]);
 
   useEffect(() => {
@@ -440,9 +441,9 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     refreshExistingTerms(word);
   }
 
-  // The API returns groups in their persisted arranged order. New chips default
-  // to the last group in that order while explicit per-chip choices take priority.
-  const defaultChipGroupId = latestWordGroup(groups)?.id ?? "";
+  // The API returns groups in their persisted priority order. New chips default
+  // to the FIRST group in that order while explicit per-chip choices take priority.
+  const defaultChipGroupId = defaultWordGroup(groups)?.id ?? "";
   function getChipGroupId(chipText: string): string {
     const override = chipGroupOverrides.get(chipText);
     return override !== undefined ? override : defaultChipGroupId;

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, Fragment } from "react";
 import { useI18n } from "../i18n/context";
 import { checkTerms, smartAddWord, modifyGroupMembers, getGroups } from "../api/vocab";
-import { categoryGroups, displayTranslation, latestWordGroup, type WordGroup } from "../types";
+import { categoryGroups, displayTranslation, defaultWordGroup, type WordGroup } from "../types";
 
 export interface ExampleFormState {
   id?: string;
@@ -71,12 +71,12 @@ export default function ExampleSentenceEditor({
   const [segmentFlags, setSegmentFlags] = useState<Map<string, boolean>>(new Map());
   const [segmentAddError, setSegmentAddError] = useState<string | null>(null);
 
-  // Vocab word-groups (sorted latest-first by createdAt). Used to populate the
+  // Vocab word-groups in the server's PRIORITY order. Used to populate the
   // per-chip group selector; the chip workflow always assigns to a *vocab*
   // group even when this editor is mounted under GrammarFormModal.
   const [wordGroups, setWordGroups] = useState<WordGroup[]>([]);
   // Per-chip group override. Key = chip text; value = groupId or "" (no group).
-  // Absent key falls back to the latest group (wordGroups[0]?.id).
+  // Absent key falls back to the highest-priority group (wordGroups[0]?.id).
   const [chipGroupOverrides, setChipGroupOverrides] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
@@ -84,8 +84,12 @@ export default function ExampleSentenceEditor({
       .then((gs) => {
         // Chip adds always target a category-A group; Group B membership comes
         // from the host form's GroupBSelect via `extraGroupIds`.
-        const sorted = categoryGroups(gs, "A").sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-        setWordGroups(sorted);
+        //
+        // Do NOT sort here. `getGroups` already returns the server's priority
+        // order, and `defaultWordGroup` takes [0] of it — a local re-sort by
+        // `createdAt` would silently hand chip adds the newest group instead of
+        // the highest-priority one.
+        setWordGroups(categoryGroups(gs, "A"));
       })
       .catch(() => setWordGroups([]));
   }, [language]);
@@ -97,10 +101,10 @@ export default function ExampleSentenceEditor({
     onChipInFlightChange?.(busySegments.size > 0);
   }, [busySegments, onChipInFlightChange]);
 
-  const latestGroupId = latestWordGroup(wordGroups)?.id ?? "";
+  const defaultGroupId = defaultWordGroup(wordGroups)?.id ?? "";
   function getChipGroupId(chipText: string): string {
     const override = chipGroupOverrides.get(chipText);
-    return override !== undefined ? override : latestGroupId;
+    return override !== undefined ? override : defaultGroupId;
   }
   function setChipGroupId(chipText: string, groupId: string) {
     setChipGroupOverrides((prev) => {

@@ -2720,15 +2720,28 @@ function docToWordGroup(doc: FirebaseFirestore.DocumentSnapshot): WordGroup {
   };
 }
 
+/**
+ * Category-A group PRIORITY order — and, being the same array, the display order of
+ * every group list. Index 0 is the highest priority.
+ *
+ * An explicit `order` (only `reorderWordGroups` writes it) wins. Without one — a
+ * language nobody has ever dragged — the NEWEST group comes first: the group you
+ * just created is the lesson you are filling, so it is both the default add target
+ * (`frontend/src/types.ts:defaultWordGroup`) and the group that
+ * `normalizeWordGroupMembership` files ungrouped words into, until you drag
+ * something above it. A group with no `order` still sorts after every group that
+ * HAS one: a stated priority beats an implied one.
+ */
+function compareWordGroups(a: WordGroup, b: WordGroup): number {
+  const ao = a.order ?? Number.MAX_SAFE_INTEGER;
+  const bo = b.order ?? Number.MAX_SAFE_INTEGER;
+  if (ao !== bo) return ao - bo;
+  return b.createdAt.localeCompare(a.createdAt); // newest first
+}
+
 export async function getWordGroups(language: string): Promise<WordGroup[]> {
   const snap = await wordGroups.where("language", "==", language).get();
-  return snap.docs.map(docToWordGroup).sort((a, b) => {
-    if (a.order !== undefined || b.order !== undefined) {
-      return (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER)
-        || a.createdAt.localeCompare(b.createdAt);
-    }
-    return a.createdAt.localeCompare(b.createdAt);
-  });
+  return snap.docs.map(docToWordGroup).sort(compareWordGroups);
 }
 
 export async function getWordGroup(groupId: string): Promise<WordGroup | null> {
@@ -2751,16 +2764,21 @@ export async function createWordGroup(
     createdAt: new Date().toISOString(),
     ...(existingGroups.some((existingGroup) => existingGroup.order !== undefined)
       ? {
-          // max+1, not existingGroups.length: after a delete, length collides
-          // with a surviving order (0,1,2 → delete the middle → the next
-          // create was also handed 2).
+          // min-1, i.e. the TOP of the priority order: a new group is the lesson
+          // you are about to fill, so it becomes the default add target and the
+          // normalize absorb target — the same thing the newest-first `createdAt`
+          // fallback in `compareWordGroups` says for a never-reordered language.
+          // Not `existingGroups.length`: after a delete, length collides with a
+          // surviving order (0,1,2 → delete the middle → the next create was also
+          // handed 2). min-1 is strictly below every existing value, so it cannot
+          // collide. Negative values are fine and transient — `reorderWordGroups`
+          // renumbers 0..n-1 on the next drag.
           order:
-            Math.max(
-              -1,
+            Math.min(
               ...existingGroups
                 .map((g) => g.order)
                 .filter((o): o is number => typeof o === "number"),
-            ) + 1,
+            ) - 1,
         }
       : {}),
     ...(category === "B" ? { category: "B" as const } : {}),

@@ -104,14 +104,25 @@ export interface WordGroup {
   category?: GroupCategory;
 }
 
-/** Most recently created **category A** word group — the default registration target
- *  for drafts (groups are otherwise listed in their user-arranged order). Group B
- *  groups are never an implicit default; they are only ever picked explicitly. */
-export function latestWordGroup(groups: WordGroup[]): WordGroup | undefined {
-  return categoryGroups(groups, "A").reduce<WordGroup | undefined>(
-    (latest, g) => (!latest || g.createdAt > latest.createdAt ? g : latest),
-    undefined
-  );
+/**
+ * The highest-priority **category A** word group: the default registration target for
+ * every "add a word" flow (drafts, segment chips, smart add, the article importer),
+ * AND the group `POST /api/vocab/:language/groups/normalize` files ungrouped words
+ * into. One definition, so the button's absorb target and the default add target can
+ * never disagree.
+ *
+ * This is the FIRST group in the server's arranged order — `getWordGroups` sorts by
+ * `order` (written by the group manager's drag) and falls back to newest-created
+ * first — NOT "the most recently created group". Dragging a group to the top of the
+ * manager therefore changes the default add target too. Until a language is ever
+ * dragged no `order` exists anywhere and the newest-first fallback reproduces the
+ * old `createdAt`-max behaviour exactly.
+ *
+ * PRECONDITION: `groups` must still be in server order. Do not sort it locally.
+ * Group B groups are never an implicit default; they are only ever picked explicitly.
+ */
+export function defaultWordGroup(groups: WordGroup[]): WordGroup | undefined {
+  return categoryGroups(groups, "A")[0];
 }
 
 export interface WordDraft {
@@ -201,7 +212,16 @@ export interface GrammarGroup {
   category?: GroupCategory;
 }
 
-/** Most recently created **category A** group (by `createdAt`), or undefined if there is none. */
+/**
+ * Most recently created **category A** group (by `createdAt`), or undefined if there
+ * is none.
+ *
+ * Deliberately NOT the priority-based `defaultWordGroup`: `GrammarGroup` has no
+ * `order` field, grammar groups are not drag-reorderable (`GroupPickerModal` gates
+ * reordering on `kind === "word"`), and grammar is exempt from the one-item-one-A-group
+ * rule — so there is no grammar priority to read. Keep the two asymmetric rather than
+ * inventing an ordering the user cannot see or set.
+ */
 export function latestGrammarGroup(groups: GrammarGroup[]): GrammarGroup | undefined {
   return categoryGroups(groups, "A").reduce<GrammarGroup | undefined>(
     (latest, g) => (!latest || g.createdAt > latest.createdAt ? g : latest),

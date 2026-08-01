@@ -4,7 +4,7 @@ import GroupBUnifiedSelect from "../GroupBUnifiedSelect";
 import {
   categoryGroups,
   latestGrammarGroup,
-  latestWordGroup,
+  defaultWordGroup,
   type GrammarGroup,
   type WordGroup,
 } from "../../types";
@@ -62,10 +62,12 @@ export default function ImportDestinationRail({
     if (wordGroups.length === 0 && grammarGroups.length === 0) return;
     if (seededRef.current === language) return;
     seededRef.current = language;
-    const latestWord = latestWordGroup(wordGroups);
+    // Words seed from the priority order (drag-arranged); grammar groups carry no
+    // `order`, so they still seed from the most recently created one.
+    const defaultWord = defaultWordGroup(wordGroups);
     const latestGrammar = latestGrammarGroup(grammarGroups);
     onChange({
-      ...(latestWord ? { wordGroupId: latestWord.id } : {}),
+      ...(defaultWord ? { wordGroupId: defaultWord.id } : {}),
       ...(latestGrammar ? { grammarGroupId: latestGrammar.id } : {}),
     });
     // `onChange` is a fresh closure each render; re-running on it would loop.
