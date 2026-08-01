@@ -38,7 +38,16 @@ export interface GrammarCreateOptions {
            *  the item's group membership without a second round trip. */
           grammarId?: string;
         }
-      | { ok: false; error: string; duplicate: boolean; rescuedAsDraft: boolean }
+      | {
+          ok: false;
+          error: string;
+          duplicate: boolean;
+          rescuedAsDraft: boolean;
+          /** Set when the item WAS created and only follow-up work — group
+           *  attach / draft retirement — failed (mirrors the word queue's
+           *  `wordId` on the failure arm). */
+          grammarId?: string;
+        }
   ) => void;
 }
 
@@ -53,6 +62,16 @@ export interface GrammarQueueResult {
   statement: string;
   success: boolean;
   error?: string;
+}
+
+// A create that got PAST smart-add: the item exists in the DB, only follow-up
+// work (group attach, draft retirement) failed — must not be rescued as a
+// draft, which would store the pattern twice on the next registration (grammar
+// smart-add has no server-side duplicate check).
+class PostCreateError extends Error {
+  constructor(public grammarId: string, public cause: unknown) {
+    super(String(cause));
+  }
 }
 
 // Serializes group-by-NAME resolution across the parallel workers: two queued
@@ -71,33 +90,39 @@ function withGroupLock<T>(fn: () => Promise<T>): Promise<T> {
 /** Resolves to the created item's ID for a `create`, and to undefined for an `update`. */
 async function processItem(item: QueueItem): Promise<string | undefined> {
   if (item.type === "create") {
+    // No 409 recovery here, unlike the word queue: grammar smart-add has no
+    // server-side duplicate check, so a 409 is unreachable.
     const saved = await smartAddGrammarItem(item.language, item.payload);
-    if (item.groupIds && item.groupIds.length > 0) {
-      await Promise.all(
-        item.groupIds.map((groupId) =>
-          modifyGrammarGroupMembers(item.language, groupId, [saved.id], "add"),
-        ),
-      );
-    }
-    // `item.groupNames` already reflects the caller's full intent — the form's
-    // selected-groups checkboxes (defaulted to the latest group unless the
-    // user changed them) plus any not-yet-existing draft group names.
-    if (item.groupNames && item.groupNames.length > 0) {
-      const names = [...new Set(item.groupNames.map((n) => n.trim()).filter(Boolean))];
-      await withGroupLock(async () => {
-        const existing = await getGrammarGroups(item.language);
-        for (const name of names) {
-          const group =
-            existing.find((g) => g.name === name) ??
-            (await createGrammarGroup(item.language, name));
-          await modifyGrammarGroupMembers(item.language, group.id, [saved.id], "add");
-        }
-      });
-    }
-    // Retire the source draft only after the item and its groups all succeeded,
-    // so a failed registration keeps the draft available for another attempt.
-    if (item.draftId) {
-      await deleteGrammarDraft(item.language, item.draftId);
+    try {
+      if (item.groupIds && item.groupIds.length > 0) {
+        await Promise.all(
+          item.groupIds.map((groupId) =>
+            modifyGrammarGroupMembers(item.language, groupId, [saved.id], "add"),
+          ),
+        );
+      }
+      // `item.groupNames` already reflects the caller's full intent — the form's
+      // selected-groups checkboxes (defaulted to the latest group unless the
+      // user changed them) plus any not-yet-existing draft group names.
+      if (item.groupNames && item.groupNames.length > 0) {
+        const names = [...new Set(item.groupNames.map((n) => n.trim()).filter(Boolean))];
+        await withGroupLock(async () => {
+          const existing = await getGrammarGroups(item.language);
+          for (const name of names) {
+            const group =
+              existing.find((g) => g.name === name) ??
+              (await createGrammarGroup(item.language, name));
+            await modifyGrammarGroupMembers(item.language, group.id, [saved.id], "add");
+          }
+        });
+      }
+      // Retire the source draft only after the item and its groups all succeeded,
+      // so a failed registration keeps the draft available for another attempt.
+      if (item.draftId) {
+        await deleteGrammarDraft(item.language, item.draftId);
+      }
+    } catch (err) {
+      throw new PostCreateError(saved.id, err);
     }
     return saved.id;
   }
@@ -177,6 +202,29 @@ export function useGrammarQueue() {
           setRefreshSignal((s) => s + 1);
         })
         .catch((err: unknown) => {
+          if (item.type === "create" && err instanceof PostCreateError) {
+            // The item IS stored — only group attach / draft retirement failed.
+            // No draft rescue (registering the rescue would store the pattern
+            // twice). The failure settle carries the id so callers (the
+            // importer) can retry down the idempotent group-add path.
+            setRecentResults((prev) =>
+              [{
+                id: item.id,
+                statement: item.statement,
+                success: false,
+                error: `created, but follow-up failed: ${String(err.cause)}`,
+              }, ...prev].slice(0, 5),
+            );
+            item.onSettled?.({
+              ok: false,
+              error: String(err.cause),
+              duplicate: false,
+              rescuedAsDraft: false,
+              grammarId: err.grammarId,
+            });
+            setRefreshSignal((s) => s + 1);
+            return;
+          }
           setRecentResults((prev) =>
             [{ id: item.id, statement: item.statement, success: false, error: String(err) }, ...prev].slice(0, 5),
           );

@@ -25,9 +25,18 @@ export default function GroupBUnifiedSelect({ language, selectedNames, onChange 
 
   useEffect(() => {
     let cancelled = false;
+    setError(null);
     loadGroupBGroups(language)
       .then((gs) => { if (!cancelled) setGroups(gs); })
-      .catch(() => { if (!cancelled) setGroups([]); });
+      .catch((err) => {
+        // Surface the failure — an empty list would read as "no groups yet",
+        // and creating "a group that already exists but couldn't be read" is
+        // exactly the duplicate-name path this component must not open.
+        if (!cancelled) {
+          setGroups([]);
+          setError(err instanceof Error ? err.message : String(err));
+        }
+      });
     return () => { cancelled = true; };
   }, [language]);
 

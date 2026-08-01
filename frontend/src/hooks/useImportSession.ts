@@ -52,7 +52,16 @@ interface Options {
  */
 type SettleResult =
   | { ok: true; entityId?: string; groupIds: string[] }
-  | { ok: false; error: string; duplicate: boolean; rescuedAsDraft: boolean };
+  | {
+      ok: false;
+      error: string;
+      duplicate: boolean;
+      rescuedAsDraft: boolean;
+      /** Present when the entity WAS created and only the follow-up (group
+       *  attach) failed — the row still learns its id, so the retry press takes
+       *  the idempotent group-add path instead of re-creating. */
+      entityId?: string;
+    };
 
 /** The term (word) or statement (grammar) two rows must share to be "the same item". */
 function itemKey(item: ImportItem): string {
@@ -329,7 +338,10 @@ export function useImportSession({
     (kind: "word" | "grammar"): Promise<string[]> => {
       const names = sessionRef.current?.groupBNames ?? [];
       if (names.length === 0) return Promise.resolve([]);
-      const key = names.join(" ");
+      // The key carries the language: this ref survives a language switch
+      // (ImportView is not remounted per language), and a same-named B set in
+      // another language must not reuse these group ids.
+      const key = [language, ...names].join(" ");
       if (groupBCache.current.key !== key) groupBCache.current = { key };
       const cached = groupBCache.current[kind];
       if (cached) return cached;
@@ -390,8 +402,10 @@ export function useImportSession({
           : { status: "failed" as const, error: result.error };
 
         return items.map((i) => {
-          const learnedId =
-            result.ok && result.entityId ? { [idField]: result.entityId } : {};
+          // The id is knowledge about the TERM and is learned even on failure
+          // (created-but-group-attach-failed): status stays `failed`, but the
+          // retry press can now take the group-add path.
+          const learnedId = result.entityId ? { [idField]: result.entityId } : {};
           if (i.id === id) {
             // Only the row that actually attempted the write can claim the rescue.
             return withRegistration({ ...i, ...learnedId } as ImportItem, destination, {
@@ -596,7 +610,9 @@ export function useImportSession({
                   return;
                 }
                 if (!result.duplicate) {
-                  settle(result);
+                  // `wordId` is set when the create landed and only the group
+                  // attach failed — carry it so the row learns its entity id.
+                  settle({ ...result, entityId: result.wordId });
                   return;
                 }
                 // A 409 means the word IS in the DB but smart-add threw before the
@@ -663,9 +679,15 @@ export function useImportSession({
           {
             ...(groupIds.length > 0 ? { groupIds } : {}),
             // Grammar smart-add never returns 409 (no duplicate check server-side), so
-            // there is no duplicate branch to recover here.
+            // there is no duplicate branch to recover here. On failure,
+            // `grammarId` is set when only the group attach failed — carried so
+            // the row (and its siblings) learn the entity id.
             onSettled: (result) =>
-              settle(result.ok ? { ok: true, entityId: result.grammarId, groupIds } : result),
+              settle(
+                result.ok
+                  ? { ok: true, entityId: result.grammarId, groupIds }
+                  : { ...result, entityId: result.grammarId }
+              ),
           }
         );
       } catch (err) {

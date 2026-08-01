@@ -17,11 +17,14 @@ export interface UnifiedGroupB {
   grammarGroupId?: string;
 }
 
-/** Every category-B group of a language, merged across both domains by name. */
+/** Every category-B group of a language, merged across both domains by name.
+ *  Read failures REJECT rather than degrade to []: a swallowed error is
+ *  indistinguishable from "this side doesn't exist", and resolveGroupBTargets
+ *  would then CREATE duplicate-named groups it merely failed to see. */
 export async function loadGroupBGroups(language: string): Promise<UnifiedGroupB[]> {
   const [wordGroups, grammarGroups] = await Promise.all([
-    getGroups(language).catch(() => []),
-    getGrammarGroups(language).catch(() => []),
+    getGroups(language),
+    getGrammarGroups(language),
   ]);
   const byName = new Map<string, UnifiedGroupB>();
   for (const g of categoryGroups(wordGroups, "B")) {
@@ -33,13 +36,17 @@ export async function loadGroupBGroups(language: string): Promise<UnifiedGroupB[
   return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Creates both sides at once so the new group is immediately usable by either domain. */
+/** Creates both sides so the new group is immediately usable by either domain.
+ *  Re-checks the server first and only creates the missing halves: a retry
+ *  after a half-failed pair create (network drop between the two POSTs) must
+ *  HEAL the pair, not duplicate the side that survived. The server's
+ *  category-B create is also idempotent by name, so even a concurrent create
+ *  resolves to one group per side. */
 export async function createGroupBGroup(language: string, name: string): Promise<UnifiedGroupB> {
-  const [wordGroup, grammarGroup] = await Promise.all([
-    createGroup(language, name, "B"),
-    createGrammarGroup(language, name, "B"),
-  ]);
-  return { name, wordGroupId: wordGroup.id, grammarGroupId: grammarGroup.id };
+  const existing = (await loadGroupBGroups(language)).find((g) => g.name === name);
+  const wordGroupId = existing?.wordGroupId ?? (await createGroup(language, name, "B")).id;
+  const grammarGroupId = existing?.grammarGroupId ?? (await createGrammarGroup(language, name, "B")).id;
+  return { name, wordGroupId, grammarGroupId };
 }
 
 /**

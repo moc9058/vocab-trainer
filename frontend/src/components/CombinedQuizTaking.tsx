@@ -137,6 +137,8 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   // Purely local feedback — the current session keeps showing them; they simply
   // stop appearing in future Group B sessions.
   const [removedFromBIds, setRemovedFromBIds] = useState<Set<string>>(new Set());
+  const [removingFromBIds, setRemovingFromBIds] = useState<Set<string>>(new Set());
+  const [removeFromBError, setRemoveFromBError] = useState<string | null>(null);
   const [groupNameMap, setGroupNameMap] = useState<Map<string, string>>(new Map());
   // Which items actually sit in a category-B group, per domain. The mixed A+B quiz draws
   // from the UNION of both categories, so most of its cards are A-only and must NOT offer
@@ -425,6 +427,28 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     return kind === "word" ? groupBIds.words.has(refId) : groupBIds.grammar.has(refId);
   }
 
+  /** Awaited and success-only: the ✓ badge used to be set alongside a
+   *  fire-and-forget request with a swallowed catch, so a failed removal still
+   *  showed the receipt while the server kept the item in Group B. */
+  async function handleRemoveFromGroupB(refId: string, kind: "word" | "grammar") {
+    if (removingFromBIds.has(refId) || removedFromBIds.has(refId)) return;
+    setRemovingFromBIds((prev) => new Set([...prev, refId]));
+    setRemoveFromBError(null);
+    try {
+      if (kind === "word") await removeWordFromGroupB(currentSession.language, refId);
+      else await removeGrammarFromGroupB(currentSession.language, refId);
+      setRemovedFromBIds((prev) => new Set([...prev, refId]));
+    } catch {
+      setRemoveFromBError(t("removeFromGroupBFailed"));
+    } finally {
+      setRemovingFromBIds((prev) => {
+        const next = new Set(prev);
+        next.delete(refId);
+        return next;
+      });
+    }
+  }
+
   // Group B: "3"-key equivalent as a clickable control, plus the post-removal badge.
   function GroupBExcludeControl({ refId, kind }: { refId: string; kind: "word" | "grammar" }) {
     if (!usesGroupBControls) return null;
@@ -438,23 +462,21 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       );
     }
     if (!isInGroupB(refId, kind)) return null;
+    const removing = removingFromBIds.has(refId);
     return (
-      <button
-        type="button"
-        onClick={() => {
-          const call =
-            kind === "word"
-              ? removeWordFromGroupB(currentSession.language, refId)
-              : removeGrammarFromGroupB(currentSession.language, refId);
-          void call.catch(() => {});
-          setRemovedFromBIds((prev) => new Set([...prev, refId]));
-        }}
-        className="w-full max-w-lg rounded-md border border-amber-700/50 bg-amber-950/40 px-3 py-2.5 text-center text-sm font-medium text-amber-300 hover:bg-amber-950/60 sm:bg-transparent sm:py-1.5 sm:text-left sm:text-xs sm:font-normal sm:hover:bg-amber-950/30"
-      >
-        {/* The "3" hint only means something where there is a keyboard. */}
-        <span className="hidden sm:inline">3 · </span>
-        {t("removeFromGroupB")}
-      </button>
+      <div className="w-full max-w-lg space-y-1">
+        <button
+          type="button"
+          disabled={removing}
+          onClick={() => void handleRemoveFromGroupB(refId, kind)}
+          className="w-full rounded-md border border-amber-700/50 bg-amber-950/40 px-3 py-2.5 text-center text-sm font-medium text-amber-300 hover:bg-amber-950/60 disabled:opacity-50 sm:bg-transparent sm:py-1.5 sm:text-left sm:text-xs sm:font-normal sm:hover:bg-amber-950/30"
+        >
+          {/* The "3" hint only means something where there is a keyboard. */}
+          <span className="hidden sm:inline">3 · </span>
+          {removing ? "…" : t("removeFromGroupB")}
+        </button>
+        {removeFromBError && <p className="text-xs text-red-400">{removeFromBError}</p>}
+      </div>
     );
   }
 
@@ -485,6 +507,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     setShowingAnswer(false);
     resetExpandedAnswers();
     setFlaggedIds(new Set());
+    setRemoveFromBError(null);
   }
 
   function endSession() {
@@ -536,12 +559,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         // Same gate as the on-screen control: the mixed quiz's A-only cards are not in B,
         // and the key must not do what the button declines to offer.
         if (!isInGroupB(refId, question.kind)) return;
-        const call =
-          question.kind === "word"
-            ? removeWordFromGroupB(currentSession.language, refId)
-            : removeGrammarFromGroupB(currentSession.language, refId);
-        void call.catch(() => {});
-        setRemovedFromBIds((prev) => new Set([...prev, refId]));
+        void handleRemoveFromGroupB(refId, question.kind);
       } else if (event.key === "3" && !usesGroupBControls && question?.kind === "word") {
         event.preventDefault();
         const wordId = question.wordId;

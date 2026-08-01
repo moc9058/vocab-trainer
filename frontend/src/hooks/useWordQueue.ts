@@ -5,6 +5,7 @@ import {
   updateWord,
   getGroups,
   createGroup,
+  checkTerms,
   uploadWordDrafts,
   deleteWordDraft,
 } from "../api/vocab";
@@ -36,7 +37,17 @@ export interface WordCreateOptions {
            *  group membership. */
           wordId?: string;
         }
-      | { ok: false; error: string; duplicate: boolean; rescuedAsDraft: boolean }
+      | {
+          ok: false;
+          error: string;
+          duplicate: boolean;
+          rescuedAsDraft: boolean;
+          /** Set when the word WAS created (or recovered from a 409) and only
+           *  follow-up work — group attach / draft retirement — failed. The
+           *  caller can then retry down the cheap group-membership-only path
+           *  instead of re-creating. */
+          wordId?: string;
+        }
   ) => void;
 }
 
@@ -58,6 +69,16 @@ export interface QueueResult {
   error?: string;
 }
 
+// A create that got PAST smart-add: the word exists in the DB, only follow-up
+// work (group attach, draft retirement) failed. The catch below must treat this
+// differently from a failed create — rescuing it as a draft would mint a
+// guaranteed future duplicate of a word that is already stored.
+class PostCreateError extends Error {
+  constructor(public wordId: string, public cause: unknown) {
+    super(String(cause));
+  }
+}
+
 // Serializes group-by-NAME resolution across the parallel workers: two queued
 // drafts sharing a brand-new group name would otherwise both miss the lookup
 // and each create a duplicate group.
@@ -74,33 +95,54 @@ function withGroupLock<T>(fn: () => Promise<T>): Promise<T> {
 /** Resolves to the created word's ID for a `create`, and to undefined for an `update`. */
 async function processItem(item: QueueItem): Promise<string | undefined> {
   if (item.type === "create") {
-    const word = await smartAddWord(item.language, item.payload);
-    const groupIds = item.payload.groupIds ?? [];
-    if (groupIds.length > 0) {
-      await Promise.all(
-        groupIds.map((groupId) =>
-          modifyGroupMembers(item.language, groupId, [word.id], "add"),
-        ),
-      );
+    let wordId: string;
+    try {
+      const word = await smartAddWord(item.language, item.payload);
+      wordId = word.id;
+    } catch (err) {
+      // 409 recovery, for DRAFT items only: a previous attempt that died after
+      // the create (a PostCreateError) left the word stored but the draft's
+      // group work undone and the draft itself unretired — every plain retry
+      // would 409 forever with no way out. Recover the id and fall through to
+      // the group/draft steps. Manual and chip adds keep the honest 409: their
+      // hand-typed definitions were NOT saved, and a silent success would
+      // claim they were.
+      if (!(item.draftId && String(err).includes("409"))) throw err;
+      const { existing } = await checkTerms(item.language, [item.term.trim()]);
+      const foundId = existing[item.term.trim()];
+      if (!foundId) throw err;
+      wordId = foundId;
     }
-    if (item.groupNames && item.groupNames.length > 0) {
-      const names = [...new Set(item.groupNames.map((n) => n.trim()).filter(Boolean))];
-      await withGroupLock(async () => {
-        const existing = await getGroups(item.language);
-        for (const name of names) {
-          const group =
-            existing.find((g) => g.name === name) ??
-            (await createGroup(item.language, name));
-          await modifyGroupMembers(item.language, group.id, [word.id], "add");
-        }
-      });
+    try {
+      const groupIds = item.payload.groupIds ?? [];
+      if (groupIds.length > 0) {
+        await Promise.all(
+          groupIds.map((groupId) =>
+            modifyGroupMembers(item.language, groupId, [wordId], "add"),
+          ),
+        );
+      }
+      if (item.groupNames && item.groupNames.length > 0) {
+        const names = [...new Set(item.groupNames.map((n) => n.trim()).filter(Boolean))];
+        await withGroupLock(async () => {
+          const existing = await getGroups(item.language);
+          for (const name of names) {
+            const group =
+              existing.find((g) => g.name === name) ??
+              (await createGroup(item.language, name));
+            await modifyGroupMembers(item.language, group.id, [wordId], "add");
+          }
+        });
+      }
+      // Retire the source draft only after the word and its groups all succeeded,
+      // so a failed registration keeps the draft available for another attempt.
+      if (item.draftId) {
+        await deleteWordDraft(item.language, item.draftId);
+      }
+    } catch (err) {
+      throw new PostCreateError(wordId, err);
     }
-    // Retire the source draft only after the word and its groups all succeeded,
-    // so a failed registration keeps the draft available for another attempt.
-    if (item.draftId) {
-      await deleteWordDraft(item.language, item.draftId);
-    }
-    return word.id;
+    return wordId;
   }
   await updateWord(item.language, item.wordId, item.updates);
   await Promise.all([
@@ -171,6 +213,32 @@ export function useWordQueue() {
           setRefreshSignal((s) => s + 1);
         })
         .catch((err: unknown) => {
+          if (item.type === "create" && err instanceof PostCreateError) {
+            // The word IS stored — only group attach / draft retirement failed.
+            // No draft rescue (the word exists; a rescue draft is a guaranteed
+            // future duplicate), and the term counts as succeeded for the
+            // chips, whose green-✓ invariant is "now in the DB". The failure
+            // settle carries the id so callers (the importer) can retry down
+            // the idempotent group-add path.
+            setRecentResults((prev) =>
+              [{
+                id: item.id,
+                term: item.term,
+                success: false,
+                error: `created, but follow-up failed: ${String(err.cause)}`,
+              }, ...prev].slice(0, 5),
+            );
+            setSucceededTerms((prev) => new Set(prev).add(item.term));
+            item.onSettled?.({
+              ok: false,
+              error: String(err.cause),
+              duplicate: false,
+              rescuedAsDraft: false,
+              wordId: err.wordId,
+            });
+            setRefreshSignal((s) => s + 1);
+            return;
+          }
           setRecentResults((prev) =>
             [{ id: item.id, term: item.term, success: false, error: String(err) }, ...prev].slice(0, 5),
           );

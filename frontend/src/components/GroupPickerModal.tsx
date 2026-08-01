@@ -108,6 +108,9 @@ export default function GroupPickerModal({
   const [editName, setEditName] = useState("");
   const [confirmedDelete, setConfirmedDelete] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
+  // Every mutating handler here used to be try…finally with no catch — a failed
+  // request surfaced as nothing but a stopped spinner (unhandled rejection).
+  const [actionError, setActionError] = useState<string | null>(null);
   const newInputRef = useRef<HTMLInputElement>(null);
 
   const isManageMode = itemIds.length === 0;
@@ -141,6 +144,7 @@ export default function GroupPickerModal({
 
   async function handleAddToGroup(group: AnyGroup) {
     setBusy(group.id);
+    setActionError(null);
     try {
       const updated = (await api.modify(language, group.id, itemIds, "add")) as AnyGroup;
       // Adding to a category-A WORD group MOVES the item there — the server strips it
@@ -154,6 +158,8 @@ export default function GroupPickerModal({
       setGroups(next);
       onDone(next);
       onClose();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(null);
     }
@@ -163,19 +169,29 @@ export default function GroupPickerModal({
     const name = newName.trim();
     if (!name || creating) return;
     setCreating(true);
+    setActionError(null);
     try {
-      const group = (await api.create(language, name, category)) as AnyGroup;
-      let finalGroup = group;
-      if (itemIds.length > 0) {
-        finalGroup = (await api.modify(language, group.id, itemIds, "add")) as AnyGroup;
-      }
-      const next = [...groups, finalGroup];
-      setGroups(next);
-      onDone(next);
+      const created = (await api.create(language, name, category)) as AnyGroup;
+      // Reflect the created group locally BEFORE the member-add: if that add
+      // fails, the retry must go down the plain add-to-group path — pressing
+      // Create again with the group absent from local state minted a second
+      // group with the same name. (The id check covers the idempotent
+      // category-B create, which may return a group already in the list.)
+      const withCreated = groups.some((g) => g.id === created.id)
+        ? groups
+        : [...groups, created];
+      setGroups(withCreated);
+      onDone(withCreated);
       setNewName("");
       if (itemIds.length > 0) {
+        const finalGroup = (await api.modify(language, created.id, itemIds, "add")) as AnyGroup;
+        const next = withCreated.map((g) => (g.id === finalGroup.id ? finalGroup : g));
+        setGroups(next);
+        onDone(next);
         onClose();
       }
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setCreating(false);
     }
@@ -185,12 +201,15 @@ export default function GroupPickerModal({
     const name = editName.trim();
     if (!name) return;
     setBusy(groupId);
+    setActionError(null);
     try {
       const updated = (await api.rename(language, groupId, name)) as AnyGroup;
       const next = groups.map((g) => (g.id === groupId ? updated : g));
       setGroups(next);
       onDone(next);
       setEditingId(null);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(null);
     }
@@ -202,12 +221,15 @@ export default function GroupPickerModal({
       return;
     }
     setBusy(groupId);
+    setActionError(null);
     try {
       await api.remove(language, groupId);
       const next = groups.filter((g) => g.id !== groupId);
       setGroups(next);
       setConfirmedDelete(null);
       onDone(next);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(null);
     }
@@ -378,6 +400,8 @@ export default function GroupPickerModal({
             </SortableContext>
           </DndContext>
         )}
+
+        {actionError && <p className="mb-2 text-xs text-red-400">{actionError}</p>}
 
         {/* New group input */}
         <div className="flex gap-2">
