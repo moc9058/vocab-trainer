@@ -65,6 +65,12 @@ interface WordRaw extends Word {
   appearsInIds?: string[];
 }
 
+/** A group doc id that resolved to no document — routes map this to 404. */
+export class GroupNotFoundError extends Error {}
+
+/** A term rename would steal a LIVE word_index entry — routes map this to 409. */
+export class DuplicateTermError extends Error {}
+
 // ========== Languages ==========
 
 export async function listLanguages(): Promise<LanguageInfo[]> {
@@ -369,19 +375,23 @@ export async function addWord(
     data.appearsInIds = [...appearsSet];
   }
 
-  await words.doc(word.id).set(data);
-  await updateLanguageMeta(language);
-  invalidateWordFiltersCache(language);
-
-  // Write to word_index
-  const indexDocId = `${language}_${word.term}`;
-  await wordIndex.doc(indexDocId).set({
+  // The word doc and its word_index entry commit atomically. A crash between
+  // the two used to leave a ghost word invisible to check-terms — the user
+  // would re-add the term and end up with a duplicate doc, with the index
+  // pointing at whichever wrote last.
+  const batch = db.batch();
+  batch.set(words.doc(word.id), data);
+  batch.set(wordIndex.doc(`${language}_${word.term}`), {
     language,
     term: word.term,
     id: word.id,
     level: word.level ?? "",
     transliteration: word.transliteration ?? "",
   });
+  await batch.commit();
+
+  await updateLanguageMeta(language);
+  invalidateWordFiltersCache(language);
 }
 
 export async function updateWord(
@@ -447,20 +457,40 @@ export async function updateWord(
   if (updates.term || updates.level !== undefined || updates.transliteration !== undefined) {
     const oldTerm = oldData.term as string;
     const newTerm = updates.term ?? oldTerm;
+    const termChanged = Boolean(updates.term) && updates.term !== oldTerm;
 
-    // If term changed, delete old index entry
-    if (updates.term && updates.term !== oldTerm) {
-      await wordIndex.doc(`${language}_${oldTerm}`).delete();
+    if (termChanged) {
+      // Refuse to repoint a LIVE entry owned by another word: the unconditional
+      // .set() here is how MISLINKED entries were minted (renaming onto an
+      // existing term silently stole its index entry). A stale/orphaned entry
+      // is overwritten — same semantics as sweep-orphaned-word-index.ts.
+      const newDoc = await wordIndex.doc(`${language}_${newTerm}`).get();
+      if (newDoc.exists && newDoc.data()!.id !== wordId) {
+        const d = newDoc.data()!;
+        const entry: WordIndexEntry = { term: d.term, id: d.id, level: d.level, transliteration: d.transliteration ?? d.pinyin };
+        const otherWord = await words.doc(entry.id).get();
+        if (wordEntryIsLive(entry, otherWord)) {
+          throw new DuplicateTermError(`Word '${newTerm}' already exists in ${language}`);
+        }
+      }
     }
 
+    // Old-entry delete + new-entry set commit atomically — a crash between the
+    // two left the term unfindable. A concurrent rename to the same term can
+    // still slip past the read above; sweep-orphaned-word-index.ts repairs that.
     const updatedWord = docToWord(updated);
-    await wordIndex.doc(`${language}_${newTerm}`).set({
+    const batch = db.batch();
+    if (termChanged) {
+      batch.delete(wordIndex.doc(`${language}_${oldTerm}`));
+    }
+    batch.set(wordIndex.doc(`${language}_${newTerm}`), {
       language,
       term: newTerm,
       id: wordId,
       level: updatedWord.level ?? "",
       transliteration: updatedWord.transliteration ?? "",
     });
+    await batch.commit();
   }
 
   const raw = docToWord(updated);
@@ -511,12 +541,39 @@ export async function deleteWord(language: string, wordId: string): Promise<bool
     }
   }
 
-  await words.doc(wordId).delete();
+  // Everything keyed by this word commits in one batch: the word doc, its
+  // word_index entry (a crash between the two is exactly the ghost-entry mode
+  // sweep-orphaned-word-index.ts repairs), the flag and progress docs (deletes
+  // of missing docs are no-ops, so no existence pre-reads), and its membership
+  // in every group — member counts render from wordIds.length, so a dangling
+  // id inflates them forever. No language filter on the query: word ids carry
+  // a per-language prefix, so a cross-language false positive is impossible.
+  const memberGroups = await wordGroups.where("wordIds", "array-contains", wordId).get();
+
+  // Defensive chunking (realistically ops ≈ 4 + a handful of groups): overflow
+  // group updates commit first, and the four deletes always share the FINAL
+  // batch so the word-doc/word-index pair can never be split.
+  const MAX_BATCH = 400;
+  const overflow = Math.max(0, memberGroups.docs.length - (MAX_BATCH - 4));
+  for (let i = 0; i < overflow; i += MAX_BATCH) {
+    const batch = db.batch();
+    for (const g of memberGroups.docs.slice(i, Math.min(overflow, i + MAX_BATCH))) {
+      batch.update(g.ref, { wordIds: FieldValue.arrayRemove(wordId) });
+    }
+    await batch.commit();
+  }
+  const final = db.batch();
+  for (const g of memberGroups.docs.slice(overflow)) {
+    final.update(g.ref, { wordIds: FieldValue.arrayRemove(wordId) });
+  }
+  final.delete(words.doc(wordId));
+  final.delete(wordIndex.doc(`${language}_${term}`));
+  final.delete(flaggedWords.doc(`${language}_${wordId}`));
+  final.delete(progress.doc(`${language}_${wordId}`));
+  await final.commit();
+
   await updateLanguageMeta(language);
   invalidateWordFiltersCache(language);
-
-  // Remove from word_index
-  await wordIndex.doc(`${language}_${term}`).delete();
   return true;
 }
 
@@ -641,10 +698,15 @@ function exampleSentenceIndexId(language: string, sentence: string): string {
 export async function addExampleSentence(es: ExampleSentence): Promise<void> {
   const data: Record<string, unknown> = { ...es };
   delete data.id;
-  await exampleSentences.doc(es.id).set(data);
-  // Write dedup index
+  // Doc + dedup index commit atomically (mirrors addGrammar's batch). If the
+  // index write were lost, findExampleByText would never see this sentence
+  // again and the next add of the same text would mint a second doc — a dedup
+  // break no validator can detect, since both docs stay legitimately referenced.
   const indexId = exampleSentenceIndexId(es.language, es.sentence);
-  await exampleSentenceIndex.doc(indexId).set({ exampleId: es.id });
+  const batch = db.batch();
+  batch.set(exampleSentences.doc(es.id), data);
+  batch.set(exampleSentenceIndex.doc(indexId), { exampleId: es.id });
+  await batch.commit();
 }
 
 export async function getExampleSentencesByIds(ids: string[]): Promise<ExampleSentence[]> {
@@ -1700,7 +1762,16 @@ export async function deleteGrammarItem(grammarId: string): Promise<boolean> {
     }
   }
 
-  await grammarItems.doc(grammarId).delete();
+  // The item delete and its removal from every grammar_groups.grammarIds
+  // commit together — member counts render from grammarIds.length, so a
+  // dangling id inflates them forever (deleteWord mirrors this for words).
+  const memberGroups = await grammarGroups.where("grammarIds", "array-contains", grammarId).get();
+  const batch = db.batch();
+  for (const g of memberGroups.docs) {
+    batch.update(g.ref, { grammarIds: FieldValue.arrayRemove(grammarId) });
+  }
+  batch.delete(grammarItems.doc(grammarId));
+  await batch.commit();
   return true;
 }
 
@@ -1866,7 +1937,7 @@ export async function modifyGrammarGroupMembers(
   return db.runTransaction(async (tx) => {
     const ref = grammarGroups.doc(groupId);
     const doc = await tx.get(ref);
-    if (!doc.exists) throw new Error(`Grammar group '${groupId}' not found`);
+    if (!doc.exists) throw new GroupNotFoundError(`Grammar group '${groupId}' not found`);
     const current: string[] = doc.data()!.grammarIds ?? [];
     let next: string[];
     if (action === "add") {
@@ -1899,8 +1970,10 @@ export async function removeGrammarFromCategoryBGroups(
   if (affected.length === 0) return [];
   const batch = db.batch();
   for (const g of affected) {
+    // arrayRemove — see removeWordsFromOtherCategoryAGroups for why a
+    // filtered-array overwrite from this stale read would lose concurrent adds.
     batch.update(grammarGroups.doc(g.id), {
-      grammarIds: g.grammarIds.filter((id) => id !== grammarId),
+      grammarIds: FieldValue.arrayRemove(grammarId),
     });
   }
   await batch.commit();
@@ -2673,7 +2746,18 @@ export async function createWordGroup(
     wordIds: [],
     createdAt: new Date().toISOString(),
     ...(existingGroups.some((existingGroup) => existingGroup.order !== undefined)
-      ? { order: existingGroups.length }
+      ? {
+          // max+1, not existingGroups.length: after a delete, length collides
+          // with a surviving order (0,1,2 → delete the middle → the next
+          // create was also handed 2).
+          order:
+            Math.max(
+              -1,
+              ...existingGroups
+                .map((g) => g.order)
+                .filter((o): o is number => typeof o === "number"),
+            ) + 1,
+        }
       : {}),
     ...(category === "B" ? { category: "B" as const } : {}),
   };
@@ -2718,7 +2802,7 @@ export async function modifyWordGroupMembers(
   const group = await db.runTransaction(async (tx) => {
     const ref = wordGroups.doc(groupId);
     const doc = await tx.get(ref);
-    if (!doc.exists) throw new Error(`Group '${groupId}' not found`);
+    if (!doc.exists) throw new GroupNotFoundError(`Group '${groupId}' not found`);
     const current: string[] = doc.data()!.wordIds ?? [];
     let next: string[];
     if (action === "add") {
@@ -2751,7 +2835,16 @@ export async function modifyWordGroupMembers(
   // word editor, the article importer) funnels through this one function, which is
   // why the invariant needs no cooperation from the callers.
   if (action === "add" && group.category !== "B" && wordIds.length > 0) {
-    await removeWordsFromOtherCategoryAGroups(group.language, wordIds, group.id);
+    try {
+      await removeWordsFromOtherCategoryAGroups(group.language, wordIds, group.id);
+    } catch (err) {
+      // The add above is already committed, so a throw here must not turn the
+      // route into a failure the client would retry — the response has to
+      // report the add truthfully. The leftover state is "word in two A
+      // groups", which the next add self-repairs and
+      // scripts/dedupe-word-group-membership.ts sweeps in bulk.
+      console.error(`[modifyWordGroupMembers] post-add A-move failed for group ${group.id} (self-healing):`, err);
+    }
   }
   return group;
 }
@@ -2780,7 +2873,12 @@ export async function removeWordsFromOtherCategoryAGroups(
   if (affected.length === 0) return [];
   const batch = db.batch();
   for (const g of affected) {
-    batch.update(wordGroups.doc(g.id), { wordIds: g.wordIds.filter((id) => !ids.has(id)) });
+    // arrayRemove, not a filtered-array overwrite: the read above is stale by
+    // the time this commits, and writing the whole array back would erase a
+    // word concurrently added to `g` (lost update, worse than the documented
+    // two-groups race). The read only SELECTS the affected groups; removing a
+    // non-member is a no-op, so the staleness is harmless here.
+    batch.update(wordGroups.doc(g.id), { wordIds: FieldValue.arrayRemove(...wordIds) });
   }
   await batch.commit();
   return affected.map((g) => g.id);
@@ -2796,7 +2894,9 @@ export async function removeWordFromCategoryBGroups(
   if (affected.length === 0) return [];
   const batch = db.batch();
   for (const g of affected) {
-    batch.update(wordGroups.doc(g.id), { wordIds: g.wordIds.filter((id) => id !== wordId) });
+    // arrayRemove — see removeWordsFromOtherCategoryAGroups for why a
+    // filtered-array overwrite from this stale read would lose concurrent adds.
+    batch.update(wordGroups.doc(g.id), { wordIds: FieldValue.arrayRemove(wordId) });
   }
   await batch.commit();
   return affected.map((g) => g.id);
