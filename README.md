@@ -303,7 +303,7 @@ vocab-trainer/
 │   │       ├── grammar.ts       # /api/grammar
 │   │       ├── grammar-quiz.ts  # /api/grammar-quiz
 │   │       ├── grammar-progress.ts # /api/grammar-progress
-│   │       ├── combined-quiz.ts # /api/combined-quiz
+│   │       ├── combined-quiz.ts # /api/combined-quiz, /api/group-b-quiz, /api/mixed-quiz
 │   │       ├── translation.ts  # /api/translation
 │   │       └── speaking-writing.ts # /api/speaking-writing
 │   └── DB/                      # Vocabulary and grammar JSON files
@@ -801,7 +801,17 @@ Returns the in-progress or completed grammar quiz session, or `404` if none exis
 
 ### Combined Quiz
 
-Merged word + grammar quiz; one session per language, stored in `combined_quiz_sessions`. Each domain is ordered internally by its group weights, then the two streams are merged by `domainWeights` (proportional draw; a weight of 0 excludes that domain).
+Merged word + grammar quiz. Each domain is ordered internally by its group weights, then the two streams are merged by `domainWeights` (proportional draw; a weight of 0 excludes that domain).
+
+The same route tree is registered **three times** from one `makeCombinedQuizRoutes({ sessionKey })` factory, differing only in the Firestore doc key, so all three can be in progress for one language at once:
+
+| Prefix | UI name | `combined_quiz_sessions` doc key | Pool |
+|---|---|---|---|
+| `/api/combined-quiz` | Group A Quiz | `language` | the category-A `groupIds` the client sends |
+| `/api/group-b-quiz` | Group B Quiz | `` `${language}__groupB` `` | the category-B `groupIds` the client sends |
+| `/api/mixed-quiz` | Group A+B ミックスクイズ (Chinese only) | `` `${language}__mixed` `` | both categories in one array, **B listed first** |
+
+The handlers never read `category` — the A/B split is decided entirely client-side by which `groupIds` are sent. B-first ordering in the mixed quiz is what makes a word belonging to both an A lesson and a B study set count against B's weight, since `assignMembership` assigns each item to the first group in `groupIds` that holds it. The endpoints below are identical for all three prefixes.
 
 #### `POST /api/combined-quiz/start` — Start a combined quiz session
 
@@ -817,11 +827,9 @@ Merged word + grammar quiz; one session per language, stored in `combined_quiz_s
 
 All fields except `language` are optional. The `word` filter additionally accepts `topics`, `categories`, and `levels` (same semantics as `POST /api/quiz/start`).
 
-**Response:** `201` with `CombinedQuizSession`. Questions are a `kind`-discriminated union: word questions are lightweight `{ kind: "word", wordId, term }` (hydrate via `GET /questions/:language`); grammar questions are stored inline.
+**Response:** `201` with `CombinedQuizSession`. Questions are a `kind`-discriminated union: word questions are lightweight `{ kind: "word", wordId, term }`; grammar questions are stored inline.
 
-#### `GET /api/combined-quiz/questions/:language` — Fetch hydrated questions in batches
-
-Same paged hydration as the word quiz (`offset`/`limit` query params); grammar questions pass through unchanged.
+**Hydration has no endpoint of its own here.** Word payloads are identical to the word quiz's, so all three variants hydrate through the shared `POST /api/quiz/hydrate/:language` (body `{wordIds}`), and grammar items through `POST /api/grammar/:language/items/batch`. Hydration is **by id, not by session position**: a session's order changes constantly (retry re-queues, resume reweighting, mid-session weight edits) while the set of ids never does, so an id-keyed client cache makes every reorder free.
 
 #### `POST /api/combined-quiz/answer` — Submit an answer
 
@@ -1062,7 +1070,7 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 - **`api/quiz.ts`** — `getCurrentSession(language)`, `startQuiz(opts)`, `getQuizQuestions(language, offset, limit)`, and `answerQuestion(opts)`.
 - **`api/vocab.ts`** — `getWords(language, filters?, page?, limit?)`, `getFilters(language)`, `updateWord(language, wordId, updates)`, `deleteWord(language, wordId)`, `checkTerms(language, terms[])`, `smartAddWord(language, data)` (the LLM always generates definitions and example translations in all four supported codes — the client passes only `term`, optional anchor `definitions`, optional `transliteration`/`topics`/`examples`/`level`).
 - **`api/grammar.ts`** — `getGrammarItems(language, filters, page, limit)`, `createGrammarItem(language, item)`, `smartAddGrammarItem(language, item)`, `updateGrammarItem(language, grammarId, updates)`, `deleteGrammarItem(language, grammarId)`, `getGrammarSettings()` / `updateGrammarSettings(defaultDefinitionLanguage)`, group CRUD (`getGrammarGroups`, `createGrammarGroup`, `renameGrammarGroup`, `deleteGrammarGroup`, `modifyGrammarGroupMembers`), `startGrammarQuiz(opts)`, `answerGrammarQuestion(opts)`, `getCurrentGrammarSession(language)`, `getGrammarProgress(language)`, `resetGrammarProgress(language)`.
-- **`api/combined-quiz.ts`** — `startCombinedQuiz(opts)`, `getCombinedQuizQuestions(language, offset, limit)`, `answerCombinedQuestion(opts)`, `getCurrentCombinedSession(language)`.
+- **`api/combined-quiz.ts`** — `startCombinedQuiz(opts, variant?)`, `answerCombinedQuestion(opts, variant?)`, `getCurrentCombinedSession(language, variant?)`, `updateCombinedQuizWeights(language, weights, variant?)`. Every function takes a trailing `variant?: "combined" | "groupB" | "mixed"` that selects the route prefix; there is deliberately no hydration helper here (words go through `hydrateQuizQuestions` in `api/quiz.ts`, grammar through `getGrammarItemsByIds` in `api/grammar.ts`).
 - **`api/flagged.ts`** — `getFlaggedWords(language)`, `getFlaggedWordCount(language)`, `flagWord(language, wordId)`, `unflagWord(language, wordId)`.
 - **`api/translation.ts`** — `translate(sourceLanguage, sourceText, targetLanguages, context?)`, `translateStream(sourceLanguage, sourceText, targetLanguages, callbacks, signal?, options?)` (options: `context` situation hint, `decomposition` replay to skip step 1), `getTranslationHistory(page, limit)`, `deleteTranslationHistory()`, `deleteTranslationEntryById(id)`.
 - **`api/speaking-writing.ts`** — `submitCorrection(language, mode, useCase, inputText)`, `submitCorrectionStream(language, mode, useCase, inputText, callbacks, signal?)`, `getSpeakingWritingSession(language)`, `deleteSpeakingWritingSession(language)`.
@@ -1104,7 +1112,7 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `grammar_items`      | Grammar items (statement + multi-language descriptions, `exampleIds` into `example_sentences`) |
 | `grammar_progress`   | Per-component grammar progress                        |
 | `grammar_quiz_sessions` | One grammar quiz session per language              |
-| `combined_quiz_sessions` | One combined word+grammar quiz session per language (word questions stored slim; re-hydrated via the paged questions endpoint) |
+| `combined_quiz_sessions` | Word+grammar quiz sessions, keyed `language` (Group A), `${language}__groupB` and `${language}__mixed` — up to three per language. Word questions stored slim; re-hydrated by id via `POST /api/quiz/hydrate/:language` |
 | `translation_history`  | Translation/analysis entries with structured LLM results (including the optional user context) |
 | `speaking_writing_sessions` | One speaking/writing correction session per language |
 | `expression_recall_sessions` | One expression **recall** (flashcard) quiz session per language. The LLM-graded expression *writing* quiz is not here — it is a subfield of `speaking_writing_sessions`. |
