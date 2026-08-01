@@ -194,17 +194,19 @@ export default function ImportSentenceCard({
         near the bottom used to mean the sentence itself had scrolled out of view:
         the reader was fixing a word with no sight of the context that defines it.
 
-        `sticky` binds to the review's scrollport (`ImportReview`'s
-        `overflow-y-auto` container) but is bounded by THIS card's box, so it
-        releases naturally once the card is scrolled past — collapsed sentences are
-        untouched. The negative margins cancel the card's own `p-3 sm:p-4` so the bar
-        spans the full width (the padding is re-applied inside), and the background
-        must be opaque because the card is `bg-gray-800/60` and the rows would
-        otherwise show through — same `bg-…/95 + backdrop-blur + z-20` treatment as
-        the mobile prev/next bar in `ImportReview`. `PinyinInput`'s floating palette
-        is `z-30`, so it still opens over this bar. `max-h-[40vh]` is a safety valve
-        for a very long sentence plus its translation; ordinary sentences never
-        reach it.
+        `sticky` binds to the document scroller — `ImportReview`'s root is
+        deliberately NOT a scroll container, see the note there — and is bounded by
+        THIS card's box, so it releases naturally once the card is scrolled past;
+        collapsed sentences are untouched. The negative margins cancel the card's own
+        `p-3 sm:p-4` so the bar spans the full width (the padding is re-applied
+        inside), and the background must be opaque because the card is
+        `bg-gray-800/60` and the rows would otherwise show through — same
+        `bg-…/95 + backdrop-blur + z-20` treatment as the mobile prev/next bar in
+        `ImportReview`. `PinyinInput`'s floating palette is `z-30`, so it still opens
+        over this bar. Only the sentence is pinned: the translation and the coverage
+        line sit below and scroll away, because every pinned line is working area a
+        phone does not get back. `max-h-[40vh]` is a safety valve for a very long
+        sentence; ordinary ones never reach it.
       */}
       <div className="sticky top-0 z-20 -mx-3 -mt-3 mb-1 max-h-[40vh] overflow-y-auto overscroll-contain rounded-t-xl border-b border-gray-700/60 bg-gray-800/95 px-3 pb-2 pt-3 backdrop-blur sm:-mx-4 sm:-mt-4 sm:px-4 sm:pt-4">
         <div className="flex items-start gap-2">
@@ -241,16 +243,6 @@ export default function ImportSentenceCard({
           </button>
         </div>
 
-        {/* The sentence's own translation, read alongside the text it belongs to.
-            Set apart by a left rule so it is never mistaken for the source. */}
-        {showTranslation && (
-          <p className="mt-2 break-words border-l-2 border-indigo-500/40 pl-2.5 text-[14px] leading-relaxed text-indigo-100/80 sm:text-[13px]">
-            {sentence.translation?.trim() || (
-              <span className="text-gray-600">{t("importNoTranslation")}</span>
-            )}
-          </p>
-        )}
-
         {/* Pinned WITH the sentence: a selection made while scrolled deep into the
             rows would otherwise offer its button at the card's top, off screen. */}
         {selection && (
@@ -267,6 +259,19 @@ export default function ImportSentenceCard({
           </button>
         )}
       </div>
+
+      {/* The sentence's own translation, read alongside the text it belongs to.
+          Set apart by a left rule so it is never mistaken for the source. It stays
+          OUT of the pinned bar on purpose: it is a reading aid consulted once, and
+          on a phone it costs two or three lines of the working area for every row
+          edited below it. */}
+      {showTranslation && (
+        <p className="mt-2 break-words border-l-2 border-indigo-500/40 pl-2.5 text-[14px] leading-relaxed text-indigo-100/80 sm:text-[13px]">
+          {sentence.translation?.trim() || (
+            <span className="text-gray-600">{t("importNoTranslation")}</span>
+          )}
+        </p>
+      )}
 
       {coverage.required > 0 && (
         <p className="mt-1.5 flex flex-wrap items-center gap-x-1.5 text-[11px] leading-snug">
