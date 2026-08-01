@@ -11,6 +11,11 @@
  * Usage: cd backend && npx tsx scripts/smoke-test-invariant.ts
  */
 
+// Must stay the FIRST import — before ../src/firestore.js, which builds its
+// Firestore client at module load: without the project fix both clients resolve
+// to gcloud's default project, which has no `vocab-database`, and every query
+// dies with a bare `5 NOT_FOUND`.
+import { PROJECT_ID, DATABASE_ID } from "./_project-env.js";
 import { Firestore } from "@google-cloud/firestore";
 import { createHash } from "crypto";
 import {
@@ -38,7 +43,8 @@ import type { Word, ExampleSentence, Grammar } from "../src/types.js";
 const LANG = "_smoke_test";
 
 const db = new Firestore({
-  databaseId: process.env.FIRESTORE_DATABASE_ID || "vocab-database",
+  projectId: PROJECT_ID,
+  databaseId: DATABASE_ID,
   ignoreUndefinedProperties: true,
 });
 

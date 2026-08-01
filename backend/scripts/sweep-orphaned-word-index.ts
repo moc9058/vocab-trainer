@@ -26,6 +26,10 @@
  *   cd backend && npx tsx scripts/sweep-orphaned-word-index.ts [--language=chinese | --all] [--dry-run]
  */
 
+// Must stay the FIRST import: it fixes the project for every Firestore client the
+// process builds. Without it this script resolved to gcloud's default project,
+// which has no `vocab-database`, and every query died with a bare `5 NOT_FOUND`.
+import { PROJECT_ID, DATABASE_ID } from "./_project-env.js";
 import { Firestore } from "@google-cloud/firestore";
 
 const args = process.argv.slice(2);
@@ -35,7 +39,8 @@ const langArg = args.find((a) => a.startsWith("--language="));
 const language = langArg ? langArg.split("=")[1] : "chinese";
 
 const db = new Firestore({
-  databaseId: process.env.FIRESTORE_DATABASE_ID || "vocab-database",
+  projectId: PROJECT_ID,
+  databaseId: DATABASE_ID,
   ignoreUndefinedProperties: true,
 });
 
