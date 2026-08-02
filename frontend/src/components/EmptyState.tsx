@@ -42,7 +42,12 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
   const { t } = useI18n();
   const { settings } = useSettings();
   const isoCode = urlLanguageToIsoCode(language) ?? language;
-  const showGrammar = isoCode !== "en";
+  // Grammar used to be hidden for English on the assumption that an English source
+  // yields none. The source importer extracts English patterns (tenses, participle
+  // clauses, it-clefts) like any other language and registers them into the same
+  // `grammar_items`, so the gate only meant the data could be created and browsed but
+  // never drilled. Every language now gets the full grammar section; a language with
+  // no items yet simply gets a 400 from `/start`, exactly as a fresh language always did.
   // The mixed Group A+B quiz is Chinese-only for now.
   const showMixed = isoCode === "zh";
   const sectionOrder: string[] = (settings.sectionOrder ?? ["word-grammar", "speaking-writing", "translation"]).filter(s => s !== "expressions");
@@ -104,83 +109,79 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
                 {t("sectionWordGrammar")}
               </h3>
               {/* Combined quiz spans both domains, so it sits above the word/grammar tabs. */}
-              {showGrammar && (
-                <div className="mb-3 space-y-2">
-                  {!loading && combinedSession && (
-                    <button
-                      onClick={() => onResumeCombined(combinedSession)}
-                      className="w-full rounded-lg border border-indigo-700 bg-indigo-900/30 px-4 py-3 text-left hover:border-indigo-500 hover:bg-indigo-800/40 transition-colors"
-                    >
-                      <p className="font-semibold text-sm text-indigo-300">{t("resumeCombinedQuiz")}</p>
-                      <p className="mt-0.5 text-xs text-indigo-400">
-                        {combinedSession.score.correct} / {combinedSession.initialTotal ?? combinedSession.questions.length} {t("questionsAnswered")}
-                      </p>
-                    </button>
-                  )}
+              <div className="mb-3 space-y-2">
+                {!loading && combinedSession && (
                   <button
-                    onClick={onCombinedQuiz}
-                    className="w-full rounded-lg bg-indigo-600 px-5 py-3 text-center font-medium text-white hover:bg-indigo-500 transition-colors"
+                    onClick={() => onResumeCombined(combinedSession)}
+                    className="w-full rounded-lg border border-indigo-700 bg-indigo-900/30 px-4 py-3 text-left hover:border-indigo-500 hover:bg-indigo-800/40 transition-colors"
                   >
-                    {t("combinedQuiz")}
+                    <p className="font-semibold text-sm text-indigo-300">{t("resumeCombinedQuiz")}</p>
+                    <p className="mt-0.5 text-xs text-indigo-400">
+                      {combinedSession.score.correct} / {combinedSession.initialTotal ?? combinedSession.questions.length} {t("questionsAnswered")}
+                    </p>
                   </button>
-                  {!loading && groupBSession && (
-                    <button
-                      onClick={() => onResumeGroupB(groupBSession)}
-                      className="w-full rounded-lg border border-amber-700 bg-amber-900/30 px-4 py-3 text-left hover:border-amber-500 hover:bg-amber-800/40 transition-colors"
-                    >
-                      <p className="font-semibold text-sm text-amber-300">{t("resumeGroupBQuiz")}</p>
-                      <p className="mt-0.5 text-xs text-amber-400">
-                        {groupBSession.score.correct} / {groupBSession.initialTotal ?? groupBSession.questions.length} {t("questionsAnswered")}
-                      </p>
-                    </button>
-                  )}
+                )}
+                <button
+                  onClick={onCombinedQuiz}
+                  className="w-full rounded-lg bg-indigo-600 px-5 py-3 text-center font-medium text-white hover:bg-indigo-500 transition-colors"
+                >
+                  {t("combinedQuiz")}
+                </button>
+                {!loading && groupBSession && (
                   <button
-                    onClick={onGroupBQuiz}
-                    className="w-full rounded-lg border border-amber-600 bg-amber-700/30 px-5 py-3 text-center font-medium text-amber-200 hover:bg-amber-700/50 transition-colors"
+                    onClick={() => onResumeGroupB(groupBSession)}
+                    className="w-full rounded-lg border border-amber-700 bg-amber-900/30 px-4 py-3 text-left hover:border-amber-500 hover:bg-amber-800/40 transition-colors"
                   >
-                    {t("groupBQuiz")}
+                    <p className="font-semibold text-sm text-amber-300">{t("resumeGroupBQuiz")}</p>
+                    <p className="mt-0.5 text-xs text-amber-400">
+                      {groupBSession.score.correct} / {groupBSession.initialTotal ?? groupBSession.questions.length} {t("questionsAnswered")}
+                    </p>
                   </button>
-                  {/* Group A+B — one session spanning both meta-groups. Chinese only for now. */}
-                  {showMixed && (
-                    <>
-                      {!loading && mixedSession && (
-                        <button
-                          onClick={() => onResumeMixed(mixedSession)}
-                          className="w-full rounded-lg border border-fuchsia-700 bg-fuchsia-900/30 px-4 py-3 text-left hover:border-fuchsia-500 hover:bg-fuchsia-800/40 transition-colors"
-                        >
-                          <p className="font-semibold text-sm text-fuchsia-300">{t("resumeMixedQuiz")}</p>
-                          <p className="mt-0.5 text-xs text-fuchsia-400">
-                            {mixedSession.score.correct} / {mixedSession.initialTotal ?? mixedSession.questions.length} {t("questionsAnswered")}
-                          </p>
-                        </button>
-                      )}
+                )}
+                <button
+                  onClick={onGroupBQuiz}
+                  className="w-full rounded-lg border border-amber-600 bg-amber-700/30 px-5 py-3 text-center font-medium text-amber-200 hover:bg-amber-700/50 transition-colors"
+                >
+                  {t("groupBQuiz")}
+                </button>
+                {/* Group A+B — one session spanning both meta-groups. Chinese only for now. */}
+                {showMixed && (
+                  <>
+                    {!loading && mixedSession && (
                       <button
-                        onClick={onMixedQuiz}
-                        className="w-full rounded-lg bg-gradient-to-r from-indigo-600 to-amber-600 px-5 py-3 text-center font-medium text-white hover:from-indigo-500 hover:to-amber-500 transition-colors"
+                        onClick={() => onResumeMixed(mixedSession)}
+                        className="w-full rounded-lg border border-fuchsia-700 bg-fuchsia-900/30 px-4 py-3 text-left hover:border-fuchsia-500 hover:bg-fuchsia-800/40 transition-colors"
                       >
-                        {t("mixedQuiz")}
+                        <p className="font-semibold text-sm text-fuchsia-300">{t("resumeMixedQuiz")}</p>
+                        <p className="mt-0.5 text-xs text-fuchsia-400">
+                          {mixedSession.score.correct} / {mixedSession.initialTotal ?? mixedSession.questions.length} {t("questionsAnswered")}
+                        </p>
                       </button>
-                    </>
-                  )}
-                </div>
-              )}
-              {showGrammar && (
-                <div className="mb-3 flex gap-1 rounded-lg bg-gray-900/60 p-1">
-                  <button
-                    onClick={() => setWordGrammarTab("word")}
-                    className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${wordGrammarTab === "word" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-200"}`}
-                  >
-                    {t("sectionVocabulary")}
-                  </button>
-                  <button
-                    onClick={() => setWordGrammarTab("grammar")}
-                    className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${wordGrammarTab === "grammar" ? "bg-emerald-600 text-white" : "text-gray-400 hover:text-gray-200"}`}
-                  >
-                    {t("sectionGrammar")}
-                  </button>
-                </div>
-              )}
-              {(!showGrammar || wordGrammarTab === "word") && (
+                    )}
+                    <button
+                      onClick={onMixedQuiz}
+                      className="w-full rounded-lg bg-gradient-to-r from-indigo-600 to-amber-600 px-5 py-3 text-center font-medium text-white hover:from-indigo-500 hover:to-amber-500 transition-colors"
+                    >
+                      {t("mixedQuiz")}
+                    </button>
+                  </>
+                )}
+              </div>
+              <div className="mb-3 flex gap-1 rounded-lg bg-gray-900/60 p-1">
+                <button
+                  onClick={() => setWordGrammarTab("word")}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${wordGrammarTab === "word" ? "bg-blue-600 text-white" : "text-gray-400 hover:text-gray-200"}`}
+                >
+                  {t("sectionVocabulary")}
+                </button>
+                <button
+                  onClick={() => setWordGrammarTab("grammar")}
+                  className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${wordGrammarTab === "grammar" ? "bg-emerald-600 text-white" : "text-gray-400 hover:text-gray-200"}`}
+                >
+                  {t("sectionGrammar")}
+                </button>
+              </div>
+              {wordGrammarTab === "word" && (
                 <>
                   {!loading && vocabSession && (
                     <div className="mb-3">
@@ -223,7 +224,7 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
                   </div>
                 </>
               )}
-              {showGrammar && wordGrammarTab === "grammar" && (
+              {wordGrammarTab === "grammar" && (
                 <>
                   {!loading && grammarSession && (
                     <div className="mb-3">

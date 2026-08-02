@@ -33,9 +33,21 @@ letter MUST belong to exactly one entry. Only punctuation, spaces and digits
   prepositions, pronouns, auxiliaries (is/have/will/would), conjunctions, particles
   of phrasal verbs, numerals written as words, proper nouns. Never skip a word for
   being too common, too simple, or "not worth learning".
-- Respect real word boundaries. Keep a multi-word set phrase or phrasal verb as ONE
-  entry when it functions as a unit ("give up", "in terms of"); otherwise one entry
-  per orthographic word.
+- One entry per orthographic word by default. A multi-word entry is allowed ONLY when
+  its words are ADJACENT in the sentence, in that exact order, with nothing between
+  them — the reader locates every entry by searching the sentence for it verbatim.
+  "in terms of", and "gave up" in "we gave up", are fine. A SEPARATED phrasal verb is
+  not: for "gave it up" or "turn the light on", list the parts as separate entries
+  ("gave" / "it" / "up"). Never write the dictionary form of a phrase that the
+  sentence splits.
+- Keep a contraction or a possessive whole — "don't", "it's", "we've", "company's".
+  Never emit a bare "n't" or "'s": they cannot be located on their own and leave the
+  rest of the sentence uncovered.
+- Keep a hyphenated compound whole — "state-of-the-art", "well-known".
+- A single-word entry may be given in any case (it is matched case-insensitively), but
+  a MULTI-word entry must copy the sentence's own capitalization exactly.
+- A number written in digits ("2024", "15%") needs no entry; a number written in words
+  ("fifteen", "third") does.
 - List the words of a sentence in the ORDER they appear in that sentence.
 - Within one sentence, list a repeated word only ONCE — every occurrence of it is
   treated as covered. Across sentences, list it AGAIN for every sentence it appears
@@ -45,9 +57,12 @@ Fields:
 
 - `term` — the word as it APPEARS in the sentence (the surface form), so that the
   reader can match it back against the text. Give the inflected form that occurs
-  ("developing", not "develop"); the dictionary form is recovered downstream.
-- `transliteration` — a simple phonetic hint without IPA symbols. Function words
-  included.
+  ("developing", not "develop"); the dictionary form is recovered downstream. A
+  multi-word `term` must be a contiguous substring of the sentence.
+- `transliteration` — a KATAKANA reading of the word as it is pronounced here, no IPA
+  and no romaji ("the" → 「ザ」, "of" → 「オブ」, "developing" → 「ディベロピング」).
+  Function words included. Where one spelling has two pronunciations, see the
+  exception below.
 - `meaning` — a SHORT Japanese gloss (a few words). Function words included
   (the → 「その（定冠詞）」, of → 「〜の」).
 - `sentenceIndex` — the index of the sentence this occurrence belongs to. Every word
@@ -87,8 +102,9 @@ Extract the grammar points the text illustrates, sentence by sentence.
 - `sentenceIndex` — the sentence that illustrates the pattern.
 
 Go through EVERY sentence and extract each pattern it demonstrates — tenses and
-aspect, passive, relative clauses, conditionals, comparatives, infinitive and gerund
-frames, fixed collocations. A sentence with nothing beyond a plain SVO clause
+aspect, passive, modality, relative clauses, conditionals, comparatives, infinitive
+and gerund frames, participle clauses, existential `there + be`, it-clefts, and fixed
+collocations. A sentence with nothing beyond a plain SVO clause
 contributes no entry, but do not leave a sentence unexamined. Do not worry about
 whether a pattern is already registered — duplicates are handled downstream.
 

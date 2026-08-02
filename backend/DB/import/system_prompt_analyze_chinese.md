@@ -36,6 +36,14 @@ and Arabic digits (，。、！？：；「」（）《》…—— etc.) are le
 - Respect real word boundaries. Do NOT dissolve a multi-character word into single
   characters, and do NOT glue separate words together. 「人工智能」 is ONE entry, not
   four; 「的」 is its own entry and is never attached to the noun beside it.
+- Every `term` must be CONTIGUOUS in the sentence — the reader locates it by searching
+  the sentence for it verbatim. This is where 离合词 and other split constructions must
+  follow the SURFACE, not the dictionary form: 「见了面」 is 见 / 了 / 面, 「帮个忙」 is
+  帮 / 个 / 忙, 「洗过澡」 is 洗 / 过 / 澡. Never emit 「见面」 for a sentence that splits it.
+  The same holds for a split 把/被 frame or a separated 「越…越…」: list what is written.
+- Split a numeral from its measure word — 「一个」 is 一 + 个, 「三本书」 is 三 / 本 / 书 —
+  but keep 儿化 attached to the word it belongs to (「一点儿」 is 一 + 点儿).
+- A personal or place name is ONE entry (「习近平」, 「北京」), never one per character.
 - List the words of a sentence in the ORDER they appear in that sentence.
 - Within one sentence, list a repeated word only ONCE — every occurrence of it is
   treated as covered. Across sentences, list it AGAIN for every sentence it appears
@@ -48,6 +56,11 @@ Fields:
   (Chinese has no inflection, so this is also the dictionary form.)
 - `transliteration` — Hanyu Pinyin with tone marks, syllables separated by spaces
   (e.g. "rén gōng zhì néng"). Function words included (的 → "de", 了 → "le").
+  Write the CITATION tone, never the sandhi: 一 stays "yī" and 不 stays "bù" even in
+  「一个」/「不是」, and a third-tone pair keeps both marks (「你好」 → "nǐ hǎo"). The
+  entry becomes a dictionary entry in the learner's library, so it has to read the
+  same whichever sentence it was found in. Neutral tone carries no mark ("de", "le",
+  "zi"). Capitalize a proper noun ("Běijīng"); everything else is lowercase.
 - `meaning` — a SHORT Japanese gloss (a few words). Function words included
   (的 → 「〜の（連体修飾）」, 了 → 「完了・変化を表す」).
 - `sentenceIndex` — the index of the sentence this occurrence belongs to. Every
