@@ -6,6 +6,9 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "dev:local": "tsx watch scripts/dev-local.ts",
+    "seed:download": "tsx scripts/seed-download.ts",
+    "seed:load": "tsx scripts/seed-load.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "migrate": "tsx scripts/migrate-to-firestore.ts",

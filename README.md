@@ -2,6 +2,114 @@
 
 A vocabulary testing tool that helps users memorize vocabularies and view example sentences.
 
+## Local Development & Verification
+
+Verify changes on your local PC before deploying. Local runs use the **Firestore
+emulator** (a `firestore` service in docker-compose) seeded with a sample of
+production data — nothing you run locally reads or writes production Firestore.
+The only command that touches production is `seed:download`, and it is read-only.
+
+### Quick start — `local.sh` / `local.ps1`
+
+The wrapper script bundles the whole flow (deps install, `.env` creation, emulator
+start, seeding, servers). On first run it downloads a sample from production
+automatically; after that it reuses the local snapshot.
+
+```bash
+./local.sh              # full stack in Docker (same images deploy.sh builds) → http://localhost:5173
+./local.sh dev          # hot-reload dev: backend + frontend run on the host, emulator in Docker; Ctrl-C stops
+./local.sh seed         # force-reload the snapshot into the emulator (wipes it first)
+./local.sh down         # stop all containers
+./local.sh up --download    # any command + --download refreshes the sample from production first
+```
+
+Windows: `.\local.ps1 [up|dev|seed|down] [-Download]` — same commands; `dev` opens
+the two servers in separate windows (close them to stop).
+
+The sections below describe what the wrapper does, for running steps individually.
+
+### Prerequisites
+
+- **Node.js ≥ 22** (Docker images use Node 24)
+- **Docker** and **Docker Compose** (provides the emulator — no local Java needed)
+- **`gcloud` CLI** with Application Default Credentials — only needed for `seed:download`
+
+### One-time setup
+
+```bash
+gcloud auth application-default login   # ADC — used only by seed:download
+cp .env.example .env                    # then fill in the OPENAI_* keys
+cd backend && npm install
+cd ../frontend && npm install
+```
+
+Never put `FIRESTORE_EMULATOR_HOST` in `.env` — see the warning in `.env.example`.
+
+### Get sample data (repeat whenever you want fresh data)
+
+```bash
+docker compose up -d firestore   # start the emulator
+cd backend
+npm run seed:download            # production -> backend/data/local-seed/  (READ-ONLY)
+npm run seed:load                # snapshot -> emulator (wipes the emulator first)
+```
+
+`seed:download` samples ~30 words / 10 grammar items / 20 expressions per language
+(evenly spread, with all referenced example sentences, progress, flags and groups).
+Tune it:
+
+```bash
+npm run seed:download -- --language=chinese --words=50 --grammar=15 --expressions=20
+```
+
+### Daily dev loop (hot reload)
+
+```bash
+# Terminal A — backend against the emulator
+docker compose up -d firestore && cd backend && npm run dev:local
+
+# Terminal B — frontend (Vite proxies /api to :3000)
+cd frontend && npm run dev
+```
+
+Open http://localhost:5173. Auth is **off** locally (the emulator has no
+`config/auth` doc), so no Google sign-in is needed. LLM features make real OpenAI
+calls using the keys in `.env`; leave them unset to run without LLM features.
+
+`npm run dev` (without `:local`) still exists for deliberate debugging **against
+production** — it requires ADC and `FIRESTORE_PROJECT` in `.env`.
+
+### Pre-deploy verification
+
+```bash
+cd backend && npm run build                        # backend type-check + compile
+cd frontend && npx tsc --noEmit && npm run build   # frontend type-check + build
+
+docker compose up --build                          # full stack with the SAME Dockerfiles deploy.sh builds
+```
+
+The compose stack (frontend nginx :5173 → backend :3000 → emulator :8080) is the
+closest local approximation of the deployed system. Emulator data is **in-memory**:
+after the `firestore` container (re)starts the emulator is empty, so re-run
+`cd backend && npm run seed:load`. Until the seed lands, the backend exits at boot
+(it requires `config/vocabulary`) and `restart: on-failure` keeps retrying — it
+comes up by itself a moment after seeding. Smoke-test at http://localhost:5173,
+then deploy:
+
+```bash
+./deploy.sh vocab-trainer-490014 asia-northeast1 [--llm|--auth|--prompts]
+```
+
+### Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| "Firestore emulator is not running" | `docker compose up -d firestore` |
+| App is empty after `seed:load` | Emulator restarted since the last load → `npm run seed:load` again |
+| `backend` container keeps restarting / nginx returns 502 | Normal on an empty emulator — run `cd backend && npm run seed:load`; the backend recovers on its next retry |
+| `seed:load` read-back check fails | Named-database mismatch: set `FIRESTORE_DATABASE_ID="(default)"` for `seed:load`, `dev:local` **and** docker compose |
+| `seed:download` fails with auth/`5 NOT_FOUND` | `gcloud auth application-default login`; check `FIRESTORE_PROJECT` in `.env` |
+
 ## Cloud Run Deployment
 
 Deploy both services to Google Cloud Run using the included script.
@@ -133,32 +241,6 @@ LLM-generates translations for `example_sentences` docs whose `translation` is e
 5. Deploy frontend to Cloud Run with `BACKEND_URL` pointing to the backend service
 
 The script prints both service URLs on completion.
-
-## Quickstart
-
-### Prerequisites
-
-- **Docker** and **Docker Compose**
-
-1. **Build and start both services**
-   ```bash
-   docker compose up --build
-   ```
-
-2. **Open the app** at http://localhost:5173. A language selection page appears — click **Chinese** or **English** to enter the corresponding language dashboard. You can also navigate directly to a language via URL (e.g. http://localhost:5173/chinese). The backend API is available at http://localhost:3000.
-
-To build images individually:
-```bash
-docker compose build backend     # backend image only
-docker compose build frontend    # frontend image only
-```
-
-To run in the background:
-```bash
-docker compose up -d --build
-docker compose logs -f           # follow logs
-docker compose down              # stop and remove containers
-```
 
 ## Vocabulary Database Format
 
@@ -1210,6 +1292,7 @@ only the standalone `migrate-db-config-to-firestore.ts --archives` touches.
 | `OPENAI_MODEL_MINI`    | —                | Default model for fast tasks such as smart-add and segmentation (falls back to Firestore `config/llm`; overridden by `config/llm_models` if set there) |
 | `OPENAI_MODEL_FULL`    | —                | Default model for translation/analysis and speaking/writing (falls back to Firestore `config/llm`; overridden by `config/llm_models` if set there) |
 | `FIRESTORE_PROJECT`    | —                | Google Cloud project ID (required for Firestore in deployed environments) |
+| `FIRESTORE_EMULATOR_HOST` | —             | Unset = real Firestore. Set automatically by the local entrypoints (`dev:local`, `seed:load`, docker compose) to route all Firestore clients to the emulator. Never put it in `.env` — the deploy config-upload scripts read that file and must reach production |
 | `GOOGLE_CLIENT_ID`     | —                | OAuth 2.0 client ID (falls back to Firestore `config/auth`) |
 | `GOOGLE_CLIENT_SECRET` | —                | OAuth 2.0 client secret (falls back to Firestore `config/auth`) |
 | `OAUTH_REDIRECT_URI`   | —                | Must match a registered redirect URI exactly; cannot be inferred from the request |
@@ -1273,11 +1356,13 @@ re-checked on every request, so removing an address revokes that person's live s
 
 ## Docker
 
-Both Dockerfiles use **Node 24 Alpine** with multi-stage builds to keep images small.
+Both app Dockerfiles use **Node 24 Alpine** with multi-stage builds to keep images small.
 
-| Service    | Port | Description                                          |
-| ---------- | ---- | ---------------------------------------------------- |
-| `backend`  | 3000 | Multi-stage build → `node dist/index.js` (production deps only) |
-| `frontend` | 5173 | Multi-stage build → Nginx Alpine serves static assets, proxies `/api/` to backend |
+| Service     | Port | Description                                          |
+| ----------- | ---- | ---------------------------------------------------- |
+| `firestore` | 8080 | Firestore **emulator** (`google-cloud-cli:emulators` image) — the backing store for every local run; data is in-memory |
+| `backend`   | 3000 | Multi-stage build → `node dist/index.js` (production deps only); compose points it at the emulator |
+| `frontend`  | 5173 | Multi-stage build → Nginx Alpine serves static assets, proxies `/api/` to backend |
 
-See [Quickstart](#quickstart) for usage.
+`docker compose up --build` runs the full stack against the emulator and never
+touches production. See [Local Development & Verification](#local-development--verification) for the workflow.

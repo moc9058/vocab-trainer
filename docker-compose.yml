@@ -1,15 +1,47 @@
 services:
+  # Local Firestore emulator — the backing store for every local run. Data lives in
+  # memory only: after this container restarts, re-run `npm run seed:load`.
+  firestore:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:578.0.0-emulators
+    command: gcloud emulators firestore start --host-port=0.0.0.0:8080
+    ports:
+      - "8080:8080" # host-side seed:load / dev:local reach it via localhost:8080
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/ || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    # An EMPTY emulator kills the backend at boot (routes/vocab.ts requires
+    # config/vocabulary at registration). on-failure keeps retrying, so the
+    # backend comes up by itself once `npm run seed:load` has run.
+    restart: on-failure
     ports:
       - "3000:3000"
-    volumes:
-      - ./backend/logs:/app/logs
+    # No ./backend/logs bind mount: pino already logs to stdout, so
+    # `docker compose logs backend` covers local verification — and a bind mount
+    # is the one thing that breaks when Docker Desktop's file sharing is wedged
+    # (containers hang forever in "Created").
     environment:
       - PORT=3000
+      # Compose always targets the emulator — production is only reachable from
+      # deploy.sh and the scripts that opt into it. The project/database ids must
+      # match what seed-load.ts writes, so they are pinned here over .env.
+      - FIRESTORE_EMULATOR_HOST=firestore:8080
+      - FIRESTORE_PROJECT=vocab-trainer-490014
       - FIRESTORE_DATABASE_ID=vocab-database
+    env_file:
+      # OPENAI_* for LLM features; without it the server still boots and only the
+      # LLM endpoints fail lazily.
+      - path: .env
+        required: false
+    depends_on:
+      firestore:
+        condition: service_healthy
 
   frontend:
     build:
@@ -19,3 +51,6 @@ services:
       - "5173:5173"
     environment:
       - BACKEND_URL=http://backend:3000
+      # The service name `backend` only resolves through Docker's embedded DNS,
+      # not the public resolver the image defaults to (see nginx.conf.template).
+      - DNS_RESOLVER=127.0.0.11

@@ -1,6 +1,10 @@
 server {
     listen 5173;
-    resolver 8.8.8.8 valid=30s;
+    # A variable proxy_pass resolves at request time through THIS resolver, so it
+    # must be one that can see the backend hostname: public DNS (the Dockerfile's
+    # 8.8.8.8 default) for the *.run.app URL on Cloud Run, Docker's embedded DNS
+    # (127.0.0.11, set by docker-compose) for the `backend` service name locally.
+    resolver ${DNS_RESOLVER} valid=30s;
 
     root /usr/share/nginx/html;
     index index.html;

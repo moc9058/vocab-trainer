@@ -6,7 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Backend
 ```bash
-cd backend && npm run dev               # Dev server with watch (tsx watch src/index.ts)
+cd backend && npm run dev               # Dev server with watch AGAINST PRODUCTION Firestore (tsx watch src/index.ts; needs ADC + FIRESTORE_PROJECT in .env)
+cd backend && npm run dev:local         # Dev server against the LOCAL Firestore emulator (scripts/dev-local.ts forces FIRESTORE_EMULATOR_HOST=localhost:8080 before importing src/index.ts; preflight-pings the emulator). Start the emulator first: docker compose up -d firestore
+cd backend && npm run seed:download     # Sample PRODUCTION -> backend/data/local-seed/ JSON snapshot (READ-ONLY; deletes FIRESTORE_EMULATOR_HOST at top so it always reads prod). [--language=<a,b>] [--words=N] [--grammar=N] [--expressions=N] — stride-samples per language, closes over example_sentences/word_index/progress/flags/groups, strips outbound dangling refs, excludes config/auth (keeps local auth OFF) and config/llm (secret)
+cd backend && npm run seed:load         # Snapshot -> emulator: FORCES FIRESTORE_EMULATOR_HOST (can never touch prod), wipes the emulator, loads all collections, recomputes example_sentence_index, then read-back canary (fails loudly if the emulator lacked named-database support)
 cd backend && npm run build             # TypeScript compile to dist/
 cd backend && npm start                 # Run compiled output (node dist/index.js)
 cd backend && npm run migrate           # One-time word migration from JSON files to Firestore
@@ -46,10 +49,21 @@ cd frontend && npm run build   # Production build
 cd frontend && npx tsc --noEmit  # Type-check (npm run build is vite-only, no tsc)
 ```
 
+### Local verification wrapper
+```bash
+./local.sh [up|dev|seed|down] [--download]   # one-command local flow (Windows: .\local.ps1 [-Download])
+#   up (default): emulator + seed (auto-download on first run) + full compose stack → :5173
+#   dev:          emulator in Docker; backend dev:local + frontend vite on the HOST (Ctrl-C stops both — npm PIDs are held directly so TERM cascades; a subshell wrapper would orphan the servers)
+#   seed:         force seed:load (up/dev only seed when the emulator is EMPTY, checked via the emulator's REST API, so restarting dev doesn't wipe quiz sessions)
+#   down:         docker compose down
+```
+
 ### Docker
 ```bash
-docker compose up --build      # Run full stack (backend :3000, frontend :5173)
+docker compose up --build         # Run full stack (backend :3000, frontend :5173, firestore emulator :8080) — compose pins FIRESTORE_EMULATOR_HOST on the backend, so it NEVER touches production
+docker compose up -d firestore    # Emulator alone — the backing store for npm run dev:local / seed:load
 ```
+Emulator data is in-memory: after the `firestore` container restarts, re-run `cd backend && npm run seed:load`. `.env` must never contain `FIRESTORE_EMULATOR_HOST` (the deploy config-upload scripts read `.env` and must reach production); the local entrypoints set it themselves.
 
 ### Deploy
 ```bash
