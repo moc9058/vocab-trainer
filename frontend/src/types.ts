@@ -303,6 +303,20 @@ export interface CombinedDomainWeights {
   grammar: number;
 }
 
+/**
+ * The mixed A+B quiz's UNFOLDED weight inputs: the A↔B category ratio and, within each
+ * category, its own word↔grammar ratio.
+ *
+ * Ordering never reads this — it uses only the folded `domainWeights`/`*GroupWeights` that
+ * `utils/quizGroupScope.ts:foldMixWeights` derives from it. It is stored so the mid-session
+ * ⚖ panel can show back what the user actually typed: the fold spreads a category's share
+ * across its groups' weights and cannot be inverted.
+ */
+export interface MixWeightConfig {
+  category: { A: number; B: number };
+  domain: { A: CombinedDomainWeights; B: CombinedDomainWeights };
+}
+
 export interface CombinedQuizSession {
   sessionId: string;
   language: string;
@@ -318,6 +332,9 @@ export interface CombinedQuizSession {
   wordGroupMembership?: Record<string, string[]>;
   grammarGroupWeights?: Record<string, number>;
   grammarGroupMembership?: Record<string, string[]>;
+  /** Mixed quiz only: the three-level inputs behind the folded weights above. Absent on every
+   *  other variant, and on mixed sessions started before the setting existed. */
+  mixWeights?: MixWeightConfig;
   /** Top-level weight for the "already-correct" (mastered) bucket, peer to word/grammar domains
    *  (0 = exclude mastered items). */
   correctWeight?: number;

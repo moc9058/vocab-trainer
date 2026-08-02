@@ -2180,6 +2180,7 @@ export async function getCombinedQuizSession(sessionKey: string): Promise<Combin
     wordGroupMembership: d.wordGroupMembership,
     grammarGroupWeights: d.grammarGroupWeights,
     grammarGroupMembership: d.grammarGroupMembership,
+    mixWeights: d.mixWeights,
     correctWeight: d.correctWeight,
     correctMembership: d.correctMembership,
     flaggedOnly: d.flaggedOnly,

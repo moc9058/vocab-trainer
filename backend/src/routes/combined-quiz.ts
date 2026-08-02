@@ -22,6 +22,7 @@ import type {
   CombinedQuizSession,
   CombinedQuizWordQuestion,
   CombinedQuizGrammarQuestion,
+  MixWeightConfig,
   Grammar,
   Word,
   WordProgress,
@@ -44,6 +45,34 @@ interface WordFilterBody {
    */
   wordIds?: string[];
 }
+
+/**
+ * JSON schema for `MixWeightConfig`. The server treats it as opaque UI state — it is stored
+ * and echoed back, never read for ordering (see the type's doc comment) — but it is still
+ * validated so a malformed shape can't be written into a session document.
+ */
+const MIX_WEIGHTS_SCHEMA = {
+  type: "object",
+  properties: {
+    category: {
+      type: "object",
+      properties: { A: { type: "number", minimum: 0 }, B: { type: "number", minimum: 0 } },
+    },
+    domain: {
+      type: "object",
+      properties: {
+        A: {
+          type: "object",
+          properties: { word: { type: "number", minimum: 0 }, grammar: { type: "number", minimum: 0 } },
+        },
+        B: {
+          type: "object",
+          properties: { word: { type: "number", minimum: 0 }, grammar: { type: "number", minimum: 0 } },
+        },
+      },
+    },
+  },
+} as const;
 
 interface GrammarFilterBody {
   groupIds?: string[];
@@ -68,6 +97,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
     Body: {
       language: string;
       domainWeights?: { word?: number; grammar?: number };
+      mixWeights?: MixWeightConfig;
       correctWeight?: number;
       randomOrder?: boolean;
       word?: WordFilterBody;
@@ -89,6 +119,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
                 grammar: { type: "number", minimum: 0 },
               },
             },
+            mixWeights: MIX_WEIGHTS_SCHEMA,
             correctWeight: { type: "number", minimum: 0 },
             randomOrder: { type: "boolean" },
             word: {
@@ -116,7 +147,8 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       },
     },
     async (request, reply) => {
-      const { language, domainWeights, correctWeight, randomOrder, word, grammar } = request.body;
+      const { language, domainWeights, mixWeights, correctWeight, randomOrder, word, grammar } =
+        request.body;
       const wordWeight = Math.max(0, domainWeights?.word ?? 1);
       const grammarWeight = Math.max(0, domainWeights?.grammar ?? 1);
       const useCorrect = correctWeight !== undefined;
@@ -287,6 +319,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
         ...(wordGroupMembership ? { wordGroupMembership } : {}),
         ...(grammar?.groupWeights ? { grammarGroupWeights: grammar.groupWeights } : {}),
         ...(grammarGroupMembership ? { grammarGroupMembership } : {}),
+        ...(mixWeights ? { mixWeights } : {}),
         ...(useCorrect
           ? {
               correctWeight,
@@ -456,6 +489,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       domainWeights?: { word?: number; grammar?: number };
       wordGroupWeights?: Record<string, number>;
       grammarGroupWeights?: Record<string, number>;
+      mixWeights?: MixWeightConfig;
       correctWeight?: number;
     };
   }>(
@@ -474,6 +508,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
             },
             wordGroupWeights: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
             grammarGroupWeights: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
+            mixWeights: MIX_WEIGHTS_SCHEMA,
             correctWeight: { type: "number", minimum: 0 },
           },
         },
@@ -487,7 +522,8 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       // weights would disagree with the order `reorderUnansweredTail` actually produces.
       if (session.randomOrder) return reply.badRequest("This session is unweighted (random order)");
 
-      const { domainWeights, wordGroupWeights, grammarGroupWeights, correctWeight } = request.body;
+      const { domainWeights, wordGroupWeights, grammarGroupWeights, mixWeights, correctWeight } =
+        request.body;
       if (correctWeight !== undefined) {
         session.correctWeight = correctWeight;
         // Activate the mastered partition on demand if the session didn't start with one.
@@ -522,6 +558,12 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       }
       if (grammarGroupWeights) {
         session.grammarGroupWeights = { ...session.grammarGroupWeights, ...grammarGroupWeights };
+      }
+      // Replaced wholesale, unlike the group maps above: this is one coherent set of ratios the
+      // folded weights were derived from, not a per-group patch. Merging halves of two different
+      // forms would describe a mix that was never requested.
+      if (mixWeights) {
+        session.mixWeights = mixWeights;
       }
 
       reorderUnansweredTail(session);

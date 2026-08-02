@@ -17,14 +17,33 @@ import QuizSyncBadge from "./QuizSyncBadge";
 import { useQuizPrefetch } from "../hooks/useQuizPrefetch";
 import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
 import { applyCombinedAnswerLocally } from "../utils/quizLocal";
-import { categoryGroups } from "../types";
+import { categoryGroups, groupCategory as categoryOf } from "../types";
+import { categoryDomainWeights, foldMixWeights, type MixWeightDraft } from "../utils/quizGroupScope";
 import type {
   CombinedQuizSession,
   CombinedQuizQuestion,
   CombinedQuizWordQuestion,
+  GroupCategory,
+  MixWeightConfig,
 } from "../types";
 
 const VISIBLE_ANSWER_ITEMS = 4;
+type QuizDomain = "word" | "grammar";
+const QUIZ_DOMAINS = ["word", "grammar"] as const;
+const CATEGORY_KEYS = ["A", "B"] as const;
+/** Domain accents, shared by the progress pills and the weight editor. */
+const DOMAIN_TONE: Record<QuizDomain, { pill: string; text: string; focus: string }> = {
+  word: {
+    pill: "bg-blue-900/40 text-blue-300 border-blue-700/50",
+    text: "text-blue-300",
+    focus: "focus:border-blue-400",
+  },
+  grammar: {
+    pill: "bg-emerald-900/40 text-emerald-300 border-emerald-700/50",
+    text: "text-emerald-300",
+    focus: "focus:border-emerald-400",
+  },
+};
 /** Reading preference, not session data: kept in localStorage so hiding the
  *  readings once holds for the next question, the next session and both quizzes. */
 const EXAMPLE_PINYIN_PREF_KEY = "quizShowExamplePinyin";
@@ -140,6 +159,10 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const [removingFromBIds, setRemovingFromBIds] = useState<Set<string>>(new Set());
   const [removeFromBError, setRemoveFromBError] = useState<string | null>(null);
   const [groupNameMap, setGroupNameMap] = useState<Map<string, string>>(new Map());
+  // Which meta-group each group belongs to, from the same fetch as the names. This is the ONLY
+  // way a question can be attributed to Group A or B: the server has no category concept, so
+  // neither the session nor its questions carry one — see `routes/combined-quiz.ts`.
+  const [groupCategoryMap, setGroupCategoryMap] = useState<Map<string, GroupCategory>>(new Map());
   // Which items actually sit in a category-B group, per domain. The mixed A+B quiz draws
   // from the UNION of both categories, so most of its cards are A-only and must NOT offer
   // "remove from Group B" — the DELETE would remove nothing while the UI claimed success.
@@ -159,7 +182,19 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const [wordWeightDraft, setWordWeightDraft] = useState<Record<string, string>>({});
   const [grammarWeightDraft, setGrammarWeightDraft] = useState<Record<string, string>>({});
   const [correctDraft, setCorrectDraft] = useState("");
+  // Mixed quiz only: the three-level form. Seeded from `session.mixWeights`, which is stored
+  // precisely because `domainWeights` cannot be un-folded back into these ratios.
+  const [mixCategoryDraft, setMixCategoryDraft] = useState<{ A: string; B: string }>({ A: "1", B: "1" });
+  const [mixDomainDraft, setMixDomainDraft] = useState<MixWeightDraft["domain"]>({
+    A: { word: "1", grammar: "1" },
+    B: { word: "1", grammar: "1" },
+  });
   const [applyingWeights, setApplyingWeights] = useState(false);
+  // Group lists in the panel start folded on a phone; read once, so a rotation mid-edit does
+  // not reopen lists the user closed.
+  const [wideViewport] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 640px)").matches
+  );
   // Session review: every question graded since mount, in grading order (retries counted separately).
   const [sessionLog, setSessionLog] = useState<CombinedQuizQuestion[]>([]);
   const [sessionReviewActive, setSessionReviewActive] = useState(false);
@@ -191,9 +226,10 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       .catch(() => setAlreadyFlaggedIds(new Set()));
   }, [session.language, usesGroupBControls]);
 
-  // One groups fetch, two consumers: the names behind the per-group progress badges, and
-  // the category-B membership sets that gate the remove-from-Group-B control. The group
-  // docs own membership (`wordIds`/`grammarIds`), so both fall out of the same response.
+  // One groups fetch, three consumers: the names behind the per-group progress badges, the
+  // A/B category of each group (which drives the per-category progress and the mixed weights
+  // editor), and the category-B membership sets that gate the remove-from-Group-B control.
+  // The group docs own membership (`wordIds`/`grammarIds`), so all three fall out of one response.
   useEffect(() => {
     const hasWordGroups =
       session.wordGroupMembership && Object.keys(session.wordGroupMembership).length > 0;
@@ -208,9 +244,9 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       needWords ? getGroups(session.language).catch(() => null) : Promise.resolve([]),
       needGrammar ? getGrammarGroups(session.language).catch(() => null) : Promise.resolve([]),
     ]).then(([wordGroups, grammarGroups]) => {
-      setGroupNameMap(
-        new Map([...(wordGroups ?? []), ...(grammarGroups ?? [])].map((g) => [g.id, g.name]))
-      );
+      const allGroups = [...(wordGroups ?? []), ...(grammarGroups ?? [])];
+      setGroupNameMap(new Map(allGroups.map((g) => [g.id, g.name])));
+      setGroupCategoryMap(new Map(allGroups.map((g) => [g.id, categoryOf(g)])));
       // A failed fetch leaves `groupBIds` null rather than claiming "in no B group".
       if (!wordGroups || !grammarGroups) return;
       setGroupBIds({
@@ -304,6 +340,77 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const hasWordGroups = groupProgress?.some((g) => g.kind === "word") ?? false;
   const hasGrammarGroups = groupProgress?.some((g) => g.kind === "grammar") ?? false;
 
+  /**
+   * Progress per (meta-group, domain) — the four buckets the mixed A+B quiz is actually made
+   * of. Rolled up from the same session membership maps `groupProgress` reads, joined to each
+   * group's category; `assignMembership` files every item under exactly ONE group, so the
+   * buckets partition the pool and a retry duplicate cannot double-count (ids, not questions).
+   *
+   * `null` unless the session really spans both categories, which keeps the Group A, Group B
+   * and article quizzes on their existing two pills. Keyed off the session rather than
+   * `variant`, the same self-describing rule as `weightsAdjustable`.
+   *
+   * A session with an "already-correct" bucket partitions its mastered items into
+   * `correctMembership` BEFORE membership is built, so they belong to no group. Those surface
+   * as a separate neutral row instead of silently making the four buckets not add up.
+   */
+  const categoryProgress = useMemo(() => {
+    if (groupCategoryMap.size === 0) return null;
+    const membership = {
+      word: currentSession.wordGroupMembership,
+      grammar: currentSession.grammarGroupMembership,
+    };
+    const bucket: Record<GroupCategory, Record<QuizDomain, Set<string>>> = {
+      A: { word: new Set(), grammar: new Set() },
+      B: { word: new Set(), grammar: new Set() },
+    };
+    const claimed: Record<QuizDomain, Set<string>> = { word: new Set(), grammar: new Set() };
+    for (const kind of QUIZ_DOMAINS) {
+      for (const [gid, ids] of Object.entries(membership[kind] ?? {})) {
+        const cat = groupCategoryMap.get(gid);
+        if (!cat) continue;
+        for (const id of ids) {
+          bucket[cat][kind].add(id);
+          claimed[kind].add(id);
+        }
+      }
+    }
+    const present = (cat: GroupCategory) => QUIZ_DOMAINS.some((k) => bucket[cat][k].size > 0);
+    if (!present("A") || !present("B")) return null;
+
+    const unanswered: Record<QuizDomain, Set<string>> = { word: new Set(), grammar: new Set() };
+    const seen: Record<QuizDomain, Set<string>> = { word: new Set(), grammar: new Set() };
+    for (const q of orderedQuestions) {
+      const refId = q.kind === "word" ? q.wordId : q.grammarId;
+      seen[q.kind].add(refId);
+      if (q.userCorrect === undefined) unanswered[q.kind].add(refId);
+    }
+    const cell = (ids: Set<string>, kind: QuizDomain) => ({
+      kind,
+      total: ids.size,
+      remaining: [...ids].filter((id) => unanswered[kind].has(id)).length,
+    });
+
+    const rows = (["A", "B"] as const).map((category) => ({
+      category,
+      label: category === "A" ? t("categoryALabel") : t("categoryBLabel"),
+      cells: QUIZ_DOMAINS.map((k) => cell(bucket[category][k], k)).filter((c) => c.total > 0),
+    }));
+    const leftover = QUIZ_DOMAINS.map((k) =>
+      cell(new Set([...seen[k]].filter((id) => !claimed[k].has(id))), k)
+    ).filter((c) => c.total > 0);
+    if (leftover.length > 0) {
+      rows.push({ category: "other" as never, label: t("progressOther"), cells: leftover });
+    }
+    return rows;
+  }, [
+    currentSession.wordGroupMembership,
+    currentSession.grammarGroupMembership,
+    groupCategoryMap,
+    orderedQuestions,
+    t,
+  ]);
+
   function resetExpandedAnswers() {
     setShowAllDefinitions(false);
     setShowAllExamples(false);
@@ -331,12 +438,66 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       )
     );
     setCorrectDraft(currentSession.correctWeight !== undefined ? String(currentSession.correctWeight) : "");
+    const mix = currentSession.mixWeights;
+    if (mix) {
+      setMixCategoryDraft({ A: String(mix.category.A), B: String(mix.category.B) });
+      setMixDomainDraft({
+        A: { word: String(mix.domain.A.word), grammar: String(mix.domain.A.grammar) },
+        B: { word: String(mix.domain.B.word), grammar: String(mix.domain.B.grammar) },
+      });
+    }
     setWeightsOpen(true);
   }
 
-  const domainDraftWordNum = parseWeightInput(domainDraft.word);
-  const domainDraftGrammarNum = parseWeightInput(domainDraft.grammar);
-  const hasInvalidDomainDraft = domainDraftWordNum === null || domainDraftGrammarNum === null;
+  /** The session's groups, per domain, tagged with their category — the "selection" the fold
+   *  operates on mid-session (every group in the session is by definition selected). */
+  const weightGroups: Record<QuizDomain, { id: string; category?: GroupCategory }[]> = {
+    word: Object.keys(currentSession.wordGroupMembership ?? {}).map((id) => ({
+      id,
+      category: groupCategoryMap.get(id),
+    })),
+    grammar: Object.keys(currentSession.grammarGroupMembership ?? {}).map((id) => ({
+      id,
+      category: groupCategoryMap.get(id),
+    })),
+  };
+  /**
+   * The three-level editor needs all three of: a mixed session, the stored ratios to seed from,
+   * and the group→category map to fold against. Missing any one (a session started before this
+   * existed, or a failed groups fetch) falls back to the flat word/grammar editor, which still
+   * works — it just can't retune the A:B balance.
+   */
+  const mixEditable =
+    variant === "mixed" && !!currentSession.mixWeights && groupCategoryMap.size > 0;
+  const foldedMix = mixEditable
+    ? foldMixWeights({
+        draft: { category: mixCategoryDraft, domain: mixDomainDraft },
+        wordGroups: weightGroups.word,
+        selectedWord: new Set(weightGroups.word.map((g) => g.id)),
+        wordRaw: wordWeightDraft,
+        grammarGroups: weightGroups.grammar,
+        selectedGrammar: new Set(weightGroups.grammar.map((g) => g.id)),
+        grammarRaw: grammarWeightDraft,
+      })
+    : null;
+
+  // In mixed mode the effective domain weights are the FOLD of the six inputs, so both the
+  // "is it a number" check and the "is anything positive" check read from there.
+  const domainDraftWordNum = foldedMix
+    ? parseWeightInput(foldedMix.domain.word)
+    : parseWeightInput(domainDraft.word);
+  const domainDraftGrammarNum = foldedMix
+    ? parseWeightInput(foldedMix.domain.grammar)
+    : parseWeightInput(domainDraft.grammar);
+  const hasInvalidMixDraft =
+    mixEditable &&
+    CATEGORY_KEYS.some(
+      (cat) =>
+        parseWeightInput(mixCategoryDraft[cat]) === null ||
+        QUIZ_DOMAINS.some((k) => parseWeightInput(mixDomainDraft[cat][k]) === null)
+    );
+  const hasInvalidDomainDraft =
+    hasInvalidMixDraft || domainDraftWordNum === null || domainDraftGrammarNum === null;
   const hasInvalidWordWeightDraft = Object.keys(wordWeightDraft).some((gid) => !isWeightValid(wordWeightDraft[gid], 0));
   const hasInvalidGrammarWeightDraft = Object.keys(grammarWeightDraft).some((gid) => !isWeightValid(grammarWeightDraft[gid], 0));
   // Already-correct: blank = feature off; a number (incl. 0) activates the top-level bucket.
@@ -360,14 +521,40 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     try {
       // Normalize each competing set independently (scale to integers + GCD-reduce): the
       // word/grammar/already-correct domains merge together, each domain's groups compete alone.
-      const domainRaw: Record<string, string> = { word: domainDraft.word, grammar: domainDraft.grammar };
+      // Mixed folds its three-level form down to these same knobs first, so the normalization
+      // below is identical for both modes — only its inputs differ. See `foldMixWeights`.
+      const domainRaw: Record<string, string> = foldedMix
+        ? { word: foldedMix.domain.word, grammar: foldedMix.domain.grammar }
+        : { word: domainDraft.word, grammar: domainDraft.grammar };
       if (correctDraftActive) domainRaw.correct = correctDraft;
       const d = scaleWeightRecord(domainRaw);
       const domainWeights = { word: d.word, grammar: d.grammar };
-      const wordGroupWeights = scaleWeightRecord(wordWeightDraft);
-      const grammarGroupWeights = scaleWeightRecord(grammarWeightDraft);
+      const wordGroupWeights = scaleWeightRecord(foldedMix?.wordGroupWeights ?? wordWeightDraft);
+      const grammarGroupWeights = scaleWeightRecord(
+        foldedMix?.grammarGroupWeights ?? grammarWeightDraft
+      );
+      // Sent alongside the folded weights so a later reopen shows the ratios back, not the fold.
+      const mixWeights: MixWeightConfig | null = mixEditable
+        ? {
+            category: {
+              A: parseWeightInput(mixCategoryDraft.A) ?? 0,
+              B: parseWeightInput(mixCategoryDraft.B) ?? 0,
+            },
+            domain: {
+              A: {
+                word: parseWeightInput(mixDomainDraft.A.word) ?? 0,
+                grammar: parseWeightInput(mixDomainDraft.A.grammar) ?? 0,
+              },
+              B: {
+                word: parseWeightInput(mixDomainDraft.B.word) ?? 0,
+                grammar: parseWeightInput(mixDomainDraft.B.grammar) ?? 0,
+              },
+            },
+          }
+        : null;
       const updated = await updateCombinedQuizWeights(currentSession.language, {
         domainWeights,
+        ...(mixWeights ? { mixWeights } : {}),
         ...(correctDraftActive ? { correctWeight: d.correct } : {}),
         ...(Object.keys(wordGroupWeights).length > 0 ? { wordGroupWeights } : {}),
         ...(Object.keys(grammarGroupWeights).length > 0 ? { grammarGroupWeights } : {}),
@@ -817,21 +1004,55 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         </button>
       </div>
 
+      {/* Per-category progress (Group A / Group B × word / grammar), for a session that spans
+          both meta-groups. It REPLACES the two domain pills rather than joining them: the four
+          buckets already carry the domain split, and six pills is more than a phone can show
+          in one glance. */}
+      {categoryProgress && (
+        <div className="flex w-full max-w-lg flex-col items-center gap-1">
+          {categoryProgress.map((row) => (
+            <div key={row.category} className="flex flex-wrap items-center justify-center gap-2">
+              <span
+                className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
+                  row.category === "B"
+                    ? "bg-amber-900/60 text-amber-300"
+                    : row.category === "A"
+                      ? "bg-indigo-900/60 text-indigo-300"
+                      : "bg-gray-700 text-gray-300"
+                }`}
+              >
+                {row.label}
+              </span>
+              {row.cells.map((c) => (
+                <span
+                  key={c.kind}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                    c.remaining === 0
+                      ? "border-green-700/50 bg-green-900/40 text-green-400"
+                      : DOMAIN_TONE[c.kind].pill
+                  }`}
+                >
+                  {c.kind === "word" ? t("sectionVocabulary") : t("sectionGrammar")}: {c.remaining}/
+                  {c.total}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Per-domain progress (Vocabulary vs Grammar) */}
       {domainProgress.length > 0 && (
         <div className="flex flex-wrap justify-center gap-2 items-center">
-          {domainProgress.map((d) => (
-            <span
-              key={d.kind}
-              className={`rounded-full px-3 py-1 text-xs font-medium border ${
-                d.kind === "word"
-                  ? "bg-blue-900/40 text-blue-300 border-blue-700/50"
-                  : "bg-emerald-900/40 text-emerald-300 border-emerald-700/50"
-              }`}
-            >
-              {d.label}: {d.remaining}/{d.total}
-            </span>
-          ))}
+          {!categoryProgress &&
+            domainProgress.map((d) => (
+              <span
+                key={d.kind}
+                className={`rounded-full px-3 py-1 text-xs font-medium border ${DOMAIN_TONE[d.kind].pill}`}
+              >
+                {d.label}: {d.remaining}/{d.total}
+              </span>
+            ))}
           {hasWordGroups && (
             <button
               onClick={() => setWordGroupsOpen((v) => !v)}
@@ -871,116 +1092,195 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         </div>
       )}
 
-      {/* Mid-session domain + group weight editor */}
+      {/* Mid-session weight editor. Two shapes over one set of controls: the mixed A+B quiz
+          gets category → domain → groups (matching its setup modal), everything else keeps the
+          flat domain → groups form. Capped and scrollable because it renders inline in the
+          document flow — four collapsible group lists would otherwise push the sticky grade
+          buttons well past the fold on a phone. */}
       {weightsOpen && weightsAdjustable && (
-        <div className="w-full max-w-lg rounded-lg border border-gray-600 bg-gray-800 p-4 space-y-2">
+        <div className="max-h-[65vh] w-full max-w-lg space-y-2 overflow-y-auto rounded-lg border border-gray-600 bg-gray-800 p-4 sm:max-h-none sm:overflow-visible">
           <p className="text-sm font-medium text-gray-300">{t("adjustWeights")}</p>
 
-          {/* Word domain: its own weight, directly followed by its own groups */}
-          <div className="rounded border border-blue-900/50 bg-gray-900/30 p-2 space-y-1">
-            <label className="flex items-center gap-2 text-sm">
-              <span className="flex-1 min-w-0 truncate font-medium text-blue-300">{t("sectionVocabulary")}</span>
-              <input
-                type="number"
-                min={0}
-                value={domainDraft.word}
-                title={t("groupWeightHint")}
-                aria-label={t("groupWeight")}
-                onChange={(e) => {
-                  setDomainDraft((prev) => ({ ...prev, word: e.target.value }));
-                }}
-                className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
-                  parseWeightInput(domainDraft.word) === null
-                    ? "border-red-500 focus:border-red-400"
-                    : "border-gray-600 focus:border-blue-400"
-                }`}
-              />
-            </label>
-            {Object.keys(currentSession.wordGroupMembership ?? {}).length > 0 && (
-              <details open>
-                <summary className="cursor-pointer text-xs font-semibold text-blue-300 select-none">
-                  {t("groups")} (
-                  {Object.keys(currentSession.wordGroupMembership ?? {}).length})
-                </summary>
-                <div className="mt-1 space-y-1">
-                  {Object.keys(currentSession.wordGroupMembership ?? {}).map((gid) => {
-                    const invalid = !isWeightValid(wordWeightDraft[gid], 0);
-                    return (
-                      <label key={`w-${gid}`} className="flex items-center gap-2 text-sm text-gray-300">
-                        <span className="flex-1 min-w-0 truncate pl-4">{groupNameMap.get(gid) ?? gid}</span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={wordWeightDraft[gid] ?? "1"}
-                          title={t("groupWeightHint")}
-                          aria-label={t("groupWeight")}
-                          onChange={(e) => {
-                            setWordWeightDraft((prev) => ({ ...prev, [gid]: e.target.value }));
-                          }}
-                          className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
-                            invalid ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-blue-400"
-                          }`}
-                        />
-                      </label>
-                    );
-                  })}
-                </div>
-              </details>
-            )}
-          </div>
-
-          {/* Grammar domain: its own weight, directly followed by its own groups */}
-          <div className="rounded border border-emerald-900/50 bg-gray-900/30 p-2 space-y-1">
-            <label className="flex items-center gap-2 text-sm">
-              <span className="flex-1 min-w-0 truncate font-medium text-emerald-300">{t("sectionGrammar")}</span>
-              <input
-                type="number"
-                min={0}
-                value={domainDraft.grammar}
-                title={t("groupWeightHint")}
-                aria-label={t("groupWeight")}
-                onChange={(e) => {
-                  setDomainDraft((prev) => ({ ...prev, grammar: e.target.value }));
-                }}
-                className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
-                  parseWeightInput(domainDraft.grammar) === null
-                    ? "border-red-500 focus:border-red-400"
-                    : "border-gray-600 focus:border-emerald-400"
-                }`}
-              />
-            </label>
-            {Object.keys(currentSession.grammarGroupMembership ?? {}).length > 0 && (
-              <details open>
-                <summary className="cursor-pointer text-xs font-semibold text-emerald-300 select-none">
-                  {t("grammarGroups")} (
-                  {Object.keys(currentSession.grammarGroupMembership ?? {}).length})
-                </summary>
-                <div className="mt-1 space-y-1">
-                {Object.keys(currentSession.grammarGroupMembership ?? {}).map((gid) => {
-                  const invalid = !isWeightValid(grammarWeightDraft[gid], 0);
-                  return (
-                    <label key={`g-${gid}`} className="flex items-center gap-2 text-sm text-gray-300">
-                      <span className="flex-1 min-w-0 truncate pl-4">{groupNameMap.get(gid) ?? gid}</span>
+          {mixEditable
+            ? CATEGORY_KEYS.map((cat) => (
+                <details
+                  key={cat}
+                  open
+                  className={`rounded border bg-gray-900/30 ${
+                    cat === "B" ? "border-amber-900/50" : "border-indigo-900/50"
+                  }`}
+                >
+                  <summary className="flex cursor-pointer select-none items-center gap-2 p-2 text-sm">
+                    <span
+                      className={`min-w-0 flex-1 truncate font-medium ${
+                        cat === "B" ? "text-amber-300" : "text-indigo-300"
+                      }`}
+                    >
+                      {t(cat === "B" ? "categoryBLabel" : "categoryALabel")}
+                    </span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={mixCategoryDraft[cat]}
+                      title={t("categoryWeightHint")}
+                      aria-label={`${t(cat === "B" ? "categoryBLabel" : "categoryALabel")} ${t("groupWeight")}`}
+                      // Keeps the click off the <summary> (which would fold the category) while
+                      // leaving the input's own default behaviour — including its spinner
+                      // arrows — intact, which preventDefault would not.
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) =>
+                        setMixCategoryDraft((prev) => ({ ...prev, [cat]: e.target.value }))
+                      }
+                      className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
+                        parseWeightInput(mixCategoryDraft[cat]) === null
+                          ? "border-red-500 focus:border-red-400"
+                          : "border-gray-600 focus:border-indigo-400"
+                      }`}
+                    />
+                  </summary>
+                  <div className="space-y-1 px-2 pb-2">
+                    {QUIZ_DOMAINS.map((k) => {
+                      const groupIds = weightGroups[k]
+                        .filter((g) => (g.category ?? "A") === cat)
+                        .map((g) => g.id);
+                      const draft = k === "word" ? wordWeightDraft : grammarWeightDraft;
+                      const setDraft = k === "word" ? setWordWeightDraft : setGrammarWeightDraft;
+                      return (
+                        <div key={k} className="rounded border border-gray-700/60 p-2">
+                          <label className="flex items-center gap-2 text-sm">
+                            <span className={`min-w-0 flex-1 truncate font-medium ${DOMAIN_TONE[k].text}`}>
+                              {k === "word" ? t("sectionVocabulary") : t("sectionGrammar")}
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={mixDomainDraft[cat][k]}
+                              title={t("categoryDomainWeightHint")}
+                              aria-label={t("groupWeight")}
+                              onChange={(e) =>
+                                setMixDomainDraft((prev) => ({
+                                  ...prev,
+                                  [cat]: { ...prev[cat], [k]: e.target.value },
+                                }))
+                              }
+                              className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
+                                parseWeightInput(mixDomainDraft[cat][k]) === null
+                                  ? "border-red-500 focus:border-red-400"
+                                  : `border-gray-600 ${DOMAIN_TONE[k].focus}`
+                              }`}
+                            />
+                          </label>
+                          {groupIds.length > 0 && (
+                            <details open={wideViewport} className="mt-1">
+                              <summary
+                                className={`cursor-pointer select-none text-xs font-semibold ${DOMAIN_TONE[k].text}`}
+                              >
+                                {t(k === "word" ? "groups" : "grammarGroups")} ({groupIds.length})
+                              </summary>
+                              <div className="mt-1 space-y-1">
+                                {groupIds.map((gid) => (
+                                  <label
+                                    key={`${k}-${gid}`}
+                                    className="flex items-center gap-2 text-sm text-gray-300"
+                                  >
+                                    <span className="min-w-0 flex-1 truncate pl-4">
+                                      {groupNameMap.get(gid) ?? gid}
+                                    </span>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={draft[gid] ?? "1"}
+                                      title={t("groupWeightHint")}
+                                      aria-label={t("groupWeight")}
+                                      onChange={(e) =>
+                                        setDraft((prev) => ({ ...prev, [gid]: e.target.value }))
+                                      }
+                                      className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
+                                        !isWeightValid(draft[gid], 0)
+                                          ? "border-red-500 focus:border-red-400"
+                                          : `border-gray-600 ${DOMAIN_TONE[k].focus}`
+                                      }`}
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                            </details>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+              ))
+            : QUIZ_DOMAINS.map((k) => {
+                const groupIds = weightGroups[k].map((g) => g.id);
+                const draft = k === "word" ? wordWeightDraft : grammarWeightDraft;
+                const setDraft = k === "word" ? setWordWeightDraft : setGrammarWeightDraft;
+                return (
+                  /* Each domain's own weight, directly followed by its own groups. */
+                  <div
+                    key={k}
+                    className={`rounded border bg-gray-900/30 p-2 space-y-1 ${
+                      k === "word" ? "border-blue-900/50" : "border-emerald-900/50"
+                    }`}
+                  >
+                    <label className="flex items-center gap-2 text-sm">
+                      <span className={`min-w-0 flex-1 truncate font-medium ${DOMAIN_TONE[k].text}`}>
+                        {k === "word" ? t("sectionVocabulary") : t("sectionGrammar")}
+                      </span>
                       <input
                         type="number"
                         min={0}
-                        value={grammarWeightDraft[gid] ?? "1"}
+                        value={domainDraft[k]}
                         title={t("groupWeightHint")}
                         aria-label={t("groupWeight")}
-                        onChange={(e) => {
-                          setGrammarWeightDraft((prev) => ({ ...prev, [gid]: e.target.value }));
-                        }}
+                        onChange={(e) => setDomainDraft((prev) => ({ ...prev, [k]: e.target.value }))}
                         className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
-                          invalid ? "border-red-500 focus:border-red-400" : "border-gray-600 focus:border-emerald-400"
+                          parseWeightInput(domainDraft[k]) === null
+                            ? "border-red-500 focus:border-red-400"
+                            : `border-gray-600 ${DOMAIN_TONE[k].focus}`
                         }`}
                       />
                     </label>
-                  );
-                })}
-                </div>
-              </details>
-            )}
-          </div>
+                    {groupIds.length > 0 && (
+                      <details open={wideViewport}>
+                        <summary
+                          className={`cursor-pointer select-none text-xs font-semibold ${DOMAIN_TONE[k].text}`}
+                        >
+                          {t(k === "word" ? "groups" : "grammarGroups")} ({groupIds.length})
+                        </summary>
+                        <div className="mt-1 space-y-1">
+                          {groupIds.map((gid) => (
+                            <label
+                              key={`${k}-${gid}`}
+                              className="flex items-center gap-2 text-sm text-gray-300"
+                            >
+                              <span className="min-w-0 flex-1 truncate pl-4">
+                                {groupNameMap.get(gid) ?? gid}
+                              </span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={draft[gid] ?? "1"}
+                                title={t("groupWeightHint")}
+                                aria-label={t("groupWeight")}
+                                onChange={(e) =>
+                                  setDraft((prev) => ({ ...prev, [gid]: e.target.value }))
+                                }
+                                className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
+                                  !isWeightValid(draft[gid], 0)
+                                    ? "border-red-500 focus:border-red-400"
+                                    : `border-gray-600 ${DOMAIN_TONE[k].focus}`
+                                }`}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                );
+              })}
 
           {/* Already-correct: top-level bucket peer to the word/grammar domains. */}
           <label

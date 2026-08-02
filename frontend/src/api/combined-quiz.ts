@@ -1,5 +1,5 @@
 import { ApiError, fetchJson, postJson, putJson } from "./client";
-import type { CombinedQuizSession } from "../types";
+import type { CombinedQuizSession, MixWeightConfig } from "../types";
 
 /** Which of the identical route trees to talk to. "groupB" drills only the category-B
  *  groups; "mixed" spans both categories in one session; "importA"/"importB" drill the
@@ -41,6 +41,9 @@ export function startCombinedQuiz(
   opts: {
     language: string;
     domainWeights: { word: number; grammar: number };
+    /** Mixed quiz only: the three-level ratios `domainWeights`/`groupWeights` were folded from.
+     *  Stored verbatim so the mid-session ⚖ panel can show them back — see `MixWeightConfig`. */
+    mixWeights?: MixWeightConfig;
     correctWeight?: number;
     /** Order the union by one uniform shuffle instead of merging the two domains by
      *  weight — see `CombinedQuizSession.randomOrder`. */
@@ -78,6 +81,7 @@ export function updateCombinedQuizWeights(
     domainWeights?: { word: number; grammar: number };
     wordGroupWeights?: Record<string, number>;
     grammarGroupWeights?: Record<string, number>;
+    mixWeights?: MixWeightConfig;
     correctWeight?: number;
   },
   variant: CombinedQuizVariant = "combined"

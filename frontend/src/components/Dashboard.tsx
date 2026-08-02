@@ -557,6 +557,9 @@ export default function Dashboard() {
     const session = await startCombinedQuiz({
       language,
       domainWeights: filters.domainWeights,
+      // The unfolded three-level ratios ride along so the mid-session ⚖ panel can show back
+      // what was typed here — `domainWeights` alone can't be un-folded. Mixed only.
+      mixWeights: filters.mixWeights,
       correctWeight: filters.correctWeight,
       word: filters.word,
       grammar: filters.grammar,
