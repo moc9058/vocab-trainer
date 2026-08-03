@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
-import { callLLMWithSchema, callLLMFullWithSchema, streamLLMWithSchema, streamLLMFullWithSchema, stripMarkdownFences } from "../llm.js";
+import { callLLM, stripMarkdownFences } from "../llm.js";
+import { openSSE } from "../sse.js";
 import {
   saveTranslationEntry,
   getTranslationHistory,
@@ -158,7 +159,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
     // Step 1: decompose using source-language-specific prompt (MINI model — structural only)
     const decomposePrompt = decomposePrompts[sourceLanguage];
     if (!decomposePrompt) throw new Error(`Unsupported source language: ${sourceLanguage}`);
-    const decomposeRaw = await callLLMWithSchema(decomposePrompt, sourceText, decomposeSchema, "translation/decompose");
+    const decomposeRaw = await callLLM({ system: decomposePrompt, user: sourceText, schema: decomposeSchema, route: "translation/decompose" });
     const decomposition = ensureDecompositionIds(stripMarkdownFences(decomposeRaw));
 
     // Step 2: translate in parallel
@@ -167,12 +168,13 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
       targetLanguages.map(async (lang) => {
         const prompt = translatePrompts[lang];
         if (!prompt) throw new Error(`Unsupported language: ${lang}`);
-        const slimRaw = await callLLMFullWithSchema(
-          buildTranslateSystemPrompt(prompt, sourceLanguage, lang, context),
-          slimInput,
-          translateSchema,
-          "translation/translate"
-        );
+        const slimRaw = await callLLM({
+          system: buildTranslateSystemPrompt(prompt, sourceLanguage, lang, context),
+          user: slimInput,
+          schema: translateSchema,
+          tier: "full",
+          route: "translation/translate",
+        });
         return mergeTranslation(decomposition, slimRaw, lang);
       })
     );
@@ -219,26 +221,7 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { sourceLanguage, sourceText, targetLanguages, context } = request.body;
 
-    // Disable socket timeout for long-running SSE streams
-    request.raw.socket.setTimeout(0);
-
-    reply.raw.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
-      "X-Accel-Buffering": "no",
-    });
-
-    // Send periodic keep-alive comments to prevent proxy/infrastructure idle timeouts
-    const keepAlive = setInterval(() => {
-      if (!reply.raw.destroyed) reply.raw.write(":keep-alive\n\n");
-    }, 15_000);
-
-    function sendEvent(event: string, data: unknown) {
-      if (!reply.raw.destroyed) {
-        reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-      }
-    }
+    const { sendEvent, close } = openSSE(request, reply);
 
     try {
       // Step 1: decompose — or reuse the client-replayed decomposition
@@ -248,17 +231,16 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
         const decomposePrompt = decomposePrompts[sourceLanguage];
         if (!decomposePrompt) {
           sendEvent("error", { message: `Unsupported source language: ${sourceLanguage}` });
-          reply.raw.end();
           return;
         }
         sendEvent("decompose-start", {});
-        const decomposeRaw = await streamLLMWithSchema(
-          decomposePrompt,
-          sourceText,
-          decomposeSchema,
-          (chunk) => sendEvent("decompose-chunk", { chunk }),
-          "translation/decompose-stream"
-        );
+        const decomposeRaw = await callLLM({
+          system: decomposePrompt,
+          user: sourceText,
+          schema: decomposeSchema,
+          onChunk: (chunk) => sendEvent("decompose-chunk", { chunk }),
+          route: "translation/decompose-stream",
+        });
         decomposition = ensureDecompositionIds(stripMarkdownFences(decomposeRaw));
       }
       sendEvent("decompose-result", { decomposition });
@@ -273,13 +255,14 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
         targetLanguages.map(async (lang): Promise<TranslationResult> => {
           const prompt = translatePrompts[lang];
           if (!prompt) throw new Error(`Unsupported language: ${lang}`);
-          const raw = await streamLLMFullWithSchema(
-            buildTranslateSystemPrompt(prompt, sourceLanguage, lang, context),
-            slimInput,
-            translateSchema,
-            (chunk) => sendEvent("chunk", { language: lang, chunk }),
-            "translation/translate-stream"
-          );
+          const raw = await callLLM({
+            system: buildTranslateSystemPrompt(prompt, sourceLanguage, lang, context),
+            user: slimInput,
+            schema: translateSchema,
+            tier: "full",
+            onChunk: (chunk) => sendEvent("chunk", { language: lang, chunk }),
+            route: "translation/translate-stream",
+          });
           const result = mergeTranslation(decomposition, raw, lang);
           sendEvent("result", { language: lang, result });
           return result;
@@ -312,14 +295,9 @@ const translationRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error processing translation";
       fastify.log.error({ err }, "Streaming translation failed");
-      if (!reply.raw.destroyed) {
-        sendEvent("error", { message });
-      }
+      sendEvent("error", { message });
     } finally {
-      clearInterval(keepAlive);
-      if (!reply.raw.destroyed) {
-        reply.raw.end();
-      }
+      close();
     }
   });
 

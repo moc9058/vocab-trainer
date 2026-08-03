@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
-import { callLLMFullWithSchema, streamLLMFullWithSchema, stripMarkdownFences } from "../llm.js";
+import { callLLM, stripMarkdownFences } from "../llm.js";
+import { openSSE } from "../sse.js";
 import {
   getSpeakingWritingSession,
   saveSpeakingWritingSession,
@@ -64,7 +65,7 @@ const speakingWritingRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const userPrompt = `Mode: ${mode}\nContext: ${useCase}\n\nText to correct:\n${inputText}`;
-    const raw = await callLLMFullWithSchema(prompt, userPrompt, outputSchema, "speaking-writing/correct");
+    const raw = await callLLM({ system: prompt, user: userPrompt, schema: outputSchema, tier: "full", route: "speaking-writing/correct" });
     const result = JSON.parse(stripMarkdownFences(raw)) as CorrectionResult;
 
     // Load existing session or create new
@@ -127,38 +128,20 @@ const speakingWritingRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.badRequest(`Unsupported language: ${language}`);
     }
 
-    // Disable socket timeout for long-running SSE streams
-    request.raw.socket.setTimeout(0);
-
-    reply.raw.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
-      "X-Accel-Buffering": "no",
-    });
-
-    // Send periodic keep-alive comments to prevent proxy/infrastructure idle timeouts
-    const keepAlive = setInterval(() => {
-      if (!reply.raw.destroyed) reply.raw.write(":keep-alive\n\n");
-    }, 15_000);
-
-    function sendEvent(event: string, data: unknown) {
-      if (!reply.raw.destroyed) {
-        reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-      }
-    }
+    const { sendEvent, close } = openSSE(request, reply);
 
     const userPrompt = `Mode: ${mode}\nContext: ${useCase}\n\nText to correct:\n${inputText}`;
 
     try {
       sendEvent("start", {});
-      const raw = await streamLLMFullWithSchema(
-        prompt,
-        userPrompt,
-        outputSchema,
-        (chunk) => sendEvent("chunk", { chunk }),
-        "speaking-writing/correct-stream"
-      );
+      const raw = await callLLM({
+        system: prompt,
+        user: userPrompt,
+        schema: outputSchema,
+        tier: "full",
+        onChunk: (chunk) => sendEvent("chunk", { chunk }),
+        route: "speaking-writing/correct-stream",
+      });
       const result = JSON.parse(stripMarkdownFences(raw)) as CorrectionResult;
 
       // Save to session
@@ -185,14 +168,9 @@ const speakingWritingRoutes: FastifyPluginAsync = async (fastify) => {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error processing correction";
       fastify.log.error({ err }, "Streaming correction failed");
-      if (!reply.raw.destroyed) {
-        sendEvent("error", { message });
-      }
+      sendEvent("error", { message });
     } finally {
-      clearInterval(keepAlive);
-      if (!reply.raw.destroyed) {
-        reply.raw.end();
-      }
+      close();
     }
   });
 

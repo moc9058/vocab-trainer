@@ -1,4 +1,4 @@
-import { callLLMFullWithSchema, stripMarkdownFences } from "./llm.js";
+import { callLLM, stripMarkdownFences } from "./llm.js";
 import type { HanjaReading } from "./types.js";
 
 /**
@@ -104,14 +104,15 @@ export async function generateHanjaReadingsBatch(
 
   // Duplicate terms would only buy duplicate output tokens.
   const unique = [...new Map(items.map((i) => [i.term, i])).values()];
-  const raw = await callLLMFullWithSchema(
-    SYSTEM_PROMPT,
-    JSON.stringify({
+  const raw = await callLLM({
+    system: SYSTEM_PROMPT,
+    user: JSON.stringify({
       words: unique.map((i) => ({ term: i.term, pinyin: i.transliteration ?? "" })),
     }),
-    LLM_SCHEMA as unknown as Record<string, unknown>,
-    caller
-  );
+    schema: LLM_SCHEMA as unknown as Record<string, unknown>,
+    tier: "full",
+    route: caller,
+  });
   const parsed = JSON.parse(stripMarkdownFences(raw)) as LLMResponse;
 
   const wanted = new Set(unique.map((i) => i.term));

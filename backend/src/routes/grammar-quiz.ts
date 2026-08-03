@@ -380,7 +380,7 @@ Allowed topics: ${TOPICS.join(", ")}`;
         .map((w) => `- ${w.term} (${w.pinyin}), example: "${w.sentence}" → "${w.translation}"`)
         .join("\n");
 
-      const raw = await callLLM(systemPrompt, `Generate entries for these words:\n\n${userPrompt}`, "grammar-quiz/batch-add");
+      const raw = await callLLM({ system: systemPrompt, user: `Generate entries for these words:\n\n${userPrompt}`, route: "grammar-quiz/batch-add" });
       const parsed = JSON.parse(stripMarkdownFences(raw));
       const generated: unknown[] = parsed.words ?? [];
 

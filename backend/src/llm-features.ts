@@ -3,7 +3,7 @@ import type { LLMTier } from "./types.js";
 /**
  * The catalog of LLM-backed features the settings screen lets you assign a model to.
  *
- * `routes` are the `route` labels already passed at every `callLLM*`/`streamLLM*`
+ * `routes` are the `route` labels already passed at every `callLLM`
  * call site — they exist for per-feature token accounting (`recordUsage`), and
  * that makes them exactly the right configuration key too: both answer "which
  * feature is this?". Reusing them is why per-feature model assignment needs no

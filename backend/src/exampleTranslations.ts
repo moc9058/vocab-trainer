@@ -1,4 +1,4 @@
-import { callLLMWithSchema, stripMarkdownFences } from "./llm.js";
+import { callLLM, stripMarkdownFences } from "./llm.js";
 import { updateExampleSentence } from "./firestore.js";
 import type { ExampleSentence } from "./types.js";
 
@@ -130,7 +130,7 @@ export async function generateMissingExampleTranslations(
     const userPrompt = JSON.stringify(batch.map((n) => n.sentence));
     let translArr: Record<string, string>[];
     try {
-      const raw = await callLLMWithSchema(systemPrompt, userPrompt, translSchema, route);
+      const raw = await callLLM({ system: systemPrompt, user: userPrompt, schema: translSchema, route });
       const result = JSON.parse(stripMarkdownFences(raw)) as { translations: Record<string, string>[] };
       translArr = result.translations ?? [];
     } catch (err) {

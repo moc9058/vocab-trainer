@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
-import { streamLLMFullWithSchema, stripMarkdownFences } from "../llm.js";
+import { callLLM, stripMarkdownFences } from "../llm.js";
+import { openSSE } from "../sse.js";
 import {
   languageExists,
   getImportConfig,
@@ -216,25 +217,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.badRequest(`No import prompt configured for language '${language}'`);
       }
 
-      // Disable socket timeout for long-running SSE streams
-      request.raw.socket.setTimeout(0);
-
-      reply.raw.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-        "X-Accel-Buffering": "no",
-      });
-
-      const keepAlive = setInterval(() => {
-        if (!reply.raw.destroyed) reply.raw.write(":keep-alive\n\n");
-      }, 15_000);
-
-      function sendEvent(event: string, data: unknown) {
-        if (!reply.raw.destroyed) {
-          reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-        }
-      }
+      const { sendEvent, close } = openSSE(request, reply);
 
       try {
         const grammarItems = await getAllGrammarItems(language);
@@ -245,16 +228,17 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
 
         sendEvent("analysis-start", {});
         let accumulated = "";
-        const raw = await streamLLMFullWithSchema(
-          buildAnalyzeSystemPrompt(basePrompt, statements),
-          text,
-          analyzeSchema,
-          (chunk) => {
+        const raw = await callLLM({
+          system: buildAnalyzeSystemPrompt(basePrompt, statements),
+          user: text,
+          schema: analyzeSchema,
+          tier: "full",
+          onChunk: (chunk) => {
             accumulated += chunk;
             sendEvent("analysis-delta", { text: accumulated });
           },
-          "import/analyze-stream"
-        );
+          route: "import/analyze-stream",
+        });
 
         const analysis = normalizeAnalysis(stripMarkdownFences(raw));
 
@@ -282,8 +266,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
         request.log.error(err);
         sendEvent("error", { message: err instanceof Error ? err.message : String(err) });
       } finally {
-        clearInterval(keepAlive);
-        reply.raw.end();
+        close();
       }
     }
   );

@@ -4,9 +4,9 @@ import { Firestore } from "@google-cloud/firestore";
 import { config } from "dotenv";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
-import { TOPICS, type Word, type Topic, type LLMTier, type LLMModelConfig } from "./types.js";
+import { TOPICS, type Word, type Topic, type LLMTier, type LLMModelConfig, type LLMModelSource } from "./types.js";
 import { logTokenUsage, ensureModelInCostConfig, getLLMModelConfig } from "./firestore.js";
-import { ROUTE_TO_FEATURE } from "./llm-features.js";
+import { ROUTE_TO_FEATURE, LLM_FEATURES } from "./llm-features.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -104,10 +104,7 @@ export async function getModelMini(): Promise<string> {
 
 export async function getModelFull(): Promise<string> {
   await ensureInit();
-  if (!modelFull) {
-    throw new Error("OPENAI_MODEL_FULL is not configured");
-  }
-  return modelFull;
+  return envModelForTier("full");
 }
 
 // --- Per-feature model assignments (config/llm_models) ---
@@ -179,11 +176,45 @@ export async function resolveModel(tier: LLMTier, route: string): Promise<string
   const tierDefault = cfg?.defaults?.[tier];
   if (tierDefault) return tierDefault;
 
+  return envModelForTier(tier);
+}
+
+/** The env / `config/llm` floor of the resolution order. Assumes `ensureInit`
+ *  has run. The full tier may legitimately be unconfigured, hence the throw —
+ *  shared with `getModelFull` so the check exists once. */
+function envModelForTier(tier: LLMTier): string {
   if (tier === "mini") return modelMini;
   if (!modelFull) {
     throw new Error("OPENAI_MODEL_FULL is not configured");
   }
   return modelFull;
+}
+
+/**
+ * Apply the `resolveModel` rule to every feature in `LLM_FEATURES` at once, for
+ * the settings screen: what would each feature use, and where did that come
+ * from. Kept here beside `resolveModel` so the two cannot drift — this is the
+ * ONLY other place the resolution order is written down.
+ */
+export function resolveEffectiveModels(
+  config: LLMModelConfig,
+  fallbacks: { mini: string; full: string }
+): Record<string, { model: string; source: LLMModelSource }> {
+  const out: Record<string, { model: string; source: LLMModelSource }> = {};
+  for (const feature of LLM_FEATURES) {
+    const assigned = config.features?.[feature.key];
+    if (assigned) {
+      out[feature.key] = { model: assigned, source: "feature" };
+      continue;
+    }
+    const tierDefault = config.defaults?.[feature.defaultTier];
+    if (tierDefault) {
+      out[feature.key] = { model: tierDefault, source: "default" };
+      continue;
+    }
+    out[feature.key] = { model: fallbacks[feature.defaultTier], source: "env" };
+  }
+  return out;
 }
 
 async function recordUsage(
@@ -210,109 +241,64 @@ async function recordUsage(
   }
 }
 
-export async function callLLM(systemPrompt: string, userPrompt: string, route = "unknown"): Promise<string> {
-  const cl = await createOpenAIClient();
-  const model = await resolveModel("mini", route);
-  const response = await cl.chat.completions.create({
-    model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: { type: "json_object" },
-  });
-  recordUsage(response.usage, model, "callLLM", route);
-  return response.choices[0]?.message?.content ?? "";
+/**
+ * THE one LLM entry point. Every model call in the app goes through here; the
+ * three axes that used to be seven hand-expanded functions are now options:
+ *
+ * - `tier`   — "mini" (default) or "full". Only the FALLBACK when neither a
+ *              per-feature assignment nor a tier default exists in
+ *              `config/llm_models` (see `resolveModel`).
+ * - `schema` — present → `response_format: json_schema`; absent → `json_object`.
+ * - `onChunk`— present → streaming with a 30s idle abort; deltas are forwarded
+ *              as they arrive and the full accumulated text is returned either way.
+ * - `route`  — REQUIRED. Doubles as the per-feature token-accounting label and
+ *              the model-assignment key: register it in `llm-features.ts` to make
+ *              the feature configurable from the LLM Models screen (an
+ *              unregistered route just falls through to the tier default).
+ */
+export interface LLMCallOptions {
+  system: string;
+  user: string;
+  route: string;
+  tier?: LLMTier;
+  schema?: Record<string, unknown>;
+  onChunk?: (chunk: string) => void;
 }
 
-export async function callLLMFull(systemPrompt: string, userPrompt: string, route = "unknown"): Promise<string> {
+export async function callLLM(opts: LLMCallOptions): Promise<string> {
+  const { system, user, route, tier = "mini", schema, onChunk } = opts;
   const cl = await createOpenAIClient();
-  const model = await resolveModel("full", route);
-  const response = await cl.chat.completions.create({
-    model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: { type: "json_object" },
-  });
-  recordUsage(response.usage, model, "callLLMFull", route);
-  return response.choices[0]?.message?.content ?? "";
-}
+  const model = await resolveModel(tier, route);
+  const messages = [
+    { role: "system" as const, content: system },
+    { role: "user" as const, content: user },
+  ];
+  // The SDK's response_format type predates json_schema — the API accepts it,
+  // the type does not, hence the one cast in the codebase.
+  const response_format = (schema
+    ? { type: "json_schema", json_schema: schema }
+    : { type: "json_object" }) as { type: "json_object" };
 
-export async function callLLMWithSchema(
-  systemPrompt: string,
-  userPrompt: string,
-  jsonSchema: Record<string, unknown>,
-  route = "unknown"
-): Promise<string> {
-  const cl = await createOpenAIClient();
-  const model = await resolveModel("mini", route);
-  const response = await cl.chat.completions.create({
-    model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: jsonSchema,
-    } as unknown as { type: "json_object" },
-  });
-  recordUsage(response.usage, model, "callLLMWithSchema", route);
-  return response.choices[0]?.message?.content ?? "";
-}
+  if (!onChunk) {
+    const response = await cl.chat.completions.create({ model, messages, response_format });
+    recordUsage(response.usage, model, "callLLM", route);
+    return response.choices[0]?.message?.content ?? "";
+  }
 
-export async function callLLMFullWithSchema(
-  systemPrompt: string,
-  userPrompt: string,
-  jsonSchema: Record<string, unknown>,
-  route = "unknown"
-): Promise<string> {
-  const cl = await createOpenAIClient();
-  const model = await resolveModel("full", route);
-  const response = await cl.chat.completions.create({
-    model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: jsonSchema,
-    } as unknown as { type: "json_object" },
-  });
-  recordUsage(response.usage, model, "callLLMFullWithSchema", route);
-  return response.choices[0]?.message?.content ?? "";
-}
-
-export async function streamLLMFull(
-  systemPrompt: string,
-  userPrompt: string,
-  onChunk: (chunk: string) => void,
-  route = "unknown"
-): Promise<string> {
-  const cl = await createOpenAIClient();
-  const model = await resolveModel("full", route);
   const abortController = new AbortController();
-  const stream = await cl.chat.completions.create({
-    model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: { type: "json_object" },
-    stream: true,
-    stream_options: { include_usage: true },
-  }, { signal: abortController.signal });
+  const stream = await cl.chat.completions.create(
+    { model, messages, response_format, stream: true, stream_options: { include_usage: true } },
+    { signal: abortController.signal }
+  );
   let full = "";
   let usage: CompletionUsage | undefined;
   let idledOut = false;
-  let idleTimer = setTimeout(() => { idledOut = true; abortController.abort(); }, STREAM_IDLE_MS);
+  const armIdle = () => setTimeout(() => { idledOut = true; abortController.abort(); }, STREAM_IDLE_MS);
+  let idleTimer = armIdle();
   try {
     for await (const chunk of stream) {
       clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => { idledOut = true; abortController.abort(); }, STREAM_IDLE_MS);
+      idleTimer = armIdle();
       const delta = chunk.choices[0]?.delta?.content ?? "";
       if (delta) {
         full += delta;
@@ -327,105 +313,7 @@ export async function streamLLMFull(
   } finally {
     clearTimeout(idleTimer);
   }
-  recordUsage(usage, model, "streamLLMFull", route);
-  return full;
-}
-
-export async function streamLLMFullWithSchema(
-  systemPrompt: string,
-  userPrompt: string,
-  jsonSchema: Record<string, unknown>,
-  onChunk: (chunk: string) => void,
-  route = "unknown"
-): Promise<string> {
-  const cl = await createOpenAIClient();
-  const model = await resolveModel("full", route);
-  const abortController = new AbortController();
-  const stream = await cl.chat.completions.create({
-    model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: jsonSchema,
-    } as unknown as { type: "json_object" },
-    stream: true,
-    stream_options: { include_usage: true },
-  }, { signal: abortController.signal });
-  let full = "";
-  let usage: CompletionUsage | undefined;
-  let idledOut = false;
-  let idleTimer = setTimeout(() => { idledOut = true; abortController.abort(); }, STREAM_IDLE_MS);
-  try {
-    for await (const chunk of stream) {
-      clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => { idledOut = true; abortController.abort(); }, STREAM_IDLE_MS);
-      const delta = chunk.choices[0]?.delta?.content ?? "";
-      if (delta) {
-        full += delta;
-        onChunk(delta);
-      }
-      if (chunk.usage) {
-        usage = chunk.usage;
-      }
-    }
-  } catch (err) {
-    if (!idledOut) throw err;
-  } finally {
-    clearTimeout(idleTimer);
-  }
-  recordUsage(usage, model, "streamLLMFullWithSchema", route);
-  return full;
-}
-
-export async function streamLLMWithSchema(
-  systemPrompt: string,
-  userPrompt: string,
-  jsonSchema: Record<string, unknown>,
-  onChunk: (chunk: string) => void,
-  route = "unknown"
-): Promise<string> {
-  const cl = await createOpenAIClient();
-  const model = await resolveModel("mini", route);
-  const abortController = new AbortController();
-  const stream = await cl.chat.completions.create({
-    model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: jsonSchema,
-    } as unknown as { type: "json_object" },
-    stream: true,
-    stream_options: { include_usage: true },
-  }, { signal: abortController.signal });
-  let full = "";
-  let usage: CompletionUsage | undefined;
-  let idledOut = false;
-  let idleTimer = setTimeout(() => { idledOut = true; abortController.abort(); }, STREAM_IDLE_MS);
-  try {
-    for await (const chunk of stream) {
-      clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => { idledOut = true; abortController.abort(); }, STREAM_IDLE_MS);
-      const delta = chunk.choices[0]?.delta?.content ?? "";
-      if (delta) {
-        full += delta;
-        onChunk(delta);
-      }
-      if (chunk.usage) {
-        usage = chunk.usage;
-      }
-    }
-  } catch (err) {
-    if (!idledOut) throw err;
-  } finally {
-    clearTimeout(idleTimer);
-  }
-  recordUsage(usage, model, "streamLLMWithSchema", route);
+  recordUsage(usage, model, "callLLM", route);
   return full;
 }
 
@@ -466,32 +354,11 @@ export interface Segment {
   transliteration?: string;
 }
 
-/** Call LLM to segment a batch of sentences into words with pinyin */
-export async function segmentBatch(
-  sentences: string[],
-  config?: { prompt: string; schema: Record<string, unknown> }
-): Promise<Map<number, Segment[]>> {
-  const systemPrompt = config?.prompt
-    ?? `You are a Chinese language expert. Segment Chinese sentences into individual words, providing pinyin with tone marks for each Chinese word. Non-Chinese tokens (punctuation, numbers, English text) should have no pinyin.
-
-Return a JSON object with a "results" key containing an array. Each entry has:
-- "index": the sentence number (0-based)
-- "segments": array of {"text": "...", "pinyin": "..."} objects. Omit "pinyin" for non-Chinese tokens.
-
-Rules:
-- Segment into natural Chinese words (not individual characters unless they are standalone words)
-- Use tone marks on pinyin (e.g. "nǐ hǎo" not "ni3 hao3")
-- Multi-syllable words get space-separated pinyin (e.g. "xuéshēng" for 学生)
-- Exclude punctuation, numbers, and all non-word tokens — only include actual Chinese words or terms`;
-
-  const numbered = sentences
-    .map((s, i) => `${i}. ${s}`)
-    .join("\n");
-  const userPrompt = `Segment these Chinese sentences:\n\n${numbered}`;
-
-  const raw = config?.schema
-    ? await callLLMWithSchema(systemPrompt, userPrompt, config.schema, "llm/segment-batch")
-    : await callLLM(systemPrompt, userPrompt, "llm/segment-batch");
+/**
+ * Shared response parser for `segmentBatch` and `fillSegmentPinyin` — both ask
+ * for the same `{results: [{index, segments: [{text, pinyin?}]}]}` shape.
+ */
+function parseSegmentResponse(raw: string): Map<number, Segment[]> {
   const parsed = JSON.parse(stripMarkdownFences(raw));
   const results = new Map<number, Segment[]>();
 
@@ -516,6 +383,38 @@ Rules:
   }
 
   return results;
+}
+
+/** Call LLM to segment a batch of sentences into words with pinyin */
+export async function segmentBatch(
+  sentences: string[],
+  config?: { prompt: string; schema: Record<string, unknown> }
+): Promise<Map<number, Segment[]>> {
+  const systemPrompt = config?.prompt
+    ?? `You are a Chinese language expert. Segment Chinese sentences into individual words, providing pinyin with tone marks for each Chinese word. Non-Chinese tokens (punctuation, numbers, English text) should have no pinyin.
+
+Return a JSON object with a "results" key containing an array. Each entry has:
+- "index": the sentence number (0-based)
+- "segments": array of {"text": "...", "pinyin": "..."} objects. Omit "pinyin" for non-Chinese tokens.
+
+Rules:
+- Segment into natural Chinese words (not individual characters unless they are standalone words)
+- Use tone marks on pinyin (e.g. "nǐ hǎo" not "ni3 hao3")
+- Multi-syllable words get space-separated pinyin (e.g. "xuéshēng" for 学生)
+- Exclude punctuation, numbers, and all non-word tokens — only include actual Chinese words or terms`;
+
+  const numbered = sentences
+    .map((s, i) => `${i}. ${s}`)
+    .join("\n");
+  const userPrompt = `Segment these Chinese sentences:\n\n${numbered}`;
+
+  const raw = await callLLM({
+    system: systemPrompt,
+    user: userPrompt,
+    schema: config?.schema,
+    route: "llm/segment-batch",
+  });
+  return parseSegmentResponse(raw);
 }
 
 const TONE_MARKS: Record<string, string[]> = {
@@ -672,12 +571,12 @@ export async function fillGrammarTransliteration(
     )
     .join("\n");
 
-  const raw = await callLLMWithSchema(
-    systemPrompt,
-    `Classify and read the Han runs of each grammar statement:\n\n${userPrompt}`,
-    GRAMMAR_TRANSLITERATION_SCHEMA,
-    "llm/fill-grammar-transliteration"
-  );
+  const raw = await callLLM({
+    system: systemPrompt,
+    user: `Classify and read the Han runs of each grammar statement:\n\n${userPrompt}`,
+    schema: GRAMMAR_TRANSLITERATION_SCHEMA,
+    route: "llm/fill-grammar-transliteration",
+  });
   const parsed = JSON.parse(stripMarkdownFences(raw));
 
   // index → (run text → pinyin)
@@ -737,28 +636,11 @@ Rules:
     .join("\n");
   const userPrompt = `Fill pinyin for these Chinese sentences and their pre-defined segments:\n\n${numbered}`;
 
-  const raw = config?.schema
-    ? await callLLMWithSchema(systemPrompt, userPrompt, config.schema, "llm/fill-segment-pinyin")
-    : await callLLM(systemPrompt, userPrompt, "llm/fill-segment-pinyin");
-  const parsed = JSON.parse(stripMarkdownFences(raw));
-  const results = new Map<number, Segment[]>();
-
-  for (const entry of parsed.results ?? []) {
-    if (typeof entry?.index !== "number" || !Array.isArray(entry?.segments)) continue;
-    const segs: Segment[] = [];
-    for (const seg of entry.segments) {
-      if (typeof seg?.text !== "string" || seg.text.length === 0) continue;
-      if (!/^[\p{Script=Han}a-zA-Z]+$/u.test(seg.text)) continue;
-      if (typeof seg.pinyin === "string" && seg.pinyin.length > 0) {
-        segs.push({ text: seg.text, transliteration: seg.pinyin });
-      } else {
-        segs.push({ text: seg.text });
-      }
-    }
-    if (segs.length > 0) {
-      results.set(entry.index, segs);
-    }
-  }
-
-  return results;
+  const raw = await callLLM({
+    system: systemPrompt,
+    user: userPrompt,
+    schema: config?.schema,
+    route: "llm/fill-segment-pinyin",
+  });
+  return parseSegmentResponse(raw);
 }

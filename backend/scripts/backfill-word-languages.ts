@@ -22,7 +22,7 @@
 // with a bare `5 NOT_FOUND`.
 import "./_project-env.js";
 import { Firestore } from "@google-cloud/firestore";
-import { callLLMFullWithSchema, stripMarkdownFences } from "../src/llm.js";
+import { callLLM, stripMarkdownFences } from "../src/llm.js";
 import type { Word, Meaning, Example } from "../src/types.js";
 
 const ALL_LANGUAGES = ["en", "ja", "ko", "zh"] as const;
@@ -174,12 +174,13 @@ async function backfillWord(word: Word, gaps: WordGaps): Promise<BackfillRespons
     })),
   };
 
-  const raw = await callLLMFullWithSchema(
-    BACKFILL_PROMPT,
-    JSON.stringify(userInput, null, 2),
-    BACKFILL_SCHEMA as unknown as Record<string, unknown>,
-    "scripts/backfill-word-languages",
-  );
+  const raw = await callLLM({
+    system: BACKFILL_PROMPT,
+    user: JSON.stringify(userInput, null, 2),
+    schema: BACKFILL_SCHEMA as unknown as Record<string, unknown>,
+    tier: "full",
+    route: "scripts/backfill-word-languages",
+  });
   return JSON.parse(stripMarkdownFences(raw)) as BackfillResponse;
 }
 

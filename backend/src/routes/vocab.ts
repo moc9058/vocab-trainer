@@ -51,7 +51,7 @@ import {
 import type { Word, WordDraft, Example, ExampleSentence, HanjaReading, SearchIn } from "../types.js";
 import { TOPICS } from "../types.js";
 import { generateHanjaReadings } from "../hanja.js";
-import { callLLMWithSchema, stripMarkdownFences, validateWord, segmentBatch, fillSegmentPinyin, type Segment } from "../llm.js";
+import { callLLM, stripMarkdownFences, validateWord, segmentBatch, fillSegmentPinyin, type Segment } from "../llm.js";
 import {
   ALL_DEFINITION_LANGUAGES,
   LANGUAGE_TO_ISO,
@@ -313,7 +313,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
 
       let llmResult: Record<string, unknown>;
       try {
-        const raw = await callLLMWithSchema(systemPrompt, userPrompt, vocabConfig.smartAddSchema, "vocab/smart-add");
+        const raw = await callLLM({ system: systemPrompt, user: userPrompt, schema: vocabConfig.smartAddSchema, route: "vocab/smart-add" });
         llmResult = JSON.parse(stripMarkdownFences(raw));
       } catch (err) {
         fastify.log.error({ err, term }, "LLM call failed for smart-add");

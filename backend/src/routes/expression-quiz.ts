@@ -7,7 +7,7 @@ import {
   saveSpeakingWritingSession,
   getSpeakingWritingConfig,
 } from "../firestore.js";
-import { callLLMFullWithSchema, stripMarkdownFences } from "../llm.js";
+import { callLLM, stripMarkdownFences } from "../llm.js";
 import type {
   Expression,
   ExpressionQuizSubsession,
@@ -161,7 +161,7 @@ const expressionQuizRoutes: FastifyPluginAsync = async (fastify) => {
 
       let correctionResult: CorrectionResult;
       try {
-        const raw = await callLLMFullWithSchema(systemPrompt, userPrompt, outputSchema, "expression-quiz/answer");
+        const raw = await callLLM({ system: systemPrompt, user: userPrompt, schema: outputSchema, tier: "full", route: "expression-quiz/answer" });
         correctionResult = JSON.parse(stripMarkdownFences(raw)) as CorrectionResult;
       } catch (err) {
         fastify.log.error({ err, expressionId }, "LLM correction failed for expression quiz");

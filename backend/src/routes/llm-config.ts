@@ -5,9 +5,10 @@ import {
   invalidateModelConfigCache,
   getModelMini,
   getModelFull,
+  resolveEffectiveModels,
 } from "../llm.js";
 import { LLM_FEATURES, FEATURE_BY_KEY } from "../llm-features.js";
-import type { LLMModelConfig, LLMModelSource } from "../types.js";
+import type { LLMModelConfig } from "../types.js";
 
 const EMPTY: LLMModelConfig = {
   catalog: [],
@@ -27,29 +28,6 @@ async function tierFallbacks(): Promise<{ mini: string; full: string }> {
   return { mini, full };
 }
 
-/** Mirrors `llm.ts:resolveModel` so the UI shows exactly what a call would use,
- *  plus where the value came from. */
-function effectiveModels(
-  config: LLMModelConfig,
-  fallbacks: { mini: string; full: string }
-): Record<string, { model: string; source: LLMModelSource }> {
-  const out: Record<string, { model: string; source: LLMModelSource }> = {};
-  for (const feature of LLM_FEATURES) {
-    const assigned = config.features?.[feature.key];
-    if (assigned) {
-      out[feature.key] = { model: assigned, source: "feature" };
-      continue;
-    }
-    const tierDefault = config.defaults?.[feature.defaultTier];
-    if (tierDefault) {
-      out[feature.key] = { model: tierDefault, source: "default" };
-      continue;
-    }
-    out[feature.key] = { model: fallbacks[feature.defaultTier], source: "env" };
-  }
-  return out;
-}
-
 async function buildPayload(config: LLMModelConfig) {
   const fallbacks = await tierFallbacks();
   return {
@@ -57,7 +35,9 @@ async function buildPayload(config: LLMModelConfig) {
     /** The static catalog, so the client needs no duplicated copy. */
     featureCatalog: LLM_FEATURES,
     tierFallbacks: fallbacks,
-    effective: effectiveModels(config, fallbacks),
+    // Computed by llm.ts itself (beside resolveModel), so what the UI shows and
+    // what a call would use cannot drift.
+    effective: resolveEffectiveModels(config, fallbacks),
   };
 }
 

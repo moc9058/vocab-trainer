@@ -20,7 +20,7 @@
 import { PROJECT_ID, DATABASE_ID } from "./_project-env.js";
 import "dotenv/config";
 import { Firestore, FieldValue } from "@google-cloud/firestore";
-import { segmentBatch, callLLMFull } from "../src/llm.js";
+import { segmentBatch, callLLM } from "../src/llm.js";
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
@@ -115,7 +115,7 @@ async function translateSentencesBatch(
   });
   const userPrompt = userLines.join("\n");
 
-  const raw = await callLLMFull(systemPrompt, userPrompt, "scripts/backfill-translations");
+  const raw = await callLLM({ system: systemPrompt, user: userPrompt, tier: "full", route: "scripts/backfill-translations" });
   const result = new Map<number, Record<string, string>>();
 
   try {

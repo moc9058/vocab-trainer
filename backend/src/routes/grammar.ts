@@ -34,7 +34,7 @@ import {
   lookupWordsByTerms,
 } from "../firestore.js";
 import {
-  callLLMWithSchema,
+  callLLM,
   stripMarkdownFences,
   fillSegmentPinyin,
   fillGrammarTransliteration,
@@ -385,7 +385,7 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
 
       let llmResult: Record<string, unknown>;
       try {
-        const raw = await callLLMWithSchema(systemPrompt, userPrompt, grammarConfig.smartAddSchema, "grammar/smart-add");
+        const raw = await callLLM({ system: systemPrompt, user: userPrompt, schema: grammarConfig.smartAddSchema, route: "grammar/smart-add" });
         llmResult = JSON.parse(stripMarkdownFences(raw));
       } catch (err) {
         fastify.log.error({ err, statement: body.statement }, "LLM call failed for grammar smart-add");
