@@ -186,6 +186,21 @@ export interface PaginatedResult<T> {
   totalPages: number;
 }
 
+// Slim per-item row for the client-side search preview (autocomplete).
+// One shape for both words (label = term) and grammar (label = statement).
+// Mirrored in backend/src/types.ts.
+export interface SearchIndexEntry {
+  id: string;
+  label: string;
+  transliteration?: string;
+  pos: string[];
+  // Flattened Meaning.text values across all ISO codes. Empty when the item
+  // has no definitions/descriptions (or its own-language gloss was stripped).
+  meanings: string[];
+}
+
+export type SearchIn = "term" | "meaning" | "both";
+
 // ========== Grammar ==========
 
 export interface GrammarExample {

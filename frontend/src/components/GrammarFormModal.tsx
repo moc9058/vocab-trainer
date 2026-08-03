@@ -13,6 +13,8 @@ import { LEVEL_OPTIONS } from "../constants/levels";
 import ExampleSentenceEditor, { type ExampleFormState } from "./ExampleSentenceEditor";
 import GroupBSelect from "./GroupBSelect";
 import PinyinInput from "./PinyinInput";
+import SearchPreviewInput from "./SearchPreviewInput";
+import { useSearchIndex } from "../hooks/useSearchIndex";
 import { categoryGroups, displayTranslation, latestGrammarGroup, type Grammar, type GrammarDraft, type GrammarGroup, type Meaning } from "../types";
 import type { smartAddWord } from "../api/vocab";
 
@@ -88,6 +90,10 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
   const prefill = editItem ?? initialItem;
 
   const [statement, setStatement] = useState(prefill?.statement ?? "");
+  // Create-mode-only statement preview (duplicate awareness — every row is an
+  // already-registered grammar item). Edit mode keeps the plain input.
+  const [previewEnabled, setPreviewEnabled] = useState(false);
+  const { entries: previewEntries } = useSearchIndex("grammar", language, previewEnabled && !isEdit);
   const [transliteration, setTransliteration] = useState(prefill?.transliteration ?? "");
   const [defaultDescLang, setDefaultDescLang] = useState(() => cachedDefaultDescLang ?? "en");
   const [descriptions, setDescriptions] = useState<DescriptionFormState[]>(() => {
@@ -445,14 +451,33 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
           {/* Statement */}
           <div>
             <label className="mb-1 block text-sm text-gray-400">{t("grammarStatement")} *</label>
-            <input
-              type="text"
-              value={statement}
-              onChange={(e) => setStatement(e.target.value)}
-              placeholder="e.g. to + V, 别+V+了"
-              required
-              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-400 focus:outline-none"
-            />
+            {isEdit ? (
+              <input
+                type="text"
+                value={statement}
+                onChange={(e) => setStatement(e.target.value)}
+                placeholder="e.g. to + V, 别+V+了"
+                required
+                className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-blue-400 focus:outline-none"
+              />
+            ) : (
+              <SearchPreviewInput
+                value={statement}
+                onChange={setStatement}
+                entries={previewEntries}
+                onSelect={(entry) => setStatement(entry.label)}
+                onFirstFocus={() => setPreviewEnabled(true)}
+                placeholder="e.g. to + V, 别+V+了"
+                required
+                renderMeta={(entry) =>
+                  entry.label === statement.trim() ? (
+                    <span className="rounded bg-amber-500/20 px-1.5 text-xs text-amber-300">
+                      {t("previewAlreadyExists")}
+                    </span>
+                  ) : null
+                }
+              />
+            )}
           </div>
 
           {/* Statement pinyin (Chinese only) — Chinese characters romanized, rest kept as-is */}

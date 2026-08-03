@@ -3,6 +3,7 @@ import {
   languageExists,
   getWords,
   getWord,
+  getWordSearchIndex,
   getWordFilters,
   addWord,
   updateWord,
@@ -47,7 +48,7 @@ import {
   GroupNotFoundError,
   DuplicateTermError,
 } from "../firestore.js";
-import type { Word, WordDraft, Example, ExampleSentence, HanjaReading } from "../types.js";
+import type { Word, WordDraft, Example, ExampleSentence, HanjaReading, SearchIn } from "../types.js";
 import { TOPICS } from "../types.js";
 import { generateHanjaReadings } from "../hanja.js";
 import { callLLMWithSchema, stripMarkdownFences, validateWord, segmentBatch, fillSegmentPinyin, type Segment } from "../llm.js";
@@ -112,7 +113,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
   // List words with filtering & pagination
   fastify.get<{
     Params: { language: string };
-    Querystring: { search?: string; topic?: string; category?: string; level?: string; flaggedOnly?: string; groupId?: string; page?: string; limit?: string };
+    Querystring: { search?: string; searchIn?: string; topic?: string; category?: string; level?: string; flaggedOnly?: string; groupId?: string; page?: string; limit?: string };
   }>("/:language", async (request, reply) => {
     const { language } = request.params;
     if (!(await languageExists(language))) {
@@ -120,15 +121,32 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const { search, topic, category, level, flaggedOnly, groupId } = request.query;
+    const searchIn: SearchIn = request.query.searchIn === "meaning" || request.query.searchIn === "both"
+      ? request.query.searchIn
+      : "term";
     const page = Math.max(1, parseInt(request.query.page ?? "1", 10) || 1);
     const limit = Math.max(1, Math.min(100, parseInt(request.query.limit ?? "50", 10) || 50));
 
     return await getWords(
       language,
-      { search, topic, category, level, flaggedOnly: flaggedOnly === "true", groupId },
+      { search, searchIn, topic, category, level, flaggedOnly: flaggedOnly === "true", groupId },
       { page, limit }
     );
   });
+
+  // Slim search-preview index (term/transliteration/pos/meanings — no examples).
+  // Registered above `/:language/:wordId`; find-my-way prefers the static
+  // segment anyway, this just keeps the intent visible.
+  fastify.get<{ Params: { language: string } }>(
+    "/:language/search-index",
+    async (request, reply) => {
+      const { language } = request.params;
+      if (!(await languageExists(language))) {
+        return reply.notFound(`Language '${language}' not found`);
+      }
+      return { items: await getWordSearchIndex(language) };
+    }
+  );
 
   // Get available filter options for a language
   fastify.get<{ Params: { language: string } }>(

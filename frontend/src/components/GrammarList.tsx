@@ -4,6 +4,7 @@ import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import {
   getGrammarItems,
+  getGrammarItemsByIds,
   deleteGrammarItem,
   getGrammarGroups,
   modifyGrammarGroupMembers,
@@ -13,7 +14,9 @@ import {
   uploadGrammarDrafts,
 } from "../api/grammar";
 import { LEVEL_OPTIONS } from "../constants/levels";
-import { categoryGroups, latestGrammarGroup, type Grammar, type GrammarDraft, type GrammarGroup } from "../types";
+import { categoryGroups, latestGrammarGroup, type Grammar, type GrammarDraft, type GrammarGroup, type SearchIn } from "../types";
+import SearchPreviewInput from "./SearchPreviewInput";
+import { useSearchIndex, invalidateSearchIndex } from "../hooks/useSearchIndex";
 import GrammarFormModal from "./GrammarFormModal";
 import GroupPickerModal from "./GroupPickerModal";
 import GroupBSelect from "./GroupBSelect";
@@ -246,6 +249,10 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [level, setLevel] = useState<string>("");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [searchIn, setSearchIn] = useState<SearchIn>("term");
+  const [previewEnabled, setPreviewEnabled] = useState(false);
+  const { entries: previewEntries } = useSearchIndex("grammar", language, previewEnabled);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -290,13 +297,26 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
     draftGroupTouchedRef.current = false;
   }, [language]);
 
+  // Debounce the search input — it used to fire a request (and a full
+  // grammar-collection scan on the server) per keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Reset page when the effective search changes.
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, searchIn]);
+
   const fetchItems = useCallback(() => {
     setLoading(true);
     getGrammarItems(
       language,
       {
         groupId: selectedGroupId || undefined,
-        search: search || undefined,
+        search: debouncedSearch || undefined,
+        searchIn: debouncedSearch ? searchIn : undefined,
         level: level || undefined,
       },
       page,
@@ -308,11 +328,16 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
       })
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
-  }, [language, selectedGroupId, search, level, page, refreshSignal]);
+  }, [language, selectedGroupId, debouncedSearch, searchIn, level, page, refreshSignal]);
 
   useEffect(() => {
     fetchItems();
   }, [fetchItems]);
+
+  // Queue-driven adds bump refreshSignal — refresh the search preview too.
+  useEffect(() => {
+    if (refreshSignal !== undefined) invalidateSearchIndex("grammar", language);
+  }, [refreshSignal, language]);
 
   const fetchDrafts = useCallback(() => {
     getGrammarDrafts(language)
@@ -424,6 +449,7 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
   async function handleDelete(grammarId: string) {
     try {
       await deleteGrammarItem(language, grammarId);
+      invalidateSearchIndex("grammar", language);
       setDeletingId(null);
       setSelectedIds((prev) => {
         if (!prev.has(grammarId)) return prev;
@@ -477,6 +503,7 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
       for (const id of ids) {
         await deleteGrammarItem(language, id);
       }
+      invalidateSearchIndex("grammar", language);
       setSelectedIds(new Set());
       setExpandedId(null);
       setShowBulkDeleteConfirm(false);
@@ -581,12 +608,22 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
       </div>
 
       {/* Search */}
-      <input
-        type="text"
-        placeholder={t("searchGrammar")}
+      <SearchPreviewInput
         value={search}
-        onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-        className="mb-4 w-full rounded-lg border border-gray-600 bg-gray-800 px-4 py-2 text-sm text-gray-100 placeholder-gray-500"
+        onChange={setSearch}
+        entries={previewEntries}
+        onSelect={(entry) => {
+          // Fetch by id — the selection may sit outside the current page/filter.
+          getGrammarItemsByIds(language, [entry.id])
+            .then(({ items: fetched }) => { if (fetched[0]) setEditingItem(fetched[0]); })
+            .catch(() => {});
+        }}
+        onFirstFocus={() => setPreviewEnabled(true)}
+        allowMeaningToggle
+        searchIn={searchIn}
+        onSearchInChange={setSearchIn}
+        placeholder={t("searchGrammar")}
+        className="mb-4 w-full"
       />
 
       {/* OCR drafts panel */}
@@ -823,7 +860,7 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
       {showAddModal && (
         <GrammarFormModal
           language={language}
-          onSave={() => { setShowAddModal(false); fetchItems(); }}
+          onSave={() => { setShowAddModal(false); invalidateSearchIndex("grammar", language); fetchItems(); }}
           onClose={() => setShowAddModal(false)}
           onQueue={onQueue}
           onGrammarQueue={onGrammarQueue}
@@ -838,7 +875,7 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
         <GrammarFormModal
           language={language}
           editItem={editingItem}
-          onSave={() => { setEditingItem(null); fetchItems(); }}
+          onSave={() => { setEditingItem(null); invalidateSearchIndex("grammar", language); fetchItems(); }}
           onClose={() => setEditingItem(null)}
           onQueue={onQueue}
           onGrammarUpdateQueue={onGrammarUpdateQueue}
@@ -884,6 +921,7 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
           onSave={async () => {
             await deleteGrammarDraft(language, reviewingDraft.id).catch(() => {});
             setReviewingDraft(null);
+            invalidateSearchIndex("grammar", language);
             fetchDrafts();
             fetchItems();
           }}

@@ -2,14 +2,16 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { getWords, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks, getGroups, modifyGroupMembers, getWordDrafts, uploadWordDrafts, updateWordDraft, deleteWordDraft } from "../api/vocab";
+import { getWords, getWord, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks, getGroups, modifyGroupMembers, getWordDrafts, uploadWordDrafts, updateWordDraft, deleteWordDraft } from "../api/vocab";
+import SearchPreviewInput from "./SearchPreviewInput";
+import { useSearchIndex, invalidateSearchIndex } from "../hooks/useSearchIndex";
 import GroupPickerModal from "./GroupPickerModal";
 import GroupBSelect from "./GroupBSelect";
 import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
 import SmartAddWordModal from "./SmartAddWordModal";
-import { categoryGroups, displayTranslation, defaultWordGroup, type Word, type WordDraft, type PaginatedResult, type WordGroup } from "../types";
+import { categoryGroups, displayTranslation, defaultWordGroup, type Word, type WordDraft, type PaginatedResult, type WordGroup, type SearchIn } from "../types";
 import { urlLanguageToIsoCode } from "../settings/defaults";
 
 type SmartAddPayload = {
@@ -58,6 +60,11 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState(initialSearch ?? "");
+  const [searchIn, setSearchIn] = useState<SearchIn>("term");
+  // Search-preview index: fetch is deferred until the search box is first
+  // focused, so browsing without searching costs nothing.
+  const [previewEnabled, setPreviewEnabled] = useState(false);
+  const { entries: previewEntries } = useSearchIndex("word", language, previewEnabled);
   const [topic, setTopic] = useState("");
   const [category, setCategory] = useState("");
   const [level, setLevel] = useState("");
@@ -283,6 +290,8 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     if (!data.id) return;
     const { id, groupIds, ...updates } = data;
     const updatedWord = await updateWord(language, id, updates);
+    // Direct in-list edits don't bump refreshSignal — refresh the preview here.
+    invalidateSearchIndex("word", language);
     if (groupIds) {
       const originalGroupIds = new Set(
         groups.filter((group) => group.wordIds.includes(id)).map((group) => group.id)
@@ -318,6 +327,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
 
   async function handleDeleteWord(wordId: string) {
     await deleteWord(language, wordId);
+    invalidateSearchIndex("word", language);
     setDeletingId(null);
     setExpandedId(null);
     setSelectedIds((prev) => {
@@ -362,6 +372,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       for (const id of ids) {
         await deleteWord(language, id);
       }
+      invalidateSearchIndex("word", language);
       setSelectedIds(new Set());
       setExpandedId(null);
       setShowBulkDeleteConfirm(false);
@@ -496,6 +507,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
         );
       }
       setExistingTerms((prev) => new Map(prev).set(term, word.id));
+      invalidateSearchIndex("word", language);
       if (flag) {
         setFlaggedIds((prev) => new Set(prev).add(word.id));
       }
@@ -722,6 +734,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     try {
       const filters = {
         search: debouncedSearch || undefined,
+        searchIn: debouncedSearch ? searchIn : undefined,
         topic: topic || undefined,
         category: category || undefined,
         level: level || undefined,
@@ -740,7 +753,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
         setLoading(false);
       }
     }
-  }, [language, debouncedSearch, topic, category, level, flaggedOnly, groupId, page]);
+  }, [language, debouncedSearch, searchIn, topic, category, level, flaggedOnly, groupId, page]);
 
   useEffect(() => {
     fetchData();
@@ -753,6 +766,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     if (refreshSignal === prevRefreshSignalRef.current) return;
     prevRefreshSignalRef.current = refreshSignal;
     silentRefreshRef.current = true;
+    invalidateSearchIndex("word", language);
     fetchData();
     getGroups(language)
       .then((gs) => setGroups(categoryGroups(gs, "A")))
@@ -776,7 +790,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       return;
     }
     setPage(1);
-  }, [debouncedSearch, topic, category, level, flaggedOnly, groupId]);
+  }, [debouncedSearch, searchIn, topic, category, level, flaggedOnly, groupId]);
 
   // Scroll to a newly added word after fetchData completes
   useEffect(() => {
@@ -847,12 +861,20 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
 
         {/* Search & Filters */}
         <div className="flex flex-col sm:flex-row flex-wrap gap-2">
-          <input
-            type="text"
+          <SearchPreviewInput
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={setSearch}
+            entries={previewEntries}
+            onSelect={(entry) => {
+              // Fetch by id — the selection may sit outside the current page/filter.
+              getWord(language, entry.id).then(setEditingWord).catch(() => {});
+            }}
+            onFirstFocus={() => setPreviewEnabled(true)}
+            allowMeaningToggle
+            searchIn={searchIn}
+            onSearchInChange={setSearchIn}
             placeholder={t("searchPlaceholder")}
-            className="w-full sm:w-auto rounded-lg border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-100 placeholder-gray-400 focus:border-blue-400 focus:outline-none"
+            className="w-full sm:w-80"
           />
           {filterOptions && (
             <>

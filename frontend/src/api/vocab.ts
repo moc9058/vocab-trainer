@@ -7,10 +7,13 @@ import type {
   WordGroup,
   GroupCategory,
   GroupNormalizeResult,
+  SearchIndexEntry,
+  SearchIn,
 } from "../types";
 
 interface WordFilters {
   search?: string;
+  searchIn?: SearchIn;
   topic?: string;
   category?: string;
   level?: string;
@@ -28,12 +31,24 @@ export async function getWords(
   params.set("page", String(page));
   params.set("limit", String(limit));
   if (filters?.search) params.set("search", filters.search);
+  if (filters?.search && filters?.searchIn) params.set("searchIn", filters.searchIn);
   if (filters?.topic) params.set("topic", filters.topic);
   if (filters?.category) params.set("category", filters.category);
   if (filters?.level) params.set("level", filters.level);
   if (filters?.flaggedOnly) params.set("flaggedOnly", "true");
   if (filters?.groupId) params.set("groupId", filters.groupId);
   return fetchJson(`/api/vocab/${encodeURIComponent(language)}?${params}`);
+}
+
+/** Single word by id — used to open the edit modal from a search-preview
+ *  selection, which may point at a word outside the current page/filter. */
+export function getWord(language: string, wordId: string): Promise<Word> {
+  return fetchJson(`/api/vocab/${encodeURIComponent(language)}/${encodeURIComponent(wordId)}`);
+}
+
+/** Slim search-preview index of the whole language (no examples). */
+export function getWordSearchIndex(language: string): Promise<{ items: SearchIndexEntry[] }> {
+  return fetchJson(`/api/vocab/${encodeURIComponent(language)}/search-index`);
 }
 
 export function getFilters(language: string): Promise<{ topics: string[]; categories: string[]; levels: string[] }> {

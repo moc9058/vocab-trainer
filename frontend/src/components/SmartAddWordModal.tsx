@@ -7,6 +7,8 @@ import { smartAddWord, lookupWord, checkTerms, getGroups, createGroup, modifyGro
 import { categoryGroups, displayTranslation, defaultWordGroup, type Word, type WordDraft, type WordGroup } from "../types";
 import GroupBSelect from "./GroupBSelect";
 import PinyinInput from "./PinyinInput";
+import SearchPreviewInput from "./SearchPreviewInput";
+import { useSearchIndex } from "../hooks/useSearchIndex";
 
 interface Prefill {
   term: string;
@@ -112,6 +114,10 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   const wordLanguage = prefill?.language || defaultLanguage || "english";
   const currentIsoCode = urlLanguageToIsoCode(wordLanguage) ?? "";
   const [term, setTerm] = useState(prefill?.term ?? initialItem?.term ?? "");
+  // Term-only search preview (every row is by definition already registered —
+  // this is duplicate awareness, not navigation).
+  const [previewEnabled, setPreviewEnabled] = useState(false);
+  const { entries: previewEntries } = useSearchIndex("word", wordLanguage, previewEnabled);
   const [transliteration, setTransliteration] = useState(initialItem?.transliteration ?? "");
   const [definitions, setDefinitions] = useState<{ langSelect: string; text: string }[]>(() => {
     const draftDef = initialItem?.definitions?.[0];
@@ -545,13 +551,21 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           {/* Term (required) */}
           <div>
             <label className="mb-1 block text-sm text-gray-400">{t("term")} *</label>
-            <input
-              type="text"
+            <SearchPreviewInput
               value={term}
-              onChange={(e) => setTerm(e.target.value)}
+              onChange={setTerm}
+              entries={previewEntries}
+              onSelect={(entry) => setTerm(entry.label)}
+              onFirstFocus={() => setPreviewEnabled(true)}
               required
               autoFocus
-              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
+              renderMeta={(entry) =>
+                entry.label === term.trim() ? (
+                  <span className="rounded bg-amber-500/20 px-1.5 text-xs text-amber-300">
+                    {t("previewAlreadyExists")}
+                  </span>
+                ) : null
+              }
             />
             {checking && (
               <p className="mt-1 text-xs text-gray-400">Checking…</p>

@@ -36,6 +36,8 @@ import type {
   ExpressionRecallSession,
   ImportSession,
   LLMModelConfig,
+  SearchIndexEntry,
+  SearchIn,
 } from "./types.js";
 
 const db = new Firestore({
@@ -151,6 +153,50 @@ async function searchWordIndex(language: string, searchTerm: string): Promise<st
   return matchingIds;
 }
 
+// Flatten a Meaning[] into the plain text values the meaning-search matches
+// against. Tolerates missing/loose data (drafts-era docs, stripped own-language
+// glosses) — an item with no meanings simply can't match a meaning search.
+function flattenMeaningTexts(meanings: Meaning[] | undefined): string[] {
+  return (meanings ?? []).flatMap((m) =>
+    Object.values(m?.text ?? {}).filter((v): v is string => typeof v === "string" && v.length > 0)
+  );
+}
+
+// Meaning-side counterpart of searchWordIndex: projection scan of `words`
+// (definitions only — never examples) returning matching word ids.
+async function searchWordMeanings(language: string, searchTerm: string): Promise<string[]> {
+  const snap = await words.where("language", "==", language).select("definitions").get();
+  const q = searchTerm.toLowerCase();
+  const matchingIds: string[] = [];
+  for (const doc of snap.docs) {
+    const texts = flattenMeaningTexts(doc.data().definitions as Meaning[] | undefined);
+    if (texts.some((t) => t.toLowerCase().includes(q))) {
+      matchingIds.push(doc.id);
+    }
+  }
+  return matchingIds;
+}
+
+/** Slim per-word rows for the client-side search preview. Projection read —
+ *  no example hydration (mirrors getGrammarStatements' approach). */
+export async function getWordSearchIndex(language: string): Promise<SearchIndexEntry[]> {
+  const snap = await words
+    .where("language", "==", language)
+    .select("term", "transliteration", "definitions")
+    .get();
+  return snap.docs.map((doc) => {
+    const d = doc.data();
+    const definitions = (d.definitions ?? []) as Meaning[];
+    return {
+      id: doc.id,
+      label: (d.term as string) ?? "",
+      ...(d.transliteration ? { transliteration: d.transliteration as string } : {}),
+      pos: definitions.map((m) => m?.partOfSpeech).filter((p): p is string => !!p),
+      meanings: flattenMeaningTexts(definitions),
+    };
+  });
+}
+
 function applyFilters(
   results: Word[],
   filters: { search?: string; topic?: string; category?: string; level?: string },
@@ -182,7 +228,7 @@ function paginateResults(results: Word[], page: number, limit: number): Paginate
 
 export async function getWords(
   language: string,
-  filters?: { search?: string; topic?: string; category?: string; level?: string; flaggedOnly?: boolean; groupId?: string },
+  filters?: { search?: string; searchIn?: SearchIn; topic?: string; category?: string; level?: string; flaggedOnly?: boolean; groupId?: string },
   pagination?: { page: number; limit: number }
 ): Promise<PaginatedResult<Word>> {
   const page = pagination?.page ?? 1;
@@ -212,10 +258,18 @@ export async function getWords(
     return paginateResults(results, page, limit);
   }
 
-  // Search: use word_index (small docs) to find matches, then batch-fetch full words
+  // Search: use word_index (small docs) for term matches and/or a definitions
+  // projection scan for meaning matches, then batch-fetch the union of full words.
   if (filters?.search) {
-    const matchingIds = await searchWordIndex(language, filters.search);
-    let results = await getWordsByIds(matchingIds);
+    const searchIn = filters.searchIn ?? "term";
+    const idSet = new Set<string>();
+    if (searchIn !== "meaning") {
+      (await searchWordIndex(language, filters.search)).forEach((id) => idSet.add(id));
+    }
+    if (searchIn !== "term") {
+      (await searchWordMeanings(language, filters.search)).forEach((id) => idSet.add(id));
+    }
+    let results = await getWordsByIds([...idSet]);
     results = applyFilters(results, { ...filters, search: undefined });
     return paginateResults(results, page, limit);
   }
@@ -1568,7 +1622,7 @@ async function hydrateGrammarItems(items: Grammar[]): Promise<Grammar[]> {
 
 export async function getGrammarItems(
   language: string,
-  filters?: { level?: string; search?: string; groupId?: string },
+  filters?: { level?: string; search?: string; searchIn?: SearchIn; groupId?: string },
   pagination?: { page: number; limit: number }
 ): Promise<PaginatedResult<Grammar>> {
   const page = pagination?.page ?? 1;
@@ -1597,7 +1651,12 @@ export async function getGrammarItems(
 
   if (filters?.search) {
     const q = filters.search.toLowerCase();
-    results = results.filter((item) => (item.statement ?? "").toLowerCase().includes(q));
+    const searchIn = filters.searchIn ?? "term";
+    results = results.filter((item) => {
+      if (searchIn !== "meaning" && (item.statement ?? "").toLowerCase().includes(q)) return true;
+      if (searchIn !== "term" && flattenMeaningTexts(item.descriptions).some((t) => t.toLowerCase().includes(q))) return true;
+      return false;
+    });
   }
 
   const total = results.length;
@@ -1619,6 +1678,25 @@ export async function getAllGrammarItems(language: string): Promise<Grammar[]> {
 export async function getGrammarStatements(language: string): Promise<string[]> {
   const snap = await grammarItems.where("language", "==", language).select("statement").get();
   return snap.docs.map((d) => (d.data().statement as string | undefined) ?? "");
+}
+
+/** Slim per-grammar rows for the client-side search preview (label = statement). */
+export async function getGrammarSearchIndex(language: string): Promise<SearchIndexEntry[]> {
+  const snap = await grammarItems
+    .where("language", "==", language)
+    .select("statement", "transliteration", "descriptions")
+    .get();
+  return snap.docs.map((doc) => {
+    const d = doc.data();
+    const descriptions = (d.descriptions ?? []) as Meaning[];
+    return {
+      id: doc.id,
+      label: (d.statement as string) ?? "",
+      ...(d.transliteration ? { transliteration: d.transliteration as string } : {}),
+      pos: descriptions.map((m) => m?.partOfSpeech).filter((p): p is string => !!p),
+      meanings: flattenMeaningTexts(descriptions),
+    };
+  });
 }
 
 export async function getGrammarItem(grammarId: string): Promise<Grammar | null> {

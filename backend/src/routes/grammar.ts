@@ -7,6 +7,7 @@ import {
   updateGrammar,
   deleteGrammarItem,
   getGrammarStatements,
+  getGrammarSearchIndex,
   getGrammarDrafts,
   getGrammarDraft,
   updateGrammarDraft,
@@ -236,6 +237,7 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
     Querystring: {
       level?: string;
       search?: string;
+      searchIn?: string;
       groupId?: string;
       page?: string;
       limit?: string;
@@ -243,11 +245,22 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
   }>("/:language/items", async (request) => {
     const { language } = request.params;
     const { level, search, groupId } = request.query;
+    const searchIn = request.query.searchIn === "meaning" || request.query.searchIn === "both"
+      ? request.query.searchIn
+      : "term";
     const page = Math.max(1, parseInt(request.query.page ?? "1", 10) || 1);
     const limit = Math.max(1, Math.min(100, parseInt(request.query.limit ?? "50", 10) || 50));
 
-    return await getGrammarItems(language, { level, search, groupId }, { page, limit });
+    return await getGrammarItems(language, { level, search, searchIn, groupId }, { page, limit });
   });
+
+  // Slim search-preview index (statement/transliteration/pos/meanings — no examples).
+  fastify.get<{ Params: { language: string } }>(
+    "/:language/search-index",
+    async (request) => {
+      return { items: await getGrammarSearchIndex(request.params.language) };
+    }
+  );
 
   // Get single grammar item
   fastify.get<{ Params: { language: string; grammarId: string } }>(

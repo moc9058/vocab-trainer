@@ -8,11 +8,13 @@ import type {
   GrammarSettings,
   PaginatedResult,
   Word,
+  SearchIndexEntry,
+  SearchIn,
 } from "../types";
 
 export function getGrammarItems(
   language: string,
-  filters?: { level?: string; search?: string; groupId?: string },
+  filters?: { level?: string; search?: string; searchIn?: SearchIn; groupId?: string },
   page = 1,
   limit = 50
 ): Promise<PaginatedResult<Grammar>> {
@@ -21,8 +23,14 @@ export function getGrammarItems(
   params.set("limit", String(limit));
   if (filters?.level) params.set("level", filters.level);
   if (filters?.search) params.set("search", filters.search);
+  if (filters?.search && filters?.searchIn) params.set("searchIn", filters.searchIn);
   if (filters?.groupId) params.set("groupId", filters.groupId);
   return fetchJson(`/api/grammar/${encodeURIComponent(language)}/items?${params}`);
+}
+
+/** Slim search-preview index of the whole language (no examples). */
+export function getGrammarSearchIndex(language: string): Promise<{ items: SearchIndexEntry[] }> {
+  return fetchJson(`/api/grammar/${encodeURIComponent(language)}/search-index`);
 }
 
 /**
