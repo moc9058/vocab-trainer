@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
-import { getWords, getWord, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks, getGroups, modifyGroupMembers, getWordDrafts, uploadWordDrafts, updateWordDraft, deleteWordDraft } from "../api/vocab";
+import { getWords, getWord, getFilters, updateWord, deleteWord, checkTerms, smartAddWord, syncSegmentLinks, getGroups, modifyGroupMembers, removeWordFromGroupB, getWordDrafts, uploadWordDrafts, updateWordDraft, deleteWordDraft } from "../api/vocab";
 import SearchPreviewInput from "./SearchPreviewInput";
 import { useSearchIndex, invalidateSearchIndex } from "../hooks/useSearchIndex";
 import GroupPickerModal from "./GroupPickerModal";
@@ -71,6 +71,11 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const [groupId, setGroupId] = useState("");
   const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [groups, setGroups] = useState<WordGroup[]>([]);
+  // Category-B slice of the same fetches, kept beside the A-only `groups` so no existing
+  // A flow changes. Feeds the per-row "B" chip and the remove-from-Group-B action.
+  const [groupsB, setGroupsB] = useState<WordGroup[]>([]);
+  const [removingFromBId, setRemovingFromBId] = useState<string | null>(null);
+  const [removeFromBError, setRemoveFromBError] = useState<string | null>(null);
   const [showGroupPicker, setShowGroupPicker] = useState<{ wordIds: string[]; manage: boolean; category?: "A" | "B" } | null>(null);
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -447,7 +452,36 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       });
   }
 
+  // word id → names of the category-B groups holding it (the "B" chip + expanded badge).
+  const groupBNamesById = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const g of groupsB) for (const id of g.wordIds) m.set(id, [...(m.get(id) ?? []), g.name]);
+    return m;
+  }, [groupsB]);
+
+  /** Same shape as the quiz's handler: awaited, success-only, and the local `groupsB`
+   *  patched from the server's `removedFromGroupIds` — no refetch needed. */
+  async function handleRemoveFromGroupB(wordId: string) {
+    if (removingFromBId) return;
+    setRemovingFromBId(wordId);
+    setRemoveFromBError(null);
+    try {
+      const { removedFromGroupIds } = await removeWordFromGroupB(language, wordId);
+      const removed = new Set(removedFromGroupIds);
+      setGroupsB((prev) =>
+        prev.map((g) =>
+          removed.has(g.id) ? { ...g, wordIds: g.wordIds.filter((id) => id !== wordId) } : g
+        )
+      );
+    } catch {
+      setRemoveFromBError(t("removeFromGroupBFailed"));
+    } finally {
+      setRemovingFromBId(null);
+    }
+  }
+
   function handleToggleExpand(word: Word) {
+    setRemoveFromBError(null);
     if (expandedId === word.id) {
       setExpandedId(null);
       setCheckingTerms(false);
@@ -727,10 +761,16 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       .then(setFilterOptions)
       .catch(() => setFilterOptions(null));
     getGroups(language)
-      // Every list/draft/chip flow here is a Group A flow; B groups are only
-      // reachable through the explicit "Group B" manager + GroupBSelect.
-      .then((gs) => setGroups(categoryGroups(gs, "A")))
-      .catch(() => setGroups([]));
+      // Every list/draft/chip flow here is a Group A flow; the B slice only feeds the
+      // per-row "B" chip + remove action (and the explicit "Group B" manager + GroupBSelect).
+      .then((gs) => {
+        setGroups(categoryGroups(gs, "A"));
+        setGroupsB(categoryGroups(gs, "B"));
+      })
+      .catch(() => {
+        setGroups([]);
+        setGroupsB([]);
+      });
   }, [language]);
 
   const fetchData = useCallback(async () => {
@@ -776,7 +816,10 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     invalidateSearchIndex("word", language);
     fetchData();
     getGroups(language)
-      .then((gs) => setGroups(categoryGroups(gs, "A")))
+      .then((gs) => {
+        setGroups(categoryGroups(gs, "A"));
+        setGroupsB(categoryGroups(gs, "B"));
+      })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSignal]);
@@ -819,7 +862,9 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="border-b border-gray-700 bg-gray-800 px-3 sm:px-6 py-4">
-        <div className="mb-3 flex items-center gap-3">
+        {/* flex-wrap: with four buttons beside the title this row overflows a 375px
+            viewport, and it is the whole screen that then scrolls sideways. */}
+        <div className="mb-3 flex flex-wrap items-center gap-3 gap-y-2">
           <button
             onClick={onBack}
             className="rounded-lg px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
@@ -1139,6 +1184,10 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                         onEdit={() => setEditingWord(word)}
                         onDelete={() => setDeletingId(word.id)}
                         onAddToGroup={() => setShowGroupPicker({ wordIds: [word.id], manage: false })}
+                        groupBNames={groupBNamesById.get(word.id)}
+                        onRemoveFromGroupB={() => handleRemoveFromGroupB(word.id)}
+                        removingFromB={removingFromBId === word.id}
+                        removeFromBError={expandedId === word.id ? removeFromBError : null}
                         onToggleSegment={handleAddSegmentWord}
                         existingTerms={expandedId === word.id ? existingTerms : new Map()}
                         checkingTerms={expandedId === word.id ? checkingTerms : false}
@@ -1205,6 +1254,10 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                           onEdit={() => setEditingWord(word)}
                           onDelete={() => setDeletingId(word.id)}
                           onAddToGroup={() => setShowGroupPicker({ wordIds: [word.id], manage: false })}
+                          groupBNames={groupBNamesById.get(word.id)}
+                          onRemoveFromGroupB={() => handleRemoveFromGroupB(word.id)}
+                          removingFromB={removingFromBId === word.id}
+                          removeFromBError={expandedId === word.id ? removeFromBError : null}
                           onToggleSegment={handleAddSegmentWord}
                           existingTerms={expandedId === word.id ? existingTerms : new Map()}
                           checkingTerms={expandedId === word.id ? checkingTerms : false}
@@ -1335,7 +1388,12 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
               .finally(() => fetchDrafts());
             silentRefreshRef.current = true;
             fetchData();
-            getGroups(language).then((gs) => setGroups(categoryGroups(gs, "A"))).catch(() => {});
+            getGroups(language)
+              .then((gs) => {
+                setGroups(categoryGroups(gs, "A"));
+                setGroupsB(categoryGroups(gs, "B"));
+              })
+              .catch(() => {});
             getFlaggedWords(language)
               .then(({ words: fw }) => setFlaggedIds(new Set(fw.map((w) => w.id))))
               .catch(() => {});
@@ -1482,6 +1540,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
           onClose={() => setShowGroupPicker(null)}
           onDone={(updatedGroups) => {
             setGroups(categoryGroups(updatedGroups as WordGroup[], "A"));
+            setGroupsB(categoryGroups(updatedGroups as WordGroup[], "B"));
             // Normalizing re-files words, so it changes which rows a `groupId`
             // filter matches — and any group edit changes the counts in the filter
             // select. One query per group edit is cheaper than reasoning about
@@ -1504,6 +1563,10 @@ function WordCard({
   onEdit,
   onDelete,
   onAddToGroup,
+  groupBNames,
+  onRemoveFromGroupB,
+  removingFromB,
+  removeFromBError,
   onToggleSegment,
   existingTerms,
   checkingTerms,
@@ -1529,6 +1592,11 @@ function WordCard({
   onEdit: () => void;
   onDelete: () => void;
   onAddToGroup?: () => void;
+  /** Names of the category-B groups holding this word; absent = not in Group B. */
+  groupBNames?: string[];
+  onRemoveFromGroupB: () => void;
+  removingFromB: boolean;
+  removeFromBError: string | null;
   onToggleSegment?: (term: string, sentence: string, translation: string, groupId?: string) => void;
   existingTerms: Map<string, string>;
   checkingTerms: boolean;
@@ -1590,6 +1658,11 @@ function WordCard({
           </div>
         </div>
         <div className="flex gap-2 shrink-0">
+          {groupBNames && (
+            <span className="rounded-full bg-amber-900/40 px-2 py-0.5 text-xs font-medium text-amber-300">
+              B
+            </span>
+          )}
           {word.definitions.map((m, i) => m.partOfSpeech && (
             <span key={i} className="rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-300">
               {m.partOfSpeech}
@@ -1605,6 +1678,52 @@ function WordCard({
       <p className="mt-1 text-sm text-gray-300">{defText}</p>
       {expanded && (
         <div className="mt-2 rounded bg-gray-700 p-3">
+          {/* Actions first: this card only renders below `md`, and the panel for a Chinese
+              word runs several screens tall — at the bottom, delete was effectively
+              unreachable on a phone. Targets are phone-sized for the same reason. */}
+          <div className="mb-3 flex flex-wrap gap-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleFlag(); }}
+              className={`rounded px-3 py-2 text-sm ${isFlagged ? "bg-amber-600 text-white hover:bg-amber-500" : "bg-gray-600 text-gray-200 hover:bg-gray-500"}`}
+            >
+              {isFlagged ? t("removeFlag") : t("flagForReview")}
+            </button>
+            {onAddToGroup && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onAddToGroup(); }}
+                className="rounded bg-indigo-700 px-3 py-2 text-sm text-gray-200 hover:bg-indigo-600"
+              >
+                {t("addToGroup")}
+              </button>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="rounded bg-gray-600 px-3 py-2 text-sm text-gray-200 hover:bg-gray-500"
+            >
+              {t("editWord")}
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              className="rounded bg-red-700 px-3 py-2 text-sm text-gray-200 hover:bg-red-600"
+            >
+              {t("deleteWord")}
+            </button>
+          </div>
+          {groupBNames && (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <span className="min-w-0 max-w-full truncate rounded border border-amber-600/60 bg-amber-900/30 px-1.5 py-0.5 text-xs font-medium text-amber-300">
+                ✓ {t("importInGroupB")}: {groupBNames.join(", ")}
+              </span>
+              <button
+                disabled={removingFromB}
+                onClick={(e) => { e.stopPropagation(); onRemoveFromGroupB(); }}
+                className="rounded bg-amber-900/50 px-3 py-2 text-sm text-amber-200 hover:bg-amber-800/50 disabled:opacity-50"
+              >
+                {removingFromB ? "…" : t("removeFromGroupB")}
+              </button>
+            </div>
+          )}
+          {removeFromBError && <p className="mb-3 text-xs text-red-400">{removeFromBError}</p>}
           {settings.showKoreanHanja && word.hanjaReadings && (
             <div className="mb-3">
               <div className="flex items-center gap-2 mb-3">
@@ -1932,34 +2051,6 @@ function WordCard({
               ))}
             </div>
           )}
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggleFlag(); }}
-              className={`rounded px-2 py-1 text-xs ${isFlagged ? "bg-amber-600 text-white hover:bg-amber-500" : "bg-gray-600 text-gray-200 hover:bg-gray-500"}`}
-            >
-              {isFlagged ? t("removeFlag") : t("flagForReview")}
-            </button>
-            {onAddToGroup && (
-              <button
-                onClick={(e) => { e.stopPropagation(); onAddToGroup(); }}
-                className="rounded bg-indigo-700 px-2 py-1 text-xs text-gray-200 hover:bg-indigo-600"
-              >
-                {t("addToGroup")}
-              </button>
-            )}
-            <button
-              onClick={(e) => { e.stopPropagation(); onEdit(); }}
-              className="rounded bg-gray-600 px-2 py-1 text-xs text-gray-200 hover:bg-gray-500"
-            >
-              {t("editWord")}
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              className="rounded bg-red-700 px-2 py-1 text-xs text-gray-200 hover:bg-red-600"
-            >
-              {t("deleteWord")}
-            </button>
-          </div>
         </div>
       )}
     </div>
@@ -1975,6 +2066,10 @@ function WordRow({
   onEdit,
   onDelete,
   onAddToGroup,
+  groupBNames,
+  onRemoveFromGroupB,
+  removingFromB,
+  removeFromBError,
   onToggleSegment,
   existingTerms,
   checkingTerms,
@@ -2000,6 +2095,11 @@ function WordRow({
   onEdit: () => void;
   onDelete: () => void;
   onAddToGroup?: () => void;
+  /** Names of the category-B groups holding this word; absent = not in Group B. */
+  groupBNames?: string[];
+  onRemoveFromGroupB: () => void;
+  removingFromB: boolean;
+  removeFromBError: string | null;
   onToggleSegment?: (term: string, sentence: string, translation: string, groupId?: string) => void;
   existingTerms: Map<string, string>;
   checkingTerms: boolean;
@@ -2056,6 +2156,11 @@ function WordRow({
           {word.transliteration && (
             <span className="ml-1 text-sm text-gray-400">
               ({word.transliteration})
+            </span>
+          )}
+          {groupBNames && (
+            <span className="ml-2 rounded-full bg-amber-900/40 px-2 py-0.5 text-xs font-medium text-amber-300">
+              B
             </span>
           )}
         </td>
@@ -2420,6 +2525,21 @@ function WordRow({
                 {t("deleteWord")}
               </button>
             </div>
+            {groupBNames && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="min-w-0 max-w-full truncate rounded border border-amber-600/60 bg-amber-900/30 px-1.5 py-0.5 text-xs font-medium text-amber-300">
+                  ✓ {t("importInGroupB")}: {groupBNames.join(", ")}
+                </span>
+                <button
+                  disabled={removingFromB}
+                  onClick={(e) => { e.stopPropagation(); onRemoveFromGroupB(); }}
+                  className="rounded bg-amber-900/50 px-2 py-1 text-xs text-amber-200 hover:bg-amber-800/50 disabled:opacity-50"
+                >
+                  {removingFromB ? "…" : t("removeFromGroupB")}
+                </button>
+              </div>
+            )}
+            {removeFromBError && <p className="mt-1 text-xs text-red-400">{removeFromBError}</p>}
           </td>
         </tr>
       )}

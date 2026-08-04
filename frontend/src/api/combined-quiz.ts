@@ -83,6 +83,11 @@ export function updateCombinedQuizWeights(
     grammarGroupWeights?: Record<string, number>;
     mixWeights?: MixWeightConfig;
     correctWeight?: number;
+    /** Mixed-quiz refile (remove-from-Group-B): replaced WHOLESALE when present, like
+     *  `mixWeights` — the client owns the move, a merge would resurrect the stripped
+     *  B memberships. Sent through the answer outbox, never from the ⚖ panel. */
+    wordGroupMembership?: Record<string, string[]>;
+    grammarGroupMembership?: Record<string, string[]>;
   },
   variant: CombinedQuizVariant = "combined"
 ): Promise<CombinedQuizSession> {

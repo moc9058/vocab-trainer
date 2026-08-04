@@ -16,7 +16,12 @@ import QuizLoadState from "./QuizLoadState";
 import QuizSyncBadge from "./QuizSyncBadge";
 import { useQuizPrefetch } from "../hooks/useQuizPrefetch";
 import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
-import { applyCombinedAnswerLocally } from "../utils/quizLocal";
+import {
+  applyCombinedAnswerLocally,
+  refileCombinedMembership,
+  reorderCombinedTailLocally,
+  type RefileOpts,
+} from "../utils/quizLocal";
 import { categoryGroups, groupCategory as categoryOf } from "../types";
 import { categoryDomainWeights, foldMixWeights, type MixWeightDraft } from "../utils/quizGroupScope";
 import type {
@@ -47,6 +52,11 @@ const DOMAIN_TONE: Record<QuizDomain, { pill: string; text: string; focus: strin
 /** Reading preference, not session data: kept in localStorage so hiding the
  *  readings once holds for the next question, the next session and both quizzes. */
 const EXAMPLE_PINYIN_PREF_KEY = "quizShowExamplePinyin";
+
+/** Key for the Group B removal sets. Word and grammar ids live in different namespaces
+ *  today (numeric vs `grammar-…`), but nothing enforces that — the OCR tool posts grammar
+ *  with ids of its own making — so the kind is part of the key. */
+const bKey = (kind: "word" | "grammar", refId: string) => `${kind}:${refId}`;
 
 interface Props {
   session: CombinedQuizSession;
@@ -152,9 +162,13 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const gradedIndexRef = useRef(-1);
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [alreadyFlaggedIds, setAlreadyFlaggedIds] = useState<Set<string>>(new Set());
-  // Group B / mixed variants: items the "3" key has dropped from their Group B groups.
-  // Purely local feedback — the current session keeps showing them; they simply
-  // stop appearing in future Group B sessions.
+  // Group B / mixed variants: the two-step "3" flow. Pressing 3 (or the control) MARKS the
+  // current card (`pendingRemoveBIds`; a second press unmarks); the DELETE commits only when
+  // the user moves past the card (grade or 🏁) — leaving without grading drops the mark.
+  // `removedFromBIds` is the committed receipt: the current session keeps showing the item,
+  // it simply stops appearing in future Group B sessions (the mixed variant additionally
+  // re-files it as Group A — see `refileAfterRemoval`). All three sets key by `bKey`.
+  const [pendingRemoveBIds, setPendingRemoveBIds] = useState<Set<string>>(new Set());
   const [removedFromBIds, setRemovedFromBIds] = useState<Set<string>>(new Set());
   const [removingFromBIds, setRemovingFromBIds] = useState<Set<string>>(new Set());
   const [removeFromBError, setRemoveFromBError] = useState<string | null>(null);
@@ -171,6 +185,13 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const [groupBIds, setGroupBIds] = useState<{ words: Set<string>; grammar: Set<string> } | null>(
     null
   );
+  // The category-A home of every item, from the same fetch: the mixed quiz's refile must
+  // know which A bucket a just-removed item belongs in. First A group wins — words are
+  // A-exclusive anyway, and grammar (which may legally sit in several) stays deterministic.
+  const [aGroupHome, setAGroupHome] = useState<{
+    words: Map<string, string>;
+    grammar: Map<string, string>;
+  } | null>(null);
   const [originalTotal] = useState(() => session.initialTotal ?? session.questions.length);
   /** A random-order session has no buckets to weight — the whole union is one shuffle,
    *  and `PUT …/weights` rejects it — so the ⚖ control has nothing to offer. */
@@ -201,6 +222,15 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
 
   const outbox = useAnswerOutbox();
+
+  // Latest-session ref for async continuations (a commit resolves long after the render that
+  // started it), plus the record of committed refiles — replayed over any server payload that
+  // may predate the outbox's membership PUT (see `applyWeights`).
+  const currentSessionRef = useRef(currentSession);
+  currentSessionRef.current = currentSession;
+  const committedBMovesRef = useRef<
+    { kind: "word" | "grammar"; refId: string; opts: RefileOpts }[]
+  >([]);
 
   // Load BOTH domains' payloads for the whole session up front, soonest cards first, so a
   // connection drop mid-quiz can't leave a card without its definitions or descriptions.
@@ -253,6 +283,13 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         words: new Set(categoryGroups(wordGroups, "B").flatMap((g) => g.wordIds)),
         grammar: new Set(categoryGroups(grammarGroups, "B").flatMap((g) => g.grammarIds)),
       });
+      const wordHomes = new Map<string, string>();
+      for (const g of categoryGroups(wordGroups, "A"))
+        for (const id of g.wordIds) if (!wordHomes.has(id)) wordHomes.set(id, g.id);
+      const grammarHomes = new Map<string, string>();
+      for (const g of categoryGroups(grammarGroups, "A"))
+        for (const id of g.grammarIds) if (!grammarHomes.has(id)) grammarHomes.set(id, g.id);
+      setAGroupHome({ words: wordHomes, grammar: grammarHomes });
     });
   }, [
     session.language,
@@ -559,7 +596,14 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         ...(Object.keys(wordGroupWeights).length > 0 ? { wordGroupWeights } : {}),
         ...(Object.keys(grammarGroupWeights).length > 0 ? { grammarGroupWeights } : {}),
       }, variant);
-      setCurrentSession(updated);
+      // The response may predate a membership PUT still in the outbox — replay the committed
+      // refiles over it so a just-removed item doesn't snap back to its B bucket locally.
+      setCurrentSession(
+        committedBMovesRef.current.reduce(
+          (s, m) => refileCombinedMembership(s, m.kind, m.refId, m.opts),
+          updated
+        )
+      );
       const firstUnanswered = updated.questions.findIndex((q) => q.userCorrect === undefined);
       // The new order can land the cursor back on an index already graded this session; the
       // double-tap guard keys off the index, so it must be cleared or that card is unanswerable.
@@ -614,32 +658,106 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     return kind === "word" ? groupBIds.words.has(refId) : groupBIds.grammar.has(refId);
   }
 
-  /** Awaited and success-only: the ✓ badge used to be set alongside a
+  /** The MARK half of the two-step removal: press marks, press again unmarks. The DELETE
+   *  itself only fires when the user moves past the card — `handleGrade` / `endSession`. */
+  function togglePendingRemoveFromB(refId: string, kind: "word" | "grammar") {
+    const key = bKey(kind, refId);
+    if (removingFromBIds.has(key) || removedFromBIds.has(key)) return; // already gone / commit in flight
+    setPendingRemoveBIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  /** The COMMIT half. Awaited and success-only: the ✓ badge used to be set alongside a
    *  fire-and-forget request with a swallowed catch, so a failed removal still
    *  showed the receipt while the server kept the item in Group B. */
   async function handleRemoveFromGroupB(refId: string, kind: "word" | "grammar") {
-    if (removingFromBIds.has(refId) || removedFromBIds.has(refId)) return;
-    setRemovingFromBIds((prev) => new Set([...prev, refId]));
+    const key = bKey(kind, refId);
+    if (removingFromBIds.has(key) || removedFromBIds.has(key)) return;
+    setRemovingFromBIds((prev) => new Set([...prev, key]));
     setRemoveFromBError(null);
     try {
-      if (kind === "word") await removeWordFromGroupB(currentSession.language, refId);
-      else await removeGrammarFromGroupB(currentSession.language, refId);
-      setRemovedFromBIds((prev) => new Set([...prev, refId]));
+      const { removedFromGroupIds } =
+        kind === "word"
+          ? await removeWordFromGroupB(currentSession.language, refId)
+          : await removeGrammarFromGroupB(currentSession.language, refId);
+      setRemovedFromBIds((prev) => new Set([...prev, key]));
+      // The item is out of Group B for real now — in the mixed quiz that means it should
+      // draw at its Group A weight for the rest of the session.
+      if (variant === "mixed") refileAfterRemoval(refId, kind, removedFromGroupIds);
     } catch {
       setRemoveFromBError(t("removeFromGroupBFailed"));
     } finally {
       setRemovingFromBIds((prev) => {
         const next = new Set(prev);
-        next.delete(refId);
+        next.delete(key);
         return next;
       });
     }
   }
 
-  // Group B: "3"-key equivalent as a clickable control, plus the post-removal badge.
+  /** Mixed only: after a committed removal, move the item's session bucket from Group B to
+   *  its Group A home — locally first (pinning the card on screen), then on the server
+   *  through the answer outbox, whose serial FIFO lands the membership PUT after the
+   *  answers enqueued before it (both read-modify-write the session document). */
+  function refileAfterRemoval(
+    refId: string,
+    kind: "word" | "grammar",
+    removedFromGroupIds: string[]
+  ) {
+    const latest = currentSessionRef.current;
+    // A completed session has no tail and the PUT would 400; randomOrder likewise
+    // (unreachable for mixed, but self-describing). An ungrouped domain has no buckets.
+    if (latest.status === "completed" || latest.randomOrder) return;
+    const map = kind === "word" ? latest.wordGroupMembership : latest.grammarGroupMembership;
+    if (!map || Object.keys(map).length === 0) return;
+
+    const opts: RefileOpts = {
+      categoryOfGroup: (gid) => groupCategoryMap.get(gid),
+      removedFromGroupIds,
+      aGroupId: aGroupHome
+        ? (kind === "word" ? aGroupHome.words : aGroupHome.grammar).get(refId)
+        : undefined,
+    };
+    committedBMovesRef.current.push({ kind, refId, opts });
+
+    // The updater sees the true latest state; the outbox payload instead replays EVERY
+    // committed move over the ref'd snapshot (refile is idempotent, so double-application
+    // is safe), which also covers two commits resolving between renders. The random
+    // re-draw inside the updater is the same class of impurity as
+    // `applyCombinedAnswerLocally`'s retry splice in `handleGrade`.
+    setCurrentSession((prev) =>
+      reorderCombinedTailLocally(refileCombinedMembership(prev, kind, refId, opts))
+    );
+    const refiled = committedBMovesRef.current.reduce(
+      (s, m) => refileCombinedMembership(s, m.kind, m.refId, m.opts),
+      latest
+    );
+    outbox.enqueue({
+      domain: "combinedMembership",
+      language: latest.language,
+      variant,
+      ...(refiled.wordGroupMembership ? { wordGroupMembership: refiled.wordGroupMembership } : {}),
+      ...(refiled.grammarGroupMembership
+        ? { grammarGroupMembership: refiled.grammarGroupMembership }
+        : {}),
+    });
+  }
+
+  // Group B: "3"-key equivalent as a clickable control, plus the pending mark and the
+  // post-removal badge.
   function GroupBExcludeControl({ refId, kind }: { refId: string; kind: "word" | "grammar" }) {
     if (!usesGroupBControls) return null;
-    if (removedFromBIds.has(refId)) {
+    const key = bKey(kind, refId);
+    // The commit fires after advancing, so its error belongs to the PREVIOUS card — it must
+    // render even when this card offers no control, or a failed removal would be silent.
+    const errorLine = removeFromBError ? (
+      <p className="text-xs text-red-400">{removeFromBError}</p>
+    ) : null;
+    if (removedFromBIds.has(key)) {
       // Keep the confirmation even though the item is no longer in B — it is the receipt
       // for the removal this session just made.
       return (
@@ -648,21 +766,29 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         </p>
       );
     }
-    if (!isInGroupB(refId, kind)) return null;
-    const removing = removingFromBIds.has(refId);
+    if (!isInGroupB(refId, kind)) {
+      return errorLine ? <div className="w-full max-w-lg">{errorLine}</div> : null;
+    }
+    const removing = removingFromBIds.has(key);
+    const pending = pendingRemoveBIds.has(key);
     return (
       <div className="w-full max-w-lg space-y-1">
         <button
           type="button"
           disabled={removing}
-          onClick={() => void handleRemoveFromGroupB(refId, kind)}
-          className="w-full rounded-md border border-amber-700/50 bg-amber-950/40 px-3 py-2.5 text-center text-sm font-medium text-amber-300 hover:bg-amber-950/60 disabled:opacity-50 sm:bg-transparent sm:py-1.5 sm:text-left sm:text-xs sm:font-normal sm:hover:bg-amber-950/30"
+          aria-pressed={pending}
+          onClick={() => togglePendingRemoveFromB(refId, kind)}
+          className={
+            pending
+              ? "w-full rounded-md border border-amber-500 bg-amber-950/60 px-3 py-2.5 text-center text-sm font-medium text-amber-200 hover:bg-amber-950/80 disabled:opacity-50 sm:py-1.5 sm:text-left sm:text-xs"
+              : "w-full rounded-md border border-amber-700/50 bg-amber-950/40 px-3 py-2.5 text-center text-sm font-medium text-amber-300 hover:bg-amber-950/60 disabled:opacity-50 sm:bg-transparent sm:py-1.5 sm:text-left sm:text-xs sm:font-normal sm:hover:bg-amber-950/30"
+          }
         >
           {/* The "3" hint only means something where there is a keyboard. */}
           <span className="hidden sm:inline">3 · </span>
-          {removing ? "…" : t("removeFromGroupB")}
+          {removing ? "…" : pending ? `⏳ ${t("removeFromGroupBPending")}` : t("removeFromGroupB")}
         </button>
-        {removeFromBError && <p className="text-xs text-red-400">{removeFromBError}</p>}
+        {errorLine}
       </div>
     );
   }
@@ -688,6 +814,17 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       setAlreadyFlaggedIds((prev) => new Set([...prev, ...submittedFlagIds]));
     }
 
+    // Grading is "moving on" — commit a deferred Group B removal marked on this card.
+    const gradedKey = bKey(question.kind, refId);
+    if (pendingRemoveBIds.has(gradedKey)) {
+      setPendingRemoveBIds((prev) => {
+        const next = new Set(prev);
+        next.delete(gradedKey);
+        return next;
+      });
+      void handleRemoveFromGroupB(refId, question.kind);
+    }
+
     setCurrentSession((prev) => applyCombinedAnswerLocally(prev, question.kind, refId, correct));
     setSessionLog((prev) => [...prev, { ...question, userCorrect: correct }]);
     setCurrentIndex((i) => i + 1);
@@ -699,6 +836,19 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
   function endSession() {
     if (sessionLog.length === 0) return;
+    // 🏁 is also "moving on": commit a pending Group B removal on the current card.
+    if (question) {
+      const refId = question.kind === "word" ? question.wordId : question.grammarId;
+      const key = bKey(question.kind, refId);
+      if (pendingRemoveBIds.has(key)) {
+        setPendingRemoveBIds((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+        void handleRemoveFromGroupB(refId, question.kind);
+      }
+    }
     setSessionReviewIndex(0);
     setSessionReviewActive(true);
   }
@@ -739,14 +889,15 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         event.preventDefault();
         void handleGrade(true);
       } else if (event.key === "3" && usesGroupBControls && question) {
-        // Group B: "3" retires the item from every Group B group it belongs to
-        // (both domains), instead of flagging. It stays in the current session.
+        // Group B: "3" MARKS the item to be retired from every Group B group it belongs to
+        // (both domains) once the user moves on — grade or 🏁; a second press unmarks. The
+        // item stays in the current session either way.
         event.preventDefault();
         const refId = question.kind === "word" ? question.wordId : question.grammarId;
         // Same gate as the on-screen control: the mixed quiz's A-only cards are not in B,
         // and the key must not do what the button declines to offer.
         if (!isInGroupB(refId, question.kind)) return;
-        void handleRemoveFromGroupB(refId, question.kind);
+        togglePendingRemoveFromB(refId, question.kind);
       } else if (event.key === "3" && !usesGroupBControls && question?.kind === "word") {
         event.preventDefault();
         const wordId = question.wordId;
@@ -764,7 +915,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, usesGroupBControls, groupBIds]);
+  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, usesGroupBControls, groupBIds, pendingRemoveBIds, removedFromBIds, removingFromBIds]);
 
 
   if (sessionReviewActive) {

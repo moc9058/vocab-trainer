@@ -376,6 +376,9 @@ export interface CombinedQuizSession {
   // Question count at start — retry re-queues grow `questions`, so the UI shows X / initialTotal.
   initialTotal: number;
   wordGroupWeights?: Record<string, number>;
+  /** Group → member ids, snapshotted at /start. NOT immutable: the mixed quiz's
+   *  remove-from-Group-B refile replaces these maps wholesale via PUT …/weights, moving the
+   *  item into its Group A bucket so the tail re-draw weights it as A from then on. */
   wordGroupMembership?: Record<string, string[]>;
   grammarGroupWeights?: Record<string, number>;
   grammarGroupMembership?: Record<string, string[]>;

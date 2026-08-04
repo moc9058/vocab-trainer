@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
@@ -8,6 +8,7 @@ import {
   deleteGrammarItem,
   getGrammarGroups,
   modifyGrammarGroupMembers,
+  removeGrammarFromGroupB,
   getGrammarDrafts,
   updateGrammarDraft,
   deleteGrammarDraft,
@@ -59,15 +60,80 @@ interface ItemProps {
   onDelete: () => void;
   onAddToGroup: () => void;
   onRemoveFromGroup: (() => void) | null;
+  /** Names of the category-B groups holding this item; absent = not in Group B. */
+  groupBNames?: string[];
+  onRemoveFromGroupB: () => void;
+  removingFromB: boolean;
+  removeFromBError: string | null;
   selected: boolean;
   onToggleSelect: () => void;
   displayGrammarDefEntries: (record: Record<string, string>) => [string, string][];
 }
 
-function GrammarDetail({ item, onEdit, onDelete, onAddToGroup, onRemoveFromGroup, displayGrammarDefEntries }: ItemProps) {
+/** The detail footer's actions, rendered twice by `GrammarDetail`: phone-sized at the TOP
+ *  below `md` (the detail can run long, and delete was buried at the bottom with 24px
+ *  targets) and in the original bottom spot from `md`. */
+function GrammarActionButtons({
+  size,
+  className,
+  onEdit,
+  onAddToGroup,
+  onRemoveFromGroup,
+  onDelete,
+}: {
+  size: "phone" | "desktop";
+  className: string;
+  onEdit: () => void;
+  onAddToGroup: () => void;
+  onRemoveFromGroup: (() => void) | null;
+  onDelete: () => void;
+}) {
+  const { t } = useI18n();
+  const pad = size === "phone" ? "px-3 py-2 text-sm" : "px-2 py-1 text-xs";
+  return (
+    <div className={className}>
+      <button
+        onClick={(e) => { e.stopPropagation(); onEdit(); }}
+        className={`rounded bg-gray-600 ${pad} text-gray-200 hover:bg-gray-500`}
+      >
+        {t("editGrammar")}
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onAddToGroup(); }}
+        className={`rounded bg-gray-600 ${pad} text-gray-200 hover:bg-gray-500`}
+      >
+        {t("addToGroup")}
+      </button>
+      {onRemoveFromGroup && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onRemoveFromGroup(); }}
+          className={`rounded bg-amber-900/50 ${pad} text-amber-200 hover:bg-amber-800/50`}
+        >
+          {t("removeFromGroup")}
+        </button>
+      )}
+      <button
+        onClick={(e) => { e.stopPropagation(); onDelete(); }}
+        className={`rounded bg-red-900/50 ${pad} text-red-300 hover:bg-red-800/50`}
+      >
+        {t("deleteGrammar")}
+      </button>
+    </div>
+  );
+}
+
+function GrammarDetail({ item, onEdit, onDelete, onAddToGroup, onRemoveFromGroup, groupBNames, onRemoveFromGroupB, removingFromB, removeFromBError, displayGrammarDefEntries }: ItemProps) {
   const { t } = useI18n();
   return (
     <div className="mt-3 border-t border-gray-700 pt-3">
+      <GrammarActionButtons
+        size="phone"
+        className="mb-3 flex flex-wrap gap-2 md:hidden"
+        onEdit={onEdit}
+        onAddToGroup={onAddToGroup}
+        onRemoveFromGroup={onRemoveFromGroup}
+        onDelete={onDelete}
+      />
       {item.descriptions?.map((d, di) => {
         const entries = displayGrammarDefEntries(d.text || {});
         return (
@@ -131,34 +197,29 @@ function GrammarDetail({ item, onEdit, onDelete, onAddToGroup, onRemoveFromGroup
         </div>
       )}
 
-      <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          onClick={(e) => { e.stopPropagation(); onEdit(); }}
-          className="rounded bg-gray-600 px-2 py-1 text-xs text-gray-200 hover:bg-gray-500"
-        >
-          {t("editGrammar")}
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); onAddToGroup(); }}
-          className="rounded bg-gray-600 px-2 py-1 text-xs text-gray-200 hover:bg-gray-500"
-        >
-          {t("addToGroup")}
-        </button>
-        {onRemoveFromGroup && (
+      {groupBNames && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="min-w-0 max-w-full truncate rounded border border-amber-600/60 bg-amber-900/30 px-1.5 py-0.5 text-xs font-medium text-amber-300">
+            ✓ {t("importInGroupB")}: {groupBNames.join(", ")}
+          </span>
           <button
-            onClick={(e) => { e.stopPropagation(); onRemoveFromGroup(); }}
-            className="rounded bg-amber-900/50 px-2 py-1 text-xs text-amber-200 hover:bg-amber-800/50"
+            disabled={removingFromB}
+            onClick={(e) => { e.stopPropagation(); onRemoveFromGroupB(); }}
+            className="rounded bg-amber-900/50 px-3 py-2 text-sm text-amber-200 hover:bg-amber-800/50 disabled:opacity-50 md:px-2 md:py-1 md:text-xs"
           >
-            Remove from group
+            {removingFromB ? "…" : t("removeFromGroupB")}
           </button>
-        )}
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="rounded bg-red-900/50 px-2 py-1 text-xs text-red-300 hover:bg-red-800/50"
-        >
-          {t("deleteGrammar")}
-        </button>
-      </div>
+        </div>
+      )}
+      {removeFromBError && <p className="mt-1 text-xs text-red-400">{removeFromBError}</p>}
+      <GrammarActionButtons
+        size="desktop"
+        className="mt-3 hidden md:flex flex-wrap gap-2"
+        onEdit={onEdit}
+        onAddToGroup={onAddToGroup}
+        onRemoveFromGroup={onRemoveFromGroup}
+        onDelete={onDelete}
+      />
     </div>
   );
 }
@@ -175,10 +236,17 @@ function GrammarCard(props: ItemProps) {
           onClick={(e) => e.stopPropagation()}
           className="mt-1 accent-red-500"
         />
-        <div className="flex-1 cursor-pointer" onClick={onToggle}>
+        <div className="min-w-0 flex-1 cursor-pointer" onClick={onToggle}>
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-gray-100 truncate">{item.statement}</p>
+              <p className="text-sm font-medium text-gray-100 truncate">
+                {props.groupBNames && (
+                  <span className="mr-2 rounded-full bg-amber-900/40 px-2 py-0.5 text-xs font-medium text-amber-300">
+                    B
+                  </span>
+                )}
+                {item.statement}
+              </p>
               {item.transliteration && (
                 <p className="text-xs text-gray-500 truncate">{item.transliteration}</p>
               )}
@@ -224,6 +292,11 @@ function GrammarRow(props: ItemProps) {
         <td className="py-2 pr-4 text-sm text-gray-100">
           {item.statement}
           {item.transliteration && <span className="ml-2 text-xs text-gray-500">{item.transliteration}</span>}
+          {props.groupBNames && (
+            <span className="ml-2 rounded-full bg-amber-900/40 px-2 py-0.5 text-xs font-medium text-amber-300">
+              B
+            </span>
+          )}
         </td>
         <td className="py-2 pr-4 text-sm text-gray-300">{item.descriptions?.[0]?.partOfSpeech ?? ""}</td>
         <td className="py-2 pr-4 text-sm text-gray-300">{item.level ?? ""}</td>
@@ -246,6 +319,11 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
   const { displayGrammarDefEntries } = useSettings();
   const [items, setItems] = useState<Grammar[]>([]);
   const [groups, setGroups] = useState<GrammarGroup[]>([]);
+  // Category-B slice of the same fetch, beside the A-only `groups` so no A flow changes.
+  // Feeds the per-row "B" chip and the remove-from-Group-B action.
+  const [groupsB, setGroupsB] = useState<GrammarGroup[]>([]);
+  const [removingFromBId, setRemovingFromBId] = useState<string | null>(null);
+  const [removeFromBError, setRemoveFromBError] = useState<string | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string>("");
   const [level, setLevel] = useState<string>("");
   const [search, setSearch] = useState("");
@@ -283,10 +361,49 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
 
   useEffect(() => {
     getGrammarGroups(language)
-      // Group A flow — see WordList for the same rationale.
-      .then((gs) => setGroups(categoryGroups(gs, "A")))
-      .catch(() => setGroups([]));
+      // Group A flow — see WordList for the same rationale; the B slice feeds the chip.
+      .then((gs) => {
+        setGroups(categoryGroups(gs, "A"));
+        setGroupsB(categoryGroups(gs, "B"));
+      })
+      .catch(() => {
+        setGroups([]);
+        setGroupsB([]);
+      });
   }, [language]);
+
+  // grammar id → names of the category-B groups holding it (the "B" chip + expanded badge).
+  const groupBNamesById = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const g of groupsB) for (const id of g.grammarIds) m.set(id, [...(m.get(id) ?? []), g.name]);
+    return m;
+  }, [groupsB]);
+
+  /** Same shape as the quiz's handler: awaited, success-only, and the local `groupsB`
+   *  patched from the server's `removedFromGroupIds` — no refetch needed. */
+  async function handleRemoveFromGroupB(grammarId: string) {
+    if (removingFromBId) return;
+    setRemovingFromBId(grammarId);
+    setRemoveFromBError(null);
+    try {
+      const { removedFromGroupIds } = await removeGrammarFromGroupB(language, grammarId);
+      const removed = new Set(removedFromGroupIds);
+      setGroupsB((prev) =>
+        prev.map((g) =>
+          removed.has(g.id) ? { ...g, grammarIds: g.grammarIds.filter((id) => id !== grammarId) } : g
+        )
+      );
+    } catch {
+      setRemoveFromBError(t("removeFromGroupBFailed"));
+    } finally {
+      setRemovingFromBId(null);
+    }
+  }
+
+  function toggleExpanded(id: string) {
+    setRemoveFromBError(null);
+    setExpandedId(expandedId === id ? null : id);
+  }
 
   useEffect(() => {
     if (draftGroupTouchedRef.current) return;
@@ -519,9 +636,10 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
 
   return (
     <div className="mx-auto max-w-4xl p-4 sm:p-6">
-      <div className="mb-4 flex items-center justify-between">
+      {/* flex-wrap on both: four px-4 buttons beside the title overflow a 375px viewport. */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold text-gray-100">{t("grammarBrowse")}</h2>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setShowAddModal(true)}
             className="rounded-lg border border-gray-600 px-4 py-1.5 text-sm text-gray-300 hover:bg-gray-700"
@@ -779,11 +897,15 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
                 key={item.id}
                 item={item}
                 expanded={expandedId === item.id}
-                onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                onToggle={() => toggleExpanded(item.id)}
                 onEdit={() => setEditingItem(item)}
                 onDelete={() => setDeletingId(item.id)}
                 onAddToGroup={() => setGroupPickerIds([item.id])}
                 onRemoveFromGroup={selectedGroupId ? () => handleRemoveFromGroup(item.id) : null}
+                groupBNames={groupBNamesById.get(item.id)}
+                onRemoveFromGroupB={() => handleRemoveFromGroupB(item.id)}
+                removingFromB={removingFromBId === item.id}
+                removeFromBError={expandedId === item.id ? removeFromBError : null}
                 selected={selectedIds.has(item.id)}
                 onToggleSelect={() => toggleSelected(item.id)}
                 displayGrammarDefEntries={displayGrammarDefEntries}
@@ -818,11 +940,15 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
                   key={item.id}
                   item={item}
                   expanded={expandedId === item.id}
-                  onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
+                  onToggle={() => toggleExpanded(item.id)}
                   onEdit={() => setEditingItem(item)}
                   onDelete={() => setDeletingId(item.id)}
                   onAddToGroup={() => setGroupPickerIds([item.id])}
                   onRemoveFromGroup={selectedGroupId ? () => handleRemoveFromGroup(item.id) : null}
+                  groupBNames={groupBNamesById.get(item.id)}
+                  onRemoveFromGroupB={() => handleRemoveFromGroupB(item.id)}
+                  removingFromB={removingFromBId === item.id}
+                  removeFromBError={expandedId === item.id ? removeFromBError : null}
                   selected={selectedIds.has(item.id)}
                   onToggleSelect={() => toggleSelected(item.id)}
                   displayGrammarDefEntries={displayGrammarDefEntries}
@@ -966,6 +1092,7 @@ export default function GrammarList({ language, onBack, onQueue, onGrammarQueue,
           onClose={() => setGroupPickerIds(null)}
           onDone={(updated) => {
             setGroups(categoryGroups(updated as GrammarGroup[], "A"));
+            setGroupsB(categoryGroups(updated as GrammarGroup[], "B"));
             fetchItems();
           }}
         />

@@ -491,6 +491,8 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       grammarGroupWeights?: Record<string, number>;
       mixWeights?: MixWeightConfig;
       correctWeight?: number;
+      wordGroupMembership?: Record<string, string[]>;
+      grammarGroupMembership?: Record<string, string[]>;
     };
   }>(
     "/session/language/:language/weights",
@@ -510,6 +512,14 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
             grammarGroupWeights: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
             mixWeights: MIX_WEIGHTS_SCHEMA,
             correctWeight: { type: "number", minimum: 0 },
+            wordGroupMembership: {
+              type: "object",
+              additionalProperties: { type: "array", items: { type: "string" } },
+            },
+            grammarGroupMembership: {
+              type: "object",
+              additionalProperties: { type: "array", items: { type: "string" } },
+            },
           },
         },
       },
@@ -522,8 +532,15 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       // weights would disagree with the order `reorderUnansweredTail` actually produces.
       if (session.randomOrder) return reply.badRequest("This session is unweighted (random order)");
 
-      const { domainWeights, wordGroupWeights, grammarGroupWeights, mixWeights, correctWeight } =
-        request.body;
+      const {
+        domainWeights,
+        wordGroupWeights,
+        grammarGroupWeights,
+        mixWeights,
+        correctWeight,
+        wordGroupMembership,
+        grammarGroupMembership,
+      } = request.body;
       if (correctWeight !== undefined) {
         session.correctWeight = correctWeight;
         // Activate the mastered partition on demand if the session didn't start with one.
@@ -564,6 +581,16 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       // forms would describe a mix that was never requested.
       if (mixWeights) {
         session.mixWeights = mixWeights;
+      }
+      // Replaced WHOLESALE, like mixWeights: the client owns the refile (the mixed quiz's
+      // remove-from-Group-B moves an item's id from its B bucket to its A group's), and a
+      // merge would resurrect exactly the B memberships it just stripped. Arrives through
+      // the answer outbox, so it lands after the answers enqueued before it.
+      if (wordGroupMembership) {
+        session.wordGroupMembership = wordGroupMembership;
+      }
+      if (grammarGroupMembership) {
+        session.grammarGroupMembership = grammarGroupMembership;
       }
 
       reorderUnansweredTail(session);

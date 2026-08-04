@@ -13,11 +13,19 @@
  * STRICTLY SERIAL, in enqueue order. The backend fills "the first question with this id and no
  * answer yet", so when a word is answered and then answered again as a retry copy, the two
  * writes must arrive in that order or they land in the wrong slots.
+ *
+ * One entry kind is NOT an answer: `combinedMembership`, the mixed quiz's Group B → A refile.
+ * It rides the same queue precisely because it is serial — the PUT and a POST /answer both
+ * read-modify-write the session document, so letting them race would lose whichever wrote first.
  */
 
 import { isRetryableError } from "../api/client";
 import { answerQuestion } from "../api/quiz";
-import { answerCombinedQuestion, type CombinedQuizVariant } from "../api/combined-quiz";
+import {
+  answerCombinedQuestion,
+  updateCombinedQuizWeights,
+  type CombinedQuizVariant,
+} from "../api/combined-quiz";
 import { answerGrammarQuestion } from "../api/grammar";
 import { answerExpressionRecallQuestion } from "../api/expression-recall-quiz";
 
@@ -49,6 +57,17 @@ export type PendingAnswer =
       language: string;
       expressionId: string;
       correct: boolean;
+    }
+  | {
+      /** Mixed-quiz membership refile — a PUT …/weights carrying only membership maps.
+       *  FULL-STATE payload captured at enqueue time: a later entry restates all earlier
+       *  moves, so a dropped (non-retryable) or superseded entry loses nothing. The
+       *  response is discarded — local state was already updated when this was enqueued. */
+      domain: "combinedMembership";
+      language: string;
+      variant: CombinedQuizVariant;
+      wordGroupMembership?: Record<string, string[]>;
+      grammarGroupMembership?: Record<string, string[]>;
     };
 
 export interface OutboxState {
@@ -125,6 +144,17 @@ function send(item: PendingAnswer): Promise<unknown> {
         expressionId: item.expressionId,
         correct: item.correct,
       });
+    case "combinedMembership":
+      return updateCombinedQuizWeights(
+        item.language,
+        {
+          ...(item.wordGroupMembership ? { wordGroupMembership: item.wordGroupMembership } : {}),
+          ...(item.grammarGroupMembership
+            ? { grammarGroupMembership: item.grammarGroupMembership }
+            : {}),
+        },
+        item.variant
+      );
   }
 }
 
