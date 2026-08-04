@@ -643,7 +643,13 @@ export interface ImportExtractedWord {
   transliteration?: string;
   /** Short gloss, for the review list only — the real definitions come from smart-add. */
   meaning?: string;
-  /** The sentence the word occurs in; it becomes the word's example sentence. */
+  /**
+   * The sentence the word occurs in; it becomes the word's example sentence.
+   *
+   * Assigned SERVER-side from the word's position in the nested response (the model
+   * emits words inside their own sentence). `import-analysis.ts:repairWordAttribution`
+   * then verifies the term really is a substring of that sentence.
+   */
   sentenceIndex: number;
 }
 
@@ -651,6 +657,12 @@ export interface ImportExtractedGrammar {
   /** Pattern notation, e.g. "～的话：〜なら". */
   statement: string;
   description: string;
+  /**
+   * The verbatim span of the sentence that instantiates the pattern. A `statement`
+   * is notation (「随着～，越来越～」) and can never be matched positionally, so this is
+   * the only field that can prove the row belongs to the sentence it is filed under.
+   */
+  excerpt?: string;
   sentenceIndex: number;
 }
 

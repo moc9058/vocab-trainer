@@ -2,10 +2,17 @@
 
 You analyze a English text — a news article, a textbook passage, subtitles, a blog
 post, any source material — that a learner wants to study.
-Produce THREE things in a single JSON response, in this key order: `paragraphs`,
-`words`, `grammar`.
 
-## 1. `paragraphs`
+Return ONE JSON object with a single top-level key, `paragraphs`. Every sentence
+carries its OWN vocabulary and grammar: each sentence object holds `text`,
+`translation`, `words` and `grammar`, in that key order.
+
+**The single most important rule:** a `words` or `grammar` entry belongs to the
+sentence object it is written inside, and to no other. Never list a word under a
+sentence it does not appear in. Finish one sentence completely — its text, its
+translation, its words, its grammar — before starting the next.
+
+## 1. Sentences
 
 Split the input into paragraphs, and each paragraph into sentences, preserving the
 original order and the original wording. Do NOT merge, reorder, drop, or rewrite
@@ -14,18 +21,13 @@ sentences — a sentence's `text` must appear verbatim in the input.
 For each sentence also give a natural Japanese `translation`. If a natural
 translation is not possible, use an empty string rather than a literal gloss.
 
-Sentences are numbered implicitly: the first sentence of the first paragraph is
-index 0, and the numbering continues across paragraph boundaries. The numbering is
-what `sentenceIndex` below refers to — the server assigns the indices, you only need
-to keep the order correct.
+## 2. `words` (inside each sentence)
 
-## 2. `words`
-
-Segment every sentence COMPLETELY. This is exhaustive tokenization, not a selection
+Segment the sentence COMPLETELY. This is exhaustive tokenization, not a selection
 of "interesting" vocabulary.
 
-**Coverage rule — the one that matters:** once the reader has worked through the
-`words` of a sentence, every character of that sentence must be accounted for. Each
+**Coverage rule — the one that matters:** once the reader has worked through a
+sentence's `words`, every character of that sentence must be accounted for. Each
 letter MUST belong to exactly one entry. Only punctuation, spaces and digits
 (, . ! ? ; : " ' ( ) — … etc.) are left uncovered.
 
@@ -48,30 +50,28 @@ letter MUST belong to exactly one entry. Only punctuation, spaces and digits
   a MULTI-word entry must copy the sentence's own capitalization exactly.
 - A number written in digits ("2024", "15%") needs no entry; a number written in words
   ("fifteen", "third") does.
-- List the words of a sentence in the ORDER they appear in that sentence.
+- List a sentence's words in the ORDER they appear in that sentence.
 - Within one sentence, list a repeated word only ONCE — every occurrence of it is
-  treated as covered. Across sentences, list it AGAIN for every sentence it appears
-  in: each sentence has to be covered on its own.
+  treated as covered. In every OTHER sentence it appears in, list it AGAIN inside
+  that sentence: each sentence has to be covered on its own.
 
 Fields:
 
-- `term` — the word as it APPEARS in the sentence (the surface form), so that the
-  reader can match it back against the text. Give the inflected form that occurs
-  ("developing", not "develop"); the dictionary form is recovered downstream. A
-  multi-word `term` must be a contiguous substring of the sentence.
+- `term` — the word as it APPEARS in THIS sentence (the surface form), so that the
+  reader can match it back against the text. It MUST be a substring of this
+  sentence's `text`. Give the inflected form that occurs ("developing", not
+  "develop"); the dictionary form is recovered downstream.
 - `transliteration` — a KATAKANA reading of the word as it is pronounced here, no IPA
   and no romaji ("the" → 「ザ」, "of" → 「オブ」, "developing" → 「ディベロピング」).
   Function words included. Where one spelling has two pronunciations, see the
   exception below.
 - `meaning` — a SHORT Japanese gloss (a few words). Function words included
   (the → 「その（定冠詞）」, of → 「〜の」).
-- `sentenceIndex` — the index of the sentence this occurrence belongs to. Every word
-  MUST have a valid index.
 
-**Write `transliteration` and `meaning` only ONCE per word.** Fill them in on the
-FIRST entry for that term in the whole text. On every later entry for the SAME
-term, return an empty string `""` for BOTH — the reader copies them from the first
-occurrence. `term` and `sentenceIndex` are still required on every entry.
+**Write `transliteration` and `meaning` only ONCE per word.** Fill them in the FIRST
+time that term appears anywhere in the text. Every later sentence still lists the
+term, but returns an empty string `""` for BOTH fields — the reader copies them from
+the first occurrence. `term` is still required every time.
 
 The ONE exception: if this occurrence genuinely has a different pronunciation or a
 different sense from the first one, write it out in full instead of leaving it
@@ -80,17 +80,36 @@ blank. English needs this for homographs — "lead" (to guide) vs "lead" (the me
 a field just because the spelling matches; blank it only when the pronunciation AND
 the meaning are the same as the first occurrence.
 
-Example, for a text where "the" appears in sentences 0, 2 and 5:
+Example — "the" appears in the first and the third sentence, and is written out only
+in the first:
 
 ```
-{ "term": "the", "transliteration": "ザ", "meaning": "その（定冠詞）", "sentenceIndex": 0 }
-{ "term": "the", "transliteration": "",   "meaning": "",              "sentenceIndex": 2 }
-{ "term": "the", "transliteration": "",   "meaning": "",              "sentenceIndex": 5 }
+"paragraphs": [{ "sentences": [
+  { "text": "The plan works.", "translation": "その計画は機能する。",
+    "words": [
+      { "term": "The",   "transliteration": "ザ",    "meaning": "その（定冠詞）" },
+      { "term": "plan",  "transliteration": "プラン", "meaning": "計画" },
+      { "term": "works", "transliteration": "ワークス", "meaning": "機能する" }
+    ],
+    "grammar": [] },
+  { "text": "It began in May.", "translation": "5月に始まった。", "words": [ ... ], "grammar": [] },
+  { "text": "We read the report.", "translation": "私たちは報告書を読んだ。",
+    "words": [
+      { "term": "We",     "transliteration": "ウィー",  "meaning": "私たち" },
+      { "term": "read",   "transliteration": "レッド",  "meaning": "読んだ（過去形）" },
+      { "term": "the",    "transliteration": "",       "meaning": "" },
+      { "term": "report", "transliteration": "リポート", "meaning": "報告書" }
+    ],
+    "grammar": [] }
+]}]
 ```
 
-## 3. `grammar`
+("read" is written out in full because it is the past-tense pronunciation, not the
+present-tense one — the homograph exception above.)
 
-Extract the grammar points the text illustrates, sentence by sentence.
+## 3. `grammar` (inside each sentence)
+
+Extract the grammar points THIS sentence illustrates.
 
 - `statement` — pattern notation in the SAME STYLE as the existing entries listed
   below, when any are given. These are concise pattern schemas, not prose.
@@ -99,14 +118,18 @@ Extract the grammar points the text illustrates, sentence by sentence.
   even if a style-reference entry below still uses capitals.
 - `description` — a short Japanese explanation of what the pattern means and when
   it is used.
-- `sentenceIndex` — the sentence that illustrates the pattern.
+- `excerpt` — the SHORTEST verbatim substring of this sentence's `text` that shows
+  the pattern in use. Unlike `statement` (which is notation and matches nothing),
+  this is copied character-for-character out of the sentence, so the reader can find
+  it. For "The report was written by the committee." with statement
+  `s + be + v-ed + by + n` the excerpt is "was written by the committee".
 
 Go through EVERY sentence and extract each pattern it demonstrates — tenses and
 aspect, passive, modality, relative clauses, conditionals, comparatives, infinitive
 and gerund frames, participle clauses, existential `there + be`, it-clefts, and fixed
-collocations. A sentence with nothing beyond a plain SVO clause
-contributes no entry, but do not leave a sentence unexamined. Do not worry about
-whether a pattern is already registered — duplicates are handled downstream.
+collocations. A sentence with nothing beyond a plain SVO clause contributes an empty
+`grammar` array, but do not leave a sentence unexamined. Do not worry about whether a
+pattern is already registered — duplicates are handled downstream.
 
 ## Output
 

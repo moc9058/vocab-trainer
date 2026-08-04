@@ -5,9 +5,7 @@
     "type": "object",
     "additionalProperties": false,
     "required": [
-      "paragraphs",
-      "words",
-      "grammar"
+      "paragraphs"
     ],
     "properties": {
       "paragraphs": {
@@ -26,7 +24,9 @@
                 "additionalProperties": false,
                 "required": [
                   "text",
-                  "translation"
+                  "translation",
+                  "words",
+                  "grammar"
                 ],
                 "properties": {
                   "text": {
@@ -34,59 +34,55 @@
                   },
                   "translation": {
                     "type": "string"
+                  },
+                  "words": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "term",
+                        "transliteration",
+                        "meaning"
+                      ],
+                      "properties": {
+                        "term": {
+                          "type": "string"
+                        },
+                        "transliteration": {
+                          "type": "string"
+                        },
+                        "meaning": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "grammar": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "statement",
+                        "description",
+                        "excerpt"
+                      ],
+                      "properties": {
+                        "statement": {
+                          "type": "string"
+                        },
+                        "description": {
+                          "type": "string"
+                        },
+                        "excerpt": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   }
                 }
               }
-            }
-          }
-        }
-      },
-      "words": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "term",
-            "transliteration",
-            "meaning",
-            "sentenceIndex"
-          ],
-          "properties": {
-            "term": {
-              "type": "string"
-            },
-            "transliteration": {
-              "type": "string"
-            },
-            "meaning": {
-              "type": "string"
-            },
-            "sentenceIndex": {
-              "type": "integer"
-            }
-          }
-        }
-      },
-      "grammar": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": [
-            "statement",
-            "description",
-            "sentenceIndex"
-          ],
-          "properties": {
-            "statement": {
-              "type": "string"
-            },
-            "description": {
-              "type": "string"
-            },
-            "sentenceIndex": {
-              "type": "integer"
             }
           }
         }

@@ -5,14 +5,18 @@ import {
   addGrammarItem,
   addWordItem,
   coverageRuns,
+  findWordHome,
   isLocked,
   materializeGaps,
   mergeWordItems,
+  reattachMismatchedWords,
+  requiresVerbatimTerms,
   sentenceCoverage,
   sentenceItems,
   sentenceSpanForTerms,
   splitWordItem,
   undoDerivation,
+  wordMismatch,
 } from "../../utils/importSession";
 import type {
   ImportGrammarItem,
@@ -50,6 +54,9 @@ interface Props {
   /** Backend full-name language ("chinese"), which is what gates the pinyin input. */
   language: string;
   sentence: ImportSentence;
+  /** Every sentence of the article — needed to say WHICH sentence a misattributed
+   *  row belongs to, and to move it there. */
+  sentences: ImportSentence[];
   /** The whole item list — `sourceIds` on a merged row point at tombstones in it. */
   items: ImportItem[];
   onSetItems: (updater: (items: ImportItem[]) => ImportItem[], immediate?: boolean) => void;
@@ -75,6 +82,7 @@ interface Props {
 export default function ImportSentenceCard({
   language,
   sentence,
+  sentences,
   items,
   onSetItems,
   onPatchItem,
@@ -182,8 +190,33 @@ export default function ImportSentenceCard({
   // The analysis segments a sentence exhaustively, so anything still uncovered is
   // something it missed — show it in the sentence itself rather than as a count
   // the reader has to reconcile by eye.
-  const coverage = useMemo(() => sentenceCoverage(sentence.text, words), [sentence.text, words]);
+  const coverage = useMemo(
+    () => sentenceCoverage(sentence.text, words, language),
+    [sentence.text, words, language]
+  );
   const runs = useMemo(() => coverageRuns(sentence.text, coverage), [sentence.text, coverage]);
+
+  /**
+   * Rows whose term does not occur in this sentence at all, with the sentence they
+   * do belong to when one can be found.
+   *
+   * They render as a fourth state rather than blending in with the rest: a
+   * misattributed row is not a proposal to accept or reject, it is a row pointing at
+   * the wrong context, and registering it would save that wrong sentence as the
+   * word's example — permanently, in the words collection.
+   */
+  const mismatches = useMemo(() => {
+    const map = new Map<string, { home: number | null; homeText: string }>();
+    for (const w of words) {
+      if (!wordMismatch(sentence.text, w.term, language)) continue;
+      const home = findWordHome(w.term, sentence.index, sentences, language);
+      map.set(w.id, {
+        home: home ? home.index : null,
+        homeText: home ? sentences.find((s) => s.index === home.index)?.text ?? "" : "",
+      });
+    }
+    return map;
+  }, [words, sentence.text, sentence.index, sentences, language]);
 
   return (
     <div className="min-w-0 rounded-xl border border-indigo-800/50 bg-gray-800/60 p-3 sm:p-4">
@@ -293,7 +326,7 @@ export default function ImportSentenceCard({
                   type="button"
                   onClick={() =>
                     onSetItems(
-                      (prev) => materializeGaps(prev, sentence.index, sentence.text),
+                      (prev) => materializeGaps(prev, sentence.index, sentence.text, language),
                       true
                     )
                   }
@@ -361,6 +394,18 @@ export default function ImportSentenceCard({
               }
               inGroupA={inLibrary.has(word.term.trim())}
               groups={wordGroupsByTerm.get(word.term.trim()) ?? NO_GROUPS}
+              mismatch={mismatches.get(word.id)}
+              // A row that provably belongs elsewhere must not write this sentence
+              // as the word's example. Only enforced where a term is REQUIRED to be
+              // verbatim: Japanese and Korean inflect, so "not found" there is a
+              // guess, not a verdict.
+              blockRegister={requiresVerbatimTerms(language) && mismatches.has(word.id)}
+              onMoveToHome={() =>
+                onSetItems(
+                  (prev) => reattachMismatchedWords(prev, sentences, language, word.id),
+                  true
+                )
+              }
               destination={wordDestination}
               checked={mergeIds.includes(word.id)}
               splitting={splitting?.id === word.id ? splitting.draft : null}
@@ -427,6 +472,9 @@ function WordRow({
   onMergeNext,
   inGroupA,
   groups,
+  mismatch,
+  blockRegister,
+  onMoveToHome,
   destination,
   checked,
   splitting,
@@ -453,6 +501,12 @@ function WordRow({
   /** The groups actually holding this word; only knowable once its ID is, which is
    *  why `inGroupA` stays the fallback rather than being derived from this. */
   groups: GroupMembership;
+  /** Set when the term does not occur in this sentence. `home` is the sentence it
+   *  does occur in, or null when it matches nothing anywhere. */
+  mismatch?: { home: number | null; homeText: string };
+  /** Refuse the A/B presses — registering would store the wrong example sentence. */
+  blockRegister: boolean;
+  onMoveToHome: () => void;
   destination: RowDestination;
   checked: boolean;
   splitting: string | null;
@@ -512,7 +566,12 @@ function WordRow({
   return (
     <li
       className={`rounded-lg px-2.5 py-2 ${
-        inGroupA
+        // Ranked before "already in the library": a row on the wrong sentence is
+        // wrong regardless of whether the user owns the word, and green would read
+        // as "nothing to do here".
+        mismatch
+          ? "border-l-4 border-rose-500/70 bg-rose-950/25"
+          : inGroupA
           ? "border-l-4 border-emerald-500/70 bg-emerald-950/30"
           : word.origin === "gap"
           ? // Not a proposal from the analysis but a hole in it, filled in verbatim:
@@ -578,6 +637,7 @@ function WordRow({
             destination={destination}
             groups={groups}
             inLibrary={inGroupA}
+            blocked={blockRegister ? t("importMismatchLockedHint") : undefined}
             onRegister={onRegister}
           />
           {!locked && (
@@ -646,9 +706,27 @@ function WordRow({
           )}
         </p>
       )}
-      {word.origin === "gap" && !locked && (
+      {word.origin === "gap" && !locked && !mismatch && (
         <p className="mt-1 pl-6 text-[11px] leading-snug text-amber-400/80">
           {t("importGapRowHint")}
+        </p>
+      )}
+      {mismatch && (
+        <p className="mt-1 flex flex-wrap items-center gap-2 pl-6 text-[11px] leading-snug text-rose-300/90">
+          <span>⚠ {t("importMismatchBadge")}</span>
+          {mismatch.home !== null && !locked && (
+            <button
+              type="button"
+              onClick={onMoveToHome}
+              // The target sentence is the tooltip: a bare number is not something
+              // the reader can check, and the sentences are not numbered on screen.
+              title={mismatch.homeText}
+              className="shrink-0 rounded border border-rose-700/70 px-1.5 py-0.5 text-rose-200 hover:border-rose-500 hover:text-rose-100"
+            >
+              {t("importMismatchMoveTo")}
+              {mismatch.home + 1}
+            </button>
+          )}
         </p>
       )}
       <MembershipChips
@@ -801,6 +879,7 @@ function RegisterControls({
   destination,
   groups,
   inLibrary,
+  blocked,
   onRegister,
 }: {
   item: ImportItem;
@@ -809,6 +888,9 @@ function RegisterControls({
   /** Known to be in the library but with no ID to look group names up by — the
    *  fallback for deciding "A is done" when no A destination is selected. */
   inLibrary: boolean;
+  /** Why both presses are refused, if they are. Used for a row proven to be on the
+   *  wrong sentence, whose registration would store the wrong example. */
+  blocked?: string;
   onRegister: (target: "A" | "B") => void;
 }) {
   const { t } = useI18n();
@@ -848,17 +930,19 @@ function RegisterControls({
         name={destination.aGroupName}
         fallbackLabel={t("importAdd")}
         title={
-          movesFrom.length > 0
+          blocked ??
+          (movesFrom.length > 0
             ? `${t("importAddToDestA")}: ${movesFrom.join(", ")} → ${destination.aGroupName}`
-            : t("importAddToDestA")
+            : t("importAddToDestA"))
         }
         done={doneA}
         busy={stateA?.status === "queued"}
         failed={stateA?.status === "failed"}
         // Only its OWN write disables it. Group A and Group B are independent presses
         // and both can be queued at once; gating either on the other is what used to
-        // make the second button dead until the first finished.
-        disabled={stateA?.status === "queued"}
+        // make the second button dead until the first finished. `blocked` is the one
+        // row-wide veto: neither destination may store a wrong example sentence.
+        disabled={stateA?.status === "queued" || Boolean(blocked)}
         error={stateA?.error}
         rescuedAsDraft={stateA?.rescuedAsDraft}
         onRegister={() => onRegister("A")}
@@ -870,11 +954,11 @@ function RegisterControls({
           tone="b"
           name={destination.bNames.join(" · ")}
           fallbackLabel={t("importAdd")}
-          title={t("importAddToDestB")}
+          title={blocked ?? t("importAddToDestB")}
           done={doneB}
           busy={stateB?.status === "queued"}
           failed={stateB?.status === "failed"}
-          disabled={stateB?.status === "queued"}
+          disabled={stateB?.status === "queued" || Boolean(blocked)}
           error={stateB?.error}
           rescuedAsDraft={stateB?.rescuedAsDraft}
           onRegister={() => onRegister("B")}

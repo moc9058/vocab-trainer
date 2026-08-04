@@ -211,6 +211,13 @@ const translations = {
     importCoverageHint: "Select the highlighted text to add it as a word.",
     importCoverageMaterialize: "Add the uncovered text as rows",
     importGapRowHint: "The analysis missed this — check it, and type a space to split it.",
+    importMismatchCount: " words are filed under a sentence they do not appear in.",
+    importMismatchFix: "Move them to the right sentence",
+    importMismatchManual: " of them match no sentence at all — check those by hand.",
+    importMismatchBadge: "not in this sentence",
+    importMismatchMoveTo: "Move to sentence ",
+    importMismatchLockedHint:
+      "Registering would save the wrong example sentence. Move it first, or delete it.",
     importLongTextWarning:
       "Every word of every sentence is extracted, so a long text can exceed what the model returns in one response and come back truncated. Importing a few paragraphs at a time is more reliable.",
     groupName: "Group name",
@@ -644,6 +651,13 @@ const translations = {
     importCoverageHint: "ハイライト部分を選択すると単語として追加できます。",
     importCoverageMaterialize: "未カバー部分を行にする",
     importGapRowHint: "解析が拾えなかった箇所です。確認し、スペースを入力すると分割できます。",
+    importMismatchCount: "件の単語が、登場しない文に紐づいています。",
+    importMismatchFix: "正しい文へ移動する",
+    importMismatchManual: "件はどの文にも一致しません。手動で確認してください。",
+    importMismatchBadge: "この文に不一致",
+    importMismatchMoveTo: "文へ移動：",
+    importMismatchLockedHint:
+      "このまま登録すると誤った例文が保存されます。先に移動するか削除してください。",
     importLongTextWarning:
       "各文のすべての単語を抽出するため、長いテキストでは1回の応答に収まらず、解析結果が途中で切れることがあります。数段落ずつ取り込むと確実です。",
     groupName: "グループ名",
@@ -1077,6 +1091,13 @@ const translations = {
     importCoverageHint: "강조된 부분을 선택하면 단어로 추가할 수 있습니다.",
     importCoverageMaterialize: "미포함 부분을 항목으로 추가",
     importGapRowHint: "분석이 놓친 부분입니다. 확인 후 띄어쓰기를 입력하면 나눌 수 있습니다.",
+    importMismatchCount: "개의 단어가 나오지 않는 문장에 연결되어 있습니다.",
+    importMismatchFix: "올바른 문장으로 옮기기",
+    importMismatchManual: "개는 어느 문장과도 맞지 않습니다. 직접 확인해 주세요.",
+    importMismatchBadge: "이 문장에 없음",
+    importMismatchMoveTo: "옮길 문장: ",
+    importMismatchLockedHint:
+      "이대로 등록하면 잘못된 예문이 저장됩니다. 먼저 옮기거나 삭제하세요.",
     importLongTextWarning:
       "각 문장의 모든 단어를 추출하므로, 긴 텍스트는 한 번의 응답에 담기지 않아 분석이 중간에 잘릴 수 있습니다. 몇 단락씩 나누어 가져오면 확실합니다.",
     groupName: "그룹 이름",

@@ -3,7 +3,11 @@ import { useI18n } from "../../i18n/context";
 import ImportDestinationRail from "./ImportDestinationRail";
 import ImportSentenceCard, { type ImportDestination } from "./ImportSentenceCard";
 import {
+  findWordHome,
   flattenSentences,
+  isLocked,
+  mismatchedWords,
+  reattachMismatchedWords,
   sentenceCoverage,
   sentenceItems,
   sessionCounts,
@@ -57,10 +61,26 @@ export default function ImportReview({
     const map = new Map<number, number>();
     for (const s of sentences) {
       const { words } = sentenceItems(session.items, s.index);
-      map.set(s.index, sentenceCoverage(s.text, words).missing);
+      map.set(s.index, sentenceCoverage(s.text, words, session.language).missing);
     }
     return map;
-  }, [sentences, session.items]);
+  }, [sentences, session.items, session.language]);
+  /** Rows sitting on a sentence their term does not occur in. Only ever non-empty
+   *  for sessions analyzed before the schema nested words inside their sentence —
+   *  a fresh analysis is repaired server-side. */
+  const mismatched = useMemo(
+    () => mismatchedWords(session.items, sentences, session.language),
+    [session.items, sentences, session.language]
+  );
+  /** …of which this many have a sentence to go to. The rest need a human, so the
+   *  fix button must not promise to resolve them. */
+  const repairable = useMemo(
+    () =>
+      mismatched.filter(
+        (w) => !isLocked(w) && findWordHome(w.term, w.sentenceIndex, sentences, session.language)
+      ).length,
+    [mismatched, sentences, session.language]
+  );
   const focused = session.focusedSentenceIndex;
   /** The focused sentence, whichever shape it is in — the open card's wrapper or,
    *  once folded, its collapsed row. Assigned through a callback ref so both
@@ -214,6 +234,42 @@ export default function ImportReview({
           </div>
         </header>
 
+        {/* Only ever shown for a session analyzed before words were nested inside
+            their sentence: the model used to emit the sentence index as a number it
+            counted out itself, and it miscounted. A fresh analysis is repaired
+            server-side, so this banner is the path for data already on disk — and it
+            is an explicit press rather than a repair on load, because autosave would
+            persist a silent bulk rewrite with no undo. */}
+        {mismatched.length > 0 && (
+          <div className="mb-4 rounded-lg border border-rose-800/70 bg-rose-950/30 px-3 py-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-rose-200">
+                ⚠ {mismatched.length}
+                {t("importMismatchCount")}
+              </p>
+              {repairable > 0 && (
+                <button
+                  onClick={() =>
+                    onSetItems(
+                      (items) => reattachMismatchedWords(items, sentences, session.language),
+                      true
+                    )
+                  }
+                  className="shrink-0 rounded-lg border border-rose-600 bg-rose-900/50 px-3 py-1.5 text-xs font-medium text-rose-100 hover:bg-rose-900"
+                >
+                  {t("importMismatchFix")}
+                </button>
+              )}
+            </div>
+            {repairable < mismatched.length && (
+              <p className="mt-1 text-[11px] text-rose-300/80">
+                {mismatched.length - repairable}
+                {t("importMismatchManual")}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Grid placement is explicit so the destination can lead on a phone —
             where it is unreachable at the bottom — and still be the right-hand
             sidebar from `lg`. */}
@@ -259,6 +315,7 @@ export default function ImportReview({
                           <ImportSentenceCard
                             language={session.language}
                             sentence={sentence}
+                            sentences={sentences}
                             items={session.items}
                             onSetItems={onSetItems}
                             onPatchItem={onPatchItem}

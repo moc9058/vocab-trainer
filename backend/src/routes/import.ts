@@ -2,6 +2,11 @@ import type { FastifyPluginAsync } from "fastify";
 import { callLLM, stripMarkdownFences } from "../llm.js";
 import { openSSE } from "../sse.js";
 import {
+  lowercaseGrammarAbbreviations,
+  normalizeAnalysis,
+  repairChangedAnything,
+} from "../import-analysis.js";
+import {
   languageExists,
   getImportConfig,
   getAllGrammarItems,
@@ -13,7 +18,6 @@ import {
   deleteImportSession,
 } from "../firestore.js";
 import type {
-  ImportAnalysisResult,
   ImportQuizPool,
   ImportSession,
   ImportSessionSummary,
@@ -24,53 +28,6 @@ const STYLE_EXAMPLE_LIMIT = 40;
 /** Guard against a runaway article: terra over a long text is the app's priciest call. */
 const MAX_TEXT_LENGTH = 8000;
 
-/**
- * Grammatical placeholder abbreviations that a `statement` writes in LOWERCASE.
- * Matched as whole Latin-letter runs, so a trailing index (`v1`) or a hyphenated
- * suffix (`v-ing`) falls outside the run and survives untouched.
- */
-const GRAMMAR_ABBREVIATIONS = new Set([
-  "s", "v", "o", "c", "a", "b", "n", "m",
-  "adj", "adv", "aux", "pron", "prep", "conj", "num", "part",
-  "np", "vp", "ap", "pp",
-  "sv", "svo", "svc", "svoo", "svoc",
-]);
-
-const FULLWIDTH_UPPER_START = 0xff21;
-const FULLWIDTH_UPPER_END = 0xff3a;
-const FULLWIDTH_TO_LOWER_OFFSET = 0x20;
-/** Half- and full-width Latin letters, since textbook notation uses both (Ｖ＋Ｏ). */
-const LATIN_RUN = /[A-Za-zＡ-Ｚａ-ｚ]+/g;
-
-function foldWidth(run: string): string {
-  return run.replace(/[Ａ-Ｚａ-ｚ]/g, (ch) =>
-    String.fromCodePoint(ch.codePointAt(0)! - 0xfee0)
-  );
-}
-
-/** Lowercases without changing width, so 「Ｖ」 becomes 「ｖ」 rather than "v". */
-function lowerKeepingWidth(run: string): string {
-  return run.replace(/[A-ZＡ-Ｚ]/g, (ch) => {
-    const code = ch.codePointAt(0)!;
-    return code >= FULLWIDTH_UPPER_START && code <= FULLWIDTH_UPPER_END
-      ? String.fromCodePoint(code + FULLWIDTH_TO_LOWER_OFFSET)
-      : ch.toLowerCase();
-  });
-}
-
-/**
- * Force grammar-element abbreviations to lowercase (「V＋O」 → 「v＋o」). Applied on
- * BOTH sides of the LLM call: to the style examples going out (40 uppercase entries
- * would otherwise out-vote the instruction, being the last thing the model reads)
- * and to the statements coming back. Only whole runs that ARE an abbreviation are
- * touched, so real words in a statement keep their casing.
- */
-export function lowercaseGrammarAbbreviations(statement: string): string {
-  return statement.replace(LATIN_RUN, (run) =>
-    GRAMMAR_ABBREVIATIONS.has(foldWidth(run).toLowerCase()) ? lowerKeepingWidth(run) : run
-  );
-}
-
 function buildAnalyzeSystemPrompt(basePrompt: string, statements: string[]): string {
   if (statements.length === 0) return basePrompt;
   // Appended AFTER the static prompt so the cached prefix stays byte-identical
@@ -80,88 +37,6 @@ function buildAnalyzeSystemPrompt(basePrompt: string, statements: string[]): str
     `Write the \`statement\` field in the same notation as these entries already in the user's database:\n\n` +
     statements.map((s) => `- ${lowercaseGrammarAbbreviations(s)}`).join("\n")
   );
-}
-
-/**
- * Sentence indices are fully derivable from position, so the schema omits them and
- * the server assigns them — mirrors `ensureDecompositionIds` in routes/translation.ts.
- * Extracted items whose index falls outside the range are dropped rather than
- * silently pointing at the wrong sentence.
- */
-function normalizeAnalysis(raw: string): ImportAnalysisResult {
-  let parsed: ImportAnalysisResult;
-  try {
-    parsed = JSON.parse(raw) as ImportAnalysisResult;
-  } catch (err) {
-    // The analysis segments every sentence exhaustively, so a long article can run
-    // the model into its output cap and the stream ends mid-token. Say so, rather
-    // than surfacing a bare "Unexpected end of JSON input".
-    throw new Error(
-      `The analysis did not come back as complete JSON (${raw.length} characters received). ` +
-        `Exhaustive word segmentation produces a lot of output, so a long article can exceed ` +
-        `the model's response limit — try importing it a few paragraphs at a time. ` +
-        `Underlying error: ${err instanceof Error ? err.message : String(err)}`
-    );
-  }
-  const paragraphs = (parsed.paragraphs ?? []).map((p) => ({ sentences: p.sentences ?? [] }));
-  let index = 0;
-  for (const p of paragraphs) {
-    for (const s of p.sentences) s.index = index++;
-  }
-  const total = index;
-  const inRange = (i: number) => Number.isInteger(i) && i >= 0 && i < total;
-  return {
-    paragraphs,
-    words: backfillRepeatedWords(
-      (parsed.words ?? []).filter((w) => w.term?.trim() && inRange(w.sentenceIndex))
-    ),
-    grammar: (parsed.grammar ?? [])
-      .filter((g) => g.statement?.trim() && inRange(g.sentenceIndex))
-      .map((g) => ({ ...g, statement: lowercaseGrammarAbbreviations(g.statement) })),
-  };
-}
-
-/**
- * Fills in the reading and gloss the model left blank on a repeated word.
- *
- * Every sentence has to be covered on its own, so a common word is listed once per
- * sentence it appears in — and paying for its pinyin and its Japanese gloss thirty
- * times over is the single largest avoidable cost in the whole analysis. The prompts
- * therefore ask for those two fields on a term's FIRST occurrence only, blank
- * thereafter, with an explicit exception for a genuinely different reading or sense
- * (还 hái/huán, 了 le/liǎo) which must still be spelled out.
- *
- * FIRST wins, not last, because that is the contract the prompt states: a blank
- * means "same as the first occurrence". Taking the latest non-empty value would make
- * an explicit polyphonic reading leak backwards onto every later blank.
- *
- * The two fields are inherited independently — the model routinely blanks one and
- * not the other. Runs after the range filter, so a dropped out-of-range entry can
- * never be the occurrence everything else inherits from.
- */
-export function backfillRepeatedWords(
-  words: ImportAnalysisResult["words"]
-): ImportAnalysisResult["words"] {
-  const firstByTerm = new Map<string, { transliteration?: string; meaning?: string }>();
-  return words.map((w) => {
-    const term = w.term.trim();
-    const first = firstByTerm.get(term);
-    const transliteration = w.transliteration?.trim() || first?.transliteration;
-    const meaning = w.meaning?.trim() || first?.meaning;
-    if (!first) {
-      firstByTerm.set(term, { transliteration, meaning });
-    } else {
-      // A term whose first occurrence was itself blank can still be filled by a
-      // later one; anything already known stays put.
-      if (!first.transliteration && transliteration) first.transliteration = transliteration;
-      if (!first.meaning && meaning) first.meaning = meaning;
-    }
-    return {
-      ...w,
-      ...(transliteration ? { transliteration } : {}),
-      ...(meaning ? { meaning } : {}),
-    };
-  });
 }
 
 const importRoutes: FastifyPluginAsync = async (fastify) => {
@@ -240,7 +115,13 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
           route: "import/analyze-stream",
         });
 
-        const analysis = normalizeAnalysis(stripMarkdownFences(raw));
+        const { analysis, repair } = normalizeAnalysis(stripMarkdownFences(raw), language);
+        if (repairChangedAnything(repair)) {
+          // The model still files the odd word under a sentence it does not occur in.
+          // Log what was corrected: silently reshaping the analysis would make a
+          // systematic drift (a whole paragraph shifted by one) invisible.
+          request.log.info({ repair }, "import: repaired word/grammar sentence attribution");
+        }
 
         // Existence check reuses the vocab check-terms path (orphaned/mislinked
         // word_index entries are filtered out by `wordEntryIsLive`).

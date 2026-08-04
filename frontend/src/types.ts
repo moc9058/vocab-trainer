@@ -547,7 +547,12 @@ export interface ImportExtractedWord {
   transliteration?: string;
   /** Short gloss, for the review list only — the real definitions come from smart-add. */
   meaning?: string;
-  /** The sentence the word occurs in; it becomes the word's example sentence. */
+  /**
+   * The sentence the word occurs in; it becomes the word's example sentence.
+   *
+   * Assigned SERVER-side from the word's position in the nested response, then
+   * verified against the sentence text (`import-analysis.ts:repairWordAttribution`).
+   */
   sentenceIndex: number;
 }
 
@@ -555,6 +560,12 @@ export interface ImportExtractedGrammar {
   /** Pattern notation, e.g. "～的话：〜なら". */
   statement: string;
   description: string;
+  /**
+   * The verbatim span of the sentence that instantiates the pattern. A `statement`
+   * is notation (「随着～，越来越～」) and can never be matched positionally, so this is
+   * the only field that can prove the row belongs to the sentence it is filed under.
+   */
+  excerpt?: string;
   sentenceIndex: number;
 }
 
@@ -643,6 +654,9 @@ export interface ImportGrammarItem extends ImportItemBase {
   kind: "grammar";
   statement: string;
   description: string;
+  /** The span of the sentence that instantiates the pattern, carried over from the
+   *  analysis. Absent on rows the user wrote and on sessions predating the field. */
+  excerpt?: string;
   /** The grammar item this row registered (or that a sibling row with the identical
    *  statement registered). Grammar has no analysis-time existence check, so unlike
    *  `existingWordId` this is only ever learned from a registration in this session. */

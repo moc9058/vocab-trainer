@@ -145,7 +145,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
                 title: text.trim().slice(0, 40),
                 text: text.trim(),
                 paragraphs: analysis.paragraphs,
-                items: buildImportItems(analysis, existing, existingGrammar),
+                items: buildImportItems(analysis, existing, existingGrammar, language),
                 wordGroupId: draftDestination.wordGroupId,
                 grammarGroupId: draftDestination.grammarGroupId,
                 groupBNames: draftDestination.groupBNames,
