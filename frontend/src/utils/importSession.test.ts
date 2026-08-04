@@ -86,6 +86,18 @@ describe("wordMismatch", () => {
     expect(wordMismatch(GDP, "  ", "chinese")).toBe(false);
   });
 
+  it("does not flag a Latin acronym embedded in Chinese", () => {
+    // A Han character is a letter, so a `\p{L}` boundary test would report 「GDP」 as
+    // absent from a sentence that plainly contains it — flagging it rose and
+    // refusing its registration.
+    expect(wordMismatch(GDP, "GDP", "chinese")).toBe(false);
+    expect(wordMismatch("制造业PMI为49.3%", "PMI", "chinese")).toBe(false);
+  });
+
+  it("still counts an acronym towards coverage", () => {
+    expect(sentenceCoverage("制造业PMI为", [wordItem("PMI", 0)], "chinese").covered[3]).toBe(true);
+  });
+
   it("only treats absence as a verdict where terms must be verbatim", () => {
     expect(requiresVerbatimTerms("chinese")).toBe(true);
     expect(requiresVerbatimTerms("english")).toBe(true);

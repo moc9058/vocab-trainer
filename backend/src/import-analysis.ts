@@ -92,10 +92,21 @@ export function lowercaseGrammarAbbreviations(statement: string): string {
  */
 const LATIN_TERM = /^[\p{Script=Latin}\p{M}''-]+$/u;
 
+/**
+ * What breaks a Latin term's word boundary: another LATIN letter, or a digit.
+ *
+ * Not `\p{L}` — a Han character is a letter, so 「的GDP差」 would leave 「GDP」 with
+ * no valid boundary anywhere and the term would look absent from a sentence it is
+ * plainly in. Chinese articles are full of embedded acronyms (GDP, PMI, CPI), and
+ * with the occurrence check now deciding whether to DROP a row, treating a CJK
+ * neighbour as boundary-breaking would delete perfectly good vocabulary.
+ */
+const LATIN_NEIGHBOUR = /[\p{Script=Latin}\p{N}]/u;
+
 function boundedAt(sentence: string, at: number, len: number): boolean {
   const before = at > 0 ? sentence[at - 1] : "";
   const after = at + len < sentence.length ? sentence[at + len] : "";
-  return !/\p{L}|\p{N}/u.test(before) && !/\p{L}|\p{N}/u.test(after);
+  return !LATIN_NEIGHBOUR.test(before) && !LATIN_NEIGHBOUR.test(after);
 }
 
 /** Every position in `sentence` where `term` occurs, left to right. */

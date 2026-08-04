@@ -34,6 +34,27 @@ test("termOccurrences matches a Latin term only at word boundaries", () => {
   assert.deepEqual(termOccurrences("the analysis", "analys"), []);
 });
 
+test("a Latin acronym embedded in Chinese still counts as present", () => {
+  // A Han character is a letter, so a `\p{L}` boundary test would leave 「GDP」 with
+  // no valid boundary anywhere in this sentence — and the occurrence check now
+  // decides whether to DROP the row, which would delete real vocabulary.
+  assert.deepEqual(termOccurrences(GDP, "GDP"), [16]);
+  assert.deepEqual(termOccurrences("制造业PMI为49.3%", "PMI"), [3]);
+});
+
+test("a Chinese sentence's Latin acronym is never dropped as absent", () => {
+  const { words, summary } = repairWordAttribution(
+    [word("GDP", 0), word("差距", 0)],
+    sentences(GDP, ADMIN),
+    "chinese"
+  );
+  assert.deepEqual(words.map((w) => [w.term, w.sentenceIndex]), [
+    ["GDP", 0],
+    ["差距", 0],
+  ]);
+  assert.equal(summary.dropped, 0);
+});
+
 // ---------- repairWordAttribution ----------
 
 test("moves a Chinese word onto the sentence it actually occurs in", () => {
