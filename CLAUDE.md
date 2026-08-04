@@ -114,15 +114,20 @@ get them wrong:
   **three** versions — an OCI index (which holds the tag) plus an amd64 child and an
   attestation child, *both untagged* — and **Cloud Run pins the child digest**, so an
   untagged-sweep deletes the running image. Both builds therefore pass
-  **`--provenance=false`** to shrink that group, but **do not assume it collapses a
-  push to a single manifest**: Docker Desktop here runs the *containerd image store*,
-  which pushes an OCI index even for one `--platform`. Measured on 2026-08-04 (before
-  the flag was ever committed), every push wrote index + amd64 child + attestation
-  child. Expect the flag to drop the attestation only; **verify after the next deploy**
-  by counting versions per push (`gcloud artifacts docker images list … --sort-by=~createTime`
-  — one push = one createTime). Count-based retention is correct either way; what
-  changes is how many versions one push consumes, and `KEEP_IMAGES` (5) buys ~1.7
-  deploys of rollback headroom at three-per-push, so raise it if the count stays >1.
+  **`--provenance=false`**, which collapses a push to a single tagged manifest and is
+  what makes plain count-based retention correct. **Both halves are measured, on
+  2026-08-04**: the three pushes before the flag was committed each wrote index + amd64
+  child + attestation child, and the first push after it wrote exactly **one** tagged
+  version. (The containerd image store is active here and does *not* force an index for
+  a single `--platform`.) Re-check the same way if the builder ever changes — one push
+  shares one `createTime`, so `gcloud artifacts docker images list … --sort-by=~createTime`
+  shows the group size directly. Versions pushed BEFORE the flag are still
+  index-shaped, and count-based retention can split such a group: `--delete-tags` on a
+  child an index still references fails, the script swallows it as
+  `skipped (still referenced)`, and the group survives whole. That is why the repos sat
+  at 10 and 9 versions against `KEEP_IMAGES=5` right after the first pruning deploy —
+  the leftovers are legacy three-version groups, not a bug in the retention count, and
+  they clear once the newest 5 are all single-manifest pushes.
 
 Rollback is by revision (`gcloud run services update-traffic --to-revisions=REV=100`),
 which works only while the digest that revision pins still exists — that is why
@@ -138,9 +143,12 @@ attestation child gets none). That measured **259 scans / ~$67 in 30 days**, and
 scans / ~$382 since the project began in March — for findings nothing consumes: there
 is no Binary Authorization, no Security Command Center and no gate in `deploy.sh`.
 Pruning does not help, since the charge lands at push time and a later delete refunds
-nothing. Re-enable with `gcloud services enable containerscanning.googleapis.com`, or
-scan deliberately with `gcloud artifacts docker images scan` (same price, only when
-asked). `containeranalysis.googleapis.com` stays enabled — it is metadata storage and
+nothing. Verified silent after the fact: the 12:16 deploy that day produced **zero**
+new `DISCOVERY` occurrences. Re-enable with
+`gcloud services enable containerscanning.googleapis.com`, or scan deliberately with
+`gcloud artifacts docker images scan` (same price, only when asked) — note that
+`--provenance=false` now makes a push ONE digest rather than three, so re-enabling
+would cost about half what it used to at the same deploy cadence, not the full $67. `containeranalysis.googleapis.com` stays enabled — it is metadata storage and
 bills nothing on its own. To audit the real spend, count scans rather than trusting an
 estimate: each billed scan is exactly one `DISCOVERY` occurrence, listable from
 `https://containeranalysis.googleapis.com/v1/projects/<id>/occurrences?filter=kind="DISCOVERY"`.
