@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
 import { getFilters, smartAddWord, getGroups } from "../api/vocab";
 import { categoryGroups, displayTranslation, type Word, type Meaning, type WordGroup } from "../types";
-import GroupBSelect from "./GroupBSelect";
 import ExampleSentenceEditor, { type ExampleFormState } from "./ExampleSentenceEditor";
 import PinyinInput from "./PinyinInput";
 
@@ -17,10 +16,10 @@ type SmartAddPayload = Parameters<typeof smartAddWord>[1];
 interface Props {
   language: string;
   word?: Word;
-  onSave: (word: Omit<Word, "id"> & { id?: string; groupIds?: string[] }) => Promise<void>;
+  onSave: (word: Omit<Word, "id"> & { id?: string; groupIds?: string[]; groupBIds?: string[] }) => Promise<void>;
   onClose: () => void;
   onQueue?: (term: string, language: string, payload: SmartAddPayload) => void;
-  onQueueEdit?: (data: Omit<Word, "id"> & { id: string; groupIds: string[] }) => void;
+  onQueueEdit?: (data: Omit<Word, "id"> & { id: string; groupIds: string[]; groupBIds: string[] }) => void;
   pendingTerms?: Set<string>;
   succeededTerms?: Set<string>;
   refreshSignal?: number;
@@ -55,8 +54,13 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
   const [availableTopics, setAvailableTopics] = useState<string[]>([]);
   const [groups, setGroups] = useState<WordGroup[]>([]);
   const [selectedGroupIds, setSelectedGroupIds] = useState<Set<string>>(new Set());
-  // Category-B word groups applied to segment-chip adds (Chinese chip workflow).
-  const [chipGroupBIds, setChipGroupBIds] = useState<string[]>([]);
+  // The word's OWN category-B memberships (edit mode), preselected from the group
+  // docs so the modal shows where the word currently sits — unlike Group A this is
+  // multi-select, since several B study sets may hold the same word. The same
+  // selection is also the Group B target for words created from segment chips
+  // (`extraGroupIds`), replacing the separate "words from chips" picker.
+  const [groupsB, setGroupsB] = useState<WordGroup[]>([]);
+  const [selectedGroupBIds, setSelectedGroupBIds] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   // True while ExampleSentenceEditor has at least one chip mid-smartAddWord.
@@ -74,20 +78,28 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
     if (!word?.id) {
       setGroups([]);
       setSelectedGroupIds(new Set());
+      setGroupsB([]);
+      setSelectedGroupBIds(new Set());
       return;
     }
     getGroups(language)
       .then((all) => {
-        // Group A flow — Group B membership is edited from the Group B manager.
         const loadedGroups = categoryGroups(all, "A");
         setGroups(loadedGroups);
         setSelectedGroupIds(new Set(
           loadedGroups.filter((group) => group.wordIds.includes(word.id)).map((group) => group.id)
         ));
+        const loadedB = categoryGroups(all, "B");
+        setGroupsB(loadedB);
+        setSelectedGroupBIds(new Set(
+          loadedB.filter((group) => group.wordIds.includes(word.id)).map((group) => group.id)
+        ));
       })
       .catch(() => {
         setGroups([]);
         setSelectedGroupIds(new Set());
+        setGroupsB([]);
+        setSelectedGroupBIds(new Set());
       });
   }, [language, word?.id]);
 
@@ -145,7 +157,7 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
     };
 
     if (word?.id && onQueueEdit) {
-      onQueueEdit({ ...payload, id: word.id, groupIds: [...selectedGroupIds] });
+      onQueueEdit({ ...payload, id: word.id, groupIds: [...selectedGroupIds], groupBIds: [...selectedGroupBIds] });
       onClose();
       return;
     }
@@ -156,7 +168,7 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
       await onSave({
         ...(word ? { id: word.id } : {}),
         ...payload,
-        ...(word?.id ? { groupIds: [...selectedGroupIds] } : {}),
+        ...(word?.id ? { groupIds: [...selectedGroupIds], groupBIds: [...selectedGroupBIds] } : {}),
       });
       onClose();
     } catch (err) {
@@ -233,15 +245,6 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
           </div>
 
           {/* Examples */}
-          {language === "chinese" && (
-            <GroupBSelect
-              kind="word"
-              language={language}
-              selectedIds={chipGroupBIds}
-              onChange={setChipGroupBIds}
-              label="Group B (words from chips)"
-            />
-          )}
           <ExampleSentenceEditor
             language={language}
             examples={examples}
@@ -252,7 +255,7 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
             succeededTerms={succeededTerms}
             refreshSignal={refreshSignal}
             onQueue={onQueue}
-            extraGroupIds={chipGroupBIds}
+            extraGroupIds={[...selectedGroupBIds]}
             onChipInFlightChange={setChipsInFlight}
           />
 
@@ -279,6 +282,39 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
                         selected
                           ? "bg-indigo-600 text-white"
                           : "bg-gray-600 text-gray-300 hover:bg-gray-500"
+                      }`}
+                    >
+                      {group.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Group B memberships — amber like every other Group B surface, multi-select. */}
+          {word?.id && groupsB.length > 0 && (
+            <div>
+              <label className="mb-1 block text-sm text-amber-300/80">Group B</label>
+              <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-gray-600 bg-gray-700 p-2">
+                {groupsB.map((group) => {
+                  const selected = selectedGroupBIds.has(group.id);
+                  return (
+                    <button
+                      key={group.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedGroupBIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(group.id)) next.delete(group.id);
+                          else next.add(group.id);
+                          return next;
+                        });
+                      }}
+                      className={`rounded-full border px-2 py-0.5 text-xs ${
+                        selected
+                          ? "border-amber-500 bg-amber-600/30 text-amber-200"
+                          : "border-gray-600 text-gray-400 hover:border-amber-600/60 hover:text-amber-300"
                       }`}
                     >
                       {group.name}

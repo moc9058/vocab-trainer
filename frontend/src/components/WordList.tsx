@@ -291,32 +291,40 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     return () => clearTimeout(timer);
   }, [search]);
 
-  async function handleUpdateWord(data: Omit<Word, "id"> & { id?: string; groupIds?: string[] }) {
+  async function handleUpdateWord(data: Omit<Word, "id"> & { id?: string; groupIds?: string[]; groupBIds?: string[] }) {
     if (!data.id) return;
-    const { id, groupIds, ...updates } = data;
+    const { id, groupIds, groupBIds, ...updates } = data;
     const updatedWord = await updateWord(language, id, updates);
     // Direct in-list edits don't bump refreshSignal — refresh the preview here.
     invalidateSearchIndex("word", language);
-    if (groupIds) {
-      const originalGroupIds = new Set(
-        groups.filter((group) => group.wordIds.includes(id)).map((group) => group.id)
-      );
-      const selectedGroupIds = new Set(groupIds);
-      const toAdd = groupIds.filter((groupId) => !originalGroupIds.has(groupId));
-      const toRemove = [...originalGroupIds].filter((groupId) => !selectedGroupIds.has(groupId));
+    if (groupIds || groupBIds) {
+      const diff = (selected: string[] | undefined, pool: WordGroup[]) => {
+        if (!selected) return { toAdd: [] as string[], toRemove: [] as string[] };
+        const original = new Set(pool.filter((g) => g.wordIds.includes(id)).map((g) => g.id));
+        const selectedSet = new Set(selected);
+        return {
+          toAdd: selected.filter((gId) => !original.has(gId)),
+          toRemove: [...original].filter((gId) => !selectedSet.has(gId)),
+        };
+      };
+      const a = diff(groupIds, groups);
+      const b = diff(groupBIds, groupsB);
       // Adds strictly before removes: the remove path strips Group B membership
       // from a word left in no category-A group, so a move fired as one
       // Promise.all could have the remove's orphan check read before the add
       // committed — wrongly emptying the word's B sets, which nothing re-adds.
       const addedGroups = await Promise.all(
-        toAdd.map((groupId) => modifyGroupMembers(language, groupId, [id], "add"))
+        [...a.toAdd, ...b.toAdd].map((groupId) => modifyGroupMembers(language, groupId, [id], "add"))
       );
       const removedGroups = await Promise.all(
-        toRemove.map((groupId) => modifyGroupMembers(language, groupId, [id], "remove"))
+        [...a.toRemove, ...b.toRemove].map((groupId) => modifyGroupMembers(language, groupId, [id], "remove"))
       );
       const updatedGroups = [...addedGroups, ...removedGroups];
       if (updatedGroups.length > 0) {
         setGroups((prev) =>
+          prev.map((group) => updatedGroups.find((updated) => updated.id === group.id) ?? group)
+        );
+        setGroupsB((prev) =>
           prev.map((group) => updatedGroups.find((updated) => updated.id === group.id) ?? group)
         );
       }
@@ -327,14 +335,22 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     }
   }
 
-  function handleQueueEditWord(data: Omit<Word, "id"> & { id: string; groupIds: string[] }) {
+  function handleQueueEditWord(data: Omit<Word, "id"> & { id: string; groupIds: string[]; groupBIds: string[] }) {
     if (!onQueueEdit) return;
-    const { id, groupIds: selectedGroupIds, ...updates } = data;
-    const originalGroupIds = new Set(groups.filter((g) => g.wordIds.includes(id)).map((g) => g.id));
-    const selectedSet = new Set(selectedGroupIds);
-    const toAdd = selectedGroupIds.filter((gId) => !originalGroupIds.has(gId));
-    const toRemove = [...originalGroupIds].filter((gId) => !selectedSet.has(gId));
-    onQueueEdit(data.term, language, id, updates, toAdd, toRemove);
+    const { id, groupIds: selectedGroupIds, groupBIds: selectedGroupBIds, ...updates } = data;
+    const diff = (selected: string[], pool: WordGroup[]) => {
+      const original = new Set(pool.filter((g) => g.wordIds.includes(id)).map((g) => g.id));
+      const selectedSet = new Set(selected);
+      return {
+        toAdd: selected.filter((gId) => !original.has(gId)),
+        toRemove: [...original].filter((gId) => !selectedSet.has(gId)),
+      };
+    };
+    const a = diff(selectedGroupIds, groups);
+    const b = diff(selectedGroupBIds, groupsB);
+    // The queue's update worker runs adds strictly before removes, so the A and B
+    // diffs can share the same two arrays.
+    onQueueEdit(data.term, language, id, updates, [...a.toAdd, ...b.toAdd], [...a.toRemove, ...b.toRemove]);
   }
 
   async function handleDeleteWord(wordId: string) {
