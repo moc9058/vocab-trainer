@@ -93,15 +93,19 @@ export function lowercaseGrammarAbbreviations(statement: string): string {
 const LATIN_TERM = /^[\p{Script=Latin}\p{M}''-]+$/u;
 
 /**
- * What breaks a Latin term's word boundary: another LATIN letter, or a digit.
+ * What breaks a Latin term's word boundary: another LATIN letter, and nothing else.
  *
- * Not `\p{L}` — a Han character is a letter, so 「的GDP差」 would leave 「GDP」 with
- * no valid boundary anywhere and the term would look absent from a sentence it is
- * plainly in. Chinese articles are full of embedded acronyms (GDP, PMI, CPI), and
- * with the occurrence check now deciding whether to DROP a row, treating a CJK
- * neighbour as boundary-breaking would delete perfectly good vocabulary.
+ * The rule exists for one reason — stop the English article 「a」 matching inside
+ * 「analysis」 — so only a letter of the same script can break it.
+ *
+ * NOT `\p{L}`: a Han character is a letter, so 「的GDP差」 would leave 「GDP」 with no
+ * valid boundary anywhere and the term would read as absent from a sentence it is
+ * plainly in. NOT digits either: Chinese runs a number straight onto an acronym
+ * (「实现GDP19843亿元」, 「制造业PMI49.3%」), and digits are outside coverage scope
+ * anyway. With this predicate now deciding whether the server DROPS a row, both
+ * over-strict readings delete perfectly good vocabulary.
  */
-const LATIN_NEIGHBOUR = /[\p{Script=Latin}\p{N}]/u;
+const LATIN_NEIGHBOUR = /\p{Script=Latin}/u;
 
 function boundedAt(sentence: string, at: number, len: number): boolean {
   const before = at > 0 ? sentence[at - 1] : "";

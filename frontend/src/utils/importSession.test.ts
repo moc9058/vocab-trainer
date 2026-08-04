@@ -98,6 +98,13 @@ describe("wordMismatch", () => {
     expect(sentenceCoverage("制造业PMI为", [wordItem("PMI", 0)], "chinese").covered[3]).toBe(true);
   });
 
+  it("does not let a trailing digit break the acronym's boundary", () => {
+    // 「实现GDP19843亿元」 — Chinese runs the number straight onto the acronym.
+    expect(wordMismatch("深圳实现GDP19843亿元", "GDP", "chinese")).toBe(false);
+    // The English case the boundary rule exists for still holds.
+    expect(wordMismatch("a quick analysis", "analys", "english")).toBe(true);
+  });
+
   it("only treats absence as a verdict where terms must be verbatim", () => {
     expect(requiresVerbatimTerms("chinese")).toBe(true);
     expect(requiresVerbatimTerms("english")).toBe(true);

@@ -42,6 +42,16 @@ test("a Latin acronym embedded in Chinese still counts as present", () => {
   assert.deepEqual(termOccurrences("制造业PMI为49.3%", "PMI"), [3]);
 });
 
+test("a digit does not break a Latin term's boundary", () => {
+  // Chinese runs the number straight onto the acronym. Treating the digit as a
+  // boundary made a legitimate 「GDP」 row look absent, so it was moved to another
+  // sentence, found redundant there, and DROPPED — with a gap row left in its place.
+  assert.deepEqual(termOccurrences("深圳实现GDP19843亿元", "GDP"), [4]);
+  assert.deepEqual(termOccurrences("制造业PMI49.3%", "PMI"), [3]);
+  // The rule it exists for still holds.
+  assert.deepEqual(termOccurrences("a quick analysis", "a"), [0]);
+});
+
 test("a Chinese sentence's Latin acronym is never dropped as absent", () => {
   const { words, summary } = repairWordAttribution(
     [word("GDP", 0), word("差距", 0)],
