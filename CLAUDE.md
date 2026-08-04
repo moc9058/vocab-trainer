@@ -74,11 +74,13 @@ Emulator data is in-memory: after the `firestore` container restarts, re-run `cd
 ./deploy.sh PROJECT_ID REGION --llm      # Deploy + upload LLM config to config/llm
 ./deploy.sh PROJECT_ID REGION --auth     # Deploy + upload Google OAuth config to config/auth
 ./deploy.sh PROJECT_ID REGION --prompts  # Deploy + upload prompts/schemas from backend/DB/
-# Windows: .\deploy.ps1 PROJECT_ID REGION [-Llm] [-Auth] [-Prompts] — same three.
+./deploy.sh PROJECT_ID REGION --no-prune # Deploy WITHOUT the post-deploy cleanup below
+# Windows: .\deploy.ps1 PROJECT_ID REGION [-Llm] [-Auth] [-Prompts] [-NoPrune] — same four.
 ```
-The deploy scripts carry **config uploads only**, and only because config is read
-once and memoized for the process lifetime (`routes/import.ts`) or at boot
-(`auth-config.ts`) — so pushing it and rolling a revision are one operation. Data
+The deploy scripts carry exactly two things: **config uploads** and the
+**post-deploy retention** described below. The uploads belong here only because
+config is read once and memoized for the process lifetime (`routes/import.ts`) or at
+boot (`auth-config.ts`) — so pushing it and rolling a revision are one operation. Data
 migrations (`migrate-example-sentences.ts`, `migrate-grammar-examples.ts`,
 `--archives`) and destructive maintenance (`wipe-grammar-firestore.ts`) used to be
 deploy flags and are now run directly; they have no relationship to a release, and
@@ -92,6 +94,56 @@ defaults). **Per-feature model assignment is not a deploy concern**: it lives in
 `config/llm_models`, is written by the in-app LLM Models screen, and takes effect
 within 30 seconds without a new revision. That separation is also what stops
 `--llm`'s full `.set()` from wiping it.
+
+#### Post-deploy retention (`--no-prune` / `-NoPrune` opts out)
+Every deploy ends by deleting what the previous one superseded — local `<none>`
+image, Artifact Registry versions past `KEEP_IMAGES` (5), Cloud Run revisions past
+`KEEP_REVISIONS` (5), build cache past `BUILD_CACHE_LIMIT` (10GB); all four are
+overridable (env vars in bash, parameters in PowerShell). It exists because nothing
+here was ever collected: the repo reached **53 local images, 31GB of build cache,
+54 registry versions and 888 inactive Cloud Run revisions** (of a 1000-per-service
+cap) before this was added. Pruning runs **after both services are up**, since the
+counts assume the newest image and revision are the ones now serving.
+
+Two traps the prune code is written around, both of which delete production if you
+get them wrong:
+- **Never pass `--limit` to `gcloud artifacts docker images list`.** It is applied
+  server-side *before* `--sort-by`, so you get an unsorted page and delete whatever
+  landed on it.
+- **Never "delete everything untagged".** With buildx provenance ON, one push writes
+  **three** versions — an OCI index (which holds the tag) plus an amd64 child and an
+  attestation child, *both untagged* — and **Cloud Run pins the child digest**, so an
+  untagged-sweep deletes the running image. Both builds therefore pass
+  **`--provenance=false`** to shrink that group, but **do not assume it collapses a
+  push to a single manifest**: Docker Desktop here runs the *containerd image store*,
+  which pushes an OCI index even for one `--platform`. Measured on 2026-08-04 (before
+  the flag was ever committed), every push wrote index + amd64 child + attestation
+  child. Expect the flag to drop the attestation only; **verify after the next deploy**
+  by counting versions per push (`gcloud artifacts docker images list … --sort-by=~createTime`
+  — one push = one createTime). Count-based retention is correct either way; what
+  changes is how many versions one push consumes, and `KEEP_IMAGES` (5) buys ~1.7
+  deploys of rollback headroom at three-per-push, so raise it if the count stays >1.
+
+Rollback is by revision (`gcloud run services update-traffic --to-revisions=REV=100`),
+which works only while the digest that revision pins still exists — that is why
+`KEEP_IMAGES` and `KEEP_REVISIONS` are kept in step.
+
+#### Automatic vulnerability scanning is OFF, deliberately
+`containerscanning.googleapis.com` is **disabled** on `vocab-trainer-490014` (as of
+2026-08-04). Artifact Analysis bills **$0.26 per newly-pushed digest**, and this repo
+deploys often — 73 `deploy.sh` runs in the preceding 30 days, each pushing both images
+— while **two of the three manifests per push were being scanned separately**
+(the OCI index and the amd64 child each get their own `DISCOVERY` occurrence; the
+attestation child gets none). That measured **259 scans / ~$67 in 30 days**, and 1,471
+scans / ~$382 since the project began in March — for findings nothing consumes: there
+is no Binary Authorization, no Security Command Center and no gate in `deploy.sh`.
+Pruning does not help, since the charge lands at push time and a later delete refunds
+nothing. Re-enable with `gcloud services enable containerscanning.googleapis.com`, or
+scan deliberately with `gcloud artifacts docker images scan` (same price, only when
+asked). `containeranalysis.googleapis.com` stays enabled — it is metadata storage and
+bills nothing on its own. To audit the real spend, count scans rather than trusting an
+estimate: each billed scan is exactly one `DISCOVERY` occurrence, listable from
+`https://containeranalysis.googleapis.com/v1/projects/<id>/occurrences?filter=kind="DISCOVERY"`.
 
 ### Tests
 ```bash
