@@ -299,10 +299,17 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       const selectedGroupIds = new Set(groupIds);
       const toAdd = groupIds.filter((groupId) => !originalGroupIds.has(groupId));
       const toRemove = [...originalGroupIds].filter((groupId) => !selectedGroupIds.has(groupId));
-      const updatedGroups = await Promise.all([
-        ...toAdd.map((groupId) => modifyGroupMembers(language, groupId, [id], "add")),
-        ...toRemove.map((groupId) => modifyGroupMembers(language, groupId, [id], "remove")),
-      ]);
+      // Adds strictly before removes: the remove path strips Group B membership
+      // from a word left in no category-A group, so a move fired as one
+      // Promise.all could have the remove's orphan check read before the add
+      // committed — wrongly emptying the word's B sets, which nothing re-adds.
+      const addedGroups = await Promise.all(
+        toAdd.map((groupId) => modifyGroupMembers(language, groupId, [id], "add"))
+      );
+      const removedGroups = await Promise.all(
+        toRemove.map((groupId) => modifyGroupMembers(language, groupId, [id], "remove"))
+      );
+      const updatedGroups = [...addedGroups, ...removedGroups];
       if (updatedGroups.length > 0) {
         setGroups((prev) =>
           prev.map((group) => updatedGroups.find((updated) => updated.id === group.id) ?? group)

@@ -2036,7 +2036,20 @@ export async function updateGrammarGroup(groupId: string, patch: { name?: string
 }
 
 export async function deleteGrammarGroup(groupId: string): Promise<void> {
+  const doc = await grammarGroups.doc(groupId).get();
   await grammarGroups.doc(groupId).delete();
+  if (!doc.exists) return;
+  const data = doc.data()!;
+  const memberIds: string[] = data.grammarIds ?? [];
+  // Same B ⊆ A cascade as deleteWordGroup; the orphan check keeps items that
+  // still sit in another A group inside their B sets.
+  if (data.category !== "B" && memberIds.length > 0) {
+    try {
+      await removeOrphanedGrammarFromCategoryBGroups(data.language as string, memberIds);
+    } catch (err) {
+      console.error(`[deleteGrammarGroup] post-delete B-strip failed for group ${groupId}:`, err);
+    }
+  }
 }
 
 export async function modifyGrammarGroupMembers(
@@ -2044,7 +2057,7 @@ export async function modifyGrammarGroupMembers(
   grammarIds: string[],
   action: "add" | "remove"
 ): Promise<GrammarGroup> {
-  return db.runTransaction(async (tx) => {
+  const group = await db.runTransaction(async (tx) => {
     const ref = grammarGroups.doc(groupId);
     const doc = await tx.get(ref);
     if (!doc.exists) throw new GroupNotFoundError(`Grammar group '${groupId}' not found`);
@@ -2068,6 +2081,17 @@ export async function modifyGrammarGroupMembers(
       ...(doc.data()!.category === "B" ? { category: "B" as const } : {}),
     };
   });
+  // B ⊆ A on the remove side, mirroring modifyWordGroupMembers (see the comment
+  // there). Grammar is not A-exclusive, so the helper's remaining-A-membership
+  // check is what keeps an item still sitting in another A group inside its B sets.
+  if (action === "remove" && group.category !== "B" && grammarIds.length > 0) {
+    try {
+      await removeOrphanedGrammarFromCategoryBGroups(group.language, grammarIds);
+    } catch (err) {
+      console.error(`[modifyGrammarGroupMembers] post-remove B-strip failed for group ${group.id}:`, err);
+    }
+  }
+  return group;
 }
 
 /** Drop `grammarId` from every category-B group of `language`. Returns the affected group IDs. */
@@ -2084,6 +2108,43 @@ export async function removeGrammarFromCategoryBGroups(
     // filtered-array overwrite from this stale read would lose concurrent adds.
     batch.update(grammarGroups.doc(g.id), {
       grammarIds: FieldValue.arrayRemove(grammarId),
+    });
+  }
+  await batch.commit();
+  return affected.map((g) => g.id);
+}
+
+/**
+ * Drop those of `grammarIds` that belong to NO category-A grammar group of
+ * `language` from every category-B grammar group. Returns the affected group IDs.
+ *
+ * Grammar twin of `removeOrphanedWordsFromCategoryBGroups` — see its comment for
+ * the invariant, the remaining-A-membership rule and the race direction. The
+ * re-check matters even more here: grammar is not A-exclusive, so an item removed
+ * from one A group may legitimately remain in another and must then keep its B sets.
+ */
+export async function removeOrphanedGrammarFromCategoryBGroups(
+  language: string,
+  grammarIds: string[]
+): Promise<string[]> {
+  const groups = await getGrammarGroups(language);
+  const stillInA = new Set<string>();
+  for (const g of groups) {
+    if (g.category === "B") continue;
+    for (const id of g.grammarIds) stillInA.add(id);
+  }
+  const orphaned = new Set(grammarIds.filter((id) => !stillInA.has(id)));
+  if (orphaned.size === 0) return [];
+  const affected = groups.filter(
+    (g) => g.category === "B" && g.grammarIds.some((id) => orphaned.has(id))
+  );
+  if (affected.length === 0) return [];
+  const batch = db.batch();
+  for (const g of affected) {
+    // arrayRemove — see removeWordsFromOtherCategoryAGroups for why a
+    // filtered-array overwrite from this stale read would lose concurrent adds.
+    batch.update(grammarGroups.doc(g.id), {
+      grammarIds: FieldValue.arrayRemove(...orphaned),
     });
   }
   await batch.commit();
@@ -2920,7 +2981,22 @@ export async function reorderWordGroups(language: string, groupIds: string[]): P
 }
 
 export async function deleteWordGroup(groupId: string): Promise<void> {
+  const doc = await wordGroups.doc(groupId).get();
   await wordGroups.doc(groupId).delete();
+  if (!doc.exists) return;
+  const data = doc.data()!;
+  const memberIds: string[] = data.wordIds ?? [];
+  // Deleting an A group orphans every member the same way a remove does (words
+  // are A-exclusive, so for them it is every member): strip the ones now in no
+  // A group from the B sets. Best-effort after the committed delete, same
+  // contract as modifyWordGroupMembers.
+  if (data.category !== "B" && memberIds.length > 0) {
+    try {
+      await removeOrphanedWordsFromCategoryBGroups(data.language as string, memberIds);
+    } catch (err) {
+      console.error(`[deleteWordGroup] post-delete B-strip failed for group ${groupId}:`, err);
+    }
+  }
 }
 
 export async function modifyWordGroupMembers(
@@ -2975,6 +3051,23 @@ export async function modifyWordGroupMembers(
       console.error(`[modifyWordGroupMembers] post-add A-move failed for group ${group.id} (self-healing):`, err);
     }
   }
+  // The REMOVE side of the same invariant: a category-B group is the
+  // not-yet-memorized SUBSET of the A structure, so a word that just left its
+  // last category-A group must leave every B set too. The helper re-checks
+  // remaining A membership from a fresh read, so a move (whose add committed
+  // first) keeps B intact.
+  if (action === "remove" && group.category !== "B" && wordIds.length > 0) {
+    try {
+      await removeOrphanedWordsFromCategoryBGroups(group.language, wordIds);
+    } catch (err) {
+      // Same contract as the add branch: the remove is committed, so this
+      // cleanup must not fail the route. The leftover is a stranded B
+      // membership — unlike the two-A-groups race it does NOT self-heal, but
+      // every in-app remove funnels through here, so the window is a lost
+      // request, not a code path.
+      console.error(`[modifyWordGroupMembers] post-remove B-strip failed for group ${group.id}:`, err);
+    }
+  }
   return group;
 }
 
@@ -3026,6 +3119,50 @@ export async function removeWordFromCategoryBGroups(
     // arrayRemove — see removeWordsFromOtherCategoryAGroups for why a
     // filtered-array overwrite from this stale read would lose concurrent adds.
     batch.update(wordGroups.doc(g.id), { wordIds: FieldValue.arrayRemove(wordId) });
+  }
+  await batch.commit();
+  return affected.map((g) => g.id);
+}
+
+/**
+ * Drop those of `wordIds` that belong to NO category-A group of `language` from
+ * every category-B group. Returns the affected group IDs.
+ *
+ * The REMOVE side of the B ⊆ A invariant: a category-B group is the
+ * not-yet-memorized subset drawn on top of the A structure, so a word leaving its
+ * last A group must leave the B sets with it. Remaining A membership is re-checked
+ * from a fresh read rather than stripping unconditionally — a word moved between A
+ * groups keeps its B sets, legacy duplicate A memberships are handled, and the same
+ * rule works for grammar, where multiple A memberships are legal.
+ *
+ * Deliberately outside the caller's transaction, mirroring
+ * `removeWordsFromOtherCategoryAGroups` — but note the race direction differs:
+ * losing a race with a concurrent A-add wrongly strips B, and nothing re-adds B on
+ * its own. Acceptable because removing a word from its A group is a rare deliberate
+ * gesture, and the in-app "move between A groups" paths sequence their add before
+ * their remove so this read sees the new membership.
+ */
+export async function removeOrphanedWordsFromCategoryBGroups(
+  language: string,
+  wordIds: string[]
+): Promise<string[]> {
+  const groups = await getWordGroups(language);
+  const stillInA = new Set<string>();
+  for (const g of groups) {
+    if (g.category === "B") continue;
+    for (const id of g.wordIds) stillInA.add(id);
+  }
+  const orphaned = new Set(wordIds.filter((id) => !stillInA.has(id)));
+  if (orphaned.size === 0) return [];
+  const affected = groups.filter(
+    (g) => g.category === "B" && g.wordIds.some((id) => orphaned.has(id))
+  );
+  if (affected.length === 0) return [];
+  const batch = db.batch();
+  for (const g of affected) {
+    // arrayRemove — see removeWordsFromOtherCategoryAGroups for why a
+    // filtered-array overwrite from this stale read would lose concurrent adds.
+    batch.update(wordGroups.doc(g.id), { wordIds: FieldValue.arrayRemove(...orphaned) });
   }
   await batch.commit();
   return affected.map((g) => g.id);

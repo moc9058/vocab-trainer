@@ -418,10 +418,14 @@ export default function GrammarFormModal({ language, editItem, onSave, onClose, 
         );
         const toAdd = [...selectedGroupIds].filter((id) => !original.has(id));
         const toRemove = [...original].filter((id) => !selectedGroupIds.has(id));
-        await Promise.all([
-          ...toAdd.map((gid) => modifyGrammarGroupMembers(language, gid, [saved.id], "add")),
-          ...toRemove.map((gid) => modifyGrammarGroupMembers(language, gid, [saved.id], "remove")),
-        ]);
+        // Adds strictly before removes — the remove path's Group B strip must
+        // see the new A membership first (see WordList.handleUpdateWord).
+        await Promise.all(
+          toAdd.map((gid) => modifyGrammarGroupMembers(language, gid, [saved.id], "add"))
+        );
+        await Promise.all(
+          toRemove.map((gid) => modifyGrammarGroupMembers(language, gid, [saved.id], "remove"))
+        );
       }
 
       onSave();

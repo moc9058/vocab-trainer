@@ -2,16 +2,26 @@ import { describe, expect, it } from "vitest";
 import { extractStreamingSentences } from "../api/import";
 import {
   buildImportItems,
+  claimedGrammarIds,
   findWordHome,
   isLive,
+  libraryClaimTerms,
   mismatchedWords,
   reattachMismatchedWords,
+  reconcileLibraryClaims,
+  registeredTerms,
   requiresVerbatimTerms,
   sentenceCoverage,
   sentenceItems,
   wordMismatch,
 } from "./importSession";
-import type { ImportAnalysisResult, ImportItem, ImportSentence, ImportWordItem } from "../types";
+import type {
+  ImportAnalysisResult,
+  ImportGrammarItem,
+  ImportItem,
+  ImportSentence,
+  ImportWordItem,
+} from "../types";
 
 // The sentence from the bug report, plus the one the stray words really came from.
 const GDP = "在2025年上半年，重庆与广州的GDP差距约为849亿元，一年间缩小约191亿元。";
@@ -256,5 +266,210 @@ describe("buildImportItems", () => {
       "chinese"
     );
     expect(terms(items, 0)).toEqual(["重庆", "与", "广州"]);
+  });
+});
+
+function grammarItem(
+  statement: string,
+  sentenceIndex: number,
+  extra: Partial<ImportGrammarItem> = {}
+): ImportGrammarItem {
+  return {
+    id: `g${seq++}`,
+    kind: "grammar",
+    sentenceIndex,
+    order: 0,
+    status: "pending",
+    origin: "llm",
+    statement,
+    description: "",
+    ...extra,
+  };
+}
+
+describe("libraryClaimTerms", () => {
+  it("collects every row that claims library presence, tombstone ids included", () => {
+    const items: ImportItem[] = [
+      wordItem("重庆", 0, { existingWordId: "42" }),
+      wordItem("广州", 0, { status: "registered" }),
+      wordItem("差距", 0, { status: "duplicate" }),
+      wordItem("缩小", 0, { status: "queued" }),
+      // A tombstone with an id still poisons `inLibrary` via registeredTerms.
+      wordItem("经济", 0, { status: "skipped", existingWordId: "7" }),
+      // A tombstone without one claims nothing.
+      wordItem("人口", 0, { status: "skipped" }),
+      wordItem("规模", 0),
+      // Dedupes after trimming.
+      wordItem(" 重庆 ", 1, { existingWordId: "42" }),
+      // Not lookupable server-side — sending it would make "never checked"
+      // indistinguishable from "absent".
+      wordItem("……", 0, { existingWordId: "9" }),
+      wordItem("", 0, { existingWordId: "9" }),
+    ];
+    expect(libraryClaimTerms(items).sort()).toEqual(
+      ["差距", "广州", "经济", "缩小", "重庆"].sort()
+    );
+  });
+});
+
+describe("reconcileLibraryClaims", () => {
+  const checked = (...checkedTerms: string[]) => new Set(checkedTerms);
+  const absent = (...checkedTerms: string[]) => ({
+    wordIdByTerm: {},
+    checkedTerms: checked(...checkedTerms),
+    liveGrammarIds: null,
+  });
+
+  it("resets a registered row whose word was deleted", () => {
+    const items = [
+      wordItem("重庆", 0, {
+        existingWordId: "42",
+        status: "registered",
+        target: "A",
+        registrations: { A: { status: "registered" } },
+      }),
+    ];
+    const { items: out, changed } = reconcileLibraryClaims(items, absent("重庆"));
+    expect(changed).toBe(true);
+    const row = out[0] as ImportWordItem;
+    expect(row.existingWordId).toBeUndefined();
+    expect(row.registrations).toBeUndefined();
+    expect(row.status).toBe("pending");
+    expect(row.target).toBeUndefined();
+    // The row no longer reads as "in the library".
+    expect(registeredTerms(out).has("重庆")).toBe(false);
+  });
+
+  it("keeps a failed slot and its error while pruning the disproved one", () => {
+    const items = [
+      wordItem("广州", 0, {
+        existingWordId: "43",
+        status: "failed",
+        target: "B",
+        error: "boom",
+        registrations: {
+          A: { status: "registered" },
+          B: { status: "failed", error: "boom" },
+        },
+      }),
+    ];
+    const { items: out } = reconcileLibraryClaims(items, absent("广州"));
+    const row = out[0] as ImportWordItem;
+    expect(row.existingWordId).toBeUndefined();
+    expect(row.registrations).toEqual({ B: { status: "failed", error: "boom" } });
+    expect(row.status).toBe("failed");
+    expect(row.target).toBe("B");
+    expect(row.error).toBe("boom");
+  });
+
+  it("drops a dead tab's queued slot rather than leaving the row locked", () => {
+    const items = [
+      wordItem("缩小", 0, {
+        status: "queued",
+        target: "A",
+        registrations: { A: { status: "queued" } },
+      }),
+    ];
+    const { items: out } = reconcileLibraryClaims(items, absent("缩小"));
+    const row = out[0] as ImportWordItem;
+    expect(row.status).toBe("pending");
+    expect(row.registrations).toBeUndefined();
+  });
+
+  it("only strips the id from a tombstone — skipped is the user's decision", () => {
+    const items = [wordItem("经济", 0, { status: "skipped", existingWordId: "7" })];
+    const { items: out, changed } = reconcileLibraryClaims(items, absent("经济"));
+    expect(changed).toBe(true);
+    const row = out[0] as ImportWordItem;
+    expect(row.status).toBe("skipped");
+    expect(row.existingWordId).toBeUndefined();
+  });
+
+  it("settles a queued row whose write is proven to have landed", () => {
+    const items = [
+      wordItem("重庆", 0, {
+        status: "queued",
+        target: "A",
+        registrations: { A: { status: "queued" }, B: { status: "registered" } },
+      }),
+      // Legacy row without a registrations record.
+      wordItem("广州", 0, { status: "queued" }),
+    ];
+    const { items: out } = reconcileLibraryClaims(items, {
+      wordIdByTerm: { "重庆": "42", "广州": "43" },
+      checkedTerms: checked("重庆", "广州"),
+      liveGrammarIds: null,
+    });
+    const first = out[0] as ImportWordItem;
+    expect(first.existingWordId).toBe("42");
+    expect(first.status).toBe("registered");
+    expect(first.registrations?.A).toEqual({ status: "registered" });
+    const second = out[1] as ImportWordItem;
+    expect(second.existingWordId).toBe("43");
+    expect(second.status).toBe("registered");
+  });
+
+  it("refreshes an id that changed under a delete-then-recreate", () => {
+    const items = [wordItem("重庆", 0, { existingWordId: "42" })];
+    const { items: out, changed } = reconcileLibraryClaims(items, {
+      wordIdByTerm: { "重庆": "77" },
+      checkedTerms: checked("重庆"),
+      liveGrammarIds: null,
+    });
+    expect(changed).toBe(true);
+    expect((out[0] as ImportWordItem).existingWordId).toBe("77");
+  });
+
+  it("never touches what was not probed", () => {
+    const items = [
+      wordItem("重庆", 0, { existingWordId: "42", status: "registered" }),
+      grammarItem("随着～，越来越～", 0, { existingGrammarId: "g1", status: "registered" }),
+    ];
+    const { items: out, changed } = reconcileLibraryClaims(items, {
+      wordIdByTerm: {},
+      checkedTerms: new Set<string>(),
+      liveGrammarIds: null,
+    });
+    expect(changed).toBe(false);
+    expect(out).toBe(items);
+  });
+
+  it("reconciles grammar claims by id", () => {
+    const items = [
+      grammarItem("随着～，越来越～", 0, {
+        existingGrammarId: "g1",
+        status: "registered",
+        registrations: { A: { status: "registered" } },
+      }),
+      grammarItem("越～越～", 0, { existingGrammarId: "g2", status: "registered" }),
+    ];
+    expect(claimedGrammarIds(items).sort()).toEqual(["g1", "g2"]);
+    const { items: out } = reconcileLibraryClaims(items, {
+      wordIdByTerm: {},
+      checkedTerms: new Set<string>(),
+      liveGrammarIds: new Set(["g2"]),
+    });
+    const gone = out[0] as ImportGrammarItem;
+    expect(gone.existingGrammarId).toBeUndefined();
+    expect(gone.status).toBe("pending");
+    expect(gone.registrations).toBeUndefined();
+    expect(out[1]).toBe(items[1]);
+  });
+
+  it("is idempotent — the second run reports no change and returns the same array", () => {
+    const items = [
+      wordItem("重庆", 0, {
+        existingWordId: "42",
+        status: "registered",
+        registrations: { A: { status: "registered" } },
+      }),
+      wordItem("经济", 0, { status: "skipped", existingWordId: "7" }),
+    ];
+    const input = absent("重庆", "经济");
+    const first = reconcileLibraryClaims(items, input);
+    expect(first.changed).toBe(true);
+    const second = reconcileLibraryClaims(first.items, input);
+    expect(second.changed).toBe(false);
+    expect(second.items).toBe(first.items);
   });
 });

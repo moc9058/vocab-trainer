@@ -5,19 +5,21 @@ import {
   updateImportSession,
 } from "../api/import";
 import { checkTerms, modifyGroupMembers } from "../api/vocab";
-import { modifyGrammarGroupMembers } from "../api/grammar";
+import { getGrammarItemsByIds, modifyGrammarGroupMembers } from "../api/grammar";
 import { resolveGroupBTargets } from "../utils/groupB";
 import {
+  claimedGrammarIds,
   flattenSentences,
   isLive,
-  pendingTargets,
+  libraryClaimTerms,
+  reconcileLibraryClaims,
   withRegistration,
 } from "../utils/importSession";
 import type {
+  Grammar,
   ImportItem,
   ImportRegistrationState,
   ImportSession,
-  ImportWordItem,
 } from "../types";
 import type { useWordQueue } from "./useWordQueue";
 import type { useGrammarQueue } from "./useGrammarQueue";
@@ -214,50 +216,48 @@ export function useImportSession({
   );
 
   /**
-   * Loads a session and reconciles it with the DB: any word row left `queued` by a
-   * tab that closed mid-flight is resolved against `check-terms`, which is the only
-   * ground truth available. Grammar has no existence check by design, so those rows
-   * keep their unverified status rather than being promoted on a guess.
+   * Loads a session and reconciles EVERY library claim it carries with the DB —
+   * not just rows left `queued` by a tab that closed mid-flight. A word deleted
+   * from the browse screen since the last visit must stop rendering "already in
+   * your library" and become registrable again, so word claims are re-verified by
+   * term through `check-terms` (authoritative: `deleteWord` retires the
+   * `word_index` entry in the same batch) and grammar claims by id through the
+   * items/batch endpoint (missing ids are omitted from its response). The two
+   * probes are independent and best-effort — a failure leaves that domain
+   * untouched, which is the old bare-catch semantics per domain. Cleaned items
+   * are flushed straight back so the session doc (and the `registeredCount` /
+   * article-quiz pool derived from it) self-heals on open, not on the next edit.
    */
   const load = useCallback(
     async (sessionId: string): Promise<ImportSession> => {
       const loaded = await getImportSession(language, sessionId);
-      const queuedWords = loaded.items.filter(
-        (i): i is ImportWordItem => i.kind === "word" && i.status === "queued"
-      );
-      let items = loaded.items;
-      if (queuedWords.length > 0) {
-        try {
-          const { existing } = await checkTerms(
-            language,
-            [...new Set(queuedWords.map((w) => w.term.trim()).filter(Boolean))]
-          );
-          items = items.map((i) => {
-            if (i.kind !== "word" || i.status !== "queued") return i;
-            const wordId = existing[i.term.trim()];
-            if (!wordId) return i;
-            const base = { ...i, existingWordId: wordId } as ImportItem;
-            // The write died with the tab that started it, but `check-terms` proves it
-            // landed — so every destination still marked in flight is settled, not just
-            // the row summary. A row left spinning would keep its button disabled.
-            const stillPending = pendingTargets(base);
-            if (stillPending.length === 0) return { ...base, status: "registered" as const };
-            return stillPending.reduce<ImportItem>(
-              (acc, d) => withRegistration(acc, d, { status: "registered" }),
-              base
-            );
-          });
-        } catch {
-          // Reconciliation is best-effort; unresolved rows stay visibly unverified.
-        }
-      }
+      const terms = libraryClaimTerms(loaded.items);
+      const grammarIds = claimedGrammarIds(loaded.items);
+      const [wordProbe, grammarProbe] = await Promise.allSettled([
+        terms.length > 0
+          ? checkTerms(language, terms)
+          : Promise.resolve({ existing: {} as Record<string, string> }),
+        grammarIds.length > 0
+          ? getGrammarItemsByIds(language, grammarIds)
+          : Promise.resolve({ items: [] as Grammar[] }),
+      ]);
+      const wordsOk = wordProbe.status === "fulfilled";
+      const { items, changed } = reconcileLibraryClaims(loaded.items, {
+        wordIdByTerm: wordsOk ? wordProbe.value.existing : {},
+        checkedTerms: wordsOk ? new Set(terms) : new Set<string>(),
+        liveGrammarIds:
+          grammarProbe.status === "fulfilled"
+            ? new Set(grammarProbe.value.items.map((g) => g.id))
+            : null,
+      });
       const next = { ...loaded, items };
       setMembershipOverlay(new Map());
       setSession(next);
       setSaveStatus("saved");
+      if (changed) flush();
       return next;
     },
-    [language, setSession]
+    [language, setSession, flush]
   );
 
   /** Leaving the review must not drop a debounce that has not fired yet. */

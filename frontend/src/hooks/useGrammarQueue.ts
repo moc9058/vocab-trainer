@@ -127,10 +127,14 @@ async function processItem(item: QueueItem): Promise<string | undefined> {
     return saved.id;
   }
   await updateGrammarItem(item.language, item.grammarId, item.updates);
-  await Promise.all([
-    ...item.groupsToAdd.map((gid) => modifyGrammarGroupMembers(item.language, gid, [item.grammarId], "add")),
-    ...item.groupsToRemove.map((gid) => modifyGrammarGroupMembers(item.language, gid, [item.grammarId], "remove")),
-  ]);
+  // Adds strictly before removes — the remove path's Group B strip must see the
+  // new A membership first (see WordList.handleUpdateWord).
+  await Promise.all(
+    item.groupsToAdd.map((gid) => modifyGrammarGroupMembers(item.language, gid, [item.grammarId], "add"))
+  );
+  await Promise.all(
+    item.groupsToRemove.map((gid) => modifyGrammarGroupMembers(item.language, gid, [item.grammarId], "remove"))
+  );
   return undefined;
 }
 

@@ -151,3 +151,34 @@ Verified live against `vocab-trainer-490014` / `vocab-database`: dry run on `chi
 409 on a stale `expectedGroupIds`; a language with no A groups returns 200 with
 `topGroup: null`; a seeded duplicate on `english` was resolved to the higher-priority
 group with both ungrouped words absorbed, Group B untouched, and a second run reported 0.
+
+---
+
+## Follow-up (2026-08-04) — the remove side of "a B item is always also in A"
+
+The invariant was only ever upheld on the ADD side (every add flow assigns an A group).
+The remove side had three holes, all of which stranded Group B memberships: taking a
+word out of its category-A group in the editor's group picker, the same remove on a
+grammar item, and deleting an A group outright. Closed server-side:
+
+- `firestore.ts:removeOrphanedWordsFromCategoryBGroups` /
+  `removeOrphanedGrammarFromCategoryBGroups` strip an item from every B group once it
+  belongs to **no** category-A group. The remaining-A-membership re-check (not an
+  unconditional strip) keeps a move between A groups inside its B sets, tolerates
+  legacy duplicate A memberships, and is the rule that stays correct for grammar's
+  legal multi-A membership.
+- Called best-effort after the committed write — the `remove` branch of both
+  `modify*GroupMembers` and both `delete*Group` functions — mirroring the add branch's
+  `removeWordsFromOtherCategoryAGroups` contract (a cleanup failure never fails the
+  route).
+- **The race direction is worse than the add side's**: losing to a concurrent A-add
+  wrongly strips B, and nothing re-adds B on its own. The four client "move" call sites
+  (`WordList.handleUpdateWord`, the `useWordQueue`/`useGrammarQueue` update items,
+  `GrammarFormModal`'s edit diff) therefore sequence adds strictly before removes
+  instead of one `Promise.all`.
+- Memberships stranded before this existed are not retro-cleaned;
+  `POST /groups/normalize` re-files such words into the top A group (the gentler
+  repair, unchanged).
+
+Word/grammar **document** deletion needed nothing: both cascades already removed the id
+from every group regardless of category (F1, fixed 2026-08-01).
