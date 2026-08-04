@@ -167,14 +167,31 @@ export interface AttributionRepairSummary {
   redundant: number;
   /** Rows left where they were despite not matching (inflected languages). */
   unmatched: number;
+  /** Rows dropped because the term holds no letter at all — a number, a
+   *  punctuation run, a stray symbol. The prompts already place these outside
+   *  the extraction scope; this is the code that holds them to it. */
+  nonLexical: number;
   /** A few human-readable examples, for the server log. */
   samples: string[];
 }
 
 const SAMPLE_LIMIT = 8;
 
+/**
+ * A term the extraction has no business producing: not one letter in it.
+ *
+ * Mirrors the client's `needsCoverage` (`frontend/src/utils/importSession.ts`),
+ * which is what makes dropping safe — coverage counts `\p{L}` only, so the
+ * characters of a dropped row leave no visible gap for `materializeGaps` to
+ * re-surface. A term that merely CONTAINS digits or symbols beside letters
+ * ("09988.HK/NYSE", "24/7") is legitimate and kept.
+ */
+function isNonLexicalTerm(term: string): boolean {
+  return !/\p{L}/u.test(term);
+}
+
 function emptySummary(): AttributionRepairSummary {
-  return { reassigned: 0, dropped: 0, redundant: 0, unmatched: 0, samples: [] };
+  return { reassigned: 0, dropped: 0, redundant: 0, unmatched: 0, nonLexical: 0, samples: [] };
 }
 
 export function repairChangedAnything(summary: AttributionRepairSummary): boolean {
@@ -182,7 +199,8 @@ export function repairChangedAnything(summary: AttributionRepairSummary): boolea
     summary.reassigned > 0 ||
     summary.dropped > 0 ||
     summary.redundant > 0 ||
-    summary.unmatched > 0
+    summary.unmatched > 0 ||
+    summary.nonLexical > 0
   );
 }
 
@@ -232,6 +250,12 @@ export function repairWordAttribution(
     const term = w.term?.trim();
     if (!term) {
       target[i] = null;
+      return;
+    }
+    if (isNonLexicalTerm(term)) {
+      target[i] = null;
+      summary.nonLexical++;
+      note(`dropped "${term}" (no letters — digits and punctuation are outside the extraction scope)`);
       return;
     }
     if (occursIn(textOf.get(w.sentenceIndex) ?? "", term)) {
@@ -477,6 +501,7 @@ export function normalizeAnalysis(
     dropped: words.summary.dropped,
     redundant: words.summary.redundant,
     unmatched: words.summary.unmatched + grammar.summary.unmatched,
+    nonLexical: words.summary.nonLexical,
     samples: [...words.summary.samples, ...grammar.summary.samples].slice(0, SAMPLE_LIMIT),
   };
 

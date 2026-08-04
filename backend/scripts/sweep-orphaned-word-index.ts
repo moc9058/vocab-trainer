@@ -14,6 +14,14 @@
  *                 the same id, one overwrote the other's doc). Fix: if a word
  *                 with the index's term exists elsewhere, repoint the entry to
  *                 it; otherwise delete the entry.
+ *   - MISKEYED   — the entry is healthy but sits at a document ID that is not
+ *                  the one `wordIndexDocId(language, term)` computes today, so
+ *                  every lookup of that term misses it. Fix: rewrite it at the
+ *                  computed ID and delete the old document. This is the audit
+ *                  for terms containing "%", the one class whose key moved when
+ *                  the raw `${language}_${term}` interpolation was replaced by
+ *                  the encoder (a term with "/" could never be stored at all —
+ *                  every write path threw first — so it cannot appear here).
  *
  * This is the bulk counterpart to `fix-word-index-entry.ts` (which repairs one
  * term and also rewrites mislinked example-sentence segments). This sweep only
@@ -31,6 +39,7 @@
 // which has no `vocab-database`, and every query died with a bare `5 NOT_FOUND`.
 import { PROJECT_ID, DATABASE_ID } from "./_project-env.js";
 import { Firestore } from "@google-cloud/firestore";
+import { wordIndexDocId } from "../src/word-index-id.js";
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
@@ -55,7 +64,7 @@ interface WordInfo {
   level: string;
 }
 
-async function sweepLanguage(lang: string): Promise<{ orphaned: number; mislinked: number; repaired: number; deleted: number }> {
+async function sweepLanguage(lang: string): Promise<{ orphaned: number; mislinked: number; miskeyed: number; repaired: number; deleted: number }> {
   console.log(`\n=== Language "${lang}"${dryRun ? " (DRY RUN)" : ""} ===`);
 
   const [indexSnap, wordSnap] = await Promise.all([
@@ -89,6 +98,7 @@ async function sweepLanguage(lang: string): Promise<{ orphaned: number; mislinke
 
   const repairs: Array<{ docId: string; term: string; fromId: string; to: WordInfo }> = [];
   const deletions: Array<{ docId: string; term: string; fromId: string; reason: string }> = [];
+  const rekeys: Array<{ docId: string; newDocId: string; term: string; entry: WordInfo }> = [];
 
   for (const doc of indexSnap.docs) {
     const d = doc.data();
@@ -96,7 +106,23 @@ async function sweepLanguage(lang: string): Promise<{ orphaned: number; mislinke
     const id = d.id as string;
 
     const actualTerm = termById.get(id);
-    if (actualTerm === term) continue; // healthy
+    if (actualTerm === term) {
+      // Healthy, but is it findable? A lookup only ever reads the computed ID.
+      const expected = wordIndexDocId(lang, term);
+      if (doc.id !== expected) {
+        rekeys.push({
+          docId: doc.id,
+          newDocId: expected,
+          term,
+          entry: {
+            id,
+            transliteration: (d.transliteration ?? "") as string,
+            level: (d.level ?? "") as string,
+          },
+        });
+      }
+      continue;
+    }
 
     const correct = wordByTerm.get(term);
     if (correct) {
@@ -116,9 +142,9 @@ async function sweepLanguage(lang: string): Promise<{ orphaned: number; mislinke
   const mislinkedCount = repairs.length + deletions.filter((x) => x.reason.startsWith("points to")).length;
   const orphanedCount = deletions.filter((x) => x.reason === "word doc missing").length;
 
-  if (repairs.length === 0 && deletions.length === 0) {
+  if (repairs.length === 0 && deletions.length === 0 && rekeys.length === 0) {
     console.log("  ✓ No drift found.");
-    return { orphaned: 0, mislinked: 0, repaired: 0, deleted: 0 };
+    return { orphaned: 0, mislinked: 0, miskeyed: 0, repaired: 0, deleted: 0 };
   }
 
   if (duplicateTerms.size > 0) {
@@ -136,6 +162,13 @@ async function sweepLanguage(lang: string): Promise<{ orphaned: number; mislinke
 
   preview("REPAIR (repoint to correct word)", repairs, (i) => `${i.fromId} -> ${i.to.id}`);
   preview("DELETE", deletions, (i) => `id=${i.fromId} (${i.reason})`);
+  if (rekeys.length > 0) {
+    console.log(`  REKEY (move to the computed document ID): ${rekeys.length}`);
+    for (const r of rekeys.slice(0, 10)) {
+      console.log(`    ${r.docId} (term="${r.term}") -> ${r.newDocId}`);
+    }
+    if (rekeys.length > 10) console.log(`    … and ${rekeys.length - 10} more`);
+  }
 
   if (!dryRun) {
     let batch = db.batch();
@@ -161,15 +194,33 @@ async function sweepLanguage(lang: string): Promise<{ orphaned: number; mislinke
       batch.delete(wordIndex.doc(del.docId));
       if (++ops >= MAX_BATCH) await flush();
     }
+    // Write the entry at its computed ID before dropping the old document, so a
+    // crash in between leaves the term findable rather than gone.
+    for (const r of rekeys) {
+      batch.set(wordIndex.doc(r.newDocId), {
+        language: lang,
+        term: r.term,
+        id: r.entry.id,
+        transliteration: r.entry.transliteration,
+        level: r.entry.level,
+      });
+      batch.delete(wordIndex.doc(r.docId));
+      if ((ops += 2) >= MAX_BATCH) await flush();
+    }
     await flush();
-    console.log(`  ✓ Applied: ${repairs.length} repaired, ${deletions.length} deleted.`);
+    console.log(
+      `  ✓ Applied: ${repairs.length} repaired, ${deletions.length} deleted, ${rekeys.length} rekeyed.`,
+    );
   } else {
-    console.log(`  [DRY RUN] Would repair ${repairs.length} and delete ${deletions.length}.`);
+    console.log(
+      `  [DRY RUN] Would repair ${repairs.length}, delete ${deletions.length}, rekey ${rekeys.length}.`,
+    );
   }
 
   return {
     orphaned: orphanedCount,
     mislinked: mislinkedCount,
+    miskeyed: rekeys.length,
     repaired: dryRun ? 0 : repairs.length,
     deleted: dryRun ? 0 : deletions.length,
   };
@@ -186,18 +237,19 @@ async function main() {
     languages = [language];
   }
 
-  const totals = { orphaned: 0, mislinked: 0, repaired: 0, deleted: 0 };
+  const totals = { orphaned: 0, mislinked: 0, miskeyed: 0, repaired: 0, deleted: 0 };
   for (const lang of languages) {
     const r = await sweepLanguage(lang);
     totals.orphaned += r.orphaned;
     totals.mislinked += r.mislinked;
+    totals.miskeyed += r.miskeyed;
     totals.repaired += r.repaired;
     totals.deleted += r.deleted;
   }
 
   console.log(
     `\n=== Done${dryRun ? " (DRY RUN — nothing written)" : ""} ===\n` +
-      `  orphaned: ${totals.orphaned}, mislinked: ${totals.mislinked}` +
+      `  orphaned: ${totals.orphaned}, mislinked: ${totals.mislinked}, miskeyed: ${totals.miskeyed}` +
       (dryRun ? "" : `, repaired: ${totals.repaired}, deleted: ${totals.deleted}`),
   );
 }

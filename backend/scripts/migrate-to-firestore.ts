@@ -16,6 +16,7 @@ import { Firestore } from "@google-cloud/firestore";
 import { readFile, readdir, writeFile, mkdir } from "node:fs/promises";
 import { resolve, join } from "node:path";
 import type { Word, Meaning, Example, VocabFile } from "../src/types.js";
+import { wordIndexDocId } from "../src/word-index-id.js";
 
 /** Recursively remove empty-string keys from an object (Firestore rejects them). */
 function stripEmptyKeys(obj: unknown): unknown {
@@ -241,7 +242,7 @@ async function migrateLanguage(filename: string): Promise<void> {
     const batch = db.batch();
     const chunk = vocab.words.slice(i, i + 500);
     for (const word of chunk) {
-      const docId = `${language}_${word.term}`;
+      const docId = wordIndexDocId(language, word.term);
       batch.set(db.collection("word_index").doc(docId), {
         language,
         term: word.term,

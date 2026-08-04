@@ -162,6 +162,31 @@ test("Korean moves a term to a sentence that spells it out", () => {
   assert.equal(words[0].sentenceIndex, 0);
 });
 
+test("a term with no letter at all is dropped, whatever the language", () => {
+  // The prompts already exclude digits and punctuation from segmentation; before
+  // this rule a symbols-only row survived as long as it occurred verbatim, and
+  // ended up in a Firestore document path via the segment lookup.
+  const { words, summary } = repairWordAttribution(
+    [word("2025", 0), word("……", 0), word("/", 0), word("行政区划", 1)],
+    sentences(GDP, ADMIN),
+    "chinese"
+  );
+  assert.deepEqual(words.map((w) => w.term), ["行政区划"]);
+  assert.equal(summary.nonLexical, 3);
+  assert.equal(summary.dropped, 0, "a non-lexical drop is not a not-in-the-article drop");
+});
+
+test("a term keeps digits and symbols as long as it holds a letter", () => {
+  const article = "阿里巴巴（09988.HK/NYSE : BABA）发布了新一代产品。";
+  const { words, summary } = repairWordAttribution(
+    [word("09988.HK/NYSE", 0), word("新一代", 0)],
+    sentences(article),
+    "chinese"
+  );
+  assert.deepEqual(words.map((w) => w.term), ["09988.HK/NYSE", "新一代"]);
+  assert.equal(summary.nonLexical, 0);
+});
+
 // ---------- grammar ----------
 
 test("grammar follows its excerpt to the right sentence", () => {
@@ -291,6 +316,34 @@ test("the pre-nesting flat shape is still accepted", () => {
     ]
   );
   assert.equal(repair.reassigned, 1);
+});
+
+test("normalizeAnalysis surfaces non-lexical drops in the repair summary", () => {
+  const nested = JSON.stringify({
+    paragraphs: [
+      {
+        sentences: [
+          {
+            text: "阿里巴巴（09988.HK/NYSE : BABA）发布了新一代产品。",
+            translation: "アリババが新世代の製品を発表した。",
+            words: [
+              { term: "阿里巴巴", transliteration: "Ālǐbābā", meaning: "アリババ" },
+              { term: "09988.HK/NYSE", transliteration: "", meaning: "銘柄コード" },
+              { term: "：", transliteration: "", meaning: "" },
+              { term: "新一代", transliteration: "xīn yī dài", meaning: "新世代" },
+            ],
+            grammar: [],
+          },
+        ],
+      },
+    ],
+  });
+  const { analysis, repair } = normalizeAnalysis(nested, "chinese");
+  assert.deepEqual(
+    analysis.words.map((w) => w.term),
+    ["阿里巴巴", "09988.HK/NYSE", "新一代"]
+  );
+  assert.equal(repair.nonLexical, 1);
 });
 
 test("a dropped bogus row is never the occurrence others inherit from", () => {

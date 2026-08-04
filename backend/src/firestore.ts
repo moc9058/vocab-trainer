@@ -1,5 +1,6 @@
 import { Firestore, FieldValue, FieldPath } from "@google-cloud/firestore";
 import { createHash } from "crypto";
+import { isLookupableTerm, wordIndexDocId } from "./word-index-id.js";
 import type {
   Word,
   ExampleSentence,
@@ -453,7 +454,7 @@ export async function addWord(
   // pointing at whichever wrote last.
   const batch = db.batch();
   batch.set(words.doc(word.id), data);
-  batch.set(wordIndex.doc(`${language}_${word.term}`), {
+  batch.set(wordIndex.doc(wordIndexDocId(language, word.term)), {
     language,
     term: word.term,
     id: word.id,
@@ -525,7 +526,7 @@ export async function updateWord(
   // term). Refuses only a LIVE entry owned by another word; stale/orphaned
   // entries stay overwritable, same semantics as sweep-orphaned-word-index.ts.
   if (updates.term && updates.term !== (oldData.term as string)) {
-    const newDoc = await wordIndex.doc(`${language}_${updates.term}`).get();
+    const newDoc = await wordIndex.doc(wordIndexDocId(language, updates.term)).get();
     if (newDoc.exists && newDoc.data()!.id !== wordId) {
       const d = newDoc.data()!;
       const entry: WordIndexEntry = { term: d.term, id: d.id, level: d.level, transliteration: d.transliteration ?? d.pinyin };
@@ -557,9 +558,9 @@ export async function updateWord(
     const updatedWord = docToWord(updated);
     const batch = db.batch();
     if (termChanged) {
-      batch.delete(wordIndex.doc(`${language}_${oldTerm}`));
+      batch.delete(wordIndex.doc(wordIndexDocId(language, oldTerm)));
     }
-    batch.set(wordIndex.doc(`${language}_${newTerm}`), {
+    batch.set(wordIndex.doc(wordIndexDocId(language, newTerm)), {
       language,
       term: newTerm,
       id: wordId,
@@ -643,7 +644,7 @@ export async function deleteWord(language: string, wordId: string): Promise<bool
     final.update(g.ref, { wordIds: FieldValue.arrayRemove(wordId) });
   }
   final.delete(words.doc(wordId));
-  final.delete(wordIndex.doc(`${language}_${term}`));
+  final.delete(wordIndex.doc(wordIndexDocId(language, term)));
   final.delete(flaggedWords.doc(`${language}_${wordId}`));
   final.delete(progress.doc(`${language}_${wordId}`));
   await final.commit();
@@ -1389,7 +1390,7 @@ function wordEntryIsLive(
 }
 
 export async function lookupWordByTerm(language: string, term: string): Promise<WordIndexEntry | null> {
-  const docId = `${language}_${term}`;
+  const docId = wordIndexDocId(language, term);
   const doc = await wordIndex.doc(docId).get();
   if (!doc.exists) return null;
   const d = doc.data()!;
@@ -1403,9 +1404,18 @@ export async function lookupWordsByTerms(language: string, terms: string[]): Pro
   const candidates: WordIndexEntry[] = [];
   const CHUNK_SIZE = 100;
 
-  for (let i = 0; i < terms.length; i += CHUNK_SIZE) {
-    const chunk = terms.slice(i, i + CHUNK_SIZE);
-    const refs = chunk.map((t) => wordIndex.doc(`${language}_${t}`));
+  // Callers hand this whatever the segmenter produced — LLM segment texts, import
+  // rows, chip splits — and a token with neither a letter nor a digit can never be
+  // a word. Skipping it here rather than at each call site means every caller
+  // (smart-add segment linking, the word PUT, check-terms, grammar, the import
+  // analysis) gets the same guard. A skipped term simply yields no match, which is
+  // the shape every caller already handles. The single-term lookup below is NOT
+  // filtered: a false "not found" there would wave through a duplicate word.
+  const lookupable = terms.filter(isLookupableTerm);
+
+  for (let i = 0; i < lookupable.length; i += CHUNK_SIZE) {
+    const chunk = lookupable.slice(i, i + CHUNK_SIZE);
+    const refs = chunk.map((t) => wordIndex.doc(wordIndexDocId(language, t)));
     const docs = await db.getAll(...refs);
     for (const doc of docs) {
       if (doc.exists) {

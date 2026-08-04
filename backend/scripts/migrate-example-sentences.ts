@@ -22,6 +22,7 @@ import { PROJECT_ID, DATABASE_ID } from "./_project-env.js";
 import { Firestore, FieldPath, FieldValue } from "@google-cloud/firestore";
 import { createHash } from "crypto";
 import type { ExampleSentence } from "../src/types.js";
+import { wordIndexDocId } from "../src/word-index-id.js";
 
 const dryRun = process.argv.includes("--dry-run");
 
@@ -147,7 +148,7 @@ async function migrate() {
         let batchCount = 0;
         for (const dup of duplicatesToDelete) {
           batch.delete(wordsCol.doc(dup.id));
-          batch.delete(wordIndex.doc(`${language}_${dup.term}`));
+          batch.delete(wordIndex.doc(wordIndexDocId(language, dup.term)));
           batch.delete(flaggedWords.doc(`${language}_${dup.id}`));
           batch.delete(progressCol.doc(`${language}_${dup.id}`));
           batchCount += 4;

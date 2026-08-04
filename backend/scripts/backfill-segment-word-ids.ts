@@ -17,6 +17,7 @@
 // which has no `vocab-database`, and every query dies with a bare `5 NOT_FOUND`.
 import { PROJECT_ID, DATABASE_ID } from "./_project-env.js";
 import { Firestore, FieldValue } from "@google-cloud/firestore";
+import { wordIndexDocId } from "../src/word-index-id.js";
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
@@ -50,7 +51,7 @@ async function lookupWordsByTerms(lang: string, terms: string[]): Promise<Map<st
   const CHUNK = 100;
   for (let i = 0; i < terms.length; i += CHUNK) {
     const chunk = terms.slice(i, i + CHUNK);
-    const refs = chunk.map((t) => wordIndex.doc(`${lang}_${t}`));
+    const refs = chunk.map((t) => wordIndex.doc(wordIndexDocId(lang, t)));
     const docs = await db.getAll(...refs);
     for (const doc of docs) {
       if (doc.exists) {

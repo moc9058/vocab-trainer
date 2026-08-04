@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from "fastify";
+import type { FastifyBaseLogger, FastifyPluginAsync } from "fastify";
 import {
   languageExists,
   getWords,
@@ -100,6 +100,33 @@ const ALLOWED_LANGUAGES = new Set(Object.keys(LANGUAGE_TO_ISO));
 
 function fillPlaceholders(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
+}
+
+/**
+ * term → word id for segment linking, degrading to "no links" on failure.
+ *
+ * Linking a segment to an existing word is enrichment, not the point of the
+ * write. The PUT below calls this from INSIDE its example loop — example docs,
+ * indexes and appearsInIds links are already committed by then, while the word
+ * doc is not — so a throw here would strand example sentences the word never
+ * gets to reference. That is the same reasoning (and the same shape) as the
+ * `segmentBatch` / `fillSegmentPinyin` catches further down. A missing link is
+ * precisely what `POST /:language/sync-segment-links` and
+ * `scripts/backfill-segment-word-ids.ts` exist to repair.
+ */
+async function linkSegmentTerms(
+  language: string,
+  terms: string[],
+  log: FastifyBaseLogger,
+): Promise<Map<string, string>> {
+  if (terms.length === 0) return new Map();
+  try {
+    const hits = await lookupWordsByTerms(language, terms);
+    return new Map(hits.map((m) => [m.term, m.id]));
+  } catch (err) {
+    log.error({ err }, "segment word lookup failed; leaving segments unlinked");
+    return new Map();
+  }
 }
 
 const vocabRoutes: FastifyPluginAsync = async (fastify) => {
@@ -236,6 +263,11 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
                 properties: {
                   sentence: { type: "string" },
                   translation: {},
+                  // Declared because the handler reads it (the Chinese chip flow
+                  // sends segment texts here). It used to survive only because
+                  // this item schema has no `additionalProperties: false`, so
+                  // tightening the schema would have silently dropped it.
+                  userSplits: { type: "array", items: { type: "string" } },
                 },
               },
             },
@@ -745,12 +777,9 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             if (hasIncomingSegs) {
               await reconcileIncomingSegments(target.segments, ex.segments!);
               const unlinked1 = [...new Set(ex.segments!.filter(s => !s.id && s.text?.trim()).map(s => s.text))];
-              if (unlinked1.length > 0) {
-                const hits1 = await lookupWordsByTerms(language, unlinked1);
-                const termToId1 = new Map(hits1.map(m => [m.term, m.id]));
-                for (const seg of ex.segments!) {
-                  if (!seg.id) { const wId = termToId1.get(seg.text); if (wId) seg.id = wId; }
-                }
+              const termToId1 = await linkSegmentTerms(language, unlinked1, fastify.log);
+              for (const seg of ex.segments!) {
+                if (!seg.id) { const wId = termToId1.get(seg.text); if (wId) seg.id = wId; }
               }
               updates.segments = ex.segments;
             } else if (isChinese && (hasUserSplits || target.sentence !== ex.sentence)) {
@@ -782,12 +811,9 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             if (hasIncomingSegs) {
               await reconcileIncomingSegments(undefined, ex.segments!);
               const unlinked2 = [...new Set(ex.segments!.filter(s => !s.id && s.text?.trim()).map(s => s.text))];
-              if (unlinked2.length > 0) {
-                const hits2 = await lookupWordsByTerms(language, unlinked2);
-                const termToId2 = new Map(hits2.map(m => [m.term, m.id]));
-                for (const seg of ex.segments!) {
-                  if (!seg.id) { const wId = termToId2.get(seg.text); if (wId) seg.id = wId; }
-                }
+              const termToId2 = await linkSegmentTerms(language, unlinked2, fastify.log);
+              for (const seg of ex.segments!) {
+                if (!seg.id) { const wId = termToId2.get(seg.text); if (wId) seg.id = wId; }
               }
             }
             const es: ExampleSentence = {
@@ -868,10 +894,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
           for (const [, segs] of mergedSegMap) {
             for (const s of segs) allSegTexts.add(s.text);
           }
-          const matches = allSegTexts.size > 0
-            ? await lookupWordsByTerms(language, [...allSegTexts])
-            : [];
-          const termToId = new Map(matches.map((m) => [m.term, m.id]));
+          const termToId = await linkSegmentTerms(language, [...allSegTexts], fastify.log);
 
           for (let i = 0; i < needsResegment.length; i++) {
             const { target, exampleId } = needsResegment[i];

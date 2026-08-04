@@ -20,6 +20,7 @@
 // which has no `vocab-database`, and every query dies with a bare `5 NOT_FOUND`.
 import { PROJECT_ID, DATABASE_ID } from "./_project-env.js";
 import { Firestore, FieldValue } from "@google-cloud/firestore";
+import { wordIndexDocId } from "../src/word-index-id.js";
 
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
@@ -47,7 +48,7 @@ async function fix() {
   console.log(`Fixing word_index entry for "${term}" (language: ${language})${dryRun ? " [DRY RUN]" : ""}...\n`);
 
   // Step 1: Read the current word_index entry
-  const indexDocId = `${language}_${term}`;
+  const indexDocId = wordIndexDocId(language, term);
   const indexDoc = await wordIndex.doc(indexDocId).get();
   const currentIndexId = indexDoc.exists ? (indexDoc.data()!.id as string) : null;
 
