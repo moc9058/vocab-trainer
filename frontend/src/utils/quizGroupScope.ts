@@ -9,6 +9,25 @@ import { parseWeightInput } from "./weightInput";
 export type QuizGroupScope = GroupCategory | "AB";
 
 /**
+ * Groups that contributed at least one item to the session's actual question set.
+ *
+ * A selected group with weight 0 is still present in the membership snapshot, but the
+ * backend drops its bucket while building the session. Keeping this distinction explicit
+ * prevents the mid-session weight editor from offering a control that cannot add those
+ * omitted items back into the already-created quiz.
+ */
+export function representedGroupIds(
+  membership: Record<string, string[]> | undefined,
+  questionIds: ReadonlySet<string>
+): Set<string> {
+  return new Set(
+    Object.entries(membership ?? {})
+      .filter(([, memberIds]) => memberIds.some((id) => questionIds.has(id)))
+      .map(([groupId]) => groupId)
+  );
+}
+
+/**
  * The groups this scope offers, in the order they must be SENT.
  *
  * For "AB" that order is load-bearing: the backend's `assignMembership`

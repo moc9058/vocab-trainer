@@ -23,7 +23,12 @@ import {
   type RefileOpts,
 } from "../utils/quizLocal";
 import { categoryGroups, groupCategory as categoryOf } from "../types";
-import { categoryDomainWeights, foldMixWeights, type MixWeightDraft } from "../utils/quizGroupScope";
+import {
+  categoryDomainWeights,
+  foldMixWeights,
+  representedGroupIds,
+  type MixWeightDraft,
+} from "../utils/quizGroupScope";
 import type {
   CombinedQuizSession,
   CombinedQuizQuestion,
@@ -453,6 +458,24 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     setShowAllExamples(false);
   }
 
+  // Membership snapshots retain groups whose creation-time weight was 0, even though none
+  // of their items entered `questions`. Freeze the groups that actually contributed at mount:
+  // changing weights can reorder the question set, but it cannot expand that set.
+  const [adjustableGroupIds] = useState<Record<QuizDomain, Set<string>>>(() => {
+    const questionIds: Record<QuizDomain, Set<string>> = {
+      word: new Set(),
+      grammar: new Set(),
+    };
+    for (const q of session.questions) {
+      if (q.kind === "word") questionIds.word.add(q.wordId);
+      else questionIds.grammar.add(q.grammarId);
+    }
+    return {
+      word: representedGroupIds(session.wordGroupMembership, questionIds.word),
+      grammar: representedGroupIds(session.grammarGroupMembership, questionIds.grammar),
+    };
+  });
+
   function openWeightsPanel() {
     setDomainDraft({
       word: String(currentSession.domainWeights?.word ?? 1),
@@ -486,8 +509,8 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     setWeightsOpen(true);
   }
 
-  /** The session's groups, per domain, tagged with their category — the "selection" the fold
-   *  operates on mid-session (every group in the session is by definition selected). */
+  /** The session's snapshotted groups, per domain, tagged with their category. The mixed fold
+   *  receives the adjustable subset below, excluding snapshots that contributed no questions. */
   const weightGroups: Record<QuizDomain, { id: string; category?: GroupCategory }[]> = {
     word: Object.keys(currentSession.wordGroupMembership ?? {}).map((id) => ({
       id,
@@ -510,10 +533,10 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     ? foldMixWeights({
         draft: { category: mixCategoryDraft, domain: mixDomainDraft },
         wordGroups: weightGroups.word,
-        selectedWord: new Set(weightGroups.word.map((g) => g.id)),
+        selectedWord: adjustableGroupIds.word,
         wordRaw: wordWeightDraft,
         grammarGroups: weightGroups.grammar,
-        selectedGrammar: new Set(weightGroups.grammar.map((g) => g.id)),
+        selectedGrammar: adjustableGroupIds.grammar,
         grammarRaw: grammarWeightDraft,
       })
     : null;
@@ -535,8 +558,12 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     );
   const hasInvalidDomainDraft =
     hasInvalidMixDraft || domainDraftWordNum === null || domainDraftGrammarNum === null;
-  const hasInvalidWordWeightDraft = Object.keys(wordWeightDraft).some((gid) => !isWeightValid(wordWeightDraft[gid], 0));
-  const hasInvalidGrammarWeightDraft = Object.keys(grammarWeightDraft).some((gid) => !isWeightValid(grammarWeightDraft[gid], 0));
+  const hasInvalidWordWeightDraft = [...adjustableGroupIds.word].some(
+    (gid) => !isWeightValid(wordWeightDraft[gid], 0)
+  );
+  const hasInvalidGrammarWeightDraft = [...adjustableGroupIds.grammar].some(
+    (gid) => !isWeightValid(grammarWeightDraft[gid], 0)
+  );
   // Already-correct: blank = feature off; a number (incl. 0) activates the top-level bucket.
   const correctDraftActive = correctDraft.trim() !== "";
   const correctDraftNum = parseWeightInput(correctDraft);
@@ -566,9 +593,13 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       if (correctDraftActive) domainRaw.correct = correctDraft;
       const d = scaleWeightRecord(domainRaw);
       const domainWeights = { word: d.word, grammar: d.grammar };
-      const wordGroupWeights = scaleWeightRecord(foldedMix?.wordGroupWeights ?? wordWeightDraft);
+      const enabledDraft = (draft: Record<string, string>, enabled: Set<string>) =>
+        Object.fromEntries(Object.entries(draft).filter(([gid]) => enabled.has(gid)));
+      const wordGroupWeights = scaleWeightRecord(
+        foldedMix?.wordGroupWeights ?? enabledDraft(wordWeightDraft, adjustableGroupIds.word)
+      );
       const grammarGroupWeights = scaleWeightRecord(
-        foldedMix?.grammarGroupWeights ?? grammarWeightDraft
+        foldedMix?.grammarGroupWeights ?? enabledDraft(grammarWeightDraft, adjustableGroupIds.grammar)
       );
       // Sent alongside the folded weights so a later reopen shows the ratios back, not the fold.
       const mixWeights: MixWeightConfig | null = mixEditable
@@ -1341,12 +1372,13 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
                                       type="number"
                                       min={0}
                                       value={draft[gid] ?? "1"}
+                                      disabled={!adjustableGroupIds[k].has(gid)}
                                       title={t("groupWeightHint")}
                                       aria-label={t("groupWeight")}
                                       onChange={(e) =>
                                         setDraft((prev) => ({ ...prev, [gid]: e.target.value }))
                                       }
-                                      className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
+                                      className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-800 disabled:text-gray-500 disabled:opacity-60 sm:w-16 sm:py-1 sm:text-xs ${
                                         !isWeightValid(draft[gid], 0)
                                           ? "border-red-500 focus:border-red-400"
                                           : `border-gray-600 ${DOMAIN_TONE[k].focus}`
@@ -1413,12 +1445,13 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
                                 type="number"
                                 min={0}
                                 value={draft[gid] ?? "1"}
+                                disabled={!adjustableGroupIds[k].has(gid)}
                                 title={t("groupWeightHint")}
                                 aria-label={t("groupWeight")}
                                 onChange={(e) =>
                                   setDraft((prev) => ({ ...prev, [gid]: e.target.value }))
                                 }
-                                className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none sm:w-16 sm:py-1 sm:text-xs ${
+                                className={`w-20 shrink-0 rounded border bg-gray-700 px-2 py-1.5 text-base text-gray-100 focus:outline-none disabled:cursor-not-allowed disabled:bg-gray-800 disabled:text-gray-500 disabled:opacity-60 sm:w-16 sm:py-1 sm:text-xs ${
                                   !isWeightValid(draft[gid], 0)
                                     ? "border-red-500 focus:border-red-400"
                                     : `border-gray-600 ${DOMAIN_TONE[k].focus}`
