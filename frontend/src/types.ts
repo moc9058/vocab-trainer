@@ -50,6 +50,8 @@ export interface QuizSession {
   startedAt: string;
   completedAt?: string;
   status: "in-progress" | "completed";
+  /** Number of answered attempts already consumed by an End Session review. */
+  reviewedQuestionCount?: number;
   score: QuizScore;
   questions: QuizQuestion[];
   questionType?: string;
@@ -289,6 +291,8 @@ export interface GrammarQuizSession {
   startedAt: string;
   completedAt?: string;
   status: "in-progress" | "completed";
+  /** Number of answered attempts already consumed by an End Session review. */
+  reviewedQuestionCount?: number;
   score: QuizScore;
   questions: GrammarQuizQuestion[];
   groupFilter?: string[];
@@ -320,7 +324,7 @@ export interface CombinedDomainWeights {
 
 /**
  * The mixed A+B quiz's UNFOLDED weight inputs: the A↔B category ratio and, within each
- * category, its own word↔grammar ratio.
+ * category, its own word↔grammar ratio, and the raw per-group weights.
  *
  * Ordering never reads this — it uses only the folded `domainWeights`/`*GroupWeights` that
  * `utils/quizGroupScope.ts:foldMixWeights` derives from it. It is stored so the mid-session
@@ -330,6 +334,12 @@ export interface CombinedDomainWeights {
 export interface MixWeightConfig {
   category: { A: number; B: number };
   domain: { A: CombinedDomainWeights; B: CombinedDomainWeights };
+  /** Original per-group inputs, before the A/B and domain ratios are folded into them.
+   *  Optional for sessions created before these values were persisted. */
+  groups?: {
+    word: Record<string, number>;
+    grammar: Record<string, number>;
+  };
 }
 
 export interface CombinedQuizSession {
@@ -338,6 +348,8 @@ export interface CombinedQuizSession {
   startedAt: string;
   completedAt?: string;
   status: "in-progress" | "completed";
+  /** Number of answered attempts already consumed by an End Session review. */
+  reviewedQuestionCount?: number;
   score: QuizScore;
   questions: CombinedQuizQuestion[];
   domainWeights: CombinedDomainWeights;
@@ -522,6 +534,8 @@ export interface ExpressionRecallSession {
   startedAt: string;
   completedAt?: string;
   status: "in-progress" | "completed";
+  /** Number of answered attempts already consumed by an End Session review. */
+  reviewedQuestionCount?: number;
   score: QuizScore;
   questions: ExpressionRecallQuestion[];
   direction: ExpressionQuizDirection;

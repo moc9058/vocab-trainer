@@ -7,6 +7,7 @@ import type { ExpressionQuizDirection, ExpressionRecallSession } from "../types"
 import ExpressionRecallFilterModal from "./ExpressionRecallFilterModal";
 import ExpressionRecallTaking from "./ExpressionRecallTaking";
 import QuizRecoveryState from "./QuizRecoveryState";
+import { hasPendingSessionReview, sessionReviewKey } from "../utils/sessionReview";
 
 interface Props {
   /** ISO code — expressions are stored under ISO codes, unlike words and grammar. */
@@ -32,7 +33,15 @@ export default function ExpressionRecallQuizView({ language, onBack }: Props) {
     getCurrentExpressionRecallSession(language)
       .then((session) => {
         if (cancelled) return;
-        if (session && session.status === "in-progress") {
+        if (session && (
+          session.status === "in-progress" ||
+          hasPendingSessionReview(
+            sessionReviewKey("expression-recall", session.sessionId),
+            session.startedAt,
+            session.questions,
+            session.reviewedQuestionCount
+          )
+        )) {
           setQuiz(session);
           setPhase("quiz");
         } else {

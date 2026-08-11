@@ -979,16 +979,18 @@ The handlers never read `category` — the A/B split is decided entirely client-
 
 All fields except `language` are optional. The `word` filter additionally accepts `topics`, `categories`, and `levels` (same semantics as `POST /api/quiz/start`).
 
-The mixed quiz also sends `mixWeights` — the A:B ratio plus each category's own word:grammar ratio:
+The mixed quiz also sends `mixWeights` — the A:B ratio, each category's own word:grammar
+ratio, and the original per-group inputs:
 
 ```json
 "mixWeights": {
   "category": { "A": 2, "B": 1 },
-  "domain": { "A": { "word": 3, "grammar": 1 }, "B": { "word": 1, "grammar": 2 } }
+  "domain": { "A": { "word": 3, "grammar": 1 }, "B": { "word": 1, "grammar": 2 } },
+  "groups": { "word": { "wg1": 0.5, "wg2": 4.5 }, "grammar": { "gg1": 2 } }
 }
 ```
 
-The server never reads it for ordering: the client folds those six numbers into `domainWeights` and the per-group weights before sending (`frontend/src/utils/quizGroupScope.ts:foldMixWeights`), and `mixWeights` is stored and echoed back only so the mid-session weights panel can show the ratios rather than the fold, which is not invertible. `PUT /session/language/:language/weights` accepts the same field and replaces it wholesale.
+The server never reads it for ordering: the client folds the category/domain ratios and raw group inputs into `domainWeights` and the per-group weights before sending (`frontend/src/utils/quizGroupScope.ts:foldMixWeights`). `mixWeights` is stored and echoed back only so the mid-session weights panel can restore the original inputs rather than display the fold, which is not fully invertible. For legacy sessions without `groups`, the client removes each category's common fold multiplier and shows the smallest equivalent within-category ratios; applying the form persists those recovered values. `PUT /session/language/:language/weights` accepts the same field and replaces it wholesale.
 
 **Response:** `201` with `CombinedQuizSession`. Questions are a `kind`-discriminated union: word questions are lightweight `{ kind: "word", wordId, term }`; grammar questions are stored inline.
 

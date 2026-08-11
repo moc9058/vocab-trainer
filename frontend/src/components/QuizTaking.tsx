@@ -11,6 +11,13 @@ import QuizSyncBadge from "./QuizSyncBadge";
 import { useQuizPrefetch } from "../hooks/useQuizPrefetch";
 import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
 import { applyWordAnswerLocally } from "../utils/quizLocal";
+import {
+  appendSessionReview,
+  completeSessionReview,
+  loadSessionReview,
+  sessionReviewKey,
+  unreviewedSessionQuestions,
+} from "../utils/sessionReview";
 import { displayTranslation, type QuizSession, type QuizQuestion } from "../types";
 import { isWeightValid, scaleWeightRecord } from "../utils/weightInput";
 
@@ -67,10 +74,16 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   // Already-correct (mastered) bucket weight, edited as raw text. Blank = feature off.
   const [correctDraft, setCorrectDraft] = useState<string>("");
   const [applyingWeights, setApplyingWeights] = useState(false);
-  // Session = every question graded since this component mounted (i.e. since
-  // the page was last loaded/refreshed), in the order it was graded. Retries
-  // of the same word appear as separate entries here.
-  const [sessionLog, setSessionLog] = useState<QuizQuestion[]>([]);
+  // The End Session review survives remounts/refreshes and is cleared only after the user has
+  // gone through it. `startedAt` distinguishes a new quiz that reuses the language doc id.
+  const reviewKey = sessionReviewKey("word", session.sessionId);
+  const [sessionLog, setSessionLog] = useState<QuizQuestion[]>(() =>
+    loadSessionReview(
+      reviewKey,
+      session.startedAt,
+      unreviewedSessionQuestions(session.questions, session.reviewedQuestionCount)
+    )
+  );
   const [sessionReviewActive, setSessionReviewActive] = useState(false);
   const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
 
@@ -82,11 +95,11 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   // Computed ONCE and then frozen: a retry re-queue reuses an id already in this list and no
   // path ever introduces a new one, so the set is fixed for the life of the session.
   // Recomputing it per answer would restart the loader for nothing. Answered questions are
-  // excluded — they are never rendered again (the end-of-session review reads `sessionLog`,
-  // which captures the merged question at grade time).
+  // included because a refresh restores the End Session log from slim persisted session rows;
+  // the review needs the same hydrated definitions/examples as the live card.
   const orderedQuestions = currentSession.questions;
   const [prefetchWordIds] = useState(() =>
-    session.questions.filter((q) => q.userCorrect === undefined).map((q) => q.wordId)
+    session.questions.map((q) => q.wordId)
   );
   const prefetch = useQuizPrefetch(currentSession.language, prefetchWordIds, EMPTY_IDS);
 
@@ -236,7 +249,10 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     }
 
     setCurrentSession((prev) => applyWordAnswerLocally(prev, question.wordId, correct));
-    setSessionLog((prev) => [...prev, { ...question, userCorrect: correct }]);
+    const reviewQuestion = { ...orderedQuestions[currentIndex], userCorrect: correct };
+    setSessionLog((prev) =>
+      appendSessionReview(reviewKey, session.startedAt, prev, reviewQuestion)
+    );
     setCurrentIndex((i) => i + 1);
     setShowingAnswer(false);
     resetExpandedAnswers();
@@ -250,7 +266,16 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   }
 
   function nextSessionReview() {
-    setSessionReviewIndex((i) => i + 1);
+    const next = sessionReviewIndex + 1;
+    if (next >= sessionLog.length) {
+      completeSessionReview(reviewKey, session.startedAt);
+      outbox.enqueue({
+        domain: "wordReviewComplete",
+        language: currentSession.language,
+        startedAt: session.startedAt,
+      });
+    }
+    setSessionReviewIndex(next);
   }
 
   useEffect(() => {
@@ -311,7 +336,10 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
 
 
   if (sessionReviewActive) {
-    const reviewQuestion = sessionReviewIndex < sessionLog.length ? sessionLog[sessionReviewIndex] : null;
+    const reviewSlim = sessionReviewIndex < sessionLog.length ? sessionLog[sessionReviewIndex] : null;
+    const reviewQuestion = reviewSlim
+      ? { ...prefetch.words.get(reviewSlim.wordId), ...reviewSlim }
+      : null;
 
     if (!reviewQuestion) {
       const sessionCorrect = sessionLog.filter((q) => q.userCorrect).length;
@@ -336,6 +364,17 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
             </button>
           </div>
         </div>
+      );
+    }
+
+    if (!prefetch.words.has(reviewQuestion.wordId) && !prefetch.missing.has(reviewQuestion.wordId)) {
+      return (
+        <QuizLoadState
+          error={prefetch.error}
+          loaded={prefetch.loaded}
+          total={prefetch.total}
+          onRetry={prefetch.retry}
+        />
       );
     }
 
@@ -440,20 +479,29 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
         <p className="text-2xl sm:text-4xl font-semibold text-blue-400">
           {correct} / {originalTotal}
         </p>
-        <div className="flex flex-col sm:flex-row gap-3">
+        {sessionLog.length > 0 ? (
           <button
-            onClick={() => { onComplete(); onBrowse(); }}
-            className="rounded-lg border border-gray-600 px-6 py-2 text-gray-300 hover:bg-gray-700"
+            onClick={endSession}
+            className="rounded-lg border border-amber-600/70 bg-amber-700/30 px-6 py-2 font-medium text-amber-200 hover:bg-amber-700/50"
           >
-            {t("browseWords")}
+            🏁 {t("endSession")}
           </button>
-          <button
-            onClick={() => { onComplete(); onStartNew(); }}
-            className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-500"
-          >
-            {t("startNew")}
-          </button>
-        </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={() => { onComplete(); onBrowse(); }}
+              className="rounded-lg border border-gray-600 px-6 py-2 text-gray-300 hover:bg-gray-700"
+            >
+              {t("browseWords")}
+            </button>
+            <button
+              onClick={() => { onComplete(); onStartNew(); }}
+              className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-500"
+            >
+              {t("startNew")}
+            </button>
+          </div>
+        )}
       </div>
     );
   }

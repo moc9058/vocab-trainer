@@ -109,3 +109,11 @@ export function answerCombinedQuestion(
 ): Promise<{ session: CombinedQuizSession }> {
   return postJson<{ session: CombinedQuizSession }>(`${base(variant)}/answer`, opts);
 }
+
+export function markCombinedQuizReviewComplete(
+  language: string,
+  startedAt: string,
+  variant: CombinedQuizVariant = "combined"
+): Promise<{ reviewedQuestionCount: number }> {
+  return putJson(`${base(variant)}/session/language/${encodeURIComponent(language)}/reviewed`, { startedAt });
+}

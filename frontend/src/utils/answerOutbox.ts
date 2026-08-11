@@ -14,20 +14,24 @@
  * answer yet", so when a word is answered and then answered again as a retry copy, the two
  * writes must arrive in that order or they land in the wrong slots.
  *
- * One entry kind is NOT an answer: `combinedMembership`, the mixed quiz's Group B → A refile.
- * It rides the same queue precisely because it is serial — the PUT and a POST /answer both
+ * Non-answer session mutations (the mixed quiz's membership refile and End Session review
+ * boundaries) ride the same queue precisely because it is serial: they and POST /answer all
  * read-modify-write the session document, so letting them race would lose whichever wrote first.
  */
 
 import { isRetryableError } from "../api/client";
-import { answerQuestion } from "../api/quiz";
+import { answerQuestion, markQuizReviewComplete } from "../api/quiz";
 import {
   answerCombinedQuestion,
+  markCombinedQuizReviewComplete,
   updateCombinedQuizWeights,
   type CombinedQuizVariant,
 } from "../api/combined-quiz";
-import { answerGrammarQuestion } from "../api/grammar";
-import { answerExpressionRecallQuestion } from "../api/expression-recall-quiz";
+import { answerGrammarQuestion, markGrammarQuizReviewComplete } from "../api/grammar";
+import {
+  answerExpressionRecallQuestion,
+  markExpressionRecallReviewComplete,
+} from "../api/expression-recall-quiz";
 
 export type PendingAnswer =
   | {
@@ -58,6 +62,15 @@ export type PendingAnswer =
       expressionId: string;
       correct: boolean;
     }
+  | { domain: "wordReviewComplete"; language: string; startedAt: string }
+  | { domain: "grammarReviewComplete"; language: string; startedAt: string }
+  | {
+      domain: "combinedReviewComplete";
+      language: string;
+      startedAt: string;
+      variant: CombinedQuizVariant;
+    }
+  | { domain: "expressionRecallReviewComplete"; language: string; startedAt: string }
   | {
       /** Mixed-quiz membership refile — a PUT …/weights carrying only membership maps.
        *  FULL-STATE payload captured at enqueue time: a later entry restates all earlier
@@ -144,6 +157,14 @@ function send(item: PendingAnswer): Promise<unknown> {
         expressionId: item.expressionId,
         correct: item.correct,
       });
+    case "wordReviewComplete":
+      return markQuizReviewComplete(item.language, item.startedAt);
+    case "grammarReviewComplete":
+      return markGrammarQuizReviewComplete(item.language, item.startedAt);
+    case "combinedReviewComplete":
+      return markCombinedQuizReviewComplete(item.language, item.startedAt, item.variant);
+    case "expressionRecallReviewComplete":
+      return markExpressionRecallReviewComplete(item.language, item.startedAt);
     case "combinedMembership":
       return updateCombinedQuizWeights(
         item.language,

@@ -76,3 +76,10 @@ export function answerQuestion(opts: {
 }): Promise<{ session: QuizSession }> {
   return postJson<{ session: QuizSession }>("/api/quiz/answer", opts);
 }
+
+export function markQuizReviewComplete(
+  language: string,
+  startedAt: string
+): Promise<{ reviewedQuestionCount: number }> {
+  return putJson(`/api/quiz/session/language/${encodeURIComponent(language)}/reviewed`, { startedAt });
+}

@@ -1,4 +1,4 @@
-import { fetchJson, postJson, deleteJson, ApiError } from "./client";
+import { fetchJson, postJson, putJson, deleteJson, ApiError } from "./client";
 import type { ExpressionQuizDirection, ExpressionRecallSession } from "../types";
 
 const BASE = "/api/expression-recall-quiz";
@@ -40,4 +40,11 @@ export async function getCurrentExpressionRecallSession(
 
 export function deleteExpressionRecallSession(language: string): Promise<{ deleted: boolean }> {
   return deleteJson(`${BASE}/session/language/${encodeURIComponent(language)}`);
+}
+
+export function markExpressionRecallReviewComplete(
+  language: string,
+  startedAt: string
+): Promise<{ reviewedQuestionCount: number }> {
+  return putJson(`${BASE}/session/language/${encodeURIComponent(language)}/reviewed`, { startedAt });
 }

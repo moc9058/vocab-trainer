@@ -3,7 +3,7 @@
 // on its own — same split as utils/weightInput.ts and utils/quizLocal.ts.
 
 import { categoryGroups, groupCategory, type GroupCategory } from "../types";
-import { parseWeightInput } from "./weightInput";
+import { parseWeightInput, scaleWeightsToIntegers } from "./weightInput";
 
 /** Which meta-group buckets a quiz draws from. "AB" is the mixed quiz — both at once. */
 export type QuizGroupScope = GroupCategory | "AB";
@@ -25,6 +25,51 @@ export function representedGroupIds(
       .filter(([, memberIds]) => memberIds.some((id) => questionIds.has(id)))
       .map(([groupId]) => groupId)
   );
+}
+
+/** Persist the user-facing group weights without integer scaling or mixed-quiz folding. */
+export function serializeGroupWeightDraft(
+  groupIds: Iterable<string>,
+  draft: Record<string, string>
+): Record<string, number> {
+  return Object.fromEntries(
+    [...groupIds].map((id) => [id, Math.max(0, parseWeightInput(draft[id] ?? "1") ?? 0)])
+  );
+}
+
+/**
+ * Seed the group editor from the original inputs when available. For older mixed sessions,
+ * effective weights can be reduced independently inside A and B: folding multiplies every
+ * group in one category by the same factor, so this recovers the smallest equivalent ratios.
+ * Without category metadata, retain the effective weights as the lossless fallback.
+ */
+export function restoreGroupWeightDraft(
+  groupIds: Iterable<string>,
+  original: Record<string, number> | undefined,
+  effective: Record<string, number> | undefined,
+  categoryByGroup?: ReadonlyMap<string, GroupCategory>
+): Record<string, string> {
+  const ids = [...groupIds];
+  if (original && Object.keys(original).length > 0) {
+    return Object.fromEntries(
+      ids.map((id) => [id, String(original[id] ?? effective?.[id] ?? 1)])
+    );
+  }
+  if (!categoryByGroup || categoryByGroup.size === 0) {
+    return Object.fromEntries(ids.map((id) => [id, String(effective?.[id] ?? 1)]));
+  }
+
+  const restored: Record<string, string> = {};
+  for (const cat of CATEGORIES) {
+    const categoryIds = ids.filter((id) => (categoryByGroup.get(id) ?? "A") === cat);
+    const normalized = scaleWeightsToIntegers(
+      categoryIds.map((id) => String(effective?.[id] ?? 1))
+    );
+    categoryIds.forEach((id, index) => {
+      restored[id] = String(normalized[index]);
+    });
+  }
+  return restored;
 }
 
 /**

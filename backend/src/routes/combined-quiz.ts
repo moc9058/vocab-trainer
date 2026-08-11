@@ -71,6 +71,13 @@ const MIX_WEIGHTS_SCHEMA = {
         },
       },
     },
+    groups: {
+      type: "object",
+      properties: {
+        word: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
+        grammar: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
+      },
+    },
   },
 } as const;
 
@@ -311,6 +318,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
         language,
         startedAt: new Date().toISOString(),
         status: "in-progress",
+        reviewedQuestionCount: 0,
         score: { correct: 0, total: questions.length },
         questions,
         domainWeights: { word: wordWeight, grammar: grammarWeight },
@@ -477,6 +485,22 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       await saveCombinedQuizSession(session);
 
       return session;
+    }
+  );
+
+  fastify.put<{ Params: { language: string }; Body: { startedAt: string } }>(
+    "/session/language/:language/reviewed",
+    async (request, reply) => {
+      const session = await getCombinedQuizSession(opts.sessionKey(request.params.language));
+      if (!session) return reply.notFound("No combined quiz session found for this language");
+      if (session.startedAt !== request.body.startedAt) {
+        return reply.conflict("The quiz session has been replaced");
+      }
+      session.reviewedQuestionCount = session.questions.filter(
+        (q) => q.userCorrect !== undefined
+      ).length;
+      await saveCombinedQuizSession(session);
+      return { reviewedQuestionCount: session.reviewedQuestionCount };
     }
   );
 

@@ -22,11 +22,20 @@ import {
   reorderCombinedTailLocally,
   type RefileOpts,
 } from "../utils/quizLocal";
+import {
+  appendSessionReview,
+  completeSessionReview,
+  loadSessionReview,
+  sessionReviewKey,
+  unreviewedSessionQuestions,
+} from "../utils/sessionReview";
 import { categoryGroups, groupCategory as categoryOf } from "../types";
 import {
   categoryDomainWeights,
   foldMixWeights,
   representedGroupIds,
+  restoreGroupWeightDraft,
+  serializeGroupWeightDraft,
   type MixWeightDraft,
 } from "../utils/quizGroupScope";
 import type {
@@ -221,8 +230,15 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const [wideViewport] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(min-width: 640px)").matches
   );
-  // Session review: every question graded since mount, in grading order (retries counted separately).
-  const [sessionLog, setSessionLog] = useState<CombinedQuizQuestion[]>([]);
+  // Durable End Session boundary; the variant is already encoded in `sessionId`.
+  const reviewKey = sessionReviewKey("combined", session.sessionId);
+  const [sessionLog, setSessionLog] = useState<CombinedQuizQuestion[]>(() =>
+    loadSessionReview(
+      reviewKey,
+      session.startedAt,
+      unreviewedSessionQuestions(session.questions, session.reviewedQuestionCount)
+    )
+  );
   const [sessionReviewActive, setSessionReviewActive] = useState(false);
   const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
 
@@ -245,7 +261,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     const wordIds: string[] = [];
     const grammarIds: string[] = [];
     for (const q of session.questions) {
-      if (q.userCorrect !== undefined) continue;
       if (q.kind === "word") wordIds.push(q.wordId);
       else grammarIds.push(q.grammarId);
     }
@@ -525,24 +540,24 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       word: String(currentSession.domainWeights?.word ?? 1),
       grammar: String(currentSession.domainWeights?.grammar ?? 1),
     });
+    const mix = currentSession.mixWeights;
     setWordWeightDraft(
-      Object.fromEntries(
-        Object.keys(currentSession.wordGroupMembership ?? {}).map((gid) => [
-          gid,
-          String(currentSession.wordGroupWeights?.[gid] ?? 1),
-        ])
+      restoreGroupWeightDraft(
+        Object.keys(currentSession.wordGroupMembership ?? {}),
+        mix?.groups?.word,
+        currentSession.wordGroupWeights,
+        groupCategoryMap
       )
     );
     setGrammarWeightDraft(
-      Object.fromEntries(
-        Object.keys(currentSession.grammarGroupMembership ?? {}).map((gid) => [
-          gid,
-          String(currentSession.grammarGroupWeights?.[gid] ?? 1),
-        ])
+      restoreGroupWeightDraft(
+        Object.keys(currentSession.grammarGroupMembership ?? {}),
+        mix?.groups?.grammar,
+        currentSession.grammarGroupWeights,
+        groupCategoryMap
       )
     );
     setCorrectDraft(currentSession.correctWeight !== undefined ? String(currentSession.correctWeight) : "");
-    const mix = currentSession.mixWeights;
     if (mix) {
       setMixCategoryDraft({ A: String(mix.category.A), B: String(mix.category.B) });
       setMixDomainDraft({
@@ -661,6 +676,16 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
                 word: parseWeightInput(mixDomainDraft.B.word) ?? 0,
                 grammar: parseWeightInput(mixDomainDraft.B.grammar) ?? 0,
               },
+            },
+            groups: {
+              word: serializeGroupWeightDraft(
+                weightGroups.word.map((g) => g.id),
+                wordWeightDraft
+              ),
+              grammar: serializeGroupWeightDraft(
+                weightGroups.grammar.map((g) => g.id),
+                grammarWeightDraft
+              ),
             },
           }
         : null;
@@ -901,7 +926,10 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     }
 
     setCurrentSession((prev) => applyCombinedAnswerLocally(prev, question.kind, refId, correct));
-    setSessionLog((prev) => [...prev, { ...question, userCorrect: correct }]);
+    const reviewQuestion = { ...orderedQuestions[currentIndex], userCorrect: correct };
+    setSessionLog((prev) =>
+      appendSessionReview(reviewKey, session.startedAt, prev, reviewQuestion)
+    );
     setCurrentIndex((i) => i + 1);
     setShowingAnswer(false);
     resetExpandedAnswers();
@@ -929,7 +957,17 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   }
 
   function nextSessionReview() {
-    setSessionReviewIndex((i) => i + 1);
+    const next = sessionReviewIndex + 1;
+    if (next >= sessionLog.length) {
+      completeSessionReview(reviewKey, session.startedAt);
+      outbox.enqueue({
+        domain: "combinedReviewComplete",
+        language: currentSession.language,
+        startedAt: session.startedAt,
+        variant,
+      });
+    }
+    setSessionReviewIndex(next);
   }
 
   useEffect(() => {
@@ -994,7 +1032,10 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
 
   if (sessionReviewActive) {
-    const reviewQ = sessionReviewIndex < sessionLog.length ? sessionLog[sessionReviewIndex] : null;
+    const reviewSlim = sessionReviewIndex < sessionLog.length ? sessionLog[sessionReviewIndex] : null;
+    const reviewQ: CombinedQuizQuestion | null = reviewSlim?.kind === "word"
+      ? { ...prefetch.words.get(reviewSlim.wordId), ...reviewSlim }
+      : reviewSlim;
     if (!reviewQ) {
       const sessionCorrect = sessionLog.filter((q) => q.userCorrect).length;
       return (
@@ -1018,6 +1059,19 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             </button>
           </div>
         </div>
+      );
+    }
+
+    const reviewRefId = reviewQ.kind === "word" ? reviewQ.wordId : reviewQ.grammarId;
+    const reviewCache = reviewQ.kind === "word" ? prefetch.words : prefetch.grammar;
+    if (!reviewCache.has(reviewRefId) && !prefetch.missing.has(reviewRefId)) {
+      return (
+        <QuizLoadState
+          error={prefetch.error}
+          loaded={prefetch.loaded}
+          total={prefetch.total}
+          onRetry={prefetch.retry}
+        />
       );
     }
 
@@ -1173,20 +1227,29 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         <p className="text-2xl sm:text-4xl font-semibold text-indigo-400">
           {correct} / {originalTotal}
         </p>
-        <div className="flex flex-col sm:flex-row gap-3">
+        {sessionLog.length > 0 ? (
           <button
-            onClick={() => { onComplete(); onBrowse(); }}
-            className="rounded-lg border border-gray-600 px-6 py-2 text-gray-300 hover:bg-gray-700"
+            onClick={endSession}
+            className="rounded-lg border border-amber-600/70 bg-amber-700/30 px-6 py-2 font-medium text-amber-200 hover:bg-amber-700/50"
           >
-            {t("browseWords")}
+            🏁 {t("endSession")}
           </button>
-          <button
-            onClick={() => { onComplete(); onStartNew(); }}
-            className="rounded-lg bg-indigo-600 px-6 py-2 text-white hover:bg-indigo-500"
-          >
-            {t("startNew")}
-          </button>
-        </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={() => { onComplete(); onBrowse(); }}
+              className="rounded-lg border border-gray-600 px-6 py-2 text-gray-300 hover:bg-gray-700"
+            >
+              {t("browseWords")}
+            </button>
+            <button
+              onClick={() => { onComplete(); onStartNew(); }}
+              className="rounded-lg bg-indigo-600 px-6 py-2 text-white hover:bg-indigo-500"
+            >
+              {t("startNew")}
+            </button>
+          </div>
+        )}
       </div>
     );
   }

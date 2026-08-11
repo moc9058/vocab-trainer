@@ -5,6 +5,13 @@ import QuizLoadState from "./QuizLoadState";
 import QuizSyncBadge from "./QuizSyncBadge";
 import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
 import { applyExpressionRecallAnswerLocally } from "../utils/quizLocal";
+import {
+  appendSessionReview,
+  completeSessionReview,
+  loadSessionReview,
+  sessionReviewKey,
+  unreviewedSessionQuestions,
+} from "../utils/sessionReview";
 import type { Expression, ExpressionRecallQuestion, ExpressionRecallSession } from "../types";
 
 interface Props {
@@ -33,7 +40,14 @@ export default function ExpressionRecallTaking({
   const [originalTotal] = useState(
     session.questions.filter((q) => q.userCorrect === undefined).length || session.questions.length
   );
-  const [sessionLog, setSessionLog] = useState<ExpressionRecallQuestion[]>([]);
+  const reviewKey = sessionReviewKey("expression-recall", session.sessionId);
+  const [sessionLog, setSessionLog] = useState<ExpressionRecallQuestion[]>(() =>
+    loadSessionReview(
+      reviewKey,
+      session.startedAt,
+      unreviewedSessionQuestions(session.questions, session.reviewedQuestionCount)
+    )
+  );
   const [sessionReviewActive, setSessionReviewActive] = useState(false);
   const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
 
@@ -117,7 +131,10 @@ export default function ExpressionRecallTaking({
     setCurrentSession((prev) =>
       applyExpressionRecallAnswerLocally(prev, question.expressionId, correct)
     );
-    setSessionLog((prev) => [...prev, { ...question, userCorrect: correct }]);
+    const reviewQuestion = { ...question, userCorrect: correct };
+    setSessionLog((prev) =>
+      appendSessionReview(reviewKey, session.startedAt, prev, reviewQuestion)
+    );
     setCurrentIndex((i) => i + 1);
     setShowingAnswer(false);
   }
@@ -126,6 +143,19 @@ export default function ExpressionRecallTaking({
     if (sessionLog.length === 0) return;
     setSessionReviewIndex(0);
     setSessionReviewActive(true);
+  }
+
+  function nextSessionReview() {
+    const next = sessionReviewIndex + 1;
+    if (next >= sessionLog.length) {
+      completeSessionReview(reviewKey, session.startedAt);
+      outbox.enqueue({
+        domain: "expressionRecallReviewComplete",
+        language: currentSession.language,
+        startedAt: session.startedAt,
+      });
+    }
+    setSessionReviewIndex(next);
   }
 
   /** The reveal face: whichever side of the card wasn't the prompt. */
@@ -193,7 +223,7 @@ export default function ExpressionRecallTaking({
         <AnswerBody expr={payloads.get(reviewQuestion.expressionId)} />
         <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
           <button
-            onClick={() => setSessionReviewIndex((i) => i + 1)}
+            onClick={nextSessionReview}
             className="w-full rounded-lg bg-amber-600 px-6 py-3 text-white hover:bg-amber-500 sm:w-auto sm:py-2"
           >
             {t("next")}
@@ -219,20 +249,29 @@ export default function ExpressionRecallTaking({
         <p className="text-2xl font-semibold text-amber-400 sm:text-4xl">
           {correct} / {currentSession.score.total}
         </p>
-        <div className="flex flex-col gap-3 sm:flex-row">
+        {sessionLog.length > 0 ? (
           <button
-            onClick={onComplete}
-            className="rounded-lg border border-gray-600 px-6 py-2 text-gray-300 hover:bg-gray-700"
+            onClick={endSession}
+            className="rounded-lg border border-amber-600/70 bg-amber-700/30 px-6 py-2 font-medium text-amber-200 hover:bg-amber-700/50"
           >
-            {t("backToHome")}
+            🏁 {t("endSession")}
           </button>
-          <button
-            onClick={onStartNew}
-            className="rounded-lg bg-amber-600 px-6 py-2 text-white hover:bg-amber-500"
-          >
-            {t("startNew")}
-          </button>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              onClick={onComplete}
+              className="rounded-lg border border-gray-600 px-6 py-2 text-gray-300 hover:bg-gray-700"
+            >
+              {t("backToHome")}
+            </button>
+            <button
+              onClick={onStartNew}
+              className="rounded-lg bg-amber-600 px-6 py-2 text-white hover:bg-amber-500"
+            >
+              {t("startNew")}
+            </button>
+          </div>
+        )}
       </div>
     );
   }

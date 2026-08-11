@@ -139,6 +139,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
         language,
         startedAt: new Date().toISOString(),
         status: "in-progress",
+        reviewedQuestionCount: 0,
         score: { correct: 0, total: questions.length },
         questions,
         ...(groupIds && groupIds.length > 0 ? { groupFilter: groupIds } : {}),
@@ -247,6 +248,22 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       await saveGrammarQuizSession(session);
 
       return session;
+    }
+  );
+
+  fastify.put<{ Params: { language: string }; Body: { startedAt: string } }>(
+    "/session/language/:language/reviewed",
+    async (request, reply) => {
+      const session = await getGrammarQuizSession(request.params.language);
+      if (!session) return reply.notFound("No grammar quiz session found");
+      if (session.startedAt !== request.body.startedAt) {
+        return reply.conflict("The quiz session has been replaced");
+      }
+      session.reviewedQuestionCount = session.questions.filter(
+        (q) => q.userCorrect !== undefined
+      ).length;
+      await saveGrammarQuizSession(session);
+      return { reviewedQuestionCount: session.reviewedQuestionCount };
     }
   );
 

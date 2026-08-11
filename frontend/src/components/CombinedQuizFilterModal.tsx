@@ -14,6 +14,7 @@ import { isWeightValid, parseWeightInput, scaleWeightRecord } from "../utils/wei
 import {
   categoryDomainWeights,
   foldMixWeights,
+  serializeGroupWeightDraft,
   scopedGroups,
   type MixWeightDraft,
   type QuizGroupScope,
@@ -428,6 +429,10 @@ export default function CombinedQuizFilterModal({
                   word: parseWeightInput(mixDomain.B.word) ?? 0,
                   grammar: parseWeightInput(mixDomain.B.grammar) ?? 0,
                 },
+              },
+              groups: {
+                word: serializeGroupWeightDraft(selectedWordGroupIds, wordGroupWeights),
+                grammar: serializeGroupWeightDraft(selectedGrammarGroupIds, grammarGroupWeights),
               },
             } satisfies MixWeightConfig,
           }

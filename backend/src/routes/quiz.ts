@@ -129,6 +129,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         language,
         startedAt: new Date().toISOString(),
         status: "in-progress",
+        reviewedQuestionCount: 0,
         score: { correct: 0, total: questions.length },
         questions,
         ...(questionType ? { questionType } : {}),
@@ -343,6 +344,23 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       await updateQuizSession(session);
 
       return session;
+    }
+  );
+
+  // Advance the durable End Session boundary after the user finishes that review.
+  fastify.put<{ Params: { language: string }; Body: { startedAt: string } }>(
+    "/session/language/:language/reviewed",
+    async (request, reply) => {
+      const session = await getQuizSessionByLanguage(request.params.language);
+      if (!session) return reply.notFound("No session found for this language");
+      if (session.startedAt !== request.body.startedAt) {
+        return reply.conflict("The quiz session has been replaced");
+      }
+      session.reviewedQuestionCount = session.questions.filter(
+        (q) => q.userCorrect !== undefined
+      ).length;
+      await updateQuizSession(session);
+      return { reviewedQuestionCount: session.reviewedQuestionCount };
     }
   );
 

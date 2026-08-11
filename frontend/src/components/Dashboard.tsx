@@ -36,6 +36,7 @@ import { urlLanguageToIsoCode } from "../settings/defaults";
 import { useWordQueue } from "../hooks/useWordQueue";
 import { useGrammarQueue } from "../hooks/useGrammarQueue";
 import type { QuizSession, GrammarQuizSession, CombinedQuizSession, ImportQuizPool } from "../types";
+import { hasPendingSessionReview, sessionReviewKey } from "../utils/sessionReview";
 
 /** The two article quizzes: every saved import session's vocabulary and grammar, split by
  *  meta-group. "A" is everything those articles put in the library; "B" is the subset also
@@ -48,6 +49,18 @@ function articleQuizVariant(category: ArticleQuizCategory): CombinedQuizVariant 
 
 function articleQuizPath(language: string, category: ArticleQuizCategory): string {
   return `/${language}/import-quiz-${category === "A" ? "a" : "b"}`;
+}
+
+function needsReview(
+  kind: "word" | "grammar" | "combined",
+  session: QuizSession | GrammarQuizSession | CombinedQuizSession
+): boolean {
+  return hasPendingSessionReview(
+    sessionReviewKey(kind, session.sessionId),
+    session.startedAt,
+    session.questions,
+    session.reviewedQuestionCount
+  );
 }
 
 export default function Dashboard() {
@@ -250,7 +263,7 @@ export default function Dashboard() {
     try {
       // Check for existing in-progress session
       const existing = await getCurrentSession(language);
-      if (existing && existing.status === "in-progress") {
+      if (existing && (existing.status === "in-progress" || needsReview("word", existing))) {
         setPendingFilters(filters);
         setResumePrompt(existing);
         return;
@@ -394,7 +407,7 @@ export default function Dashboard() {
     try {
       // Check for existing in-progress session
       const existing = await getCurrentGrammarSession(language);
-      if (existing && existing.status === "in-progress") {
+      if (existing && (existing.status === "in-progress" || needsReview("grammar", existing))) {
         setActiveGrammarQuiz(existing);
         navigate(`/${language}/grammar-quiz`);
         return;
@@ -442,7 +455,7 @@ export default function Dashboard() {
     try {
       // Check for existing in-progress combined session
       const existing = await getCurrentCombinedSession(language);
-      if (existing && existing.status === "in-progress") {
+      if (existing && (existing.status === "in-progress" || needsReview("combined", existing))) {
         setPendingCombinedFilters(filters);
         setCombinedResumePrompt(existing);
         return;
@@ -506,7 +519,7 @@ export default function Dashboard() {
     setStarting(true);
     try {
       const existing = await getCurrentCombinedSession(language, "groupB");
-      if (existing && existing.status === "in-progress") {
+      if (existing && (existing.status === "in-progress" || needsReview("combined", existing))) {
         setPendingGroupBFilters(filters);
         setGroupBResumePrompt(existing);
         return;
@@ -573,7 +586,7 @@ export default function Dashboard() {
     setStarting(true);
     try {
       const existing = await getCurrentCombinedSession(language, "mixed");
-      if (existing && existing.status === "in-progress") {
+      if (existing && (existing.status === "in-progress" || needsReview("combined", existing))) {
         setPendingMixedFilters(filters);
         setMixedResumePrompt(existing);
         return;
@@ -643,7 +656,7 @@ export default function Dashboard() {
       // `/start` overwrites the session under a fixed key, so an in-progress drill has to
       // be offered back rather than silently discarded — same contract as every other quiz.
       const existing = await getCurrentCombinedSession(language, articleQuizVariant(category));
-      if (existing && existing.status === "in-progress") {
+      if (existing && (existing.status === "in-progress" || needsReview("combined", existing))) {
         setPendingArticleQuiz({ category, pool });
         setArticleResumePrompt({ category, session: existing });
         return;

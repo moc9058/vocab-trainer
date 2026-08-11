@@ -6,6 +6,7 @@ import { getCurrentSession } from "../api/quiz";
 import { getCurrentGrammarSession } from "../api/grammar";
 import { getCurrentCombinedSession } from "../api/combined-quiz";
 import type { QuizSession, GrammarQuizSession, CombinedQuizSession } from "../types";
+import { hasPendingSessionReview, sessionReviewKey } from "../utils/sessionReview";
 
 interface Props {
   language: string;
@@ -82,11 +83,26 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
           results.map((r) => (r.status === "fulfilled" ? r.value : null))
         );
         if (!cancelled) {
-          setVocabSession(vocabResult && vocabResult.status === "in-progress" ? (vocabResult as QuizSession) : null);
-          setGrammarSession(grammarResult && grammarResult.status === "in-progress" ? (grammarResult as GrammarQuizSession) : null);
-          setCombinedSession(combinedResult && combinedResult.status === "in-progress" ? (combinedResult as CombinedQuizSession) : null);
-          setGroupBSession(groupBResult && groupBResult.status === "in-progress" ? (groupBResult as CombinedQuizSession) : null);
-          setMixedSession(mixedResult && mixedResult.status === "in-progress" ? (mixedResult as CombinedQuizSession) : null);
+          const resumable = <T extends QuizSession | GrammarQuizSession | CombinedQuizSession>(
+            kind: "word" | "grammar" | "combined",
+            session: T | null
+          ): T | null =>
+            session && (
+              session.status === "in-progress" ||
+              hasPendingSessionReview(
+                sessionReviewKey(kind, session.sessionId),
+                session.startedAt,
+                session.questions,
+                session.reviewedQuestionCount
+              )
+            )
+              ? session
+              : null;
+          setVocabSession(resumable("word", vocabResult as QuizSession | null));
+          setGrammarSession(resumable("grammar", grammarResult as GrammarQuizSession | null));
+          setCombinedSession(resumable("combined", combinedResult as CombinedQuizSession | null));
+          setGroupBSession(resumable("combined", groupBResult as CombinedQuizSession | null));
+          setMixedSession(resumable("combined", mixedResult as CombinedQuizSession | null));
         }
       } catch {
         // ignore

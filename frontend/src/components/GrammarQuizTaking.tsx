@@ -9,6 +9,13 @@ import QuizSyncBadge from "./QuizSyncBadge";
 import { useQuizPrefetch } from "../hooks/useQuizPrefetch";
 import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
 import { applyGrammarAnswerLocally } from "../utils/quizLocal";
+import {
+  appendSessionReview,
+  completeSessionReview,
+  loadSessionReview,
+  sessionReviewKey,
+  unreviewedSessionQuestions,
+} from "../utils/sessionReview";
 import type { GrammarQuizSession, GrammarQuizQuestion } from "../types";
 import { isWeightValid, scaleWeightRecord } from "../utils/weightInput";
 
@@ -41,8 +48,15 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
   const [weightDraft, setWeightDraft] = useState<Record<string, string>>({});
   const [correctDraft, setCorrectDraft] = useState<string>("");
   const [applyingWeights, setApplyingWeights] = useState(false);
-  // Session review: every question graded since mount, in grading order (retries counted separately).
-  const [sessionLog, setSessionLog] = useState<GrammarQuizQuestion[]>([]);
+  // Durable End Session boundary; see `utils/sessionReview.ts`.
+  const reviewKey = sessionReviewKey("grammar", session.sessionId);
+  const [sessionLog, setSessionLog] = useState<GrammarQuizQuestion[]>(() =>
+    loadSessionReview(
+      reviewKey,
+      session.startedAt,
+      unreviewedSessionQuestions(session.questions, session.reviewedQuestionCount)
+    )
+  );
   const [sessionReviewActive, setSessionReviewActive] = useState(false);
   const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
 
@@ -54,7 +68,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
   // Computed once and frozen — see the note in `QuizTaking.tsx`.
   const orderedQuestions = currentSession.questions;
   const [prefetchGrammarIds] = useState(() =>
-    session.questions.filter((q) => q.userCorrect === undefined).map((q) => q.grammarId)
+    session.questions.map((q) => q.grammarId)
   );
   const prefetch = useQuizPrefetch(currentSession.language, EMPTY_IDS, prefetchGrammarIds);
 
@@ -147,7 +161,10 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
     });
 
     setCurrentSession((prev) => applyGrammarAnswerLocally(prev, question.grammarId, correct));
-    setSessionLog((prev) => [...prev, { ...question, userCorrect: correct }]);
+    const reviewQuestion = { ...question, userCorrect: correct };
+    setSessionLog((prev) =>
+      appendSessionReview(reviewKey, session.startedAt, prev, reviewQuestion)
+    );
     setCurrentIndex((i) => i + 1);
     setShowingAnswer(false);
   }
@@ -159,7 +176,16 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
   }
 
   function nextSessionReview() {
-    setSessionReviewIndex((i) => i + 1);
+    const next = sessionReviewIndex + 1;
+    if (next >= sessionLog.length) {
+      completeSessionReview(reviewKey, session.startedAt);
+      outbox.enqueue({
+        domain: "grammarReviewComplete",
+        language: currentSession.language,
+        startedAt: session.startedAt,
+      });
+    }
+    setSessionReviewIndex(next);
   }
 
   if (sessionReviewActive) {
@@ -247,7 +273,14 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
         <p className="text-2xl sm:text-4xl font-semibold text-emerald-400">
           {correct} / {originalTotal}
         </p>
-        <div className="flex gap-3">
+        {sessionLog.length > 0 ? (
+          <button
+            onClick={endSession}
+            className="rounded-lg border border-amber-600/70 bg-amber-700/30 px-6 py-2 font-medium text-amber-200 hover:bg-amber-700/50"
+          >
+            🏁 {t("endSession")}
+          </button>
+        ) : (
           <button
             onClick={() => {
               onComplete();
@@ -257,7 +290,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
           >
             {t("startNew")}
           </button>
-        </div>
+        )}
       </div>
     );
   }

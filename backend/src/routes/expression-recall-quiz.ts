@@ -160,6 +160,7 @@ const expressionRecallQuizRoutes: FastifyPluginAsync = async (fastify) => {
         language,
         startedAt: new Date().toISOString(),
         status: "in-progress",
+        reviewedQuestionCount: 0,
         score: { correct: 0, total: questions.length },
         questions,
         direction,
@@ -243,6 +244,22 @@ const expressionRecallQuizRoutes: FastifyPluginAsync = async (fastify) => {
       await saveExpressionRecallSession(session);
 
       return session;
+    }
+  );
+
+  fastify.put<{ Params: { language: string }; Body: { startedAt: string } }>(
+    "/session/language/:language/reviewed",
+    async (request, reply) => {
+      const session = await getExpressionRecallSession(request.params.language);
+      if (!session) return reply.notFound("No expression recall session found");
+      if (session.startedAt !== request.body.startedAt) {
+        return reply.conflict("The quiz session has been replaced");
+      }
+      session.reviewedQuestionCount = session.questions.filter(
+        (q) => q.userCorrect !== undefined
+      ).length;
+      await saveExpressionRecallSession(session);
+      return { reviewedQuestionCount: session.reviewedQuestionCount };
     }
   );
 

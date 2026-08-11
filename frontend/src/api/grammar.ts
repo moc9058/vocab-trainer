@@ -194,6 +194,13 @@ export function updateGrammarQuizWeights(
   );
 }
 
+export function markGrammarQuizReviewComplete(
+  language: string,
+  startedAt: string
+): Promise<{ reviewedQuestionCount: number }> {
+  return putJson(`/api/grammar-quiz/session/language/${encodeURIComponent(language)}/reviewed`, { startedAt });
+}
+
 export function answerGrammarQuestion(opts: {
   language: string;
   grammarId: string;
