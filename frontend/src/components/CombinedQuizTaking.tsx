@@ -39,6 +39,7 @@ import type {
 
 const VISIBLE_ANSWER_ITEMS = 4;
 type QuizDomain = "word" | "grammar";
+type ProgressSelection = { category?: GroupCategory; kind?: QuizDomain };
 const QUIZ_DOMAINS = ["word", "grammar"] as const;
 const CATEGORY_KEYS = ["A", "B"] as const;
 /** Domain accents, shared by the progress pills and the weight editor. */
@@ -202,8 +203,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
    *  and `PUT …/weights` rejects it — so the ⚖ control has nothing to offer. */
   const weightsAdjustable = !currentSession.randomOrder;
   const [weightsOpen, setWeightsOpen] = useState(false);
-  const [wordGroupsOpen, setWordGroupsOpen] = useState(false);
-  const [grammarGroupsOpen, setGrammarGroupsOpen] = useState(false);
+  const [progressSelection, setProgressSelection] = useState<ProgressSelection | null>(null);
   const [domainDraft, setDomainDraft] = useState<{ word: string; grammar: string }>({ word: "1", grammar: "1" });
   const [wordWeightDraft, setWordWeightDraft] = useState<Record<string, string>>({});
   const [grammarWeightDraft, setGrammarWeightDraft] = useState<Record<string, string>>({});
@@ -357,11 +357,19 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     const unansweredGrammarIds = new Set(
       orderedQuestions.filter((q) => q.kind === "grammar" && q.userCorrect === undefined).map((q) => (q as { grammarId: string }).grammarId)
     );
-    const rows: { id: string; kind: "word" | "grammar"; name: string; remaining: number; total: number }[] = [];
+    const rows: {
+      id: string;
+      kind: QuizDomain;
+      category?: GroupCategory;
+      name: string;
+      remaining: number;
+      total: number;
+    }[] = [];
     for (const [gid, ids] of Object.entries(wordMembership ?? {})) {
       rows.push({
         id: gid,
         kind: "word",
+        category: groupCategoryMap.get(gid),
         name: groupNameMap.get(gid) ?? gid,
         remaining: ids.filter((id) => unansweredWordIds.has(id)).length,
         total: ids.length,
@@ -371,16 +379,52 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       rows.push({
         id: gid,
         kind: "grammar",
+        category: groupCategoryMap.get(gid),
         name: groupNameMap.get(gid) ?? gid,
         remaining: ids.filter((id) => unansweredGrammarIds.has(id)).length,
         total: ids.length,
       });
     }
     return rows.length > 0 ? rows : null;
-  }, [currentSession.wordGroupMembership, currentSession.grammarGroupMembership, orderedQuestions, groupNameMap]);
+  }, [
+    currentSession.wordGroupMembership,
+    currentSession.grammarGroupMembership,
+    orderedQuestions,
+    groupNameMap,
+    groupCategoryMap,
+  ]);
 
-  const hasWordGroups = groupProgress?.some((g) => g.kind === "word") ?? false;
-  const hasGrammarGroups = groupProgress?.some((g) => g.kind === "grammar") ?? false;
+  const progressPanelRows = useMemo(() => {
+    if (!groupProgress || !progressSelection) return [];
+    return groupProgress.filter(
+      (group) =>
+        (!progressSelection.category || group.category === progressSelection.category) &&
+        (!progressSelection.kind || group.kind === progressSelection.kind)
+    );
+  }, [groupProgress, progressSelection]);
+
+  function toggleProgressPanel(next: ProgressSelection) {
+    setProgressSelection((current) =>
+      current?.category === next.category && current?.kind === next.kind ? null : next
+    );
+  }
+
+  function isProgressSelectionActive(selection: ProgressSelection): boolean {
+    return (
+      progressSelection?.category === selection.category &&
+      progressSelection?.kind === selection.kind
+    );
+  }
+
+  function hasProgressGroups(selection: ProgressSelection): boolean {
+    return (
+      groupProgress?.some(
+        (group) =>
+          (!selection.category || group.category === selection.category) &&
+          (!selection.kind || group.kind === selection.kind)
+      ) ?? false
+    );
+  }
 
   /**
    * Progress per (meta-group, domain) — the four buckets the mixed A+B quiz is actually made
@@ -1194,29 +1238,48 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         <div className="flex w-full max-w-lg flex-col items-center gap-1">
           {categoryProgress.map((row) => (
             <div key={row.category} className="flex flex-wrap items-center justify-center gap-2">
-              <span
-                className={`rounded px-1.5 py-0.5 text-xs font-semibold ${
+              {row.category === "A" || row.category === "B" ? (
+                <button
+                  type="button"
+                  onClick={() => toggleProgressPanel({ category: row.category })}
+                  aria-expanded={isProgressSelectionActive({ category: row.category })}
+                  className={`rounded border px-2 py-1 text-xs font-semibold transition-colors ${
                   row.category === "B"
-                    ? "bg-amber-900/60 text-amber-300"
-                    : row.category === "A"
-                      ? "bg-indigo-900/60 text-indigo-300"
-                      : "bg-gray-700 text-gray-300"
+                    ? isProgressSelectionActive({ category: row.category })
+                      ? "border-amber-400 bg-amber-700/70 text-amber-100"
+                      : "border-amber-700/60 bg-amber-900/60 text-amber-300 hover:bg-amber-800/70"
+                    : isProgressSelectionActive({ category: row.category })
+                      ? "border-indigo-400 bg-indigo-700/70 text-indigo-100"
+                      : "border-indigo-700/60 bg-indigo-900/60 text-indigo-300 hover:bg-indigo-800/70"
                 }`}
-              >
-                {row.label}
-              </span>
+                >
+                  {row.label}
+                </button>
+              ) : (
+                <span className="rounded bg-gray-700 px-1.5 py-0.5 text-xs font-semibold text-gray-300">
+                  {row.label}
+                </span>
+              )}
               {row.cells.map((c) => (
-                <span
+                <button
+                  type="button"
                   key={c.kind}
-                  className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                  onClick={() => toggleProgressPanel({ category: row.category, kind: c.kind })}
+                  aria-expanded={isProgressSelectionActive({ category: row.category, kind: c.kind })}
+                  disabled={!hasProgressGroups({ category: row.category, kind: c.kind })}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-default ${
                     c.remaining === 0
                       ? "border-green-700/50 bg-green-900/40 text-green-400"
                       : DOMAIN_TONE[c.kind].pill
+                  } ${
+                    isProgressSelectionActive({ category: row.category, kind: c.kind })
+                      ? "ring-2 ring-white/60"
+                      : "enabled:hover:brightness-125"
                   }`}
                 >
                   {c.kind === "word" ? t("sectionVocabulary") : t("sectionGrammar")}: {c.remaining}/
                   {c.total}
-                </span>
+                </button>
               ))}
             </div>
           ))}
@@ -1228,39 +1291,21 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         <div className="flex flex-wrap justify-center gap-2 items-center">
           {!categoryProgress &&
             domainProgress.map((d) => (
-              <span
+              <button
+                type="button"
                 key={d.kind}
-                className={`rounded-full px-3 py-1 text-xs font-medium border ${DOMAIN_TONE[d.kind].pill}`}
+                onClick={() => toggleProgressPanel({ kind: d.kind })}
+                aria-expanded={isProgressSelectionActive({ kind: d.kind })}
+                disabled={!hasProgressGroups({ kind: d.kind })}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-default ${DOMAIN_TONE[d.kind].pill} ${
+                  isProgressSelectionActive({ kind: d.kind })
+                    ? "ring-2 ring-white/60"
+                    : "enabled:hover:brightness-125"
+                }`}
               >
                 {d.label}: {d.remaining}/{d.total}
-              </span>
+              </button>
             ))}
-          {hasWordGroups && (
-            <button
-              onClick={() => setWordGroupsOpen((v) => !v)}
-              aria-pressed={wordGroupsOpen}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium text-blue-200 sm:py-1 ${
-                wordGroupsOpen
-                  ? "border-blue-400 bg-blue-700/60"
-                  : "border-blue-800/70 bg-blue-900/30 hover:bg-blue-900/50"
-              }`}
-            >
-              📘 {t("wordGroupsToggle")}
-            </button>
-          )}
-          {hasGrammarGroups && (
-            <button
-              onClick={() => setGrammarGroupsOpen((v) => !v)}
-              aria-pressed={grammarGroupsOpen}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium text-emerald-200 sm:py-1 ${
-                grammarGroupsOpen
-                  ? "border-emerald-400 bg-emerald-700/60"
-                  : "border-emerald-800/70 bg-emerald-900/30 hover:bg-emerald-900/50"
-              }`}
-            >
-              🏷 {t("grammarGroupsToggle")}
-            </button>
-          )}
           {/* A random-order session has no weights to adjust — the server rejects the PUT
               too. Keyed off the session rather than `variant` so it is self-describing. */}
           {weightsAdjustable && (
@@ -1506,43 +1551,72 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         </div>
       )}
 
-      {/* Per-group progress (word + grammar groups shown as separately labeled rows) — each domain
-          collapsed by default and toggled independently via its own 🏷 button since a large group
-          count clutters the screen. */}
-      {groupProgress && (wordGroupsOpen || grammarGroupsOpen) && (
-        <div className="flex flex-col items-center gap-1.5">
-          {(["word", "grammar"] as const).map((kind) => {
-            if (kind === "word" && !wordGroupsOpen) return null;
-            if (kind === "grammar" && !grammarGroupsOpen) return null;
-            const rows = groupProgress.filter((g) => g.kind === kind);
-            if (rows.length === 0) return null;
-            return (
-              <div key={kind} className="flex flex-wrap items-center justify-center gap-2">
+      {/* The aggregate A/B and Vocabulary/Grammar pills above open this focused drill-down.
+          Rows use completed/total (plus a bar) while the compact pills retain remaining/total. */}
+      {progressSelection && progressPanelRows.length > 0 && (
+        <section className="w-full max-w-lg rounded-xl border border-gray-700 bg-gray-800/90 p-4 shadow-lg">
+          <div className="mb-3 flex items-center gap-2">
+            <h3 className="min-w-0 flex-1 text-sm font-semibold text-gray-100">
+              {progressSelection.category && (
                 <span
-                  className={`text-xs font-semibold ${
-                    kind === "word" ? "text-blue-300" : "text-emerald-300"
-                  }`}
+                  className={
+                    progressSelection.category === "B" ? "text-amber-300" : "text-indigo-300"
+                  }
                 >
-                  {kind === "word" ? t("sectionVocabulary") : t("sectionGrammar")}:
+                  {t(progressSelection.category === "B" ? "categoryBLabel" : "categoryALabel")} ·{" "}
                 </span>
-                {rows.map((g) => (
-                  <span
-                    key={g.id}
-                    className={`rounded-full px-3 py-1 text-xs font-medium border ${
-                      g.remaining === 0
-                        ? "bg-green-900/40 text-green-400 border-green-700/50"
-                        : kind === "word"
-                          ? "bg-blue-900/20 text-gray-300 border-blue-700/50"
-                          : "bg-emerald-900/20 text-gray-300 border-emerald-700/50"
-                    }`}
+              )}
+              {progressSelection.kind
+                ? t(progressSelection.kind === "word" ? "wordGroupsToggle" : "grammarGroupsToggle")
+                : t("groupProgressTitle")}
+            </h3>
+            <button
+              type="button"
+              onClick={() => setProgressSelection(null)}
+              aria-label={t("closeProgress")}
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-lg text-gray-400 hover:bg-gray-700 hover:text-gray-100"
+            >
+              ×
+            </button>
+          </div>
+          <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
+            {progressPanelRows.map((group) => {
+              const completed = group.total - group.remaining;
+              const percent = group.total === 0 ? 0 : Math.round((completed / group.total) * 100);
+              return (
+                <div key={`${group.kind}-${group.id}`}>
+                  <div className="mb-1 flex items-baseline gap-3 text-xs">
+                    <span className="min-w-0 flex-1 truncate font-medium text-gray-200">
+                      {group.name}
+                    </span>
+                    <span className={completed === group.total ? "text-green-400" : "text-gray-400"}>
+                      {completed}/{group.total} {t("completedProgress")} · {percent}%
+                    </span>
+                  </div>
+                  <div
+                    className="h-2 overflow-hidden rounded-full bg-gray-700"
+                    role="progressbar"
+                    aria-label={group.name}
+                    aria-valuemin={0}
+                    aria-valuemax={group.total}
+                    aria-valuenow={completed}
                   >
-                    {g.name}: {g.remaining}/{g.total}
-                  </span>
-                ))}
-              </div>
-            );
-          })}
-        </div>
+                    <div
+                      className={`h-full rounded-full transition-[width] ${
+                        completed === group.total
+                          ? "bg-green-500"
+                          : group.kind === "word"
+                            ? "bg-blue-500"
+                            : "bg-emerald-500"
+                      }`}
+                      style={{ width: `${percent}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
       )}
 
       {/* Question type badge */}

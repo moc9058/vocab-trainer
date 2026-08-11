@@ -279,6 +279,9 @@ const translations = {
     noGrammarGroupsHint: "No grammar groups yet — all grammar items will be included.",
     wordGroupsToggle: "Word Groups",
     grammarGroupsToggle: "Grammar Groups",
+    groupProgressTitle: "Progress by group",
+    closeProgress: "Close group progress",
+    completedProgress: "completed",
     // Smart Add
     smartAddWord: "Add Word",
     addingWord: "Adding word...",
@@ -721,6 +724,9 @@ const translations = {
     noGrammarGroupsHint: "文法グループがまだありません — すべての文法項目が対象になります。",
     wordGroupsToggle: "単語グループ",
     grammarGroupsToggle: "文法グループ",
+    groupProgressTitle: "グループ別進捗",
+    closeProgress: "グループ別進捗を閉じる",
+    completedProgress: "完了",
     // Smart Add
     smartAddWord: "単語を追加",
     addingWord: "単語を追加中...",
@@ -1163,6 +1169,9 @@ const translations = {
     noGrammarGroupsHint: "문법 그룹이 아직 없습니다 — 모든 문법 항목이 포함됩니다.",
     wordGroupsToggle: "단어 그룹",
     grammarGroupsToggle: "문법 그룹",
+    groupProgressTitle: "그룹별 진도",
+    closeProgress: "그룹별 진도 닫기",
+    completedProgress: "완료",
     // Smart Add
     smartAddWord: "단어 추가",
     addingWord: "단어 추가 중...",
