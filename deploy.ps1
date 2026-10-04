@@ -193,7 +193,7 @@ gcloud run deploy vocab-trainer-backend `
   --platform=managed `
   --port=3000 `
   --allow-unauthenticated `
-  --min-instances=1 `
+  --min-instances=0 `
   --cpu-boost `
   --timeout=3600 `
   --set-env-vars="FIRESTORE_DATABASE_ID=vocab-database"
@@ -225,7 +225,7 @@ gcloud run deploy vocab-trainer-frontend `
   --platform=managed `
   --port=5173 `
   --allow-unauthenticated `
-  --min-instances=1 `
+  --min-instances=0 `
   --cpu-boost `
   --timeout=3600 `
   --set-env-vars="BACKEND_URL=$BackendUrl"
