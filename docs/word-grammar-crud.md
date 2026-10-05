@@ -1,5 +1,11 @@
 # Word / Grammar Domain — Technical Reference & CRUD Verification Report
 
+> Historical audit: findings and old `CLAUDE.md` references below describe the
+> repository at the stated verification date. Current working instructions are in
+> [AGENTS.md](../AGENTS.md), detailed notes in
+> [development-reference.md](development-reference.md), and current mixed-quiz
+> behavior in [live-group-b-quiz.md](live-group-b-quiz.md).
+
 Verified: 2026-07-29 · Backend commit `8e41dd5` · Firestore `vocab-trainer-490014 / vocab-database`
 
 This document is two things at once:

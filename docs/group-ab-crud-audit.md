@@ -1,5 +1,11 @@
 # Group A/B CRUD audit & hardening — 2026-08-01
 
+> Historical audit: findings and old `CLAUDE.md` references below describe the
+> repository at the stated verification date. Current working instructions are in
+> [AGENTS.md](../AGENTS.md), detailed notes in
+> [development-reference.md](development-reference.md), and current mixed-quiz
+> behavior in [live-group-b-quiz.md](live-group-b-quiz.md).
+
 An audit of the Group A/B CRUD paths (word + grammar), the word CRUD's behavior when a
 request dies mid-sequence (network drop, instance shutdown, LLM failure), and the
 English-specific word paths. Everything below was verified against the code before fixing;

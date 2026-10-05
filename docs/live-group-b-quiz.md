@@ -1,5 +1,9 @@
 # Live Group B in the mixed quiz
 
+See [AGENTS.md](../AGENTS.md) for repository working instructions,
+[README.md](../README.md#combined-quiz) for the API reference, and
+[development-reference.md](development-reference.md) for surrounding architecture.
+
 Group A is the main word/grammar library, including Group B items. Group B is an
 additional, contextual grouping. The standalone Group B quiz has been removed;
 old `/group-b-quiz` bookmarks redirect to `/mixed-quiz`. Article quizzes are unchanged.
@@ -37,6 +41,19 @@ migration script is needed.
 
 The home-page resume button fetches the session again when opening the quiz, so
 it cannot reuse the pool fetched earlier when the home page first loaded.
+
+## Implementation map
+
+| Responsibility | Source |
+| --- | --- |
+| Fixed A snapshot, live B reconciliation and legacy migration | `backend/src/mixed-quiz-scope.ts` |
+| Start/resume/weight-update integration | `backend/src/routes/combined-quiz.ts` |
+| Persisted session fields | `backend/src/types.ts`, `backend/src/firestore.ts`, `frontend/src/types.ts` |
+| Setup, compact B display and mid-session weights | `frontend/src/components/CombinedQuizFilterModal.tsx`, `CombinedQuizTaking.tsx` |
+| Fresh resume fetch and retired-route redirect | `frontend/src/components/Dashboard.tsx` |
+| Equal B subgroup inputs in the client fold | `frontend/src/utils/quizGroupScope.ts` |
+| Scope regression tests | `backend/src/mixed-quiz-scope.test.ts` |
+| API lifecycle regression | `backend/scripts/tests/mixed-quiz-routes.test.ts` |
 
 ## Local verification
 
