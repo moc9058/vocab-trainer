@@ -2334,6 +2334,7 @@ export async function getCombinedQuizSession(sessionKey: string): Promise<Combin
     grammarGroupWeights: d.grammarGroupWeights,
     grammarGroupMembership: d.grammarGroupMembership,
     mixWeights: d.mixWeights,
+    mixedScope: d.mixedScope,
     correctWeight: d.correctWeight,
     correctMembership: d.correctMembership,
     flaggedOnly: d.flaggedOnly,

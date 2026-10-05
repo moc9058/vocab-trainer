@@ -20,7 +20,6 @@ import flaggedRoutes from "./routes/flagged.js";
 import grammarRoutes from "./routes/grammar.js";
 import grammarQuizRoutes from "./routes/grammar-quiz.js";
 import combinedQuizRoutes, {
-  groupBQuizRoutes,
   mixedQuizRoutes,
   importQuizARoutes,
   importQuizBRoutes,
@@ -107,7 +106,6 @@ await fastify.register(flaggedRoutes, { prefix: "/api/flagged" });
 await fastify.register(grammarRoutes, { prefix: "/api/grammar" });
 await fastify.register(grammarQuizRoutes, { prefix: "/api/grammar-quiz" });
 await fastify.register(combinedQuizRoutes, { prefix: "/api/combined-quiz" });
-await fastify.register(groupBQuizRoutes, { prefix: "/api/group-b-quiz" });
 await fastify.register(mixedQuizRoutes, { prefix: "/api/mixed-quiz" });
 await fastify.register(importQuizARoutes, { prefix: "/api/import-quiz-a" });
 await fastify.register(importQuizBRoutes, { prefix: "/api/import-quiz-b" });

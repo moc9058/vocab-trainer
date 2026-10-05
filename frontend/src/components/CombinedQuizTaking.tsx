@@ -78,7 +78,7 @@ interface Props {
   onComplete: () => void;
   onBrowse: () => void;
   onStartNew: () => void;
-  /** "groupB" talks to /api/group-b-quiz and swaps the "3" key from flag to
+  /** The mixed quiz swaps the "3" key from flag to
    *  "remove from Group B". Default "combined". */
   variant?: CombinedQuizVariant;
 }
@@ -152,7 +152,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   // The article quizzes ("importA"/"importB") are deliberately NOT in this list: they are
   // specified to match the plain Group A quiz, keeping the flag key and offering no
   // remove-from-Group-B, even for the Group B article drill.
-  const usesGroupBControls = variant === "groupB" || variant === "mixed";
+  const usesGroupBControls = variant === "mixed";
   const { t } = useI18n();
   const { settings, displayDefEntries, displayGrammarDefEntries } = useSettings();
   // `currentSession.questions` is the single source of ORDER and is slim; word payloads and
@@ -573,11 +573,15 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const weightGroups: Record<QuizDomain, { id: string; category?: GroupCategory }[]> = {
     word: Object.keys(currentSession.wordGroupMembership ?? {}).map((id) => ({
       id,
-      category: groupCategoryMap.get(id),
+      category: currentSession.mixedScope
+        ? (Object.hasOwn(currentSession.mixedScope.wordA, id) ? "A" : "B")
+        : groupCategoryMap.get(id),
     })),
     grammar: Object.keys(currentSession.grammarGroupMembership ?? {}).map((id) => ({
       id,
-      category: groupCategoryMap.get(id),
+      category: currentSession.mixedScope
+        ? (Object.hasOwn(currentSession.mixedScope.grammarA, id) ? "A" : "B")
+        : groupCategoryMap.get(id),
     })),
   };
   /**
@@ -587,7 +591,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
    * works — it just can't retune the A:B balance.
    */
   const mixEditable =
-    variant === "mixed" && !!currentSession.mixWeights && groupCategoryMap.size > 0;
+    variant === "mixed" && !!currentSession.mixWeights && (!!currentSession.mixedScope || groupCategoryMap.size > 0);
   const foldedMix = mixEditable
     ? foldMixWeights({
         draft: { category: mixCategoryDraft, domain: mixDomainDraft },
@@ -1460,7 +1464,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
                               }`}
                             />
                           </label>
-                          {groupIds.length > 0 && (
+                          {cat === "B" ? <p className="mt-1 text-xs text-gray-500">{t("liveGroupBScope")}</p> : groupIds.length > 0 && (
                             <details open={wideViewport} className="mt-1">
                               <summary
                                 className={`cursor-pointer select-none text-xs font-semibold ${DOMAIN_TONE[k].text}`}
@@ -1504,7 +1508,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
                 </details>
               ))
             : QUIZ_DOMAINS.map((k) => {
-                const groupIds = weightGroups[k].map((g) => g.id);
+                const groupIds = variant === "mixed" ? [] : weightGroups[k].map((g) => g.id);
                 const draft = k === "word" ? wordWeightDraft : grammarWeightDraft;
                 const setDraft = k === "word" ? setWordWeightDraft : setGrammarWeightDraft;
                 return (

@@ -326,10 +326,8 @@ export interface CombinedDomainWeights {
  * The mixed A+B quiz's UNFOLDED weight inputs: the A↔B category ratio and, within each
  * category, its own word↔grammar ratio, and the raw per-group weights.
  *
- * Ordering never reads this — it uses only the folded `domainWeights`/`*GroupWeights` that
- * `utils/quizGroupScope.ts:foldMixWeights` derives from it. It is stored so the mid-session
- * ⚖ panel can show back what the user actually typed: the fold spreads a category's share
- * across its groups' weights and cannot be inverted.
+ * Mixed sessions use these ratios server-side when their live Group B pool changes.
+ * The original inputs also seed the mid-session weight editor.
  */
 export interface MixWeightConfig {
   category: { A: number; B: number };
@@ -343,6 +341,12 @@ export interface MixWeightConfig {
 }
 
 export interface CombinedQuizSession {
+  /** Fixed Group A pool (including overlap with B); Group B is resolved live on resume. */
+  mixedScope?: {
+    version: 1;
+    wordA: Record<string, string[]>;
+    grammarA: Record<string, string[]>;
+  };
   sessionId: string;
   language: string;
   startedAt: string;

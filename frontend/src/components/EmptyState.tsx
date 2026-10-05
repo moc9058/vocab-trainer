@@ -14,8 +14,6 @@ interface Props {
   onResumeGrammar: (session: GrammarQuizSession) => void;
   onResumeCombined: (session: CombinedQuizSession) => void;
   onCombinedQuiz: () => void;
-  onResumeGroupB: (session: CombinedQuizSession) => void;
-  onGroupBQuiz: () => void;
   onResumeMixed: (session: CombinedQuizSession) => void;
   onMixedQuiz: () => void;
   onStartNew: () => void;
@@ -39,7 +37,7 @@ interface Props {
   onAddExpression: () => void;
 }
 
-export default function EmptyState({ language, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onResumeGroupB, onGroupBQuiz, onResumeMixed, onMixedQuiz, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onImport, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onStartExpressionRecall, onBrowseExpressions, onAddExpression }: Props) {
+export default function EmptyState({ language, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onResumeMixed, onMixedQuiz, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onImport, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onStartExpressionRecall, onBrowseExpressions, onAddExpression }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const isoCode = urlLanguageToIsoCode(language) ?? language;
@@ -55,7 +53,6 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
   const [vocabSession, setVocabSession] = useState<QuizSession | null>(null);
   const [grammarSession, setGrammarSession] = useState<GrammarQuizSession | null>(null);
   const [combinedSession, setCombinedSession] = useState<CombinedQuizSession | null>(null);
-  const [groupBSession, setGroupBSession] = useState<CombinedQuizSession | null>(null);
   const [mixedSession, setMixedSession] = useState<CombinedQuizSession | null>(null);
   const [loading, setLoading] = useState(true);
   const [wordGrammarTab, setWordGrammarTab] = useState<"word" | "grammar">("word");
@@ -71,11 +68,10 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
         // `allSettled`, not `all`: these getters now reject on a transport failure instead of
         // swallowing everything into `null`, and one domain being unreachable must not hide
         // the other resume buttons.
-        const [vocabResult, grammarResult, combinedResult, groupBResult, mixedResult] = await Promise.allSettled([
+        const [vocabResult, grammarResult, combinedResult, mixedResult] = await Promise.allSettled([
           getCurrentSession(language),
           getCurrentGrammarSession(language),
           getCurrentCombinedSession(language),
-          getCurrentCombinedSession(language, "groupB"),
           // The mixed quiz is Chinese-only, so don't spend a request looking for a session
           // that can never exist elsewhere.
           showMixed ? getCurrentCombinedSession(language, "mixed") : Promise.resolve(null),
@@ -101,7 +97,6 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
           setVocabSession(resumable("word", vocabResult as QuizSession | null));
           setGrammarSession(resumable("grammar", grammarResult as GrammarQuizSession | null));
           setCombinedSession(resumable("combined", combinedResult as CombinedQuizSession | null));
-          setGroupBSession(resumable("combined", groupBResult as CombinedQuizSession | null));
           setMixedSession(resumable("combined", mixedResult as CombinedQuizSession | null));
         }
       } catch {
@@ -142,23 +137,6 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
                   className="w-full rounded-lg bg-indigo-600 px-5 py-3 text-center font-medium text-white hover:bg-indigo-500 transition-colors"
                 >
                   {t("combinedQuiz")}
-                </button>
-                {!loading && groupBSession && (
-                  <button
-                    onClick={() => onResumeGroupB(groupBSession)}
-                    className="w-full rounded-lg border border-amber-700 bg-amber-900/30 px-4 py-3 text-left hover:border-amber-500 hover:bg-amber-800/40 transition-colors"
-                  >
-                    <p className="font-semibold text-sm text-amber-300">{t("resumeGroupBQuiz")}</p>
-                    <p className="mt-0.5 text-xs text-amber-400">
-                      {groupBSession.score.correct} / {groupBSession.initialTotal ?? groupBSession.questions.length} {t("questionsAnswered")}
-                    </p>
-                  </button>
-                )}
-                <button
-                  onClick={onGroupBQuiz}
-                  className="w-full rounded-lg border border-amber-600 bg-amber-700/30 px-5 py-3 text-center font-medium text-amber-200 hover:bg-amber-700/50 transition-colors"
-                >
-                  {t("groupBQuiz")}
                 </button>
                 {/* Group A+B — one session spanning both meta-groups. Chinese only for now. */}
                 {showMixed && (

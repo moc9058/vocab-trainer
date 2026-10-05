@@ -610,7 +610,7 @@ export default function CombinedQuizFilterModal({
                             }
                             active={bucketActive(cat, k)}
                           >
-                            {k === "word" ? (
+                            {cat === "B" ? <p className="text-xs text-gray-500">{t("liveGroupBScope")}</p> : k === "word" ? (
                               <GroupChecklist
                                 title={t("groups")}
                                 groups={categoryGroups(allWordGroups, cat)}

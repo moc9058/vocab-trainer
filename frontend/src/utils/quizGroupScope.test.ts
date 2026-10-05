@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  foldMixWeights,
   representedGroupIds,
   restoreGroupWeightDraft,
   serializeGroupWeightDraft,
@@ -69,4 +70,15 @@ describe("mixed quiz group-weight persistence", () => {
       b: "9",
     });
   });
+});
+
+it("mixed scope always includes B subgroups with equal weights, even for stale client selections", () => {
+  const folded = foldMixWeights({
+    draft: { category: { A: "2", B: "1" }, domain: { A: { word: "1", grammar: "1" }, B: { word: "1", grammar: "1" } } },
+    wordGroups: [{ id: "a", category: "A" }, { id: "b1", category: "B" }, { id: "b2", category: "B" }],
+    selectedWord: new Set(["a", "b1"]), wordRaw: { a: "3", b1: "99", b2: "0" },
+    grammarGroups: [], selectedGrammar: new Set(), grammarRaw: {},
+  });
+  expect(folded.wordGroupWeights.b1).toEqual(folded.wordGroupWeights.b2);
+  expect(Number(folded.wordGroupWeights.a) / (Number(folded.wordGroupWeights.b1) + Number(folded.wordGroupWeights.b2))).toBe(2);
 });

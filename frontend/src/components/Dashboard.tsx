@@ -93,10 +93,6 @@ export default function Dashboard() {
   const [pendingCombinedFilters, setPendingCombinedFilters] = useState<CombinedQuizFilters | null>(null);
   // Group B quiz — an independent system on top of the same combined-quiz machinery,
   // so it gets its own session state and setup modal (no StudyQuizModal tab).
-  const [activeGroupBQuiz, setActiveGroupBQuiz] = useState<CombinedQuizSession | null>(null);
-  const [showGroupBSetup, setShowGroupBSetup] = useState(false);
-  const [groupBResumePrompt, setGroupBResumePrompt] = useState<CombinedQuizSession | null>(null);
-  const [pendingGroupBFilters, setPendingGroupBFilters] = useState<CombinedQuizFilters | null>(null);
   // Mixed A+B quiz — same machinery again, spanning both meta-groups in one session.
   const [activeMixedQuiz, setActiveMixedQuiz] = useState<CombinedQuizSession | null>(null);
   const [showMixedSetup, setShowMixedSetup] = useState(false);
@@ -172,16 +168,10 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subPath, language, recoveryAttempt]);
 
-  // Session recovery: navigate to /:language/group-b-quiz → fetch active session if state is empty
+  // Retired standalone route: old bookmarks open the mixed quiz.
   useEffect(() => {
-    if (subPath !== "/group-b-quiz" || activeGroupBQuiz) return;
-    setRecoveryError(false);
-    getCurrentCombinedSession(language ?? "", "groupB").then(session => {
-      if (session) setActiveGroupBQuiz(session);
-      else navigate(`/${language}`, { replace: true });
-    }).catch(() => setRecoveryError(true));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subPath, language, recoveryAttempt]);
+    if (subPath === "/group-b-quiz") navigate(`/${language}/mixed-quiz`, { replace: true });
+  }, [subPath, language, navigate]);
 
   // Session recovery: navigate to /:language/mixed-quiz → fetch active session if state is empty
   useEffect(() => {
@@ -192,7 +182,7 @@ export default function Dashboard() {
       else navigate(`/${language}`, { replace: true });
     }).catch(() => setRecoveryError(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subPath, language, recoveryAttempt]);
+  }, [subPath, language, recoveryAttempt, activeMixedQuiz]);
 
   // Session recovery: /:language/import-quiz-a|b → fetch that category's active session.
   // One effect for both, since the category is derived from the path.
@@ -356,10 +346,6 @@ export default function Dashboard() {
     setActiveCombinedQuiz(null);
     setCombinedResumePrompt(null);
     setPendingCombinedFilters(null);
-    setActiveGroupBQuiz(null);
-    setShowGroupBSetup(false);
-    setGroupBResumePrompt(null);
-    setPendingGroupBFilters(null);
     setActiveMixedQuiz(null);
     setShowMixedSetup(false);
     setMixedResumePrompt(null);
@@ -496,70 +482,6 @@ export default function Dashboard() {
     }
   }
 
-  function handleStartGroupBQuiz() {
-    if (!language) return;
-    setShowGroupBSetup(true);
-  }
-
-  async function doStartGroupB(filters: CombinedQuizFilters) {
-    if (!language) return;
-    const session = await startCombinedQuiz({
-      language,
-      domainWeights: filters.domainWeights,
-      correctWeight: filters.correctWeight,
-      word: filters.word,
-      grammar: filters.grammar,
-    }, "groupB");
-    setActiveGroupBQuiz(session);
-    navigate(`/${language}/group-b-quiz`);
-  }
-
-  async function handleGroupBFiltersSelected(filters: CombinedQuizFilters) {
-    if (starting || !language) return;
-    setStarting(true);
-    try {
-      const existing = await getCurrentCombinedSession(language, "groupB");
-      if (existing && (existing.status === "in-progress" || needsReview("combined", existing))) {
-        setPendingGroupBFilters(filters);
-        setGroupBResumePrompt(existing);
-        return;
-      }
-      setShowGroupBSetup(false);
-      await doStartGroupB(filters);
-    } catch (err) {
-      console.error("Failed to start Group B quiz:", err);
-      alert(String(err));
-    } finally {
-      setStarting(false);
-    }
-  }
-
-  function handleResumeGroupB() {
-    if (!groupBResumePrompt) return;
-    setActiveGroupBQuiz(groupBResumePrompt);
-    setGroupBResumePrompt(null);
-    setPendingGroupBFilters(null);
-    setShowGroupBSetup(false);
-    setStarting(false);
-    navigate(`/${language}/group-b-quiz`);
-  }
-
-  async function handleStartNewGroupB() {
-    if (!language || !pendingGroupBFilters) return;
-    const filters = pendingGroupBFilters;
-    setGroupBResumePrompt(null);
-    setShowGroupBSetup(false);
-    setPendingGroupBFilters(null);
-    try {
-      await doStartGroupB(filters);
-    } catch (err) {
-      console.error("Failed to start Group B quiz:", err);
-      alert(String(err));
-    } finally {
-      setStarting(false);
-    }
-  }
-
   function handleStartMixedQuiz() {
     if (!language) return;
     setShowMixedSetup(true);
@@ -603,7 +525,7 @@ export default function Dashboard() {
 
   function handleResumeMixed() {
     if (!mixedResumePrompt) return;
-    setActiveMixedQuiz(mixedResumePrompt);
+    setActiveMixedQuiz(null);
     setMixedResumePrompt(null);
     setPendingMixedFilters(null);
     setShowMixedSetup(false);
@@ -805,15 +727,6 @@ export default function Dashboard() {
           onStartCombined={handleCombinedFiltersSelected}
         />
       )}
-      {showGroupBSetup && !groupBResumePrompt && language && (
-        <CombinedQuizFilterModal
-          language={language}
-          groupCategory="B"
-          showFlaggedToggle={false}
-          onStart={handleGroupBFiltersSelected}
-          onClose={() => setShowGroupBSetup(false)}
-        />
-      )}
       {showMixedSetup && !mixedResumePrompt && language && (
         <CombinedQuizFilterModal
           language={language}
@@ -872,30 +785,6 @@ export default function Dashboard() {
               </button>
               <button
                 onClick={handleStartNewArticleQuiz}
-                className="flex-1 rounded-lg bg-gray-700 px-4 py-3 text-gray-300 hover:bg-gray-600 sm:py-2"
-              >
-                {t("startNewQuiz")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {groupBResumePrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-sm rounded-xl bg-gray-800 p-5 shadow-lg sm:p-6">
-            <p className="mb-4 text-gray-300">{t("existingGroupBQuizFound")}</p>
-            <p className="mb-4 text-lg font-semibold text-amber-400">
-              {groupBResumePrompt.score.correct} / {groupBResumePrompt.initialTotal ?? groupBResumePrompt.questions.length}
-            </p>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <button
-                onClick={handleResumeGroupB}
-                className="flex-1 rounded-lg bg-amber-600 px-4 py-3 text-white hover:bg-amber-500 sm:py-2"
-              >
-                {t("resumeQuiz")}
-              </button>
-              <button
-                onClick={handleStartNewGroupB}
                 className="flex-1 rounded-lg bg-gray-700 px-4 py-3 text-gray-300 hover:bg-gray-600 sm:py-2"
               >
                 {t("startNewQuiz")}
@@ -1049,19 +938,6 @@ export default function Dashboard() {
           ) : (
             <QuizRecoveryState error={recoveryError} onRetry={() => setRecoveryAttempt((n) => n + 1)} onHome={goHome} />
           )
-        ) : subPath === "/group-b-quiz" ? (
-          activeGroupBQuiz ? (
-            <CombinedQuizTaking
-              key="groupB"
-              session={activeGroupBQuiz}
-              variant="groupB"
-              onComplete={() => { setActiveGroupBQuiz(null); navigate(`/${language}`); }}
-              onBrowse={handleBrowse}
-              onStartNew={handleStartGroupBQuiz}
-            />
-          ) : (
-            <QuizRecoveryState error={recoveryError} onRetry={() => setRecoveryAttempt((n) => n + 1)} onHome={goHome} />
-          )
         ) : subPath === "/mixed-quiz" ? (
           activeMixedQuiz ? (
             <CombinedQuizTaking
@@ -1143,9 +1019,7 @@ export default function Dashboard() {
             onResumeGrammar={(session) => { setActiveGrammarQuiz(session); navigate(`/${language}/grammar-quiz`); }}
             onResumeCombined={(session) => { setActiveCombinedQuiz(session); navigate(`/${language}/combined-quiz`); }}
             onCombinedQuiz={handleStartCombinedQuiz}
-            onResumeGroupB={(session) => { setActiveGroupBQuiz(session); navigate(`/${language}/group-b-quiz`); }}
-            onGroupBQuiz={handleStartGroupBQuiz}
-            onResumeMixed={(session) => { setActiveMixedQuiz(session); navigate(`/${language}/mixed-quiz`); }}
+            onResumeMixed={() => { setActiveMixedQuiz(null); navigate(`/${language}/mixed-quiz`); }}
             onMixedQuiz={handleStartMixedQuiz}
             onStartNew={handleStartQuiz}
             onBrowse={handleBrowse}

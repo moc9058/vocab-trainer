@@ -233,7 +233,9 @@ export function foldMixWeights(args: {
   const domain = {} as { word: string; grammar: string };
   const folded = {} as Record<"word" | "grammar", Record<string, string>>;
   for (const k of DOMAINS) {
-    const { groups, selected, raw } = byDomain[k];
+    const { groups, selected: requested, raw: draftRaw } = byDomain[k];
+    const selected = new Set([...requested, ...groups.filter(g => groupCategory(g) === "B").map(g => g.id)]);
+    const raw = { ...draftRaw, ...Object.fromEntries(groups.filter(g => groupCategory(g) === "B").map(g => [g.id, "1"])) };
     const represented = CATEGORIES.filter((cat) =>
       groups.some((g) => selected.has(g.id) && groupCategory(g) === cat)
     );

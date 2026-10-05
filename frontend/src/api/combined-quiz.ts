@@ -1,18 +1,14 @@
 import { ApiError, fetchJson, postJson, putJson } from "./client";
 import type { CombinedQuizSession, MixWeightConfig } from "../types";
 
-/** Which of the identical route trees to talk to. "groupB" drills only the category-B
- *  groups; "mixed" spans both categories in one session; "importA"/"importB" drill the
- *  vocabulary and grammar of every saved article. Each keeps its own session per language,
- *  so all five can be in progress at once. */
-export type CombinedQuizVariant = "combined" | "groupB" | "mixed" | "importA" | "importB";
+/** Each variant keeps its own session per language. Mixed includes all live Group B items. */
+export type CombinedQuizVariant = "combined" | "mixed" | "importA" | "importB";
 
 /** A total map rather than an if-chain with a fallback: a variant added to the union but
  *  not given a path is a compile error here, instead of silently posting its answers into
  *  the plain Group A session. */
 const VARIANT_BASE: Record<CombinedQuizVariant, string> = {
   combined: "/api/combined-quiz",
-  groupB: "/api/group-b-quiz",
   mixed: "/api/mixed-quiz",
   importA: "/api/import-quiz-a",
   importB: "/api/import-quiz-b",

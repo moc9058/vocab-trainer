@@ -1,3 +1,4 @@
+import { initializeMixedScope, reconcileMixedScope } from "../mixed-quiz-scope.js";
 import type { FastifyPluginAsync } from "fastify";
 import {
   languageExists,
@@ -7,6 +8,8 @@ import {
   getProgressForLanguage,
   flagWord,
   getWordGroup,
+  getWordGroups,
+  getGrammarGroups,
   getWordsByIds,
   getAllGrammarItems,
   getGrammarItemsByIds,
@@ -46,33 +49,35 @@ interface WordFilterBody {
   wordIds?: string[];
 }
 
-/**
- * JSON schema for `MixWeightConfig`. The server treats it as opaque UI state — it is stored
- * and echoed back, never read for ordering (see the type's doc comment) — but it is still
- * validated so a malformed shape can't be written into a session document.
- */
+/** Authoritative mixed-quiz ratios, also displayed by the weight editor. */
 const MIX_WEIGHTS_SCHEMA = {
   type: "object",
+  required: ["category", "domain"],
   properties: {
     category: {
       type: "object",
+      required: ["A", "B"],
       properties: { A: { type: "number", minimum: 0 }, B: { type: "number", minimum: 0 } },
     },
     domain: {
       type: "object",
+      required: ["A", "B"],
       properties: {
         A: {
           type: "object",
+          required: ["word", "grammar"],
           properties: { word: { type: "number", minimum: 0 }, grammar: { type: "number", minimum: 0 } },
         },
         B: {
           type: "object",
+          required: ["word", "grammar"],
           properties: { word: { type: "number", minimum: 0 }, grammar: { type: "number", minimum: 0 } },
         },
       },
     },
     groups: {
       type: "object",
+      required: ["word", "grammar"],
       properties: {
         word: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
         grammar: { type: "object", additionalProperties: { type: "number", minimum: 0 } },
@@ -88,14 +93,8 @@ interface GrammarFilterBody {
   grammarIds?: string[];
 }
 
-/**
- * The combined quiz and the Group B quiz are the SAME routes over the same
- * `combined_quiz_sessions` collection, differing only in the Firestore doc key —
- * so both can be in progress for one language at the same time. Everything else
- * (weighted ordering, retry re-queue, mid-session weight changes) is inherited
- * unchanged.
- */
-function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string }): FastifyPluginAsync {
+/** Shared routes for Group A, live A+B, and article quizzes, each with its own session key. */
+function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string; liveGroupB?: boolean }): FastifyPluginAsync {
   return async (fastify) => {
   // Start a combined session: each domain is ordered internally by group weights
   // (words exactly like /api/quiz, grammar analogously), then the two streams are
@@ -165,6 +164,25 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
 
       if (!(await languageExists(language))) {
         return reply.notFound(`Language '${language}' not found`);
+      }
+
+      if (opts.liveGroupB) {
+        const session: CombinedQuizSession = {
+          sessionId: opts.sessionKey(language), language, startedAt: new Date().toISOString(),
+          status: "in-progress", reviewedQuestionCount: 0, score: { correct: 0, total: 0 },
+          questions: [], initialTotal: 0, domainWeights: { word: wordWeight, grammar: grammarWeight },
+          mixWeights: mixWeights ?? {
+            category: { A: 1, B: 1 },
+            domain: { A: { word: wordWeight, grammar: grammarWeight }, B: { word: wordWeight, grammar: grammarWeight } },
+            groups: { word: word?.groupWeights ?? {}, grammar: grammar?.groupWeights ?? {} },
+          },
+          ...(useCorrect ? { correctWeight } : {}),
+        };
+        await refreshMixedScope(session, { word: word?.groupIds ?? [], grammar: grammar?.groupIds ?? [] });
+        if (!session.questions.length) return reply.badRequest("No words or grammar items match the given filters");
+        reorderUnansweredTail(session);
+        await saveCombinedQuizSession(session);
+        return reply.status(201).send({ ...session, questions: session.questions.map(q => q.kind === "word" ? { kind: q.kind, wordId: q.wordId, term: q.term } : q) });
       }
 
       const toWordQuestion = (w: Word): CombinedQuizWordQuestion => ({
@@ -481,6 +499,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       const session = await getCombinedQuizSession(opts.sessionKey(request.params.language));
       if (!session) return reply.notFound("No combined quiz session found for this language");
 
+      if (opts.liveGroupB && session.status === "in-progress") await refreshMixedScope(session);
       reorderUnansweredTail(session);
       await saveCombinedQuizSession(session);
 
@@ -617,6 +636,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
         session.grammarGroupMembership = grammarGroupMembership;
       }
 
+      if (opts.liveGroupB && session.status === "in-progress") await refreshMixedScope(session);
       reorderUnansweredTail(session);
       await saveCombinedQuizSession(session);
 
@@ -627,13 +647,8 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
 }
 
 const combinedQuizRoutes = makeCombinedQuizRoutes({ sessionKey: (l) => l });
-/** Group B quiz — same handlers, session stored under `${language}__groupB`
- *  ("__" cannot occur in a language name, so the keys never collide). */
-export const groupBQuizRoutes = makeCombinedQuizRoutes({ sessionKey: (l) => `${l}__groupB` });
-/** Mixed A+B quiz — one session spanning both meta-groups. Nothing here knows about
- *  categories: the client simply sends category-A and category-B `groupIds` in one array
- *  (B first, so `assignMembership`'s first-wins rule gives a shared word B's weight). */
-export const mixedQuizRoutes = makeCombinedQuizRoutes({ sessionKey: (l) => `${l}__mixed` });
+/** Mixed sessions retain an A snapshot and reconcile the entire live B pool on resume. */
+export const mixedQuizRoutes = makeCombinedQuizRoutes({ sessionKey: (l) => `${l}__mixed`, liveGroupB: true });
 /**
  * Article quizzes — the vocabulary and grammar of every saved import session, drilled as
  * one pool. Two registrations rather than one shared `__import` key so a Group A and a
@@ -763,3 +778,19 @@ function reweightDomain<T extends object>(
 }
 
 export default combinedQuizRoutes;
+
+async function refreshMixedScope(session: CombinedQuizSession, selection?: { word?: string[]; grammar?: string[] }): Promise<void> {
+  const [wg, gg] = await Promise.all([getWordGroups(session.language), getGrammarGroups(session.language)]);
+  initializeMixedScope(session, wg, gg, selection);
+  const wordIds = [...new Set([...Object.values(session.mixedScope!.wordA).flat(), ...wg.filter(g => g.category === "B").flatMap(g => g.wordIds)])];
+  const grammarIds = [...new Set([...Object.values(session.mixedScope!.grammarA).flat(), ...gg.filter(g => g.category === "B").flatMap(g => g.grammarIds)])];
+  const [words, grammar, wp, gp] = await Promise.all([
+    getWordsByIds(wordIds), getGrammarItemsByIds(grammarIds),
+    session.correctWeight !== undefined ? getProgressForLanguage(session.language) : null,
+    session.correctWeight !== undefined ? getGrammarProgressForLanguage(session.language) : null,
+  ]);
+  reconcileMixedScope(session, wg, gg, words, grammar, {
+    wordIds: words.filter(w => isMastered(wp?.words[w.id])).map(w => w.id),
+    grammarIds: grammar.filter(g => isMastered(gp?.[g.id])).map(g => g.id),
+  });
+}
