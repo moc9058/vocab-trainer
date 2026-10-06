@@ -1,3 +1,4 @@
+import { recalculateMixedWeights } from "./mixed-operations.js";
 import type { CombinedQuizSession, CombinedQuizQuestion, WordGroup, GrammarGroup, Word, Grammar } from './types.js';
 
 type Membership = Record<string, string[]>;
@@ -40,6 +41,14 @@ export function reconcileMixedScope(session: CombinedQuizSession, wordGroups: Wo
   const mix = session.mixWeights!;
   const wordById = new Map(words.map(w => [w.id, w]));
   const grammarById = new Map(grammar.map(g => [g.id, g]));
+  const homes = (groups: { id: string; category?: string; ids: string[] }[], exists: (id: string) => boolean) => {
+    const result: Record<string, string> = {};
+    for (const group of groups) if (group.category !== "B")
+      for (const id of group.ids) if (exists(id)) result[id] ??= group.id;
+    return result;
+  };
+  scope.wordAHomes = homes(wordGroups.map(g => ({ ...g, ids: g.wordIds })), id => wordById.has(id));
+  scope.grammarAHomes = homes(grammarGroups.map(g => ({ ...g, ids: g.grammarIds })), id => grammarById.has(id));
   const build = (a: Membership, groups: { id: string; ids: string[] }[], exists: (id: string) => boolean) => {
     const seen = new Set<string>();
     const result: Membership = {};
@@ -51,8 +60,11 @@ export function reconcileMixedScope(session: CombinedQuizSession, wordGroups: Wo
     }
     return result;
   };
-  session.wordGroupMembership = build(scope.wordA, wordGroups.filter(g => g.category === 'B').map(g => ({ id: g.id, ids: g.wordIds })), id => wordById.has(id));
-  session.grammarGroupMembership = build(scope.grammarA, grammarGroups.filter(g => g.category === 'B').map(g => ({ id: g.id, ids: g.grammarIds })), id => grammarById.has(id));
+  scope.wordB = Object.fromEntries(wordGroups.filter(g => g.category === "B").map(g => [g.id, g.wordIds]));
+  scope.grammarB = Object.fromEntries(grammarGroups.filter(g => g.category === "B").map(g => [g.id, g.grammarIds]));
+  const union = (a: Membership, b: Membership = {}) => Object.fromEntries([...new Set([...Object.keys(a), ...Object.keys(b)])].map(gid => [gid, [...new Set([...(a[gid] ?? []), ...(b[gid] ?? [])])]]));
+  session.wordGroupMembership = build(union(scope.wordA, scope.retainedWordA), wordGroups.filter(g => g.category === 'B').map(g => ({ id: g.id, ids: g.wordIds })), id => wordById.has(id));
+  session.grammarGroupMembership = build(union(scope.grammarA, scope.retainedGrammarA), grammarGroups.filter(g => g.category === 'B').map(g => ({ id: g.id, ids: g.grammarIds })), id => grammarById.has(id));
   const wordIds = new Set(Object.values(session.wordGroupMembership).flat());
   const grammarIds = new Set(Object.values(session.grammarGroupMembership).flat());
   const key = (q: CombinedQuizQuestion) => q.kind === 'word' ? `w:${q.wordId}` : `g:${q.grammarId}`;
@@ -84,39 +96,7 @@ export function reconcileMixedScope(session: CombinedQuizSession, wordGroups: Wo
       grammarIds: [...new Set([...previous.grammarIds.filter(id => grammarIds.has(id)), ...addedGrammar.filter(id => mastered?.grammarIds.includes(id))])],
     };
   }
-  const bWords = new Set(wordGroups.filter(g => g.category === 'B').map(g => g.id));
-  const bGrammar = new Set(grammarGroups.filter(g => g.category === 'B').map(g => g.id));
-  const mass = { A: { word: 0, grammar: 0 }, B: { word: 0, grammar: 0 } };
-  for (const cat of ['A', 'B'] as const) {
-    const total = mix.domain[cat].word + mix.domain[cat].grammar || 1;
-    for (const k of ['word', 'grammar'] as const) {
-      const membership = k === 'word' ? session.wordGroupMembership : session.grammarGroupMembership;
-      const b = k === 'word' ? bWords : bGrammar;
-      const represented = Object.keys(membership).some(id => (b.has(id) ? 'B' : 'A') === cat);
-      mass[cat][k] = represented ? mix.category[cat] * mix.domain[cat][k] / total : 0;
-    }
-  }
-  const oldTotal = session.domainWeights.word + session.domainWeights.grammar || 2;
-  const totalMass = mass.A.word + mass.B.word + mass.A.grammar + mass.B.grammar || 1;
-  session.domainWeights = { word: (mass.A.word + mass.B.word) * oldTotal / totalMass, grammar: (mass.A.grammar + mass.B.grammar) * oldTotal / totalMass };
-  mix.groups ??= { word: {}, grammar: {} };
-  for (const k of ['word', 'grammar'] as const) {
-    const membership = k === 'word' ? session.wordGroupMembership : session.grammarGroupMembership;
-    const b = k === 'word' ? bWords : bGrammar;
-    const raw = mix.groups[k];
-    const sums = { A: 0, B: 0 };
-    for (const gid of Object.keys(membership)) {
-      if (b.has(gid)) raw[gid] = 1;
-      else raw[gid] ??= 1;
-      sums[b.has(gid) ? 'B' : 'A'] += raw[gid];
-    }
-    const weights = Object.fromEntries(Object.keys(membership).map(gid => {
-      const cat = b.has(gid) ? 'B' : 'A';
-      return [gid, raw[gid] * mass[cat][k] / (sums[cat] || 1)];
-    }));
-    if (k === 'word') session.wordGroupWeights = weights;
-    else session.grammarGroupWeights = weights;
-  }
+  recalculateMixedWeights(session);
   session.score.total = session.questions.length;
   session.initialTotal = new Set(session.questions.map(key)).size;
   if (session.questions.some(q => q.userCorrect === undefined)) {

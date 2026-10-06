@@ -341,11 +341,20 @@ export interface MixWeightConfig {
 }
 
 export interface CombinedQuizSession {
-  /** Fixed Group A pool (including overlap with B); Group B is resolved live on resume. */
+  /** Fixed A pool, session-only continuations, and live B display membership. */
   mixedScope?: {
     version: 1;
     wordA: Record<string, string[]>;
     grammarA: Record<string, string[]>;
+    /** Live B membership, distinct from exclusive sampling buckets. */
+    wordB?: Record<string, string[]>;
+    grammarB?: Record<string, string[]>;
+    /** Authoritative A homes for offline/local B removal before group metadata loads. */
+    wordAHomes?: Record<string, string>;
+    grammarAHomes?: Record<string, string>;
+    /** Explicit B removals keep these items in this session's A scope. */
+    retainedWordA?: Record<string, string[]>;
+    retainedGrammarA?: Record<string, string[]>;
   };
   sessionId: string;
   language: string;
@@ -360,9 +369,7 @@ export interface CombinedQuizSession {
   // Question count at start — retry re-queues grow `questions`, so the UI shows X / initialTotal.
   initialTotal: number;
   wordGroupWeights?: Record<string, number>;
-  /** Group → member ids, snapshotted at /start. NOT immutable: the mixed quiz's
-   *  remove-from-Group-B refile replaces these maps wholesale via PUT …/weights, moving the
-   *  item into its Group A bucket so the tail re-draw weights it as A from then on. */
+  /** Exclusive sampling membership. Mixed sessions rebuild it from fixed A, retained A and live B. */
   wordGroupMembership?: Record<string, string[]>;
   grammarGroupWeights?: Record<string, number>;
   grammarGroupMembership?: Record<string, string[]>;
@@ -616,6 +623,8 @@ export type ImportItemStatus =
 /** One destination's registration state. Terminal values mirror `ImportItemStatus`;
  *  `pending`/`skipped` are row-level facts and never appear here. */
 export interface ImportRegistrationState {
+  /** Exact destinations for retrying a partially completed registration. */
+  groupIds?: string[];
   status: "queued" | "registered" | "duplicate" | "failed";
   error?: string;
   rescuedAsDraft?: boolean;
@@ -648,6 +657,8 @@ interface ImportItemBase {
    *  uncovered, materialized so every character of every sentence has a row. They
    *  carry no reading or meaning, which is why they are flagged for review. */
   origin: "llm" | "merge" | "split" | "manual" | "gap";
+  /** Preserve explicit edits when cleaning old automatic extraction rows. */
+  edited?: boolean;
   /** Rows this one was derived from — drives the hint line and the undo. */
   sourceIds?: string[];
   /** Set on the rows a merge/split consumed. They stay in `items` as `skipped`

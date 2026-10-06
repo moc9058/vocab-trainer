@@ -26,7 +26,9 @@ live B membership and checks that the referenced word/grammar documents still ex
   are preserved. An already answered item is not added again merely because it
   appears in another B group.
 - A pending item removed from B moves to its selected A bucket if it belongs to the
-  A snapshot; otherwise it leaves the pending pool. Deleted documents leave the
+  A snapshot; otherwise it leaves the pending pool. **Exception:** an explicit
+  removal from the mixed quiz retains it in `retainedWordA` / `retainedGrammarA`
+  for this session, including an unselected A home. Deleted documents leave the
   pending pool. Answered history remains available for review.
 - Duplicate A/B membership gets B priority. Totals are recalculated after changes.
 - Completed sessions remain historical; they are not reopened by subsequent B additions.
@@ -42,17 +44,62 @@ migration script is needed.
 The home-page resume button fetches the session again when opening the quiz, so
 it cannot reuse the pool fetched earlier when the home page first loaded.
 
+## Explicit removal, progress and random ordering
+
+The removal control is available before and after reveal in the bottom action bar
+on phone/tablet widths, including landscape. Marking it does not write immediately.
+Grading sends `startedAt`, a UUID `operationId`, and `removeFromGroupB` with the
+answer through the serial outbox. Ending a sitting with a marked, ungraded card
+uses `POST /api/mixed-quiz/remove-from-b` with the same identifiers and no grade.
+
+`commitMixedQuizOperation` commits group `arrayRemove` writes, the session, domain
+progress, and an operation receipt in one Firestore transaction. Receipts live in
+`combined_quiz_sessions/{sessionKey}/operations/{operationId}`. Replaying an operation
+cannot grade twice; reusing its ID for different input, or targeting a replaced
+session, returns 409. Resume, review-boundary and weight writes also use a session
+transaction, so they cannot overwrite a concurrently committed mixed answer.
+
+- Removal + Wrong: keep exactly one pending slot at its A home's weight, even when
+  that home was not selected initially. Unknown/unassigned A homes use the virtual
+  `__ungroupedA` bucket, weight 1; no real group is created. A group without a saved
+  subgroup weight defaults to 1.
+- Removal + Correct: remove all pending copies for this item in this session.
+  Answered history remains. A later new session applies normal selection/weights.
+- Removal without grading: retain the pending card as A and do not record a grade.
+- `wordA` / `grammarA` stay fixed. Optional `retainedWordA` / `retainedGrammarA`
+  record the explicit continuation; `wordB` / `grammarB` record live B membership
+  for display. `wordAHomes` / `grammarAHomes` let local removal use the authoritative
+  A home before the metadata fetch finishes. Old sessions acquire these optional
+  fields lazily, without a bulk rewrite.
+- The next appearance of a removed item offers only ordinary grading after reveal;
+  there is no “Removed from Group B” receipt on the card. Pending/failed writes remain
+  visible in the sync badge, with the existing unsynced-answer navigation warning.
+
+A/B progress shows **remaining / total unique items in this session**, separately
+for words and grammar. A includes B; B is the currently B-associated subset. Retries
+count once, and zero-weight items never admitted to the quiz are excluded. Group
+details may overlap (especially grammar) and are not summed to obtain unique totals.
+
+Wrong answers rejoin the ordinary weighted draw, with no extra wrong-answer boost
+or recency rule. Sampling remains exclusive with B priority, and items within a
+bucket are uniform. Correct removes the pending slot; repeated Wrong keeps one slot.
+Already-correct weighting still applies when configured; Wrong leaves that bucket.
+Existing zero-weight pending items survive in a randomized tail. Consecutive draws
+of the same item are possible. Reordering without grading pins the visible card.
+Weight edits wait until the outbox has no pending or unacknowledged failed writes.
+
 ## Implementation map
 
 | Responsibility | Source |
 | --- | --- |
-| Fixed A snapshot, live B reconciliation and legacy migration | `backend/src/mixed-quiz-scope.ts` |
+| Fixed A snapshot, explicit A continuations, live B reconciliation and legacy migration | `backend/src/mixed-quiz-scope.ts` |
 | Start/resume/weight-update integration | `backend/src/routes/combined-quiz.ts` |
 | Persisted session fields | `backend/src/types.ts`, `backend/src/firestore.ts`, `frontend/src/types.ts` |
 | Setup, compact B display and mid-session weights | `frontend/src/components/CombinedQuizFilterModal.tsx`, `CombinedQuizTaking.tsx` |
 | Fresh resume fetch and retired-route redirect | `frontend/src/components/Dashboard.tsx` |
 | Equal B subgroup inputs in the client fold | `frontend/src/utils/quizGroupScope.ts` |
 | Scope regression tests | `backend/src/mixed-quiz-scope.test.ts` |
+| Atomic removal/grade and sampling | `backend/src/mixed-operations.ts`, `frontend/src/utils/mixedOperations.ts`, `firestore.ts:commitMixedQuizOperation` |
 | API lifecycle regression | `backend/scripts/tests/mixed-quiz-routes.test.ts` |
 
 ## Local verification
@@ -66,12 +113,18 @@ cd ../frontend
 npx tsc --noEmit
 npm test
 npm run build
+npx playwright install chromium
+npm run test:browser
 ```
 
 `test:mixed` uses Node's module mocking and Fastify injection with an in-memory
-store. It exercises start → answer → B changes → resume → weight changes → legacy
+store, plus an atomic Firestore adapter for transaction callbacks. It exercises start → answer → B changes → resume → weight changes → legacy
 migration → removals and the completed-session boundary, without cloud access.
-It requires a Node version supporting `--experimental-test-module-mocks` (the
+The browser suite mounts the production React components with local mocked APIs;
+it covers mobile controls, registration retries, lost responses and A/B double clicks.
+It makes no cloud or LLM calls. Chromium requires its normal OS libraries.
+
+`test:mixed` requires a Node version supporting `--experimental-test-module-mocks` (the
 repository's Node 24 runtime is suitable).
 
 ## Deployment from the home PC

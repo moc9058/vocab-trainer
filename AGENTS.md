@@ -56,8 +56,11 @@ Read the relevant reference before changing its feature:
   questions; existing pending questions follow the tail-preservation behavior.
 - Preserve answered attempts, scores, review boundaries and pending retries during
   reconciliation. Remove pending deleted/out-of-scope items; keep a B removal as A
-  only when it belongs to the selected A snapshot. Recalculate totals and do not
-  reopen completed sessions when B grows.
+  only when it belongs to the selected A snapshot, except an explicit mixed-quiz
+  removal: retain that item in the session-only A continuation scope even if its
+  A home was not selected. Removal + Wrong retains one pending slot; removal +
+  Correct removes pending slots for that item until the next new session.
+  Recalculate totals and do not reopen completed sessions when B grows.
 - Existing in-progress cloud sessions migrate lazily. New session fields must be
   included in the explicit `getCombinedQuizSession` read mapping, not just saved.
   Do not add a bulk production rewrite for this migration.
@@ -70,9 +73,15 @@ Read the relevant reference before changing its feature:
   live B reconciliation make positional caches unsafe. Grammar hydrates by ID too.
 - Mirror grading/retry changes in the server and `frontend/src/utils/quizLocal.ts`.
   Answer and membership writes use the serial `answerOutbox`; preserve their order
-  and the local refile behavior when changing mixed quizzes.
+  and the local transition behavior when changing mixed quizzes. Mixed answers
+  carry startedAt/operationId and optional removeFromGroupB; removal, grading and
+  retry receipts commit atomically. Do not restore the separate DELETE + weights
+  refile path. Mirror mixed transitions in mixed-operations.ts/mixedOperations.ts.
 - Keep quiz components keyed by variant and refetch mixed sessions when resuming.
   Distinguish a missing session (404) from transport/server errors.
+- Mixed progress displays unique remaining/total IDs: A includes B, while the
+  sampling buckets remain exclusive with B priority. Mixed wrong answers rejoin
+  the ordinary weighted draw; keep at most one pending slot per kind/ID.
 - Session data lives in Firestore; localStorage is for display preferences. Preserve
   the existing warning for unsynced answers rather than silently changing persistence.
 - Update UI translations in `frontend/src/i18n/translations.ts` for English, Japanese

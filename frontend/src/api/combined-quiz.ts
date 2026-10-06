@@ -100,6 +100,9 @@ export function answerCombinedQuestion(
     refId: string;
     correct: boolean;
     flagWordIds?: string[];
+    removeFromGroupB?: boolean;
+    startedAt?: string;
+    operationId?: string;
   },
   variant: CombinedQuizVariant = "combined"
 ): Promise<{ session: CombinedQuizSession }> {
@@ -112,4 +115,10 @@ export function markCombinedQuizReviewComplete(
   variant: CombinedQuizVariant = "combined"
 ): Promise<{ reviewedQuestionCount: number }> {
   return putJson(`${base(variant)}/session/language/${encodeURIComponent(language)}/reviewed`, { startedAt });
+}
+
+export function removeMixedQuestionFromB(opts: {
+  language: string; kind: "word" | "grammar"; refId: string; startedAt: string; operationId: string;
+}): Promise<{ session: CombinedQuizSession }> {
+  return postJson(`${base("mixed")}/remove-from-b`, opts);
 }

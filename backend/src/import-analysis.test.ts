@@ -371,3 +371,21 @@ test("a truncated response reports the over-long-article error", () => {
     /did not come back as complete JSON/
   );
 });
+
+// Repeated words and contained fragments must be repaired without a second LLM call.
+test("normalization deduplicates per sentence and removes contained-only fragments", () => {
+  const raw = JSON.stringify({ paragraphs: [{ sentences: [
+    { text: "总统支持左翼，总统讲话。", words: [{ term: "总统", transliteration: "zǒngtǒng", meaning: "president" }, { term: "总统" }, { term: "左翼" }, { term: "翼" }], grammar: [] },
+    { text: "总统看左翼和翼。", words: [{ term: "总统" }, { term: "左翼" }, { term: "翼" }], grammar: [] },
+  ] }] });
+  const { analysis } = normalizeAnalysis(raw, "chinese");
+  assert.deepEqual(analysis.words.filter(w => w.sentenceIndex === 0).map(w => w.term), ["总统", "左翼"]);
+  assert.deepEqual(analysis.words.filter(w => w.sentenceIndex === 1).map(w => w.term), ["总统", "左翼", "翼"]);
+  assert.equal(analysis.words[0].meaning, "president");
+});
+test("different readings/senses and uncertain inflections survive normalization", () => {
+  const { analysis } = normalizeAnalysis(JSON.stringify({ paragraphs: [{ sentences: [
+    { text: "还要还钱。", words: [{ term: "还", transliteration: "hái", meaning: "still" }, { term: "还", transliteration: "huán", meaning: "return" }], grammar: [] },
+  ] }] }), "chinese");
+  assert.equal(analysis.words.length, 2);
+});

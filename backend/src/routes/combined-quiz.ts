@@ -1,6 +1,10 @@
+import { orderMixedQuestions } from "../mixed-operations.js";
 import { initializeMixedScope, reconcileMixedScope } from "../mixed-quiz-scope.js";
 import type { FastifyPluginAsync } from "fastify";
 import {
+  commitMixedQuizOperation,
+  mutateCombinedQuizSession,
+  MixedOperationError,
   languageExists,
   getFilteredWords,
   getWordProgress,
@@ -376,6 +380,22 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
   // quiz serves, so both variants hydrate through the shared `POST /api/quiz/hydrate/:language`,
   // and grammar questions hydrate through `POST /api/grammar/:language/items/batch`.
 
+  if (opts.liveGroupB) fastify.post<{
+    Body: { language: string; kind: "word" | "grammar"; refId: string; startedAt: string; operationId: string };
+  }>("/remove-from-b", {
+    schema: { body: { type: "object", required: ["language", "kind", "refId", "startedAt", "operationId"], properties: {
+      language: { type: "string" }, kind: { type: "string", enum: ["word", "grammar"] },
+      refId: { type: "string" }, startedAt: { type: "string" }, operationId: { type: "string", pattern: "^[a-zA-Z0-9-]{1,100}$" },
+    } } },
+  }, async (request, reply) => {
+    try {
+      return { session: await commitMixedQuizOperation(opts.sessionKey(request.body.language), { ...request.body, removeFromGroupB: true }) };
+    } catch (error) {
+      if (error instanceof MixedOperationError) return reply.code(error.statusCode).send({ message: error.message });
+      throw error;
+    }
+  });
+
   // Submit answer for either kind; wrong answers are re-queued into the tail.
   fastify.post<{
     Body: {
@@ -384,6 +404,9 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       refId: string;
       correct: boolean;
       flagWordIds?: string[];
+      removeFromGroupB?: boolean;
+      startedAt?: string;
+      operationId?: string;
     };
   }>(
     "/answer",
@@ -398,12 +421,29 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
             refId: { type: "string" },
             correct: { type: "boolean" },
             flagWordIds: { type: "array", items: { type: "string" } },
+            removeFromGroupB: { type: "boolean" },
+            startedAt: { type: "string" },
+            operationId: { type: "string", pattern: "^[a-zA-Z0-9-]{1,100}$" },
           },
         },
       },
     },
     async (request, reply) => {
       const { language, kind, refId, correct, flagWordIds } = request.body;
+      if (opts.liveGroupB && (request.body.operationId || request.body.removeFromGroupB)) {
+        const { startedAt, operationId, removeFromGroupB } = request.body;
+        if (!startedAt || !operationId) return reply.badRequest("Session and operation IDs are required");
+        try {
+          const session = await commitMixedQuizOperation(opts.sessionKey(language), {
+            kind, refId, correct, startedAt, operationId, removeFromGroupB,
+          });
+          return { session };
+        } catch (error) {
+          if (error instanceof MixedOperationError) return reply.code(error.statusCode).send({ message: error.message });
+          throw error;
+        }
+      }
+
       const session = await getCombinedQuizSession(opts.sessionKey(language));
       if (!session) return reply.notFound("No combined quiz session found for this language");
       if (session.status === "completed") return reply.badRequest("Session already completed");
@@ -480,6 +520,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
         await Promise.all(flagWordIds.map((id) => flagWord(language, id).catch(() => {})));
       }
 
+      if (opts.liveGroupB) Object.assign(session, orderMixedQuestions(session));
       const allAnswered = session.questions.every((q) => q.userCorrect !== undefined);
       if (allAnswered) {
         session.status = "completed";
@@ -496,30 +537,31 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
   fastify.get<{ Params: { language: string } }>(
     "/session/language/:language",
     async (request, reply) => {
-      const session = await getCombinedQuizSession(opts.sessionKey(request.params.language));
-      if (!session) return reply.notFound("No combined quiz session found for this language");
+      return mutateCombinedQuizSession(opts.sessionKey(request.params.language), async (session) => {
+        if (!session) throw fastify.httpErrors.notFound("No combined quiz session found for this language");
 
-      if (opts.liveGroupB && session.status === "in-progress") await refreshMixedScope(session);
-      reorderUnansweredTail(session);
-      await saveCombinedQuizSession(session);
+        if (opts.liveGroupB && session.status === "in-progress") await refreshMixedScope(session);
+        reorderUnansweredTail(session);
 
-      return session;
+        return session;
+      });
     }
   );
 
   fastify.put<{ Params: { language: string }; Body: { startedAt: string } }>(
     "/session/language/:language/reviewed",
     async (request, reply) => {
-      const session = await getCombinedQuizSession(opts.sessionKey(request.params.language));
-      if (!session) return reply.notFound("No combined quiz session found for this language");
-      if (session.startedAt !== request.body.startedAt) {
-        return reply.conflict("The quiz session has been replaced");
-      }
-      session.reviewedQuestionCount = session.questions.filter(
-        (q) => q.userCorrect !== undefined
-      ).length;
-      await saveCombinedQuizSession(session);
-      return { reviewedQuestionCount: session.reviewedQuestionCount };
+      return mutateCombinedQuizSession(opts.sessionKey(request.params.language), async (session) => {
+        if (!session) throw fastify.httpErrors.notFound("No combined quiz session found for this language");
+        if (session.startedAt !== request.body.startedAt) {
+          throw fastify.httpErrors.conflict("The quiz session has been replaced");
+        }
+        session.reviewedQuestionCount = session.questions.filter(
+          (q) => q.userCorrect !== undefined
+        ).length;
+
+        return { reviewedQuestionCount: session.reviewedQuestionCount };
+      });
     }
   );
 
@@ -568,79 +610,77 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       },
     },
     async (request, reply) => {
-      const session = await getCombinedQuizSession(opts.sessionKey(request.params.language));
-      if (!session) return reply.notFound("No combined quiz session found for this language");
-      if (session.status === "completed") return reply.badRequest("Session already completed");
-      // The client hides the weights panel for these sessions; refuse anyway, or the stored
-      // weights would disagree with the order `reorderUnansweredTail` actually produces.
-      if (session.randomOrder) return reply.badRequest("This session is unweighted (random order)");
+      return mutateCombinedQuizSession(opts.sessionKey(request.params.language), async (session) => {
+        if (!session) throw fastify.httpErrors.notFound("No combined quiz session found for this language");
+        if (session.status === "completed") throw fastify.httpErrors.badRequest("Session already completed");
+        // The client hides the weights panel for these sessions; refuse anyway, or the stored
+        // weights would disagree with the order `reorderUnansweredTail` actually produces.
+        if (session.randomOrder) throw fastify.httpErrors.badRequest("This session is unweighted (random order)");
 
-      const {
-        domainWeights,
-        wordGroupWeights,
-        grammarGroupWeights,
-        mixWeights,
-        correctWeight,
-        wordGroupMembership,
-        grammarGroupMembership,
-      } = request.body;
-      if (correctWeight !== undefined) {
-        session.correctWeight = correctWeight;
-        // Activate the mastered partition on demand if the session didn't start with one.
-        if (!session.correctMembership) {
-          const [wp, gp] = await Promise.all([
-            getProgressForLanguage(request.params.language),
-            getGrammarProgressForLanguage(request.params.language),
-          ]);
-          const wordIds: string[] = [];
-          const grammarIds: string[] = [];
-          for (const q of session.questions) {
-            if (q.userCorrect !== undefined) continue;
-            if (q.kind === "word") {
-              if (isMastered(wp.words[q.wordId])) wordIds.push(q.wordId);
-            } else if (isMastered(gp[q.grammarId])) {
-              grammarIds.push(q.grammarId);
+        const {
+          domainWeights,
+          wordGroupWeights,
+          grammarGroupWeights,
+          mixWeights,
+          correctWeight,
+          wordGroupMembership,
+          grammarGroupMembership,
+        } = request.body;
+        if (correctWeight !== undefined) {
+          session.correctWeight = correctWeight;
+          // Activate the mastered partition on demand if the session didn't start with one.
+          if (!session.correctMembership) {
+            const [wp, gp] = await Promise.all([
+              getProgressForLanguage(request.params.language),
+              getGrammarProgressForLanguage(request.params.language),
+            ]);
+            const wordIds: string[] = [];
+            const grammarIds: string[] = [];
+            for (const q of session.questions) {
+              if (q.userCorrect !== undefined) continue;
+              if (q.kind === "word") {
+                if (isMastered(wp.words[q.wordId])) wordIds.push(q.wordId);
+              } else if (isMastered(gp[q.grammarId])) {
+                grammarIds.push(q.grammarId);
+              }
             }
+            session.correctMembership = { wordIds, grammarIds };
           }
-          session.correctMembership = { wordIds, grammarIds };
         }
-      }
-      if (domainWeights) {
-        const wordWeight = Math.max(0, domainWeights.word ?? session.domainWeights?.word ?? 1);
-        const grammarWeight = Math.max(0, domainWeights.grammar ?? session.domainWeights?.grammar ?? 1);
-        if (wordWeight <= 0 && grammarWeight <= 0 && (session.correctWeight ?? 0) <= 0) {
-          return reply.badRequest("At least one of the word/grammar/already-correct weights must be positive");
+        if (domainWeights) {
+          const wordWeight = Math.max(0, domainWeights.word ?? session.domainWeights?.word ?? 1);
+          const grammarWeight = Math.max(0, domainWeights.grammar ?? session.domainWeights?.grammar ?? 1);
+          if (wordWeight <= 0 && grammarWeight <= 0 && (session.correctWeight ?? 0) <= 0) {
+            throw fastify.httpErrors.badRequest("At least one of the word/grammar/already-correct weights must be positive");
+          }
+          session.domainWeights = { word: wordWeight, grammar: grammarWeight };
         }
-        session.domainWeights = { word: wordWeight, grammar: grammarWeight };
-      }
-      if (wordGroupWeights) {
-        session.wordGroupWeights = { ...session.wordGroupWeights, ...wordGroupWeights };
-      }
-      if (grammarGroupWeights) {
-        session.grammarGroupWeights = { ...session.grammarGroupWeights, ...grammarGroupWeights };
-      }
-      // Replaced wholesale, unlike the group maps above: this is one coherent set of ratios the
-      // folded weights were derived from, not a per-group patch. Merging halves of two different
-      // forms would describe a mix that was never requested.
-      if (mixWeights) {
-        session.mixWeights = mixWeights;
-      }
-      // Replaced WHOLESALE, like mixWeights: the client owns the refile (the mixed quiz's
-      // remove-from-Group-B moves an item's id from its B bucket to its A group's), and a
-      // merge would resurrect exactly the B memberships it just stripped. Arrives through
-      // the answer outbox, so it lands after the answers enqueued before it.
-      if (wordGroupMembership) {
-        session.wordGroupMembership = wordGroupMembership;
-      }
-      if (grammarGroupMembership) {
-        session.grammarGroupMembership = grammarGroupMembership;
-      }
+        if (wordGroupWeights) {
+          session.wordGroupWeights = { ...session.wordGroupWeights, ...wordGroupWeights };
+        }
+        if (grammarGroupWeights) {
+          session.grammarGroupWeights = { ...session.grammarGroupWeights, ...grammarGroupWeights };
+        }
+        // Replaced wholesale, unlike the group maps above: this is one coherent set of ratios the
+        // folded weights were derived from, not a per-group patch. Merging halves of two different
+        // forms would describe a mix that was never requested.
+        if (mixWeights) {
+          session.mixWeights = mixWeights;
+        }
+        // Compatibility with older clients. Mixed scope is rebuilt server-side below;
+        // the current UI sends explicit removal operations instead of these maps.
+        if (wordGroupMembership) {
+          session.wordGroupMembership = wordGroupMembership;
+        }
+        if (grammarGroupMembership) {
+          session.grammarGroupMembership = grammarGroupMembership;
+        }
 
-      if (opts.liveGroupB && session.status === "in-progress") await refreshMixedScope(session);
-      reorderUnansweredTail(session);
-      await saveCombinedQuizSession(session);
+        if (opts.liveGroupB && session.status === "in-progress") await refreshMixedScope(session);
+        reorderUnansweredTail(session);
 
-      return session;
+        return session;
+      });
     }
   );
   };
@@ -664,6 +704,7 @@ export const importQuizBRoutes = makeCombinedQuizRoutes({ sessionKey: (l) => `${
 // keeping answered questions in place. Shared by resume (GET session) and the
 // mid-session weight update (PUT weights).
 function reorderUnansweredTail(session: CombinedQuizSession): void {
+  if (session.mixedScope) { Object.assign(session, orderMixedQuestions(session)); return; }
   const answered: CombinedQuizQuestion[] = [];
   const unanswered: CombinedQuizQuestion[] = [];
   for (const q of session.questions) {
@@ -782,8 +823,8 @@ export default combinedQuizRoutes;
 async function refreshMixedScope(session: CombinedQuizSession, selection?: { word?: string[]; grammar?: string[] }): Promise<void> {
   const [wg, gg] = await Promise.all([getWordGroups(session.language), getGrammarGroups(session.language)]);
   initializeMixedScope(session, wg, gg, selection);
-  const wordIds = [...new Set([...Object.values(session.mixedScope!.wordA).flat(), ...wg.filter(g => g.category === "B").flatMap(g => g.wordIds)])];
-  const grammarIds = [...new Set([...Object.values(session.mixedScope!.grammarA).flat(), ...gg.filter(g => g.category === "B").flatMap(g => g.grammarIds)])];
+  const wordIds = [...new Set([...Object.values(session.mixedScope!.wordA).flat(), ...Object.values(session.mixedScope!.retainedWordA ?? {}).flat(), ...wg.filter(g => g.category === "B").flatMap(g => g.wordIds)])];
+  const grammarIds = [...new Set([...Object.values(session.mixedScope!.grammarA).flat(), ...Object.values(session.mixedScope!.retainedGrammarA ?? {}).flat(), ...gg.filter(g => g.category === "B").flatMap(g => g.grammarIds)])];
   const [words, grammar, wp, gp] = await Promise.all([
     getWordsByIds(wordIds), getGrammarItemsByIds(grammarIds),
     session.correctWeight !== undefined ? getProgressForLanguage(session.language) : null,

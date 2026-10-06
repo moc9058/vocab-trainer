@@ -1,3 +1,6 @@
+import { applyMixedOperation, UNGROUPED_A } from "../utils/mixedOperations";
+import { mixedCategoryProgress } from "../utils/mixedProgress";
+import { getOutboxState } from "../utils/answerOutbox";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
@@ -6,8 +9,8 @@ import {
   updateCombinedQuizWeights,
   type CombinedQuizVariant,
 } from "../api/combined-quiz";
-import { getGroups, removeWordFromGroupB } from "../api/vocab";
-import { getGrammarGroups, removeGrammarFromGroupB } from "../api/grammar";
+import { getGroups } from "../api/vocab";
+import { getGrammarGroups } from "../api/grammar";
 import { getFlaggedWordIds, flagWord, unflagWord } from "../api/flagged";
 import { isWeightValid, parseWeightInput, scaleWeightRecord } from "../utils/weightInput";
 import RubyText from "./RubyText";
@@ -18,9 +21,6 @@ import { useQuizPrefetch } from "../hooks/useQuizPrefetch";
 import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
 import {
   applyCombinedAnswerLocally,
-  refileCombinedMembership,
-  reorderCombinedTailLocally,
-  type RefileOpts,
 } from "../utils/quizLocal";
 import {
   appendSessionReview,
@@ -177,20 +177,12 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const gradedIndexRef = useRef(-1);
   const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const [alreadyFlaggedIds, setAlreadyFlaggedIds] = useState<Set<string>>(new Set());
-  // Group B / mixed variants: the two-step "3" flow. Pressing 3 (or the control) MARKS the
-  // current card (`pendingRemoveBIds`; a second press unmarks); the DELETE commits only when
-  // the user moves past the card (grade or 🏁) — leaving without grading drops the mark.
-  // `removedFromBIds` is the committed receipt: the current session keeps showing the item,
-  // it simply stops appearing in future Group B sessions (the mixed variant additionally
-  // re-files it as Group A — see `refileAfterRemoval`). All three sets key by `bKey`.
+  // Mark now, commit with grading (or end-sitting) through the serial outbox.
+  // Removed IDs hide the control locally; the sync badge reports pending/failed commits.
   const [pendingRemoveBIds, setPendingRemoveBIds] = useState<Set<string>>(new Set());
   const [removedFromBIds, setRemovedFromBIds] = useState<Set<string>>(new Set());
-  const [removingFromBIds, setRemovingFromBIds] = useState<Set<string>>(new Set());
-  const [removeFromBError, setRemoveFromBError] = useState<string | null>(null);
   const [groupNameMap, setGroupNameMap] = useState<Map<string, string>>(new Map());
-  // Which meta-group each group belongs to, from the same fetch as the names. This is the ONLY
-  // way a question can be attributed to Group A or B: the server has no category concept, so
-  // neither the session nor its questions carry one — see `routes/combined-quiz.ts`.
+  // Group metadata labels the weight editor and detailed progress rows.
   const [groupCategoryMap, setGroupCategoryMap] = useState<Map<string, GroupCategory>>(new Map());
   // Which items actually sit in a category-B group, per domain. The mixed A+B quiz draws
   // from the UNION of both categories, so most of its cards are A-only and must NOT offer
@@ -207,6 +199,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     words: Map<string, string>;
     grammar: Map<string, string>;
   } | null>(null);
+  const [actualAMembership, setActualAMembership] = useState<{ word: Record<string, string[]>; grammar: Record<string, string[]> }>({ word: {}, grammar: {} });
   const [originalTotal] = useState(() => session.initialTotal ?? session.questions.length);
   /** A random-order session has no buckets to weight — the whole union is one shuffle,
    *  and `PUT …/weights` rejects it — so the ⚖ control has nothing to offer. */
@@ -243,15 +236,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
 
   const outbox = useAnswerOutbox();
-
-  // Latest-session ref for async continuations (a commit resolves long after the render that
-  // started it), plus the record of committed refiles — replayed over any server payload that
-  // may predate the outbox's membership PUT (see `applyWeights`).
-  const currentSessionRef = useRef(currentSession);
-  currentSessionRef.current = currentSession;
-  const committedBMovesRef = useRef<
-    { kind: "word" | "grammar"; refId: string; opts: RefileOpts }[]
-  >([]);
 
   // Load BOTH domains' payloads for the whole session up front, soonest cards first, so a
   // connection drop mid-quiz can't leave a card without its definitions or descriptions.
@@ -295,8 +279,8 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       needGrammar ? getGrammarGroups(session.language).catch(() => null) : Promise.resolve([]),
     ]).then(([wordGroups, grammarGroups]) => {
       const allGroups = [...(wordGroups ?? []), ...(grammarGroups ?? [])];
-      setGroupNameMap(new Map(allGroups.map((g) => [g.id, g.name])));
-      setGroupCategoryMap(new Map(allGroups.map((g) => [g.id, categoryOf(g)])));
+      setGroupNameMap(new Map([[UNGROUPED_A, t("ungroupedA")], ...allGroups.map((g): [string, string] => [g.id, g.name])]));
+      setGroupCategoryMap(new Map([[UNGROUPED_A, "A"], ...allGroups.map((g): [string, GroupCategory] => [g.id, categoryOf(g)])]));
       // A failed fetch leaves `groupBIds` null rather than claiming "in no B group".
       if (!wordGroups || !grammarGroups) return;
       setGroupBIds({
@@ -310,6 +294,10 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       for (const g of categoryGroups(grammarGroups, "A"))
         for (const id of g.grammarIds) if (!grammarHomes.has(id)) grammarHomes.set(id, g.id);
       setAGroupHome({ words: wordHomes, grammar: grammarHomes });
+      setActualAMembership({
+        word: Object.fromEntries(categoryGroups(wordGroups, "A").map(g => [g.id, g.wordIds])),
+        grammar: Object.fromEntries(categoryGroups(grammarGroups, "A").map(g => [g.id, g.grammarIds])),
+      });
     });
   }, [
     session.language,
@@ -364,8 +352,18 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
   // Per-group progress for word groups and grammar groups combined.
   const groupProgress = useMemo(() => {
-    const wordMembership = currentSession.wordGroupMembership;
-    const grammarMembership = currentSession.grammarGroupMembership;
+    const detailMembership = (kind: QuizDomain): Record<string, string[]> | undefined => {
+      if (variant !== "mixed") return kind === "word" ? currentSession.wordGroupMembership : currentSession.grammarGroupMembership;
+      const scope = currentSession.mixedScope;
+      const b = (kind === "word" ? scope?.wordB : scope?.grammarB) ?? {};
+      const a = { ...(kind === "word" ? scope?.wordA : scope?.grammarA), ...actualAMembership[kind] };
+      const ids = new Set(orderedQuestions.filter(q => q.kind === kind).map(q => q.kind === "word" ? q.wordId : q.grammarId));
+      const grouped = new Set(Object.values(a).flat());
+      a[UNGROUPED_A] = [...ids].filter(id => !grouped.has(id));
+      return Object.fromEntries(Object.entries({ ...a, ...b }).map(([gid, members]): [string, string[]] => [gid, [...new Set(members)].filter(id => ids.has(id))]).filter(([, members]) => members.length));
+    };
+    const wordMembership = detailMembership("word");
+    const grammarMembership = detailMembership("grammar");
     const unansweredWordIds = new Set(
       orderedQuestions.filter((q) => q.kind === "word" && q.userCorrect === undefined).map((q) => (q as { wordId: string }).wordId)
     );
@@ -384,8 +382,8 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       rows.push({
         id: gid,
         kind: "word",
-        category: groupCategoryMap.get(gid),
-        name: groupNameMap.get(gid) ?? gid,
+        category: gid === UNGROUPED_A ? "A" : groupCategoryMap.get(gid) ?? (variant === "mixed" ? "A" : undefined),
+        name: gid === UNGROUPED_A ? t("ungroupedA") : groupNameMap.get(gid) ?? gid,
         remaining: ids.filter((id) => unansweredWordIds.has(id)).length,
         total: ids.length,
       });
@@ -394,16 +392,18 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       rows.push({
         id: gid,
         kind: "grammar",
-        category: groupCategoryMap.get(gid),
-        name: groupNameMap.get(gid) ?? gid,
+        category: gid === UNGROUPED_A ? "A" : groupCategoryMap.get(gid) ?? (variant === "mixed" ? "A" : undefined),
+        name: gid === UNGROUPED_A ? t("ungroupedA") : groupNameMap.get(gid) ?? gid,
         remaining: ids.filter((id) => unansweredGrammarIds.has(id)).length,
         total: ids.length,
       });
     }
     return rows.length > 0 ? rows : null;
   }, [
-    currentSession.wordGroupMembership,
-    currentSession.grammarGroupMembership,
+    currentSession,
+    actualAMembership,
+    variant,
+    t,
     orderedQuestions,
     groupNameMap,
     groupCategoryMap,
@@ -456,6 +456,9 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
    * as a separate neutral row instead of silently making the four buckets not add up.
    */
   const categoryProgress = useMemo(() => {
+    if (variant === "mixed") return mixedCategoryProgress(currentSession).map(row => ({
+      ...row, label: t(row.category === "A" ? "categoryALabel" : "categoryBLabel"),
+    }));
     if (groupCategoryMap.size === 0) return null;
     const membership = {
       word: currentSession.wordGroupMembership,
@@ -505,8 +508,8 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     }
     return rows;
   }, [
-    currentSession.wordGroupMembership,
-    currentSession.grammarGroupMembership,
+    currentSession,
+    variant,
     groupCategoryMap,
     orderedQuestions,
     t,
@@ -517,23 +520,16 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     setShowAllExamples(false);
   }
 
-  // Membership snapshots retain groups whose creation-time weight was 0, even though none
-  // of their items entered `questions`. Freeze the groups that actually contributed at mount:
-  // changing weights can reorder the question set, but it cannot expand that set.
-  const [adjustableGroupIds] = useState<Record<QuizDomain, Set<string>>>(() => {
-    const questionIds: Record<QuizDomain, Set<string>> = {
-      word: new Set(),
-      grammar: new Set(),
-    };
-    for (const q of session.questions) {
-      if (q.kind === "word") questionIds.word.add(q.wordId);
-      else questionIds.grammar.add(q.grammarId);
-    }
+  // Mixed scope can gain live B items and explicit A continuations while the quiz is open.
+  const adjustableGroupIds = useMemo<Record<QuizDomain, Set<string>>>(() => {
+    const active = variant === "mixed" ? currentSession : session;
+    const questionIds = { word: new Set<string>(), grammar: new Set<string>() };
+    for (const q of active.questions) questionIds[q.kind].add(q.kind === "word" ? q.wordId : q.grammarId);
     return {
-      word: representedGroupIds(session.wordGroupMembership, questionIds.word),
-      grammar: representedGroupIds(session.grammarGroupMembership, questionIds.grammar),
+      word: representedGroupIds(active.wordGroupMembership, questionIds.word),
+      grammar: representedGroupIds(active.grammarGroupMembership, questionIds.grammar),
     };
-  });
+  }, [currentSession, session, variant]);
 
   function openWeightsPanel() {
     setDomainDraft({
@@ -643,6 +639,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   // unanswered tail and returns the full session; re-sync local order and jump
   // to the first unanswered question of the new order.
   async function applyWeights() {
+    if (getOutboxState().pending || getOutboxState().failed) return;
     if (applyingWeights || !canApplyWeights) return;
     setApplyingWeights(true);
     try {
@@ -700,14 +697,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         ...(Object.keys(wordGroupWeights).length > 0 ? { wordGroupWeights } : {}),
         ...(Object.keys(grammarGroupWeights).length > 0 ? { grammarGroupWeights } : {}),
       }, variant);
-      // The response may predate a membership PUT still in the outbox — replay the committed
-      // refiles over it so a just-removed item doesn't snap back to its B bucket locally.
-      setCurrentSession(
-        committedBMovesRef.current.reduce(
-          (s, m) => refileCombinedMembership(s, m.kind, m.refId, m.opts),
-          updated
-        )
-      );
+      setCurrentSession(updated);
       const firstUnanswered = updated.questions.findIndex((q) => q.userCorrect === undefined);
       // The new order can land the cursor back on an index already graded this session; the
       // double-tap guard keys off the index, so it must be cleared or that card is unanswerable.
@@ -758,6 +748,10 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   /** Unknown membership (`groupBIds === null`) counts as "in B" so the control never
    *  vanishes from the Group B quiz because a groups request was slow or failed. */
   function isInGroupB(refId: string, kind: "word" | "grammar") {
+    if (variant === "mixed" && currentSession.mixedScope) {
+      const b = kind === "word" ? currentSession.mixedScope.wordB : currentSession.mixedScope.grammarB;
+      if (b) return Object.values(b).some(ids => ids.includes(refId));
+    }
     if (!groupBIds) return true;
     return kind === "word" ? groupBIds.words.has(refId) : groupBIds.grammar.has(refId);
   }
@@ -766,7 +760,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
    *  itself only fires when the user moves past the card — `handleGrade` / `endSession`. */
   function togglePendingRemoveFromB(refId: string, kind: "word" | "grammar") {
     const key = bKey(kind, refId);
-    if (removingFromBIds.has(key) || removedFromBIds.has(key)) return; // already gone / commit in flight
+    if (removedFromBIds.has(key)) return; // already gone / commit in flight
     setPendingRemoveBIds((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
@@ -775,111 +769,16 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     });
   }
 
-  /** The COMMIT half. Awaited and success-only: the ✓ badge used to be set alongside a
-   *  fire-and-forget request with a swallowed catch, so a failed removal still
-   *  showed the receipt while the server kept the item in Group B. */
-  async function handleRemoveFromGroupB(refId: string, kind: "word" | "grammar") {
-    const key = bKey(kind, refId);
-    if (removingFromBIds.has(key) || removedFromBIds.has(key)) return;
-    setRemovingFromBIds((prev) => new Set([...prev, key]));
-    setRemoveFromBError(null);
-    try {
-      const { removedFromGroupIds } =
-        kind === "word"
-          ? await removeWordFromGroupB(currentSession.language, refId)
-          : await removeGrammarFromGroupB(currentSession.language, refId);
-      setRemovedFromBIds((prev) => new Set([...prev, key]));
-      // The item is out of Group B for real now — in the mixed quiz that means it should
-      // draw at its Group A weight for the rest of the session.
-      if (variant === "mixed") refileAfterRemoval(refId, kind, removedFromGroupIds);
-    } catch {
-      setRemoveFromBError(t("removeFromGroupBFailed"));
-    } finally {
-      setRemovingFromBIds((prev) => {
-        const next = new Set(prev);
-        next.delete(key);
-        return next;
-      });
-    }
-  }
-
-  /** Mixed only: after a committed removal, move the item's session bucket from Group B to
-   *  its Group A home — locally first (pinning the card on screen), then on the server
-   *  through the answer outbox, whose serial FIFO lands the membership PUT after the
-   *  answers enqueued before it (both read-modify-write the session document). */
-  function refileAfterRemoval(
-    refId: string,
-    kind: "word" | "grammar",
-    removedFromGroupIds: string[]
-  ) {
-    const latest = currentSessionRef.current;
-    // A completed session has no tail and the PUT would 400; randomOrder likewise
-    // (unreachable for mixed, but self-describing). An ungrouped domain has no buckets.
-    if (latest.status === "completed" || latest.randomOrder) return;
-    const map = kind === "word" ? latest.wordGroupMembership : latest.grammarGroupMembership;
-    if (!map || Object.keys(map).length === 0) return;
-
-    const opts: RefileOpts = {
-      categoryOfGroup: (gid) => groupCategoryMap.get(gid),
-      removedFromGroupIds,
-      aGroupId: aGroupHome
-        ? (kind === "word" ? aGroupHome.words : aGroupHome.grammar).get(refId)
-        : undefined,
-    };
-    committedBMovesRef.current.push({ kind, refId, opts });
-
-    // The updater sees the true latest state; the outbox payload instead replays EVERY
-    // committed move over the ref'd snapshot (refile is idempotent, so double-application
-    // is safe), which also covers two commits resolving between renders. The random
-    // re-draw inside the updater is the same class of impurity as
-    // `applyCombinedAnswerLocally`'s retry splice in `handleGrade`.
-    setCurrentSession((prev) =>
-      reorderCombinedTailLocally(refileCombinedMembership(prev, kind, refId, opts))
-    );
-    const refiled = committedBMovesRef.current.reduce(
-      (s, m) => refileCombinedMembership(s, m.kind, m.refId, m.opts),
-      latest
-    );
-    outbox.enqueue({
-      domain: "combinedMembership",
-      language: latest.language,
-      variant,
-      ...(refiled.wordGroupMembership ? { wordGroupMembership: refiled.wordGroupMembership } : {}),
-      ...(refiled.grammarGroupMembership
-        ? { grammarGroupMembership: refiled.grammarGroupMembership }
-        : {}),
-    });
-  }
-
-  // Group B: "3"-key equivalent as a clickable control, plus the pending mark and the
-  // post-removal badge.
+  // Group B: the keyboard mark as a clickable control. Removed cards have no receipt.
   function GroupBExcludeControl({ refId, kind }: { refId: string; kind: "word" | "grammar" }) {
     if (!usesGroupBControls) return null;
     const key = bKey(kind, refId);
-    // The commit fires after advancing, so its error belongs to the PREVIOUS card — it must
-    // render even when this card offers no control, or a failed removal would be silent.
-    const errorLine = removeFromBError ? (
-      <p className="text-xs text-red-400">{removeFromBError}</p>
-    ) : null;
-    if (removedFromBIds.has(key)) {
-      // Keep the confirmation even though the item is no longer in B — it is the receipt
-      // for the removal this session just made.
-      return (
-        <p className="w-full max-w-lg rounded-md border border-amber-700/50 bg-amber-950/30 px-3 py-2.5 text-center text-sm text-amber-300 sm:py-1.5 sm:text-left sm:text-xs">
-          ✓ {t("removedFromGroupB")}
-        </p>
-      );
-    }
-    if (!isInGroupB(refId, kind)) {
-      return errorLine ? <div className="w-full max-w-lg">{errorLine}</div> : null;
-    }
-    const removing = removingFromBIds.has(key);
+    if (removedFromBIds.has(key) || !isInGroupB(refId, kind)) return null;
     const pending = pendingRemoveBIds.has(key);
     return (
       <div className="w-full max-w-lg space-y-1">
         <button
           type="button"
-          disabled={removing}
           aria-pressed={pending}
           onClick={() => togglePendingRemoveFromB(refId, kind)}
           className={
@@ -890,18 +789,18 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         >
           {/* The "3" hint only means something where there is a keyboard. */}
           <span className="hidden sm:inline">3 · </span>
-          {removing ? "…" : pending ? `⏳ ${t("removeFromGroupBPending")}` : t("removeFromGroupB")}
+          {pending ? `⏳ ${t("removeFromGroupBPending")}` : t("removeFromGroupB")}
         </button>
-        {errorLine}
       </div>
     );
   }
 
   /** Local-first — see `utils/quizLocal.ts`. The write is queued, never awaited. */
   function handleGrade(correct: boolean) {
-    if (!question || gradedIndexRef.current === currentIndex) return;
+    if (!question || applyingWeights || gradedIndexRef.current === currentIndex) return;
     gradedIndexRef.current = currentIndex;
     const refId = question.kind === "word" ? question.wordId : question.grammarId;
+    const removeFromGroupB = pendingRemoveBIds.has(bKey(question.kind, refId));
     const submittedFlagIds = !usesGroupBControls && question.kind === "word" ? Array.from(flaggedIds) : [];
 
     outbox.enqueue({
@@ -911,6 +810,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       kind: question.kind,
       refId,
       correct,
+      ...(variant === "mixed" ? { removeFromGroupB, startedAt: session.startedAt, operationId: crypto.randomUUID() } : {}),
       ...(submittedFlagIds.length > 0 ? { flagWordIds: submittedFlagIds } : {}),
     });
 
@@ -926,10 +826,13 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         next.delete(gradedKey);
         return next;
       });
-      void handleRemoveFromGroupB(refId, question.kind);
+      if (variant === "mixed") setRemovedFromBIds(prev => new Set([...prev, gradedKey]));
     }
 
-    setCurrentSession((prev) => applyCombinedAnswerLocally(prev, question.kind, refId, correct));
+    setCurrentSession(prev => variant === "mixed"
+      ? applyMixedOperation(prev, { kind: question.kind, refId, correct, removeFromGroupB },
+          (question.kind === "word" ? aGroupHome?.words : aGroupHome?.grammar)?.get(refId))
+      : applyCombinedAnswerLocally(prev, question.kind, refId, correct));
     const reviewQuestion = { ...orderedQuestions[currentIndex], userCorrect: correct };
     setSessionLog((prev) =>
       appendSessionReview(reviewKey, session.startedAt, prev, reviewQuestion)
@@ -938,7 +841,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     setShowingAnswer(false);
     resetExpandedAnswers();
     setFlaggedIds(new Set());
-    setRemoveFromBError(null);
   }
 
   function endSession() {
@@ -953,7 +855,13 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
           next.delete(key);
           return next;
         });
-        void handleRemoveFromGroupB(refId, question.kind);
+        if (variant === "mixed") {
+          outbox.enqueue({ domain: "combinedRemoval", language: session.language, kind: question.kind,
+            refId, startedAt: session.startedAt, operationId: crypto.randomUUID() });
+          setRemovedFromBIds(prev => new Set([...prev, key]));
+          setCurrentSession(prev => applyMixedOperation(prev, { kind: question.kind, refId, removeFromGroupB: true },
+            (question.kind === "word" ? aGroupHome?.words : aGroupHome?.grammar)?.get(refId)));
+        }
       }
     }
     setSessionReviewIndex(0);
@@ -1032,7 +940,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, usesGroupBControls, groupBIds, pendingRemoveBIds, removedFromBIds, removingFromBIds]);
+  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, usesGroupBControls, groupBIds, pendingRemoveBIds, removedFromBIds]);
 
 
   if (sessionReviewActive) {
@@ -1276,7 +1184,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   }
 
   return (
-    <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+    <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 pb-44 lg:p-8">
       <QuizSyncBadge
         prefetch={prefetch}
         pending={outbox.pending}
@@ -1303,6 +1211,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
           in one glance. */}
       {categoryProgress && (
         <div className="flex w-full max-w-lg flex-col items-center gap-1">
+          {variant === "mixed" && <p className="text-center text-xs text-gray-400">{t("mixedProgressHint")}</p>}
           {categoryProgress.map((row) => (
             <div key={row.category} className="flex flex-wrap items-center justify-center gap-2">
               {row.category === "A" || row.category === "B" ? (
@@ -1609,7 +1518,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             </button>
             <button
               onClick={applyWeights}
-              disabled={applyingWeights || !canApplyWeights}
+              disabled={applyingWeights || !canApplyWeights || outbox.pending > 0 || outbox.failed > 0}
               className="rounded-lg bg-indigo-600 px-3 py-2.5 text-sm text-white hover:bg-indigo-500 disabled:opacity-50 sm:py-1.5 sm:text-xs"
             >
               {applyingWeights ? "..." : t("applyWeights")}
@@ -1706,18 +1615,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         </h2>
       )}
 
-      {!showingAnswer ? (
-        // Same sticky-bottom treatment as the grade buttons: the progress pills above can
-        // push this off-screen on a phone, and it is the only way forward.
-        <div className="sticky bottom-0 z-10 -mx-4 flex w-[calc(100%+2rem)] flex-col bg-gray-900/95 px-4 py-2 sm:static sm:mx-0 sm:w-auto sm:bg-transparent sm:px-0 sm:py-0">
-          <button
-            onClick={revealAnswer}
-            className="w-full rounded-lg bg-gray-700 px-6 py-3 text-gray-300 hover:bg-gray-600 sm:w-auto sm:py-2"
-          >
-            {wordQuestion ? t("showAnswer") : t("showGrammarAnswer")}
-          </button>
-        </div>
-      ) : wordQuestion ? (
+      {!showingAnswer ? null : wordQuestion ? (
         <>
           {settings.showKoreanHanja && wordQuestion.hanjaReadings && (
             <div className="w-full max-w-lg rounded-lg bg-gray-700 p-4">
@@ -1810,7 +1708,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             </div>
           )}
 
-          <GroupBExcludeControl refId={wordQuestion.wordId} kind="word" />
 
           <div className={`w-full max-w-lg space-y-1 ${usesGroupBControls ? "hidden" : ""}`}>
             <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
@@ -1843,20 +1740,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             )}
           </div>
 
-          <div className="sticky bottom-0 z-10 -mx-4 flex w-[calc(100%+2rem)] flex-col gap-3 bg-gray-900/95 px-4 py-2 sm:static sm:mx-0 sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:px-0 sm:py-0">
-            <button
-              onClick={() => handleGrade(false)}
-              className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-3 sm:py-2 text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              {t("iWasWrong")}
-            </button>
-            <button
-              onClick={() => handleGrade(true)}
-              className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-3 sm:py-2 text-white hover:bg-green-700 disabled:opacity-50"
-            >
-              {t("iWasCorrect")}
-            </button>
-          </div>
+
         </>
       ) : (
         <>
@@ -1893,26 +1777,23 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             </div>
           )}
 
-          {grammarQuestion && (
-            <GroupBExcludeControl refId={grammarQuestion.grammarId} kind="grammar" />
-          )}
 
-          <div className="sticky bottom-0 z-10 -mx-4 flex w-[calc(100%+2rem)] flex-col gap-3 bg-gray-900/95 px-4 py-2 sm:static sm:mx-0 sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:px-0 sm:py-0">
-            <button
-              onClick={() => handleGrade(false)}
-              className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-3 sm:py-2 text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              {t("iWasWrong")}
-            </button>
-            <button
-              onClick={() => handleGrade(true)}
-              className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-3 sm:py-2 text-white hover:bg-green-700 disabled:opacity-50"
-            >
-              {t("iWasCorrect")}
-            </button>
-          </div>
+
         </>
       )}
+      <div data-testid="quiz-actions" className="fixed inset-x-0 bottom-0 z-20 flex flex-col items-center gap-2 border-t border-gray-700 bg-gray-900/95 px-4 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:static lg:w-full lg:max-w-lg lg:border-0 lg:bg-transparent lg:p-0">
+        {question && <GroupBExcludeControl refId={question.kind === "word" ? question.wordId : question.grammarId} kind={question.kind} />}
+        {!showingAnswer ? (
+          <button onClick={revealAnswer} className="w-full max-w-lg rounded-lg bg-gray-700 px-6 py-3 text-gray-300 hover:bg-gray-600 sm:py-2">
+            {wordQuestion ? t("showAnswer") : t("showGrammarAnswer")}
+          </button>
+        ) : (
+          <div className="flex w-full max-w-lg gap-3">
+            <button onClick={() => handleGrade(false)} disabled={applyingWeights} className="min-h-11 flex-1 rounded-lg bg-red-600 px-3 py-3 text-white hover:bg-red-700 disabled:opacity-50">{t("iWasWrong")}</button>
+            <button onClick={() => handleGrade(true)} disabled={applyingWeights} className="min-h-11 flex-1 rounded-lg bg-green-600 px-3 py-3 text-white hover:bg-green-700 disabled:opacity-50">{t("iWasCorrect")}</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

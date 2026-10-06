@@ -23,6 +23,7 @@ import { isRetryableError } from "../api/client";
 import { answerQuestion, markQuizReviewComplete } from "../api/quiz";
 import {
   answerCombinedQuestion,
+  removeMixedQuestionFromB,
   markCombinedQuizReviewComplete,
   updateCombinedQuizWeights,
   type CombinedQuizVariant,
@@ -54,8 +55,12 @@ export type PendingAnswer =
       kind: "word" | "grammar";
       refId: string;
       correct: boolean;
+      removeFromGroupB?: boolean;
+      startedAt?: string;
+      operationId?: string;
       flagWordIds?: string[];
     }
+  | { domain: "combinedRemoval"; language: string; kind: "word" | "grammar"; refId: string; startedAt: string; operationId: string }
   | {
       domain: "expressionRecall";
       language: string;
@@ -147,10 +152,15 @@ function send(item: PendingAnswer): Promise<unknown> {
           kind: item.kind,
           refId: item.refId,
           correct: item.correct,
+          removeFromGroupB: item.removeFromGroupB,
+          startedAt: item.startedAt,
+          operationId: item.operationId,
           ...(item.flagWordIds?.length ? { flagWordIds: item.flagWordIds } : {}),
         },
         item.variant
       );
+    case "combinedRemoval":
+      return removeMixedQuestionFromB(item);
     case "expressionRecall":
       return answerExpressionRecallQuestion({
         language: item.language,

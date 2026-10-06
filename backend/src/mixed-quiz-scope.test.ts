@@ -58,7 +58,9 @@ test('legacy cloud session migrates once, keeps its A scope and adds every curre
   const saved = structuredClone(s.mixedScope);
   reconcileMixedScope(s, groups, [], ['a', 'old-b', 'new-b', 'excluded', 'unrelated-new-a'].map(word), []);
   initializeMixedScope(s, [], []);
-  assert.deepEqual(s.mixedScope, saved);
+  assert.deepEqual(s.mixedScope!.wordA, saved!.wordA);
+  assert.deepEqual(s.mixedScope!.grammarA, saved!.grammarA);
+  assert.deepEqual(s.mixedScope!.wordB, { oldB: ["old-b"], newB: ["new-b"] });
   assert.deepEqual(new Set(keys(s)), new Set(['a', 'old-b', 'new-b']));
   assert.equal(s.mixWeights!.category.A / s.mixWeights!.category.B, 2);
 });

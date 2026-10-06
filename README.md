@@ -22,7 +22,10 @@ Group B quiz has been removed. The two article quizzes are separate and remain a
 
 On resume, an unfinished A+B session reconciles its pending questions with the latest
 Group B membership, preserving answered history and retries. Its selected A pool stays
-fixed. Existing cloud sessions migrate automatically on their first resume after deployment;
+fixed; explicitly removing a B item retains it as A for this session even if its A
+home was not selected. Removal + Wrong re-enters the weighted draw; removal + Correct
+ends its pending attempts. Progress shows remaining/total unique items with B included
+in A. Existing cloud sessions migrate automatically on their first resume after deployment;
 completed sessions stay historical. See [Live Group B](docs/live-group-b-quiz.md) for
 removals, zero weights and migration details.
 
@@ -1034,6 +1037,18 @@ required. See [Live Group B](docs/live-group-b-quiz.md) for the full rules.
 
 **Response:** `{ session }` — updated session state.
 
+For `/api/mixed-quiz/answer`, the client also sends `startedAt`, a UUID `operationId`,
+and optional `removeFromGroupB`. Grading, B removal and progress commit atomically;
+a repeated operation does not grade twice. Removal + Wrong retains the item as A
+for this session, including unselected A homes. Removal + Correct leaves no pending
+copy. Wrong uses the regular weighted draw, without extra retry priority.
+
+`POST /api/mixed-quiz/remove-from-b` accepts
+`{ language, kind, refId, startedAt, operationId }` to commit a marked removal when
+ending a sitting without grading. It preserves the pending item as A and does not
+increment progress. These operations do not permanently exclude an item from later
+new A quizzes. See [mixed quiz behavior](docs/live-group-b-quiz.md).
+
 #### `GET /api/combined-quiz/session/language/:language` — Get current combined quiz session
 
 Returns the in-progress or completed session (unanswered tail reweighted per-domain and re-merged), or `404` if none exists. For `/api/mixed-quiz`, an in-progress session first reconciles
@@ -1420,3 +1435,29 @@ Both app Dockerfiles use **Node 24 Alpine** with multi-stage builds to keep imag
 
 `docker compose up --build` runs the full stack against the emulator and never
 touches production. See [Local Development & Verification](#local-development--verification) for the workflow.
+
+### Import extraction and retry guarantees
+
+Extraction uses one analysis LLM call. Deterministic cleanup consolidates equivalent
+word rows within each sentence and removes short fragments occurring only inside
+longer extracted words (e.g. 翼 inside 左翼). Independent occurrences, distinct readings
+or senses, and uncertain inflections remain. The client applies the same cleanup on
+saved analyses while preserving explicit edits and registration knowledge. Grammar
+cleanup uses identical sentence/pattern/description, never overlap with vocabulary.
+
+Import word registration can recover an existing entity after HTTP 409 or a lost
+create response, then finish the selected group writes. A failed follow-up retains
+the entity ID and exact destination group IDs; Retry B does not create the word again.
+The shared queue reports the final recovered outcome, and simultaneous A/B presses
+serialize creation before resolving group names. These checks do not call an LLM.
+
+Browser regression tests (mock APIs, no cloud):
+
+```bash
+cd frontend
+npx playwright install chromium
+npm run test:browser
+```
+
+On Linux, install Chromium's required OS libraries if they are not already available.
+Browser test pages are development-only and are not part of the production build.

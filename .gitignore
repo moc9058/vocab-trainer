@@ -27,3 +27,7 @@ test/
 # .claude
 .claude/*
 .claude/settings.json
+
+# Browser regression artifacts
+frontend/test-results/
+frontend/playwright-report/

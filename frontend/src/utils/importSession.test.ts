@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { extractStreamingSentences } from "../api/import";
 import {
   buildImportItems,
+  deduplicateImportItems,
   claimedGrammarIds,
   findWordHome,
   isLive,
@@ -471,5 +472,39 @@ describe("reconcileLibraryClaims", () => {
     const second = reconcileLibraryClaims(first.items, input);
     expect(second.changed).toBe(false);
     expect(second.items).toBe(first.items);
+  });
+});
+
+describe("sentence-local duplicate cleanup", () => {
+  it("hides an already-registered contained fragment while preserving its registration record", () => {
+    const result = deduplicateImportItems([
+      wordItem("左翼", 0),
+      wordItem("翼", 0, { status: "registered", existingWordId: "wing", registrations: { B: { status: "registered", groupIds: ["b"] } } }),
+    ], [{ sentences: [{ index: 0, text: "左翼" }] }]);
+    expect(result.filter(isLive)).toHaveLength(1);
+    expect(result[1]).toMatchObject({ status: "skipped", existingWordId: "wing", registrations: { B: { status: "registered", groupIds: ["b"] } } });
+  });
+  const paragraphs = [{ index: 0, sentences: [{ index: 0, text: "总统支持左翼，总统讲话。" }] }];
+  it("collapses a repeated term and removes a contained fragment without recreating gaps", () => {
+    const rows = [wordItem("总统", 0), wordItem("总统", 0), wordItem("左翼", 0), wordItem("翼", 0)];
+    const result = deduplicateImportItems(rows, paragraphs);
+    expect(result.filter(i => i.kind === "word").map(i => i.term)).toEqual(["总统", "左翼"]);
+    expect(sentenceCoverage(paragraphs[0].sentences[0].text, result as ImportWordItem[], "chinese").covered.slice(7, 9)).toEqual([true, true]);
+  });
+  it("preserves independent occurrences, readings and manual segmentation", () => {
+    const rows = [wordItem("左翼", 0), wordItem("翼", 0)];
+    expect(deduplicateImportItems(rows, [{ sentences: [{ index: 0, text: "左翼和翼" }] }])).toHaveLength(2);
+    expect(deduplicateImportItems([wordItem("翼", 0, { origin: "manual" }), wordItem("左翼", 0)], paragraphs)).toHaveLength(2);
+    expect(deduplicateImportItems([wordItem("总统", 0, { meaning: "sense 1" }), wordItem("总统", 0, { meaning: "sense 2" })], paragraphs)).toHaveLength(2);
+  });
+  it("merges registration knowledge without losing failed destinations or library IDs", () => {
+    const result = deduplicateImportItems([
+      wordItem("总统", 0, { existingWordId: "stored", status: "registered", registrations: { A: { status: "registered" } } }),
+      wordItem("总统", 0, { status: "failed", registrations: { B: { status: "failed", error: "offline", groupIds: ["b"] } } }),
+    ], paragraphs);
+    expect(result).toHaveLength(1);
+    expect((result[0] as ImportWordItem).existingWordId).toBe("stored");
+    expect(result[0].registrations?.B?.groupIds).toEqual(["b"]);
+    expect(result[0].registrations?.A?.status).toBe("registered");
   });
 });

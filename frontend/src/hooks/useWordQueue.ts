@@ -1,3 +1,4 @@
+import { ApiError, isRetryableError } from "../api/client";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   modifyGroupMembers,
@@ -16,6 +17,8 @@ type SmartAddPayload = Parameters<typeof smartAddWord>[1];
 /** Extra work a `create` item performs after a successful smart-add — used by
  *  draft registration so the review modal can close immediately. */
 export interface WordCreateOptions {
+  /** Import registration may reuse an existing entity; manual definitions must not be silently discarded. */
+  reuseExisting?: boolean;
   /** Group NAMES to attach the new word to; missing groups are created. */
   groupNames?: string[];
   /** Draft to delete once the word (and its groups) are fully registered. */
@@ -59,7 +62,7 @@ export interface WordCreateOptions {
 const CONCURRENCY = 4;
 
 type QueueItem =
-  | { id: string; type: "create"; term: string; language: string; payload: SmartAddPayload; groupNames?: string[]; draftId?: string; onSettled?: WordCreateOptions["onSettled"] }
+  | { id: string; type: "create"; term: string; language: string; payload: SmartAddPayload; reuseExisting?: boolean; groupNames?: string[]; draftId?: string; onSettled?: WordCreateOptions["onSettled"] }
   | { id: string; type: "update"; term: string; language: string; wordId: string; updates: Partial<Word>; groupsToAdd: string[]; groupsToRemove: string[] };
 
 export interface QueueResult {
@@ -96,22 +99,17 @@ function withGroupLock<T>(fn: () => Promise<T>): Promise<T> {
 async function processItem(item: QueueItem): Promise<string | undefined> {
   if (item.type === "create") {
     let wordId: string;
+    const lookup = async () => (await checkTerms(item.language, [item.term.trim()])).existing[item.term.trim()];
+    // An import retry first resolves an earlier write whose response may have been lost.
+    const known = item.reuseExisting ? await lookup() : undefined;
     try {
-      const word = await smartAddWord(item.language, item.payload);
-      wordId = word.id;
+      wordId = known ?? (await smartAddWord(item.language, item.payload)).id;
     } catch (err) {
-      // 409 recovery, for DRAFT items only: a previous attempt that died after
-      // the create (a PostCreateError) left the word stored but the draft's
-      // group work undone and the draft itself unretired — every plain retry
-      // would 409 forever with no way out. Recover the id and fall through to
-      // the group/draft steps. Manual and chip adds keep the honest 409: their
-      // hand-typed definitions were NOT saved, and a silent success would
-      // claim they were.
-      if (!(item.draftId && String(err).includes("409"))) throw err;
-      const { existing } = await checkTerms(item.language, [item.term.trim()]);
-      const foundId = existing[item.term.trim()];
-      if (!foundId) throw err;
-      wordId = foundId;
+      const conflict = err instanceof ApiError && err.status === 409;
+      if (!((item.draftId && conflict) || (item.reuseExisting && (conflict || isRetryableError(err))))) throw err;
+      const recovered = await lookup();
+      if (!recovered) throw err;
+      wordId = recovered;
     }
     try {
       const groupIds = item.payload.groupIds ?? [];
@@ -249,10 +247,10 @@ export function useWordQueue() {
           // Rescue failed creates into a draft — except 409 duplicates (the word
           // is already in the DB) and draft-originated items (draft still exists).
           if (item.type !== "create") return;
-          const duplicate = String(err).includes("409");
+          const duplicate = err instanceof ApiError && err.status === 409;
           const settle = (rescuedAsDraft: boolean) =>
             item.onSettled?.({ ok: false, error: String(err), duplicate, rescuedAsDraft });
-          if (!item.draftId && !duplicate) {
+          if (!item.draftId && !item.reuseExisting && !duplicate) {
             // Settle only once the rescue resolves, so `rescuedAsDraft` is accurate.
             saveFailedCreateAsDraft(item)
               .then(() => {

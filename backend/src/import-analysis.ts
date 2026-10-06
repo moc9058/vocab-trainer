@@ -1,3 +1,4 @@
+import { deduplicateWords } from "./import-dedup.js";
 /**
  * The pure half of `routes/import.ts`: turning the model's raw analysis JSON into
  * the flat `ImportAnalysisResult` the client consumes, and guaranteeing that every
@@ -237,7 +238,7 @@ export function repairWordAttribution(
   const indices = sentences.map((s) => s.index);
   const strict = VERBATIM_LANGUAGES.has(language);
   const placed = new Set<string>();
-  const key = (index: number, term: string) => `${index} ${term}`;
+  const key = (index: number, term: string) => `${index}\0${term}`;
   const note = (message: string) => {
     if (summary.samples.length < SAMPLE_LIMIT) summary.samples.push(message);
   };
@@ -505,11 +506,17 @@ export function normalizeAnalysis(
     samples: [...words.summary.samples, ...grammar.summary.samples].slice(0, SAMPLE_LIMIT),
   };
 
+  const uniqueWords = deduplicateWords(backfillRepeatedWords(words.words),
+    index => sentences.find(s => s.index === index)?.text ?? "", termOccurrences);
+  repair.redundant += words.words.length - uniqueWords.length;
   return {
     analysis: {
       paragraphs,
-      words: backfillRepeatedWords(words.words),
-      grammar: grammar.grammar.map((g) => ({
+      words: uniqueWords,
+      grammar: grammar.grammar.filter((g, i, all) => all.findIndex(other =>
+        other.sentenceIndex === g.sentenceIndex &&
+        lowercaseGrammarAbbreviations(other.statement).trim() === lowercaseGrammarAbbreviations(g.statement).trim() &&
+        other.description?.trim() === g.description?.trim()) === i).map((g) => ({
         ...g,
         statement: lowercaseGrammarAbbreviations(g.statement),
       })),

@@ -5,13 +5,23 @@ import Fastify from 'fastify';
 import sensible from '@fastify/sensible';
 import type { CombinedQuizSession } from '../../src/types.js';
 
+class MixedOperationError extends Error { constructor(public statusCode: number, message: string) { super(message); } }
 let stored: CombinedQuizSession | null = null;
+const operations: unknown[] = [];
 let words = ['a', 'shared'];
 let b = ['shared'];
 let grammar = ['g'];
 const saved = () => stored ? structuredClone(stored) : null;
 const word = (id: string) => ({ id, term: id, definitions: [{ partOfSpeech: 'noun', text: { en: id } }] });
 mock.module('../../src/firestore.js', { namedExports: {
+  MixedOperationError,
+  mutateCombinedQuizSession: async (_: string, mutate: (s: CombinedQuizSession | null) => Promise<unknown>) => {
+    const session = saved();
+    const result = await mutate(session);
+    stored = session;
+    return result;
+  },
+  commitMixedQuizOperation: async (_key: string, operation: unknown) => { operations.push(operation); return saved(); },
   languageExists: async () => true,
   getWordGroups: async () => [{ id: 'a', wordIds: ['a', 'shared'], category: 'A' }, { id: 'b', wordIds: b, category: 'B' }],
   getGrammarGroups: async () => [{ id: 'bg', grammarIds: grammar, category: 'B' }],
@@ -74,5 +84,18 @@ test('start, answer, resume, weights and persisted legacy migration', async () =
   const completed = await app.inject(`${base}/session/language/chinese`);
   assert.equal(completed.json().status, 'completed');
   assert.ok(!keys(completed.json()).includes('later'));
+  // New clients use the atomic command path; verify Fastify preserves its fields.
+  const op = { language: 'chinese', kind: 'word', refId: 'shared', correct: false, removeFromGroupB: true, startedAt: 'start', operationId: 'operation-1' };
+  const atomic = await app.inject({ method: 'POST', url: `${base}/answer`, payload: op });
+  assert.equal(atomic.statusCode, 200, atomic.body);
+  assert.deepEqual(operations.at(-1), { kind: 'word', refId: 'shared', correct: false, startedAt: 'start', operationId: 'operation-1', removeFromGroupB: true });
+  const missingId = await app.inject({ method: 'POST', url: `${base}/answer`, payload: { ...op, operationId: undefined } });
+  assert.equal(missingId.statusCode, 400);
+  const badId = await app.inject({ method: 'POST', url: `${base}/answer`, payload: { ...op, operationId: 'not/a/doc-id' } });
+  assert.equal(badId.statusCode, 400);
+  const ungraded = await app.inject({ method: 'POST', url: `${base}/remove-from-b`, payload: { language: 'chinese', kind: 'grammar', refId: 'g', startedAt: 'start', operationId: 'remove-1' } });
+  assert.equal(ungraded.statusCode, 200, ungraded.body);
+  assert.equal((operations.at(-1) as any).correct, undefined);
+  assert.equal((operations.at(-1) as any).removeFromGroupB, true);
   await app.close();
 });

@@ -1,3 +1,5 @@
+import { applyMixedOperation, type MixedOperation } from "./mixed-operations.js";
+import { initializeMixedScope } from "./mixed-quiz-scope.js";
 import { Firestore, FieldValue, FieldPath } from "@google-cloud/firestore";
 import { createHash } from "crypto";
 import { isLookupableTerm, wordIndexDocId } from "./word-index-id.js";
@@ -3394,3 +3396,92 @@ export async function deleteImportSession(sessionId: string): Promise<boolean> {
 }
 
 export { db };
+
+/** Session read/modify/write guard shared with mixed answer transactions. */
+export async function mutateCombinedQuizSession<T>(
+  key: string, mutate: (session: CombinedQuizSession | null) => Promise<T>,
+): Promise<T> {
+  return db.runTransaction(async tx => {
+    const ref = combinedQuizSessions.doc(key);
+    const doc = await tx.get(ref);
+    const session = doc.exists ? { ...doc.data(), sessionId: doc.id } as CombinedQuizSession : null;
+    const result = await mutate(session);
+    if (session) {
+      const { sessionId: _, ...data } = session;
+      tx.set(ref, { ...data, questions: slimCombinedQuestions(session.questions) });
+    }
+    return result;
+  });
+}
+
+export class MixedOperationError extends Error {
+  constructor(public statusCode: number, message: string) { super(message); }
+}
+
+/** Group removal, grade, progress and retry receipt either all commit or none do. */
+export async function commitMixedQuizOperation(
+  key: string, input: MixedOperation & { startedAt: string; operationId: string },
+): Promise<CombinedQuizSession> {
+  return db.runTransaction(async tx => {
+    const ref = combinedQuizSessions.doc(key);
+    const receipt = ref.collection("operations").doc(input.operationId);
+    const [doc, prior] = await tx.getAll(ref, receipt);
+    if (!doc.exists) throw new MixedOperationError(404, "No mixed quiz session found");
+    const session = { ...doc.data(), sessionId: doc.id } as CombinedQuizSession;
+    if (session.startedAt !== input.startedAt) throw new MixedOperationError(409, "The quiz session has been replaced");
+    const signature = JSON.stringify([input.startedAt, input.kind, input.refId, input.correct ?? null, !!input.removeFromGroupB]);
+    if (prior.exists) {
+      if (prior.data()!.signature !== signature) throw new MixedOperationError(409, "Operation ID reused for a different answer");
+      return session;
+    }
+    if (session.status === "completed") throw new MixedOperationError(409, "Session already completed");
+    if (!session.questions.some(q => q.userCorrect === undefined && q.kind === input.kind &&
+      (q.kind === "word" ? q.wordId : q.grammarId) === input.refId)) {
+      throw new MixedOperationError(409, "Question is no longer pending");
+    }
+    const needsGroups = input.removeFromGroupB || !session.mixedScope?.wordB || !session.mixedScope?.grammarB;
+    const [wgDocs, ggDocs] = needsGroups ? await Promise.all([
+      tx.get(wordGroups.where("language", "==", session.language)),
+      tx.get(grammarGroups.where("language", "==", session.language)),
+    ]) : [{ docs: [] }, { docs: [] }];
+    const wg = wgDocs.docs.map(docToWordGroup).sort(compareWordGroups);
+    const gg = ggDocs.docs.map(docToGrammarGroup).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    initializeMixedScope(session, wg, gg);
+    const scope = session.mixedScope!;
+    if (needsGroups) {
+      scope.wordB = Object.fromEntries(wg.filter(g => g.category === "B").map(g => [g.id, g.wordIds]));
+      scope.grammarB = Object.fromEntries(gg.filter(g => g.category === "B").map(g => [g.id, g.grammarIds]));
+    }
+    const home = input.kind === "word"
+      ? wg.find(g => g.category !== "B" && g.wordIds.includes(input.refId))?.id
+      : gg.find(g => g.category !== "B" && g.grammarIds.includes(input.refId))?.id;
+    const progressRef = (input.kind === "word" ? progress : grammarProgress).doc(`${session.language}_${input.refId}`);
+    const progressDoc = input.correct !== undefined ? await tx.get(progressRef) : null;
+    const next = applyMixedOperation(session, input, home ?? "__ungroupedA");
+    // All reads precede writes, including the progress read above.
+    if (input.removeFromGroupB) {
+      if (input.kind === "word") {
+        for (const g of wg.filter(g => g.category === "B" && g.wordIds.includes(input.refId)))
+          tx.update(wordGroups.doc(g.id), { wordIds: FieldValue.arrayRemove(input.refId) });
+      } else {
+        for (const g of gg.filter(g => g.category === "B" && g.grammarIds.includes(input.refId)))
+          tx.update(grammarGroups.doc(g.id), { grammarIds: FieldValue.arrayRemove(input.refId) });
+      }
+    }
+    if (input.correct !== undefined) {
+      const old = progressDoc?.data();
+      const timesSeen = (old?.timesSeen ?? 0) + 1;
+      const timesCorrect = (old?.timesCorrect ?? 0) + (input.correct ? 1 : 0);
+      tx.set(progressRef, { language: session.language,
+        [input.kind === "word" ? "wordId" : "componentId"]: input.refId,
+        timesSeen, timesCorrect, correctRate: timesCorrect / timesSeen,
+        streak: input.correct ? (old?.streak ?? 0) + 1 : 0,
+        lastReviewed: new Date().toISOString(),
+      });
+    }
+    const { sessionId: _, ...data } = next;
+    tx.set(ref, { ...data, questions: slimCombinedQuestions(next.questions) });
+    tx.set(receipt, { signature, createdAt: new Date().toISOString() });
+    return next;
+  });
+}

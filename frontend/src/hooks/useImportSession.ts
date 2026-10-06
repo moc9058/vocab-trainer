@@ -9,6 +9,7 @@ import { getGrammarItemsByIds, modifyGrammarGroupMembers } from "../api/grammar"
 import { resolveGroupBTargets } from "../utils/groupB";
 import {
   claimedGrammarIds,
+  deduplicateImportItems,
   flattenSentences,
   isLive,
   libraryClaimTerms,
@@ -250,11 +251,12 @@ export function useImportSession({
             ? new Set(grammarProbe.value.items.map((g) => g.id))
             : null,
       });
-      const next = { ...loaded, items };
+      const cleaned = deduplicateImportItems(items, loaded.paragraphs);
+      const next = { ...loaded, items: cleaned };
       setMembershipOverlay(new Map());
       setSession(next);
       setSaveStatus("saved");
-      if (changed) flush();
+      if (changed || JSON.stringify(cleaned) !== JSON.stringify(items)) flush();
       return next;
     },
     [language, setSession, flush]
@@ -298,7 +300,7 @@ export function useImportSession({
   const patchItem = useCallback(
     (id: string, updates: Partial<ImportItem>, immediate = false) => {
       setItems(
-        (items) => items.map((i) => (i.id === id ? ({ ...i, ...updates } as ImportItem) : i)),
+        (items) => items.map((i) => (i.id === id ? ({ ...i, ...updates, edited: true } as ImportItem) : i)),
         immediate
       );
     },
@@ -341,7 +343,7 @@ export function useImportSession({
       // The key carries the language: this ref survives a language switch
       // (ImportView is not remounted per language), and a same-named B set in
       // another language must not reuse these group ids.
-      const key = [language, ...names].join(" ");
+      const key = [language, ...names].join("\0");
       if (groupBCache.current.key !== key) groupBCache.current = { key };
       const cached = groupBCache.current[kind];
       if (cached) return cached;
@@ -410,6 +412,7 @@ export function useImportSession({
             // Only the row that actually attempted the write can claim the rescue.
             return withRegistration({ ...i, ...learnedId } as ImportItem, destination, {
               ...terminal,
+              groupIds: i.registrations?.[destination]?.groupIds,
               ...(result.ok ? {} : { rescuedAsDraft: result.rescuedAsDraft }),
             });
           }
@@ -473,7 +476,11 @@ export function useImportSession({
 
       // In flight before any await, so the button spins immediately and a second press
       // for the same destination is refused by the guard above.
-      patchRegistration(id, target, { status: "queued" });
+      patchRegistration(id, target, {
+        status: "queued",
+        groupIds: started.registrations?.[target]?.status === "failed"
+          ? started.registrations[target]?.groupIds : undefined,
+      });
       if (piggyback) return;
 
       /**
@@ -488,7 +495,7 @@ export function useImportSession({
        *
        * Group adds are set-based and idempotent, so they are NOT chained — only creates.
        */
-      const chainKey = `${started.kind} ${key}`;
+      const chainKey = `${started.kind}\0${key}`;
       const runningCreate = createChain.current.get(chainKey);
       if (runningCreate) await runningCreate;
 
@@ -513,8 +520,8 @@ export function useImportSession({
       };
 
       const settle = (result: SettleResult) => {
-        releaseCreate?.();
         applySettle(id, target, result);
+        releaseCreate?.();
       };
       const fail = (err: unknown) =>
         settle({
@@ -542,6 +549,8 @@ export function useImportSession({
       const alreadyInLibrary = Boolean(
         item.kind === "word" ? item.existingWordId : item.existingGrammarId
       );
+      // Claim before group-name resolution awaits: A and B must not both create.
+      if (!alreadyInLibrary) claimCreateChain();
       let groupBIds: string[] = [];
       if (target === "B") {
         try {
@@ -551,12 +560,14 @@ export function useImportSession({
           return;
         }
       }
-      const groupIds = [
+      const groupIds = item.registrations?.[target]?.groupIds ?? [
         ...new Set([
           ...(aGroupId && (target === "A" || !alreadyInLibrary) ? [aGroupId] : []),
           ...groupBIds,
         ]),
       ];
+
+      patchRegistration(id, target, { status: "queued", groupIds });
 
       if (item.kind === "word") {
         /** Group membership for a word already in the DB. Firestore's group add is
@@ -581,7 +592,6 @@ export function useImportSession({
         // waiting on a promise nobody will resolve, so `fail` (which releases it) has to
         // cover the enqueue itself, not just the queue's own outcome.
         try {
-          claimCreateChain();
           onQueue(
             item.term.trim(),
             language,
@@ -604,36 +614,10 @@ export function useImportSession({
               ...(groupIds.length > 0 ? { groupIds } : {}),
             },
             {
+              reuseExisting: true,
               onSettled: (result) => {
-                if (result.ok) {
-                  settle({ ok: true, entityId: result.wordId, groupIds });
-                  return;
-                }
-                if (!result.duplicate) {
-                  // `wordId` is set when the create landed and only the group
-                  // attach failed — carry it so the row learns its entity id.
-                  settle({ ...result, entityId: result.wordId });
-                  return;
-                }
-                // A 409 means the word IS in the DB but smart-add threw before the
-                // queue's group work, so nothing was written. The row's whole purpose
-                // was the group membership, so recover the ID and finish the job
-                // rather than reporting a dead end. Stays `queued` (spinner) meanwhile.
-                const term = item.term.trim();
-                void (async () => {
-                  try {
-                    const { existing } = await checkTerms(language, [term]);
-                    const wordId = existing[term];
-                    if (!wordId) {
-                      settle(result);
-                      return;
-                    }
-                    await addToGroups(wordId);
-                    settle({ ok: true, entityId: wordId, groupIds });
-                  } catch {
-                    settle(result);
-                  }
-                })();
+                if (result.ok) settle({ ok: true, entityId: result.wordId, groupIds });
+                else settle({ ...result, duplicate: false, entityId: result.wordId });
               },
             }
           );
@@ -664,7 +648,6 @@ export function useImportSession({
       }
 
       try {
-        claimCreateChain();
         onGrammarQueue(
           item.statement.trim(),
           language,
