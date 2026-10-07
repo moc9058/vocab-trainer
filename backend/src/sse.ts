@@ -31,6 +31,8 @@ export function openSSE(request: FastifyRequest, reply: FastifyReply): SSEChanne
   const keepAlive = setInterval(() => {
     if (!reply.raw.destroyed) reply.raw.write(":keep-alive\n\n");
   }, 15_000);
+  const stopKeepAlive = () => clearInterval(keepAlive);
+  reply.raw.once("close", stopKeepAlive);
 
   return {
     sendEvent(event, data) {
@@ -39,7 +41,8 @@ export function openSSE(request: FastifyRequest, reply: FastifyReply): SSEChanne
       }
     },
     close() {
-      clearInterval(keepAlive);
+      stopKeepAlive();
+      reply.raw.off("close", stopKeepAlive);
       if (!reply.raw.destroyed) {
         reply.raw.end();
       }

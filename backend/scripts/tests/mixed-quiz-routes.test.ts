@@ -60,13 +60,20 @@ test('start, answer, resume, weights and persisted legacy migration', async () =
   const resumed = await app.inject(`${base}/session/language/chinese`);
   assert.equal(resumed.statusCode, 200, resumed.body);
   const s: CombinedQuizSession = resumed.json();
-  assert.equal(keys(s).filter(id => id === 'shared').length, 2);
+  assert.equal(keys(s).filter(id => id === 'shared').length, 1);
   assert.ok(keys(s).includes('new-b')); assert.ok(keys(s).includes('new-g'));
   assert.equal(s.questions.find(q => q.kind === 'word' && q.wordId === 'shared')!.userCorrect, false);
-  assert.equal(s.score.total, 6); assert.equal(s.initialTotal, 5);
+  assert.equal(s.score.total, 5); assert.equal(s.initialTotal, 5);
   const weighted = await app.inject({ method: 'PUT', url: `${base}/session/language/chinese/weights`, payload: { mixWeights: { ...mixWeights, category: { A: 1, B: 3 } }, wordGroupWeights: { b: 0 }, grammarGroupWeights: { bg: 99 } } });
   assert.equal(weighted.statusCode, 200, weighted.body);
   assert.equal(weighted.json().mixWeights.groups.word.b, 1);
+  // Only completing the mid-quiz review releases the wrong item into a new sitting.
+  const reviewed = await app.inject({ method: 'PUT', url: `${base}/session/language/chinese/reviewed`, payload: { startedAt: stored!.startedAt } });
+  assert.equal(reviewed.statusCode, 200, reviewed.body);
+  assert.equal(keys(stored!).filter(id => id === 'shared').length, 2);
+  const again = await app.inject({ method: 'PUT', url: `${base}/session/language/chinese/reviewed`, payload: { startedAt: stored!.startedAt } });
+  assert.equal(again.statusCode, 200);
+  assert.equal(keys(stored!).filter(id => id === 'shared').length, 2);
   // Simulate a session document written by the old release.
   delete stored!.mixedScope; delete stored!.mixWeights;
   const legacy = await app.inject(`${base}/session/language/chinese`);

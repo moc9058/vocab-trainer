@@ -78,7 +78,8 @@ export async function analyzeImportStream(
     method: "POST",
     credentials: CREDENTIALS,
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
+    // Old servers ignore this field and continue sending full analysis-delta frames.
+    body: JSON.stringify({ text, streamFormat: "chunks" }),
     signal,
   });
 
@@ -94,6 +95,7 @@ export async function analyzeImportStream(
   let buffer = "";
   let terminated = false;
   let currentEvent = "";
+  let accumulated = "";
 
   while (true) {
     const { done, value } = await reader.read();
@@ -111,10 +113,16 @@ export async function analyzeImportStream(
           const data = JSON.parse(line.slice(6));
           switch (currentEvent) {
             case "analysis-start":
+              accumulated = "";
               callbacks.onStart?.();
               break;
+            case "analysis-chunk":
+              accumulated += data.chunk;
+              callbacks.onDelta?.(accumulated);
+              break;
             case "analysis-delta":
-              callbacks.onDelta?.(data.text);
+              accumulated = data.text;
+              callbacks.onDelta?.(accumulated);
               break;
             case "analysis-result":
               callbacks.onResult?.(data.analysis, data.existing ?? {}, data.existingGrammar ?? {});

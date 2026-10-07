@@ -1,5 +1,5 @@
 # Deploy vocab-trainer to Google Cloud Run
-# Usage: .\deploy.ps1 [<GCP_PROJECT_ID>] [<REGION>] [-Llm] [-Auth] [-Prompts] [-NoPrune]
+# Usage: .\deploy.ps1 [GCP_PROJECT_ID] [REGION] [-Llm] [-Auth] [-Prompts] [-NoPrune]
 #
 # The optional switches push LOCAL CONFIG into Firestore just before the new
 # revision rolls. That timing is the only reason they belong in a deploy script at
@@ -193,9 +193,16 @@ gcloud run deploy vocab-trainer-backend `
   --platform=managed `
   --port=3000 `
   --allow-unauthenticated `
+  --min=0 `
+  --max=3 `
   --min-instances=0 `
+  --max-instances=3 `
+  --cpu=1 `
+  --memory=512Mi `
+  --concurrency=80 `
+  --cpu-throttling `
   --cpu-boost `
-  --timeout=3600 `
+  --timeout=660 `
   --set-env-vars="FIRESTORE_DATABASE_ID=vocab-database"
 Invoke-Checked "gcloud run deploy vocab-trainer-backend"
 
@@ -225,9 +232,16 @@ gcloud run deploy vocab-trainer-frontend `
   --platform=managed `
   --port=5173 `
   --allow-unauthenticated `
+  --min=0 `
+  --max=3 `
   --min-instances=0 `
+  --max-instances=3 `
+  --cpu=1 `
+  --memory=512Mi `
+  --concurrency=80 `
+  --cpu-throttling `
   --cpu-boost `
-  --timeout=3600 `
+  --timeout=660 `
   --set-env-vars="BACKEND_URL=$BackendUrl"
 Invoke-Checked "gcloud run deploy vocab-trainer-frontend"
 

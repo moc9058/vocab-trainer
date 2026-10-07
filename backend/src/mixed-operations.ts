@@ -119,8 +119,6 @@ export function applyMixedOperation(
     session.questions = session.questions.filter(q => q === question || q.userCorrect !== undefined || !matches(q));
     if (correct) session.score.correct++;
     else {
-      const retry = { ...question }; delete retry.userCorrect;
-      session.questions.push(retry);
       if (session.correctMembership) {
         const field = kind === "word" ? "wordIds" : "grammarIds";
         session.correctMembership[field] = session.correctMembership[field].filter(id => id !== refId);

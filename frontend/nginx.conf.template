@@ -1,5 +1,8 @@
 server {
     listen 5173;
+    # Cloud Run supplies request logs; retain nginx errors without duplicating access logs.
+    access_log off;
+    error_log /dev/stderr warn;
     # A variable proxy_pass resolves at request time through THIS resolver, so it
     # must be one that can see the backend hostname: public DNS (the Dockerfile's
     # 8.8.8.8 default) for the *.run.app URL on Cloud Run, Docker's embedded DNS
@@ -33,7 +36,8 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         proxy_buffering off;
         proxy_cache off;
-        proxy_read_timeout 600s;
+        # Allow the backend's 10-minute article budget to report its own error.
+        proxy_read_timeout 660s;
     }
 
     location / {

@@ -6,7 +6,7 @@
  * applies the same mutation locally, advances immediately, and hands the write to the outbox
  * (`utils/answerOutbox.ts`) to land whenever the network allows.
  *
- * The two sides therefore compute the retry position independently and their question ORDER
+ * The two sides compute weighted ordering independently and their question ORDER
  * diverges while offline. That is deliberate and harmless: every resume path re-draws the
  * unanswered tail from the stored group weights, so the server's order is never the one the
  * user ends up seeing.
@@ -23,26 +23,11 @@ import type {
   CombinedQuizQuestion,
   CombinedQuizSession,
   CombinedQuizWordQuestion,
-  ExpressionRecallQuestion,
   ExpressionRecallSession,
-  GrammarQuizQuestion,
   GrammarQuizSession,
   GroupCategory,
-  QuizQuestion,
   QuizSession,
 } from "../types";
-
-/**
- * Port of `backend/src/quiz-utils.ts:insertRetryQuestion`. Splices the retry copy at a random
- * spot in the remaining tail rather than reshuffling it, so a weighted (grouped) ordering
- * survives the insert. Mutates the array it is given, like its server twin.
- */
-function insertRetryQuestion<T>(questions: T[], retryQuestion: T, answeredIndex: number): void {
-  const tailStart = answeredIndex + 1;
-  const tailLen = questions.length - tailStart;
-  const pos = tailStart + Math.floor(Math.random() * (tailLen + 1));
-  questions.splice(pos, 0, retryQuestion);
-}
 
 /** The answered question is the first one with this id that has no answer yet — the same
  *  rule `routes/quiz.ts` uses, so client and server agree on which slot an answer fills. */
@@ -69,14 +54,6 @@ export function applyWordAnswerLocally(
     correct: session.score.correct + (correct ? 1 : 0),
     total: session.score.total,
   };
-
-  if (!correct) {
-    // Wrong answers are asked again later, so the denominator grows — matching `routes/quiz.ts`.
-    const retry: QuizQuestion = { ...questions[index] };
-    delete retry.userCorrect;
-    insertRetryQuestion(questions, retry, index);
-    score.total += 1;
-  }
 
   return {
     ...session,
@@ -106,15 +83,6 @@ export function applyGrammarAnswerLocally(
     correct: session.score.correct + (correct ? 1 : 0),
     total: session.score.total,
   };
-
-  if (!correct) {
-    // NOTE: the grammar quiz APPENDS its retry rather than splicing it into the tail
-    // (`routes/grammar-quiz.ts`). Kept deliberately different so local and server agree.
-    const retry: GrammarQuizQuestion = { ...questions[index] };
-    delete retry.userCorrect;
-    questions.push(retry);
-    score.total += 1;
-  }
 
   return {
     ...session,
@@ -149,13 +117,6 @@ export function applyCombinedAnswerLocally(
     total: session.score.total,
   };
 
-  if (!correct) {
-    const retry = { ...questions[index] } as CombinedQuizQuestion;
-    delete retry.userCorrect;
-    insertRetryQuestion(questions, retry, index);
-    score.total += 1;
-  }
-
   const membership = session.correctMembership;
   return {
     ...session,
@@ -180,8 +141,7 @@ export function applyCombinedAnswerLocally(
 
 // ---------- combined quiz: Group B → A refile (mixed variant) ----------
 
-// Ports of `backend/src/quiz-utils.ts` — deliberately copied, like `insertRetryQuestion`
-// above, so the local tail re-draw orders questions by the same rules as the server.
+// Ports of `backend/src/quiz-utils.ts`, so local tail ordering follows the server.
 
 function shuffle<T>(items: T[]): T[] {
   const shuffled = [...items];
@@ -364,16 +324,6 @@ export function applyExpressionRecallAnswerLocally(
     correct: session.score.correct + (correct ? 1 : 0),
     total: session.score.total,
   };
-
-  if (!correct) {
-    // APPENDS, like the grammar quiz (`routes/expression-recall-quiz.ts` does the
-    // same) — the word and combined quizzes splice into the tail instead. The two
-    // sides must agree on which.
-    const retry: ExpressionRecallQuestion = { ...questions[index] };
-    delete retry.userCorrect;
-    questions.push(retry);
-    score.total += 1;
-  }
 
   return {
     ...session,

@@ -1,3 +1,4 @@
+import { normalizeQuizSitting } from "./quiz-sitting.js";
 import { applyMixedOperation, type MixedOperation } from "./mixed-operations.js";
 import { initializeMixedScope } from "./mixed-quiz-scope.js";
 import { Firestore, FieldValue, FieldPath } from "@google-cloud/firestore";
@@ -1505,13 +1506,13 @@ export async function deleteProgressForLanguage(language: string): Promise<void>
 export async function getQuizSession(sessionId: string): Promise<QuizSession | null> {
   const doc = await quizSessions.doc(sessionId).get();
   if (!doc.exists) return null;
-  return docToSession(doc);
+  return normalizeQuizSitting(docToSession(doc));
 }
 
 export async function getQuizSessionByLanguage(language: string): Promise<QuizSession | null> {
   const doc = await quizSessions.doc(language).get();
   if (!doc.exists) return null;
-  return docToSession(doc);
+  return normalizeQuizSitting(docToSession(doc));
 }
 
 /** Strip heavy word data — only persist wordId, term, and answer state. */
@@ -2215,7 +2216,7 @@ export async function getGrammarQuizSession(language: string): Promise<GrammarQu
   const doc = await grammarQuizSessions.doc(language).get();
   if (!doc.exists) return null;
   const d = doc.data()!;
-  return {
+  return normalizeQuizSitting({
     sessionId: doc.id,
     language: d.language,
     startedAt: d.startedAt,
@@ -2229,7 +2230,7 @@ export async function getGrammarQuizSession(language: string): Promise<GrammarQu
     groupMembership: d.groupMembership,
     correctWeight: d.correctWeight,
     correctMembership: d.correctMembership,
-  };
+  });
 }
 
 export async function saveGrammarQuizSession(session: GrammarQuizSession): Promise<void> {
@@ -2255,7 +2256,7 @@ export async function getExpressionRecallSession(
   const doc = await expressionRecallSessions.doc(language).get();
   if (!doc.exists) return null;
   const d = doc.data()!;
-  return {
+  return normalizeQuizSitting({
     sessionId: doc.id,
     language: d.language,
     startedAt: d.startedAt,
@@ -2269,7 +2270,7 @@ export async function getExpressionRecallSession(
     groupFilter: d.groupFilter,
     groupWeights: d.groupWeights,
     groupMembership: d.groupMembership,
-  };
+  });
 }
 
 export async function saveExpressionRecallSession(
@@ -2320,7 +2321,7 @@ export async function getCombinedQuizSession(sessionKey: string): Promise<Combin
   const doc = await combinedQuizSessions.doc(sessionKey).get();
   if (!doc.exists) return null;
   const d = doc.data()!;
-  return {
+  return normalizeQuizSitting({
     sessionId: doc.id,
     language: d.language,
     startedAt: d.startedAt,
@@ -2341,7 +2342,7 @@ export async function getCombinedQuizSession(sessionKey: string): Promise<Combin
     correctMembership: d.correctMembership,
     flaggedOnly: d.flaggedOnly,
     randomOrder: d.randomOrder,
-  };
+  });
 }
 
 export async function saveCombinedQuizSession(session: CombinedQuizSession): Promise<void> {
@@ -3404,7 +3405,7 @@ export async function mutateCombinedQuizSession<T>(
   return db.runTransaction(async tx => {
     const ref = combinedQuizSessions.doc(key);
     const doc = await tx.get(ref);
-    const session = doc.exists ? { ...doc.data(), sessionId: doc.id } as CombinedQuizSession : null;
+    const session = doc.exists ? normalizeQuizSitting({ ...doc.data(), sessionId: doc.id } as CombinedQuizSession) : null;
     const result = await mutate(session);
     if (session) {
       const { sessionId: _, ...data } = session;
@@ -3427,7 +3428,7 @@ export async function commitMixedQuizOperation(
     const receipt = ref.collection("operations").doc(input.operationId);
     const [doc, prior] = await tx.getAll(ref, receipt);
     if (!doc.exists) throw new MixedOperationError(404, "No mixed quiz session found");
-    const session = { ...doc.data(), sessionId: doc.id } as CombinedQuizSession;
+    const session = normalizeQuizSitting({ ...doc.data(), sessionId: doc.id } as CombinedQuizSession);
     if (session.startedAt !== input.startedAt) throw new MixedOperationError(409, "The quiz session has been replaced");
     const signature = JSON.stringify([input.startedAt, input.kind, input.refId, input.correct ?? null, !!input.removeFromGroupB]);
     if (prior.exists) {

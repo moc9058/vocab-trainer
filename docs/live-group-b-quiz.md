@@ -59,8 +59,8 @@ cannot grade twice; reusing its ID for different input, or targeting a replaced
 session, returns 409. Resume, review-boundary and weight writes also use a session
 transaction, so they cannot overwrite a concurrently committed mixed answer.
 
-- Removal + Wrong: keep exactly one pending slot at its A home's weight, even when
-  that home was not selected initially. Unknown/unassigned A homes use the virtual
+- Removal + Wrong: defer one retry until a mid-quiz review completes, at its A
+  home's weight, even when that home was not selected initially. Unknown/unassigned A homes use the virtual
   `__ungroupedA` bucket, weight 1; no real group is created. A group without a saved
   subgroup weight defaults to 1.
 - Removal + Correct: remove all pending copies for this item in this session.
@@ -80,12 +80,15 @@ for words and grammar. A includes B; B is the currently B-associated subset. Ret
 count once, and zero-weight items never admitted to the quiz are excluded. Group
 details may overlap (especially grammar) and are not summed to obtain unique totals.
 
-Wrong answers rejoin the ordinary weighted draw, with no extra wrong-answer boost
+Wrong answers rejoin the ordinary weighted draw only in the next sitting after
+End session and review, with no extra wrong-answer boost
 or recency rule. Sampling remains exclusive with B priority, and items within a
-bucket are uniform. Correct removes the pending slot; repeated Wrong keeps one slot.
+bucket are uniform. Correct removes the pending slot; Wrong removes it for the
+rest of the current sitting. Finishing a mid-quiz review releases at most one retry.
+Natural exhaustion completes the test even with Wrong answers; reviewing a completed
+test does not reopen it.
 Already-correct weighting still applies when configured; Wrong leaves that bucket.
-Existing zero-weight pending items survive in a randomized tail. Consecutive draws
-of the same item are possible. Reordering without grading pins the visible card.
+Existing zero-weight pending items survive in a randomized tail. The same item cannot be drawn twice within a sitting. Reordering without grading pins the visible card.
 Weight edits wait until the outbox has no pending or unacknowledged failed writes.
 
 ## Implementation map

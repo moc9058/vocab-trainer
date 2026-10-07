@@ -58,8 +58,8 @@ Read the relevant reference before changing its feature:
   reconciliation. Remove pending deleted/out-of-scope items; keep a B removal as A
   only when it belongs to the selected A snapshot, except an explicit mixed-quiz
   removal: retain that item in the session-only A continuation scope even if its
-  A home was not selected. Removal + Wrong retains one pending slot; removal +
-  Correct removes pending slots for that item until the next new session.
+  A home was not selected. Removal + Wrong defers one retry until the next sitting;
+  removal + Correct removes pending slots for that item until the next new test.
   Recalculate totals and do not reopen completed sessions when B grows.
 - Existing in-progress cloud sessions migrate lazily. New session fields must be
   included in the explicit `getCombinedQuizSession` read mapping, not just saved.
@@ -80,8 +80,10 @@ Read the relevant reference before changing its feature:
 - Keep quiz components keyed by variant and refetch mixed sessions when resuming.
   Distinguish a missing session (404) from transport/server errors.
 - Mixed progress displays unique remaining/total IDs: A includes B, while the
-  sampling buckets remain exclusive with B priority. Mixed wrong answers rejoin
-  the ordinary weighted draw; keep at most one pending slot per kind/ID.
+  sampling buckets remain exclusive with B priority. Wrong answers never repeat
+  within the sitting ended by End session. After a mid-test review, mixed wrong answers rejoin the ordinary weighted draw in the
+  next sitting; keep at most one pending slot per kind/ID. Natural exhaustion
+  completes the test even with Wrong answers; review must not reopen it.
 - Session data lives in Firestore; localStorage is for display preferences. Preserve
   the existing warning for unsynced answers rather than silently changing persistence.
 - Update UI translations in `frontend/src/i18n/translations.ts` for English, Japanese
@@ -118,9 +120,9 @@ available, and report any verification that could not be performed.
 - Honor the user's current commit/push/deploy scope; these are separate actions.
   A requested push does not imply permission to deploy. Check the branch and working
   tree, preserve unrelated edits, and do not force-push to resolve remote changes.
-- The existing production command is
-  `./deploy.sh vocab-trainer-490014 asia-northeast1`; Windows uses
-  `.\deploy.ps1 vocab-trainer-490014 asia-northeast1`. Both services deploy to Cloud Run.
+- The production command is `./deploy.sh`; defaults target
+  `vocab-trainer-490014` in `asia-northeast1`. Windows uses `.\deploy.ps1`.
+  Both services deploy to Cloud Run.
 - Config upload flags (`--llm`, `--auth`, `--prompts`; corresponding PowerShell
   switches) are only for requested config changes. Data maintenance scripts remain
   separate from deployment. The live B quiz change needs no config upload or bulk migration.

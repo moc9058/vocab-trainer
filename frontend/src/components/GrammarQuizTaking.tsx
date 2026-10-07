@@ -1,3 +1,4 @@
+import { finishQuizSitting, normalizeQuizSitting } from "../utils/quizSitting";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
@@ -31,10 +32,10 @@ interface Props {
 export default function GrammarQuizTaking({ session, onComplete, onStartNew }: Props) {
   const { t } = useI18n();
   const { displayGrammarDefEntries } = useSettings();
-  const [currentSession, setCurrentSession] = useState(session);
+  const [currentSession, setCurrentSession] = useState(() => normalizeQuizSitting(session));
   const [currentIndex, setCurrentIndex] = useState(() => {
-    const idx = session.questions.findIndex((q) => q.userCorrect === undefined);
-    return idx === -1 ? session.questions.length : idx;
+    const idx = currentSession.questions.findIndex((q) => q.userCorrect === undefined);
+    return idx === -1 ? currentSession.questions.length : idx;
   });
   const [showingAnswer, setShowingAnswer] = useState(false);
   // Grading is synchronous now; this only stops a double-tap grading the same card twice.
@@ -175,10 +176,21 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
     setSessionReviewActive(true);
   }
 
+  function returnToQuiz() {
+    setSessionLog([]);
+    setSessionReviewActive(false);
+    setSessionReviewIndex(0);
+    const index = currentSession.questions.findIndex(q => q.userCorrect === undefined);
+    setCurrentIndex(index < 0 ? currentSession.questions.length : index);
+    gradedIndexRef.current = -1;
+    setShowingAnswer(false);
+  }
+
   function nextSessionReview() {
     const next = sessionReviewIndex + 1;
     if (next >= sessionLog.length) {
       completeSessionReview(reviewKey, session.startedAt);
+      setCurrentSession(prev => finishQuizSitting(prev));
       outbox.enqueue({
         domain: "grammarReviewComplete",
         language: currentSession.language,
@@ -200,10 +212,10 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
             {sessionCorrect} / {sessionLog.length}
           </p>
           <button
-            onClick={() => { onComplete(); onStartNew(); }}
+            onClick={isComplete ? () => { onComplete(); onStartNew(); } : returnToQuiz}
             className="rounded-lg bg-emerald-600 px-6 py-2 text-white hover:bg-emerald-500"
           >
-            {t("startNew")}
+            {t(isComplete ? "startNew" : "returnToQuiz")}
           </button>
         </div>
       );
@@ -269,16 +281,16 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
           onFlush={outbox.flush}
           onAcknowledgeFailed={outbox.acknowledgeFailed}
         />
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("congratulations")}</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("quizComplete")}</h2>
         <p className="text-2xl sm:text-4xl font-semibold text-emerald-400">
-          {correct} / {originalTotal}
+          {correct} / {currentSession.score.total}
         </p>
         {sessionLog.length > 0 ? (
           <button
             onClick={endSession}
             className="rounded-lg border border-amber-600/70 bg-amber-700/30 px-6 py-2 font-medium text-amber-200 hover:bg-amber-700/50"
           >
-            🏁 {t("endSession")}
+            🏁 {t("startSessionReview")}
           </button>
         ) : (
           <button

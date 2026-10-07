@@ -23,11 +23,25 @@ Group B quiz has been removed. The two article quizzes are separate and remain a
 On resume, an unfinished A+B session reconciles its pending questions with the latest
 Group B membership, preserving answered history and retries. Its selected A pool stays
 fixed; explicitly removing a B item retains it as A for this session even if its A
-home was not selected. Removal + Wrong re-enters the weighted draw; removal + Correct
-ends its pending attempts. Progress shows remaining/total unique items with B included
+home was not selected. Removal + Wrong waits until the next sitting before
+re-entering the weighted draw; removal + Correct ends its pending attempts. Progress shows remaining/total unique items with B included
 in A. Existing cloud sessions migrate automatically on their first resume after deployment;
 completed sessions stay historical. See [Live Group B](docs/live-group-b-quiz.md) for
 removals, zero weights and migration details.
+
+## Quiz sessions and review
+
+A session (sitting) is the set of questions answered continuously until **End session**.
+A Wrong answer never repeats in that sitting, including after a refresh or weight change.
+Ending early opens a review of the answers since the previous boundary. After reviewing,
+**Return to Quiz** continues the same test in a new sitting; wrong items become eligible
+once again alongside the unanswered questions. Answers and scores are retained.
+
+If all questions are answered before End session, the test ends even if some answers
+were Wrong. The completion screen offers **Review Session**; after that review, only
+**Start New** is offered as the quiz action. Completed tests are never reopened by review.
+This flow applies to word, grammar, combined/article and expression recall quizzes.
+The expression writing quiz also stops repeating Wrong within its test.
 
 ## Local Development & Verification
 
@@ -128,7 +142,7 @@ comes up by itself a moment after seeding. Smoke-test at http://localhost:5173,
 then deploy:
 
 ```bash
-./deploy.sh vocab-trainer-490014 asia-northeast1 [--llm|--auth|--prompts]
+./deploy.sh [--llm|--auth|--prompts]
 ```
 
 ### Troubleshooting
@@ -165,26 +179,27 @@ Deploy both services to Google Cloud Run using the included script.
 https://vocab-trainer-frontend-839843597381.asia-northeast1.run.app
 
 ```bash
-./deploy.sh vocab-trainer-490014 asia-northeast1
+./deploy.sh
 ```
 
-REGION is optional and defaults to `asia-northeast1`:
+Project and region default to `vocab-trainer-490014` and `asia-northeast1`.
+Override them only when needed:
 
 ```bash
-./deploy.sh vocab-trainer-490014                                     # uses asia-northeast1
+./deploy.sh MY_PROJECT_ID MY_REGION
 ```
 
 The deploy script takes **three optional flags, and they all do the same kind of
 thing**: push local config into Firestore just before the new revision rolls.
 
 ```bash
-./deploy.sh vocab-trainer-490014 asia-northeast1 --llm       # OpenAI key + model names from .env  -> config/llm
-./deploy.sh vocab-trainer-490014 asia-northeast1 --auth      # Google OAuth client from .env       -> config/auth
-./deploy.sh vocab-trainer-490014 asia-northeast1 --prompts   # prompts + schemas from backend/DB/  -> config/{speaking_writing,translation,vocabulary,grammar,import}
-./deploy.sh vocab-trainer-490014 asia-northeast1 --llm --auth --prompts   # combined
+./deploy.sh --llm       # OpenAI key + model names from .env  -> config/llm
+./deploy.sh --auth      # Google OAuth client from .env       -> config/auth
+./deploy.sh --prompts   # prompts + schemas from backend/DB/  -> config/{speaking_writing,translation,vocabulary,grammar,import}
+./deploy.sh --llm --auth --prompts   # combined
 ```
 
-Windows: `.\deploy.ps1 vocab-trainer-490014 asia-northeast1 -Llm -Auth -Prompts`
+Windows: `.\deploy.ps1 -Llm -Auth -Prompts`
 (same three, as switches).
 
 **Why these belong in the deploy script and nothing else does.** Every config
@@ -272,6 +287,13 @@ LLM-generates translations for `example_sentences` docs whose `translation` is e
 5. Deploy frontend to Cloud Run with `BACKEND_URL` pointing to the backend service
 
 The script prints both service URLs on completion.
+
+Both services deploy with request-based billing, minimum 0 and maximum 3 instances
+at the service and revision levels, 1 vCPU, 512 MiB, concurrency 80 and a 660-second
+request timeout. LLM work shares a 3-minute deadline per request (10 minutes for
+article analysis), including retries; disconnected clients cancel LLM work.
+See [Cloud Run cost controls](docs/cloud-run-cost-controls.md) for usage measurement,
+Python setup with uv, stream compatibility and verification commands.
 
 ## Vocabulary Database Format
 
@@ -757,7 +779,7 @@ Looks up multiple terms at once against `word_index`. Used by the grammar quiz /
 
 ### Quiz
 
-One quiz session is stored per language. Starting a new quiz overwrites the previous session. Wrong answers are re-queued and appear again until answered correctly.
+One quiz session is stored per language. Starting a new quiz overwrites the previous session. Wrong answers do not repeat within a sitting. Completing a mid-test End session review makes them eligible in the next sitting; answering every pending question completes the test even with Wrong answers.
 
 #### `POST /api/quiz/start` — Start a new quiz session
 
@@ -1033,7 +1055,7 @@ required. See [Live Group B](docs/live-group-b-quiz.md) for the full rules.
 
 #### `POST /api/combined-quiz/answer` — Submit an answer
 
-**Body:** `{ "language": "...", "kind": "word" | "grammar", "refId": "<wordId | grammarId>", "correct": true, "flagWordIds": [] }` — dispatches to word vs grammar progress; wrong answers re-queue the question into the session tail.
+**Body:** `{ "language": "...", "kind": "word" | "grammar", "refId": "<wordId | grammarId>", "correct": true, "flagWordIds": [] }` — dispatches to word vs grammar progress; wrong answers wait until the next sitting; they are not repeated before End session.
 
 **Response:** `{ session }` — updated session state.
 
@@ -1041,7 +1063,7 @@ For `/api/mixed-quiz/answer`, the client also sends `startedAt`, a UUID `operati
 and optional `removeFromGroupB`. Grading, B removal and progress commit atomically;
 a repeated operation does not grade twice. Removal + Wrong retains the item as A
 for this session, including unselected A homes. Removal + Correct leaves no pending
-copy. Wrong uses the regular weighted draw, without extra retry priority.
+copy. Wrong uses the regular weighted draw in the next sitting, after a mid-quiz review completes.
 
 `POST /api/mixed-quiz/remove-from-b` accepts
 `{ language, kind, refId, startedAt, operationId }` to commit a marked removal when
@@ -1266,7 +1288,7 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | **Dashboard**           | Main layout at `/:language/*`. Each view has its own URL sub-path (`/browse`, `/quiz`, `/flagged`, `/grammar`, `/grammar-quiz`, `/translation`, `/speaking-writing`) so page refresh stays on the current view. Header shows "Back" button on sub-paths (returns to `/:language`) and "← Languages" on the language home. Quiz and grammar-quiz sub-paths auto-recover the active session on mount and redirect home if none exists. Includes settings gear, dynamic UI language toggle. |
 | **SettingsModal**       | Settings modal with sections for (1) drag-and-drop language display order reordering via @dnd-kit, (2) active UI language checkboxes, (3) displayed definition / example translation language checkboxes (display-only — generation always covers all four), (4) smart-add defaults (`defaultAddWordLanguage`, `defaultDefinitionLanguage`), (5) speaking/writing defaults (`defaultCorrectionMode`, `defaultSpeakingUseCase`, `defaultWritingUseCase`), (6) translation defaults (`defaultTranslationSourceLanguage`, `defaultTranslationTargetLanguages`), and (7) a `showKoreanHanja` checkbox — visible only when the active language is Chinese — that toggles the 🀄 Korean hanja section in word cards, quiz answers, and flagged-review answers. Persisted to localStorage. |
-| **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows all definitions, transliteration, and example sentences with RubyText annotations. When `showKoreanHanja` is enabled and the word has `hanjaReadings`, a 🀄 Korean Hanja section is shown above the definitions. Wrong answers are re-queued until correct. Questions are lazy-loaded in batches of 50 with automatic prefetching at the halfway point. Supports resuming from where the user left off. |
+| **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows all definitions, transliteration, and example sentences with RubyText annotations. When `showKoreanHanja` is enabled and the word has `hanjaReadings`, a 🀄 Korean Hanja section is shown above the definitions. Wrong answers are deferred until the next sitting after End session and review. Questions are lazy-loaded in batches of 50 with automatic prefetching at the halfway point. Supports resuming from where the user left off. |
 | **WordList**            | Paginated word browsing with search, topic/category/level/group filters, progress badges, and expandable word details with pinyin displayed via RubyText. Accepts `refreshSignal` (silently re-fetches on change — also re-runs `refreshExistingTerms` on the expanded word so queued segment chips flip to ✓), `onQueue` (enables queue mode in its embedded SmartAddWordModal; segment chip "+" clicks also route through this queue, serializing them instead of firing concurrent HTTP requests), and `pendingTerms` (Set from `useWordQueue`; chips whose term is in-flight show amber "⋯" and are disabled). Expanded details show the first 3 definitions and first 3 examples by default; a "show more / show less" toggle appears when there are additional entries. Segment buttons show amber "⋯" while the activation check is in-flight or the term is queued, green "✓" when already in the DB, and blue "+" when addable; the flag checkbox below each addable segment is hidden while the activation check is running or the term is queued; on expand, any segments found in `word_index` without a `seg.id` are patched locally and persisted via `sync-segment-links`. When clicking a segment "+" button fails (e.g. LLM error), a red error toast appears bottom-right for 3 seconds with the actual backend error message. When `onJumpToWord` fires from an embedded `SmartAddWordModal`, the list filters/expands to the target word and opens it in `WordFormModal` edit mode (passing `onQueue`/`pendingTerms`/`refreshSignal` through). |
 | **SmartAddWordModal**   | Modal to add a word with LLM auto-filling missing fields. Only `term` is required; the LLM generates transliteration, definitions, examples (with translations), and — for Chinese — pinyin segments per example. The LLM **always** generates definitions and example translations in all four supported languages regardless of settings; the settings only control which subset is **displayed** (`displayDefinitionLanguages`, `displayExampleTranslationLanguages`) and which language each form field is **pre-filled** with (`defaultAddWordLanguage` for the outer Language radio, `defaultDefinitionLanguage` for the first definition row). Note that the modal exposes two independent language fields — the outer "word language" (sent as the `:language` route parameter, backend full-name format) and per-row "definition language" (ISO code, used as the key in `definitions[].text`) — easy to confuse. Duplicate detection: shows "⚠ Already in DB" if the term is already in Firestore; shows "⏳ Already queued" (amber) and disables the submit button if the term is in `pendingTerms` (queued but not yet written). For Chinese, uses inline debounced `checkTerms` + `smartAddWord` to show WorldList-style `rounded-full` pill buttons with an amber flag checkbox below each addable segment on space-split example sentences; when `onQueue` is provided, segment chip additions route through the queue (amber "⋯" queued state, `checkTerms` re-runs on `refreshSignal`). When the `onQueue` prop is provided the modal enters **queue mode**: clicking Save enqueues the word instantly (no blocking LLM wait), flashes "✓ Queued", then resets the form so the user can add the next term immediately. Also accepts optional `pendingTerms?: Set<string>` and `refreshSignal?: number` to enable the queued-duplicate detection and chip re-checks. |
 | **FlaggedReview**       | Review interface for flagged words. Allows browsing and unflagging words marked for review. When `showKoreanHanja` is enabled and the word has `hanjaReadings`, a 🀄 Korean Hanja section is shown above the definitions in the revealed answer. |
@@ -1415,7 +1437,7 @@ the backend refuses to start rather than silently exposing the API.
    (config is read at boot, so a Firestore write alone does not activate it):
 
    ```bash
-   ./deploy.sh vocab-trainer-490014 asia-northeast1 --auth
+   ./deploy.sh --auth
    ```
 
    Run from an interactive terminal, this prompts for the credentials the first time.

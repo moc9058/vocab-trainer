@@ -1,3 +1,4 @@
+import { finishQuizSitting, normalizeQuizSitting } from "../utils/quizSitting";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
@@ -53,10 +54,10 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   // `currentSession.questions` is the single source of ORDER, and is slim
   // (`{wordId, term, userCorrect}`). Word payloads live in the id-keyed prefetch cache below
   // and are merged in at render time, so re-ordering the session never costs a fetch.
-  const [currentSession, setCurrentSession] = useState(session);
+  const [currentSession, setCurrentSession] = useState(() => normalizeQuizSitting(session));
   const [currentIndex, setCurrentIndex] = useState(() => {
-    const firstUnanswered = session.questions.findIndex((q) => q.userCorrect === undefined);
-    return firstUnanswered === -1 ? session.questions.length : firstUnanswered;
+    const firstUnanswered = currentSession.questions.findIndex((q) => q.userCorrect === undefined);
+    return firstUnanswered === -1 ? currentSession.questions.length : firstUnanswered;
   });
   const [showingAnswer, setShowingAnswer] = useState(false);
   const [showAllDefinitions, setShowAllDefinitions] = useState(false);
@@ -265,10 +266,21 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     setSessionReviewActive(true);
   }
 
+  function returnToQuiz() {
+    setSessionLog([]);
+    setSessionReviewActive(false);
+    setSessionReviewIndex(0);
+    const index = currentSession.questions.findIndex(q => q.userCorrect === undefined);
+    setCurrentIndex(index < 0 ? currentSession.questions.length : index);
+    gradedIndexRef.current = -1;
+    setShowingAnswer(false);
+  }
+
   function nextSessionReview() {
     const next = sessionReviewIndex + 1;
     if (next >= sessionLog.length) {
       completeSessionReview(reviewKey, session.startedAt);
+      setCurrentSession(prev => finishQuizSitting(prev));
       outbox.enqueue({
         domain: "wordReviewComplete",
         language: currentSession.language,
@@ -357,10 +369,10 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
               {t("browseWords")}
             </button>
             <button
-              onClick={() => { onComplete(); onStartNew(); }}
+              onClick={isComplete ? () => { onComplete(); onStartNew(); } : returnToQuiz}
               className="rounded-lg bg-blue-600 px-6 py-2 text-white hover:bg-blue-500"
             >
-              {t("startNew")}
+              {t(isComplete ? "startNew" : "returnToQuiz")}
             </button>
           </div>
         </div>
@@ -475,16 +487,16 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
           onFlush={outbox.flush}
           onAcknowledgeFailed={outbox.acknowledgeFailed}
         />
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("congratulations")}</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("quizComplete")}</h2>
         <p className="text-2xl sm:text-4xl font-semibold text-blue-400">
-          {correct} / {originalTotal}
+          {correct} / {currentSession.score.total}
         </p>
         {sessionLog.length > 0 ? (
           <button
             onClick={endSession}
             className="rounded-lg border border-amber-600/70 bg-amber-700/30 px-6 py-2 font-medium text-amber-200 hover:bg-amber-700/50"
           >
-            🏁 {t("endSession")}
+            🏁 {t("startSessionReview")}
           </button>
         ) : (
           <div className="flex flex-col sm:flex-row gap-3">

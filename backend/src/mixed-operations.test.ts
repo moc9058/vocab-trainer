@@ -1,3 +1,4 @@
+import { finishQuizSitting } from "./quiz-sitting.js";
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import { applyMixedOperation, orderMixedQuestions, recalculateMixedWeights } from "./mixed-operations.js";
@@ -6,7 +7,7 @@ import type { CombinedQuizSession, Word, WordGroup } from "./types.js";
 
 function fixture(): CombinedQuizSession {
   return {
-    sessionId: "chinese__mixed", language: "chinese", startedAt: "start", status: "in-progress",
+    sessionId: "chinese__mixed", language: "chinese", startedAt: "start", status: "in-progress", reviewedQuestionCount: 0,
     questions: ["b", "a", "a2"].map(wordId => ({ kind: "word", wordId, term: wordId, definitions: [] })),
     score: { correct: 0, total: 3 }, initialTotal: 3, domainWeights: { word: 2, grammar: 0 },
     wordGroupMembership: { a: ["a", "a2"], b: ["b"] }, grammarGroupMembership: {},
@@ -25,6 +26,8 @@ test("B removal + Wrong retains an unselected A home across reconciliation and w
   s.mixWeights!.category.A = 4;
   const groups = [{ id: "a", wordIds: ["a", "a2"], category: "A" }, { id: "outside", wordIds: ["b"], category: "A" }, { id: "b", wordIds: [], category: "B" }] as WordGroup[];
   reconcileMixedScope(s, groups, [], ["a", "a2", "b"].map(id => ({ id, term: id, definitions: [] })) as Word[], []);
+  assert.equal(pending(s).filter(id => id === "b").length, 0);
+  s = finishQuizSitting(s);
   assert.equal(pending(s).filter(id => id === "b").length, 1);
   assert.ok(s.wordGroupMembership!.outside.includes("b"));
   assert.equal(s.questions.find(q => q.userCorrect === false)?.kind, "word");
@@ -48,20 +51,26 @@ test("removal without grading retains a pinned pending item and does not change 
   assert.equal(s.score.total, 3);
 });
 
-test("repeated Wrong has at most one pending slot; Correct on the last slot completes", () => {
-  let s = fixture(); s.questions = [s.questions[0]]; s.initialTotal = 1; s.score.total = 1;
-  for (let i = 0; i < 5; i++) s = applyMixedOperation(s, { kind: "word", refId: "b", correct: false });
-  assert.deepEqual(pending(s), ["b"]);
-  assert.equal(s.questions.filter(q => q.userCorrect === false).length, 5);
-  s = applyMixedOperation(s, { kind: "word", refId: "b", correct: true, removeFromGroupB: true });
-  assert.equal(s.status, "completed"); assert.equal(s.score.correct, 1);
+test("Wrong cannot repeat in the sitting; the last Wrong completes the quiz", () => {
+  let s = fixture();
+  s = applyMixedOperation(s, { kind: "word", refId: "b", correct: false });
+  assert.ok(!pending(s).includes("b"));
+  assert.throws(() => applyMixedOperation(s, { kind: "word", refId: "b", correct: false }), /not pending/);
+  s = finishQuizSitting(s);
+  assert.equal(pending(s).filter(id => id === "b").length, 1);
+  s = applyMixedOperation(s, { kind: "word", refId: "a", correct: true });
+  s = applyMixedOperation(s, { kind: "word", refId: "a2", correct: true });
+  s = applyMixedOperation(s, { kind: "word", refId: "b", correct: false });
+  assert.equal(s.status, "completed");
+  assert.deepEqual(pending(finishQuizSitting(s)), []);
 });
 
 test("zero-weight pending retries survive, and wrong leaves the already-correct bucket", () => {
   const s = fixture(); s.correctWeight = 0; s.correctMembership = { wordIds: ["b"], grammarIds: [] };
   s.mixWeights!.category.A = 0;
   const next = applyMixedOperation(s, { kind: "word", refId: "b", correct: false, removeFromGroupB: true });
-  assert.ok(pending(next).includes("b"));
+  assert.ok(!pending(next).includes("b"));
+  assert.ok(pending(finishQuizSitting(next)).includes("b"));
   assert.deepEqual(next.correctMembership!.wordIds, []);
 });
 

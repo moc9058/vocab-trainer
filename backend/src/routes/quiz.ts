@@ -1,3 +1,4 @@
+import { finishQuizSitting } from "../quiz-sitting.js";
 import type { FastifyPluginAsync } from "fastify";
 import {
   languageExists,
@@ -14,7 +15,7 @@ import {
   getWordGroup,
 } from "../firestore.js";
 import type { QuizSession, QuizQuestion, Word, WordProgress } from "../types.js";
-import { shuffle, weightedInterleave, insertRetryQuestion, isMastered } from "../quiz-utils.js";
+import { shuffle, weightedInterleave, isMastered } from "../quiz-utils.js";
 
 const quizRoutes: FastifyPluginAsync = async (fastify) => {
   // Start quiz session
@@ -277,14 +278,6 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       if (correct) {
         session.score.correct++;
       } else {
-        insertRetryQuestion(session.questions, {
-          wordId: question.wordId,
-          term: question.term,
-          definitions: question.definitions ?? [],
-          transliteration: question.transliteration,
-          examples: question.examples,
-        }, session.questions.indexOf(question));
-        session.score.total++;
         // A wrong answer means it's no longer "already-correct": drop it from the mastered
         // bucket so its retry is treated as a normal (unmastered) item for the rest of the session.
         if (session.correctMembership) {
@@ -356,9 +349,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       if (session.startedAt !== request.body.startedAt) {
         return reply.conflict("The quiz session has been replaced");
       }
-      session.reviewedQuestionCount = session.questions.filter(
-        (q) => q.userCorrect !== undefined
-      ).length;
+      Object.assign(session, finishQuizSitting(session));
       await updateQuizSession(session);
       return { reviewedQuestionCount: session.reviewedQuestionCount };
     }

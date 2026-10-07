@@ -7,6 +7,10 @@ import { fileURLToPath } from "url";
 import { TOPICS, type Word, type Topic, type LLMTier, type LLMModelConfig, type LLMModelSource } from "./types.js";
 import { logTokenUsage, ensureModelInCostConfig, getLLMModelConfig } from "./firestore.js";
 import { ROUTE_TO_FEATURE, LLM_FEATURES } from "./llm-features.js";
+import {
+  getLLMRequestSignal, withLLMBudget, awaitWithLLMSignal, LLM_BUDGET_MS,
+  IMPORT_LLM_BUDGET_MS, LLM_ATTEMPT_TIMEOUT_MS,
+} from "./llm-budget.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -76,7 +80,8 @@ async function ensureInit(): Promise<void> {
       }
       client = new OpenAI({
         apiKey: process.env.OPENAI_API_KEY,
-        maxRetries: 5,
+        maxRetries: 2,
+        timeout: LLM_ATTEMPT_TIMEOUT_MS,
       });
       modelMini = process.env.OPENAI_MODEL_MINI;
       modelFull = process.env.OPENAI_MODEL_FULL ?? "";
@@ -266,9 +271,24 @@ export interface LLMCallOptions {
 }
 
 export async function callLLM(opts: LLMCallOptions): Promise<string> {
+  const timeoutMs = opts.route === "import/analyze-stream"
+    ? IMPORT_LLM_BUDGET_MS : LLM_BUDGET_MS;
+  return withLLMBudget(timeoutMs, getLLMRequestSignal(), async (signal) => {
+    try {
+      return await callLLMWithSignal(opts, signal);
+    } catch (err) {
+      // Preserve the deadline/disconnect reason instead of the SDK's generic abort.
+      signal.throwIfAborted();
+      throw err;
+    }
+  });
+}
+
+async function callLLMWithSignal(opts: LLMCallOptions, signal: AbortSignal): Promise<string> {
   const { system, user, route, tier = "mini", schema, onChunk } = opts;
-  const cl = await createOpenAIClient();
-  const model = await resolveModel(tier, route);
+  const cl = await awaitWithLLMSignal(createOpenAIClient(), signal);
+  const model = await awaitWithLLMSignal(resolveModel(tier, route), signal);
+  signal.throwIfAborted();
   const messages = [
     { role: "system" as const, content: system },
     { role: "user" as const, content: user },
@@ -280,7 +300,10 @@ export async function callLLM(opts: LLMCallOptions): Promise<string> {
     : { type: "json_object" }) as { type: "json_object" };
 
   if (!onChunk) {
-    const response = await cl.chat.completions.create({ model, messages, response_format });
+    const response = await cl.chat.completions.create(
+      { model, messages, response_format }, { signal },
+    );
+    signal.throwIfAborted();
     recordUsage(response.usage, model, "callLLM", route);
     return response.choices[0]?.message?.content ?? "";
   }
@@ -288,7 +311,7 @@ export async function callLLM(opts: LLMCallOptions): Promise<string> {
   const abortController = new AbortController();
   const stream = await cl.chat.completions.create(
     { model, messages, response_format, stream: true, stream_options: { include_usage: true } },
-    { signal: abortController.signal }
+    { signal: AbortSignal.any([signal, abortController.signal]) }
   );
   let full = "";
   let usage: CompletionUsage | undefined;
@@ -309,10 +332,12 @@ export async function callLLM(opts: LLMCallOptions): Promise<string> {
       }
     }
   } catch (err) {
-    if (!idledOut) throw err;
+    if (idledOut) throw new Error("LLM stream stalled for 30s.");
+    throw err;
   } finally {
     clearTimeout(idleTimer);
   }
+  signal.throwIfAborted();
   recordUsage(usage, model, "callLLM", route);
   return full;
 }

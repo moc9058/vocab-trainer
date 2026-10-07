@@ -1,3 +1,4 @@
+import { finishQuizSitting } from "../quiz-sitting.js";
 import type { FastifyPluginAsync } from "fastify";
 import {
   getAllExpressions,
@@ -208,12 +209,6 @@ const expressionRecallQuizRoutes: FastifyPluginAsync = async (fastify) => {
       question.userCorrect = correct;
       if (correct) {
         session.score.correct++;
-      } else {
-        // Retries are APPENDED here, matching the grammar quiz — the word and
-        // combined quizzes splice into the tail instead. `utils/quizLocal.ts`
-        // mirrors whichever one applies, so the two must not drift.
-        session.questions.push({ expressionId, prompt: question.prompt });
-        session.score.total++;
       }
 
       const allAnswered = session.questions.every((q) => q.userCorrect !== undefined);
@@ -255,9 +250,7 @@ const expressionRecallQuizRoutes: FastifyPluginAsync = async (fastify) => {
       if (session.startedAt !== request.body.startedAt) {
         return reply.conflict("The quiz session has been replaced");
       }
-      session.reviewedQuestionCount = session.questions.filter(
-        (q) => q.userCorrect !== undefined
-      ).length;
+      Object.assign(session, finishQuizSitting(session));
       await saveExpressionRecallSession(session);
       return { reviewedQuestionCount: session.reviewedQuestionCount };
     }

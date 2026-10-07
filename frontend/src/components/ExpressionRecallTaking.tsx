@@ -1,3 +1,4 @@
+import { finishQuizSitting, normalizeQuizSitting } from "../utils/quizSitting";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useI18n } from "../i18n/context";
 import { getExpressionsByIds } from "../api/expressions";
@@ -29,10 +30,10 @@ export default function ExpressionRecallTaking({
   onStartNew,
 }: Props) {
   const { t } = useI18n();
-  const [currentSession, setCurrentSession] = useState(session);
+  const [currentSession, setCurrentSession] = useState(() => normalizeQuizSitting(session));
   const [currentIndex, setCurrentIndex] = useState(() => {
-    const idx = session.questions.findIndex((q) => q.userCorrect === undefined);
-    return idx === -1 ? session.questions.length : idx;
+    const idx = currentSession.questions.findIndex((q) => q.userCorrect === undefined);
+    return idx === -1 ? currentSession.questions.length : idx;
   });
   const [showingAnswer, setShowingAnswer] = useState(false);
   // Grading is synchronous; this only stops a double-tap grading the same card twice.
@@ -145,10 +146,21 @@ export default function ExpressionRecallTaking({
     setSessionReviewActive(true);
   }
 
+  function returnToQuiz() {
+    setSessionLog([]);
+    setSessionReviewActive(false);
+    setSessionReviewIndex(0);
+    const index = currentSession.questions.findIndex(q => q.userCorrect === undefined);
+    setCurrentIndex(index < 0 ? currentSession.questions.length : index);
+    gradedIndexRef.current = -1;
+    setShowingAnswer(false);
+  }
+
   function nextSessionReview() {
     const next = sessionReviewIndex + 1;
     if (next >= sessionLog.length) {
       completeSessionReview(reviewKey, session.startedAt);
+      setCurrentSession(prev => finishQuizSitting(prev));
       outbox.enqueue({
         domain: "expressionRecallReviewComplete",
         language: currentSession.language,
@@ -200,13 +212,10 @@ export default function ExpressionRecallTaking({
             {sessionCorrect} / {sessionLog.length}
           </p>
           <button
-            onClick={() => {
-              onComplete();
-              onStartNew();
-            }}
+            onClick={isComplete ? onStartNew : returnToQuiz}
             className="rounded-lg bg-amber-600 px-6 py-2 text-white hover:bg-amber-500"
           >
-            {t("startNew")}
+            {t(isComplete ? "startNew" : "returnToQuiz")}
           </button>
         </div>
       );
@@ -254,7 +263,7 @@ export default function ExpressionRecallTaking({
             onClick={endSession}
             className="rounded-lg border border-amber-600/70 bg-amber-700/30 px-6 py-2 font-medium text-amber-200 hover:bg-amber-700/50"
           >
-            🏁 {t("endSession")}
+            🏁 {t("startSessionReview")}
           </button>
         ) : (
           <div className="flex flex-col gap-3 sm:flex-row">

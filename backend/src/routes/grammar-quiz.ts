@@ -1,3 +1,4 @@
+import { finishQuizSitting } from "../quiz-sitting.js";
 import type { FastifyPluginAsync } from "fastify";
 import {
   getAllGrammarItems,
@@ -188,15 +189,6 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       if (correct) {
         session.score.correct++;
       } else {
-        // Re-queue wrong answer
-        const item = await getGrammarItem(grammarId);
-        if (item) {
-          session.questions.push({
-            grammarId,
-            statement: question.statement ?? item.statement,
-          });
-          session.score.total++;
-        }
         // A wrong answer means it's no longer "already-correct": drop it from the mastered
         // bucket so its retry is treated as a normal (unmastered) item for the rest of the session.
         if (session.correctMembership) {
@@ -259,9 +251,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       if (session.startedAt !== request.body.startedAt) {
         return reply.conflict("The quiz session has been replaced");
       }
-      session.reviewedQuestionCount = session.questions.filter(
-        (q) => q.userCorrect !== undefined
-      ).length;
+      Object.assign(session, finishQuizSitting(session));
       await saveGrammarQuizSession(session);
       return { reviewedQuestionCount: session.reviewedQuestionCount };
     }

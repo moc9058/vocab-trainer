@@ -9,7 +9,7 @@ case "$(uname -s)" in
 esac
 
 # Deploy vocab-trainer to Google Cloud Run
-# Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--llm] [--auth] [--prompts] [--no-prune]
+# Usage: ./deploy.sh [GCP_PROJECT_ID] [REGION] [--llm] [--auth] [--prompts] [--no-prune]
 #
 # The optional flags push LOCAL CONFIG into Firestore just before the new revision
 # rolls. That timing is the only reason they belong in a deploy script at all: every
@@ -45,7 +45,7 @@ esac
 #   - gcloud CLI installed and authenticated
 #   - Artifact Registry API and Cloud Run API enabled
 
-USAGE="Usage: ./deploy.sh <GCP_PROJECT_ID> [REGION] [--llm] [--auth] [--prompts] [--no-prune]"
+USAGE="Usage: ./deploy.sh [GCP_PROJECT_ID] [REGION] [--llm] [--auth] [--prompts] [--no-prune]"
 
 # How much history each deploy leaves behind. Images and revisions are kept in step
 # on purpose: a revision is only rollback-able while the digest it pins still exists,
@@ -187,9 +187,16 @@ gcloud run deploy vocab-trainer-backend \
   --platform=managed \
   --port=3000 \
   --allow-unauthenticated \
+  --min=0 \
+  --max=3 \
   --min-instances=0 \
+  --max-instances=3 \
+  --cpu=1 \
+  --memory=512Mi \
+  --concurrency=80 \
+  --cpu-throttling \
   --cpu-boost \
-  --timeout=3600 \
+  --timeout=660 \
   --set-env-vars="FIRESTORE_DATABASE_ID=vocab-database"
 
 # Get backend URL
@@ -215,9 +222,16 @@ gcloud run deploy vocab-trainer-frontend \
   --platform=managed \
   --port=5173 \
   --allow-unauthenticated \
+  --min=0 \
+  --max=3 \
   --min-instances=0 \
+  --max-instances=3 \
+  --cpu=1 \
+  --memory=512Mi \
+  --concurrency=80 \
+  --cpu-throttling \
   --cpu-boost \
-  --timeout=3600 \
+  --timeout=660 \
   --set-env-vars="BACKEND_URL=${BACKEND_URL}"
 
 FRONTEND_URL=$(gcloud run services describe vocab-trainer-frontend \

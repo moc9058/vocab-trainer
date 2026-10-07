@@ -1,3 +1,4 @@
+import { finishQuizSitting } from "../quiz-sitting.js";
 import { orderMixedQuestions } from "../mixed-operations.js";
 import { initializeMixedScope, reconcileMixedScope } from "../mixed-quiz-scope.js";
 import type { FastifyPluginAsync } from "fastify";
@@ -34,7 +35,7 @@ import type {
   Word,
   WordProgress,
 } from "../types.js";
-import { shuffle, weightedInterleave, weightedMerge, insertRetryQuestion, isMastered } from "../quiz-utils.js";
+import { shuffle, weightedInterleave, weightedMerge, isMastered } from "../quiz-utils.js";
 
 interface WordFilterBody {
   topics?: string[];
@@ -461,23 +462,6 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       if (correct) {
         session.score.correct++;
       } else {
-        const retry: CombinedQuizQuestion =
-          question.kind === "word"
-            ? {
-                kind: "word",
-                wordId: question.wordId,
-                term: question.term,
-                definitions: question.definitions ?? [],
-                transliteration: question.transliteration,
-                examples: question.examples,
-              }
-            : {
-                kind: "grammar",
-                grammarId: question.grammarId,
-                statement: question.statement,
-              };
-        insertRetryQuestion(session.questions, retry, session.questions.indexOf(question));
-        session.score.total++;
         // A wrong answer means it's no longer "already-correct": drop it from the mastered
         // bucket so its retry is treated as a normal (unmastered) item for the rest of the session.
         if (session.correctMembership) {
@@ -556,9 +540,8 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
         if (session.startedAt !== request.body.startedAt) {
           throw fastify.httpErrors.conflict("The quiz session has been replaced");
         }
-        session.reviewedQuestionCount = session.questions.filter(
-          (q) => q.userCorrect !== undefined
-        ).length;
+        Object.assign(session, finishQuizSitting(session));
+        if (opts.liveGroupB) Object.assign(session, orderMixedQuestions(session));
 
         return { reviewedQuestionCount: session.reviewedQuestionCount };
       });

@@ -2,8 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import sensible from "@fastify/sensible";
-import { mkdirSync } from "node:fs";
-import { resolve, join } from "node:path";
+import { installLLMBudgets } from "./llm-budget.js";
 import {
   loadAuthConfig,
   getAuthConfig,
@@ -34,22 +33,13 @@ import metricsRoutes from "./routes/metrics.js";
 import importRoutes from "./routes/import.js";
 import llmConfigRoutes from "./routes/llm-config.js";
 
-const LOG_DIR = resolve(import.meta.dirname, "..", "logs");
-mkdirSync(LOG_DIR, { recursive: true });
-
-const timestamp = new Date().toISOString().replace(/:/g, "-");
-const logFile = join(LOG_DIR, `app-${timestamp}.log`);
-
 const fastify = Fastify({
-  logger: {
-    transport: {
-      targets: [
-        { target: "pino/file", level: "info", options: { destination: 1 } },
-        { target: "pino/file", level: "info", options: { destination: logFile } },
-      ],
-    },
-  },
+  logger: { level: "info" },
+  // Cloud Run already records requests. Keep application/error logs on stdout.
+  disableRequestLogging: true,
 });
+
+installLLMBudgets(fastify);
 
 // Eager, before anything is served: the auth hook below has to know the posture
 // up front, and a misconfiguration must stop the boot rather than quietly serving

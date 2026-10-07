@@ -1,4 +1,5 @@
-import { applyMixedOperation, UNGROUPED_A } from "../utils/mixedOperations";
+import { finishQuizSitting, normalizeQuizSitting } from "../utils/quizSitting";
+import { applyMixedOperation, orderMixedQuestions, UNGROUPED_A } from "../utils/mixedOperations";
 import { mixedCategoryProgress } from "../utils/mixedProgress";
 import { getOutboxState } from "../utils/answerOutbox";
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -157,10 +158,10 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   const { settings, displayDefEntries, displayGrammarDefEntries } = useSettings();
   // `currentSession.questions` is the single source of ORDER and is slim; word payloads and
   // grammar items live in the id-keyed prefetch cache and are merged in at render time.
-  const [currentSession, setCurrentSession] = useState(session);
+  const [currentSession, setCurrentSession] = useState(() => normalizeQuizSitting(session));
   const [currentIndex, setCurrentIndex] = useState(() => {
-    const firstUnanswered = session.questions.findIndex((q) => q.userCorrect === undefined);
-    return firstUnanswered === -1 ? session.questions.length : firstUnanswered;
+    const firstUnanswered = currentSession.questions.findIndex((q) => q.userCorrect === undefined);
+    return firstUnanswered === -1 ? currentSession.questions.length : firstUnanswered;
   });
   const [showingAnswer, setShowingAnswer] = useState(false);
   const [showAllDefinitions, setShowAllDefinitions] = useState(false);
@@ -868,10 +869,22 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     setSessionReviewActive(true);
   }
 
+  function returnToQuiz() {
+    setSessionLog([]);
+    setSessionReviewActive(false);
+    setSessionReviewIndex(0);
+    const index = currentSession.questions.findIndex(q => q.userCorrect === undefined);
+    setCurrentIndex(index < 0 ? currentSession.questions.length : index);
+    gradedIndexRef.current = -1;
+    setShowingAnswer(false);
+  }
+
   function nextSessionReview() {
     const next = sessionReviewIndex + 1;
     if (next >= sessionLog.length) {
       completeSessionReview(reviewKey, session.startedAt);
+      setCurrentSession(prev => variant === "mixed"
+        ? orderMixedQuestions(finishQuizSitting(prev)) : finishQuizSitting(prev));
       outbox.enqueue({
         domain: "combinedReviewComplete",
         language: currentSession.language,
@@ -964,10 +977,10 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
               {t("browseWords")}
             </button>
             <button
-              onClick={() => { onComplete(); onStartNew(); }}
+              onClick={isComplete ? () => { onComplete(); onStartNew(); } : returnToQuiz}
               className="rounded-lg bg-indigo-600 px-6 py-2 text-white hover:bg-indigo-500"
             >
-              {t("startNew")}
+              {t(isComplete ? "startNew" : "returnToQuiz")}
             </button>
           </div>
         </div>
@@ -1135,16 +1148,16 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
           onFlush={outbox.flush}
           onAcknowledgeFailed={outbox.acknowledgeFailed}
         />
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("congratulations")}</h2>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("quizComplete")}</h2>
         <p className="text-2xl sm:text-4xl font-semibold text-indigo-400">
-          {correct} / {originalTotal}
+          {correct} / {currentSession.score.total}
         </p>
         {sessionLog.length > 0 ? (
           <button
             onClick={endSession}
             className="rounded-lg border border-amber-600/70 bg-amber-700/30 px-6 py-2 font-medium text-amber-200 hover:bg-amber-700/50"
           >
-            🏁 {t("endSession")}
+            🏁 {t("startSessionReview")}
           </button>
         ) : (
           <div className="flex flex-col sm:flex-row gap-3">

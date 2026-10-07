@@ -9,6 +9,7 @@ import {
 } from "../llm.js";
 import { LLM_FEATURES, FEATURE_BY_KEY } from "../llm-features.js";
 import type { LLMModelConfig } from "../types.js";
+import { awaitWithLLMSignal, getLLMRequestSignal } from "../llm-budget.js";
 
 const EMPTY: LLMModelConfig = {
   catalog: [],
@@ -136,9 +137,11 @@ const llmConfigRoutes: FastifyPluginAsync = async (fastify) => {
       let exists = false;
 
       try {
-        const cl = await createOpenAIClient();
-
-        await cl.models.retrieve(model);
+        const signal = getLLMRequestSignal();
+        const initialization = createOpenAIClient();
+        const cl = await (signal ? awaitWithLLMSignal(initialization, signal) : initialization);
+        signal?.throwIfAborted();
+        await cl.models.retrieve(model, { signal });
         exists = true;
 
         // Deliberately NOT routed through `recordUsage` — a settings probe is
@@ -148,7 +151,7 @@ const llmConfigRoutes: FastifyPluginAsync = async (fastify) => {
           model,
           messages: [{ role: "user", content: "ping" }],
           max_completion_tokens: 1,
-        });
+        }, { signal });
 
         // Register it now rather than on first real use, so its (zero) rates are
         // already visible on the Costs tab while the user is still here.
@@ -176,8 +179,11 @@ const llmConfigRoutes: FastifyPluginAsync = async (fastify) => {
   // for when a new model ships.
   fastify.get("/available", async () => {
     try {
-      const cl = await createOpenAIClient();
-      const list = await cl.models.list();
+      const signal = getLLMRequestSignal();
+      const initialization = createOpenAIClient();
+      const cl = await (signal ? awaitWithLLMSignal(initialization, signal) : initialization);
+      signal?.throwIfAborted();
+      const list = await cl.models.list({ signal });
       const models = [...list.data]
         .sort((a, b) => b.created - a.created)
         .map((m) => ({ id: m.id, created: m.created }));

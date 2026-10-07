@@ -22,7 +22,7 @@ describe("mixed local state", () => {
     expect(mixedCategoryProgress(s)[0].cells[0]).toEqual({ kind: "word", total: 2, remaining: 2 });
     expect(mixedCategoryProgress(s)[1].cells[0].total).toBe(1);
     const next = applyMixedOperation(s, { kind: "word", refId: "b", correct: false, removeFromGroupB: true }, "outside");
-    expect(mixedCategoryProgress(next)[0].cells[0]).toEqual({ kind: "word", total: 2, remaining: 2 });
+    expect(mixedCategoryProgress(next)[0].cells[0]).toEqual({ kind: "word", total: 2, remaining: 1 });
     expect(mixedCategoryProgress(next)[1].cells[0]).toEqual({ kind: "word", total: 0, remaining: 0 });
     expect(next.mixedScope?.retainedWordA).toEqual({ outside: ["b"] });
     expect(s.mixedScope?.wordB).toEqual({ b: ["b"] });

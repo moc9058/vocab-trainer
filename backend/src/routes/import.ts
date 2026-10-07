@@ -57,14 +57,17 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
   // SSE over POST — the article is too large for a query string, and the client
   // renders paragraphs as they stream in. Same transport shape as
   // /api/translation/translate-stream.
-  fastify.post<{ Params: { language: string }; Body: { text: string } }>(
+  fastify.post<{ Params: { language: string }; Body: { text: string; streamFormat?: "chunks" } }>(
     "/:language/analyze-stream",
     {
       schema: {
         body: {
           type: "object",
           required: ["text"],
-          properties: { text: { type: "string", minLength: 1, maxLength: MAX_TEXT_LENGTH } },
+          properties: {
+            text: { type: "string", minLength: 1, maxLength: MAX_TEXT_LENGTH },
+            streamFormat: { type: "string", enum: ["chunks"] },
+          },
         },
       },
     },
@@ -102,15 +105,20 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
           .slice(0, STYLE_EXAMPLE_LIMIT);
 
         sendEvent("analysis-start", {});
-        let accumulated = "";
+        let legacyText = "";
         const raw = await callLLM({
           system: buildAnalyzeSystemPrompt(basePrompt, statements),
           user: text,
           schema: analyzeSchema,
           tier: "full",
           onChunk: (chunk) => {
-            accumulated += chunk;
-            sendEvent("analysis-delta", { text: accumulated });
+            if (request.body.streamFormat === "chunks") {
+              sendEvent("analysis-chunk", { chunk });
+            } else {
+              // Cached clients keep working while the backend deploys first.
+              legacyText += chunk;
+              sendEvent("analysis-delta", { text: legacyText });
+            }
           },
           route: "import/analyze-stream",
         });

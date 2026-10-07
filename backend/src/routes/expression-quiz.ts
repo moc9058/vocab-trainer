@@ -211,17 +211,6 @@ const expressionQuizRoutes: FastifyPluginAsync = async (fastify) => {
       question.userCorrect = correct;
       if (correct) {
         subsession.score.correct++;
-      } else {
-        const expr = await getExpression(expressionId);
-        if (expr) {
-          subsession.questions.push({
-            expressionId,
-            phrase: question.phrase,
-            context: question.context,
-            ...(question.description ? { description: question.description } : {}),
-          });
-          subsession.score.total++;
-        }
       }
 
       const allDone = subsession.questions.every((q) => q.userCorrect !== undefined);

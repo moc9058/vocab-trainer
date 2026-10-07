@@ -80,12 +80,13 @@ test("word removal and Wrong commit atomically, survive resume, and replay once 
   assert.deepEqual(documents.get("word_groups/b2").wordIds, []);
   assert.deepEqual(documents.get("word_groups/outside").wordIds, ["x"]);
   assert.equal(documents.get("progress/chinese_x").timesSeen, 1);
-  assert.equal(first.questions.length, 2);
+  assert.equal(first.questions.length, 1);
+  assert.equal(first.status, "completed");
   assert.deepEqual(first.mixedScope?.retainedWordA, { outside: ["x"] });
   const read = await getCombinedQuizSession(key);
   assert.deepEqual(read?.mixedScope?.retainedWordA, { outside: ["x"] });
   reconcileMixedScope(read!, [...documents.entries()].filter(([k]) => k.startsWith("word_groups/")).map(([, v]) => v), [], [{ id: "x", term: "x", definitions: [] }] as any, []);
-  assert.equal(read!.questions.filter(q => q.userCorrect === undefined).length, 1);
+  assert.equal(read!.questions.filter(q => q.userCorrect === undefined).length, 0);
   await assert.rejects(commitMixedQuizOperation(key, { ...op, correct: true }), /reused/);
   await assert.rejects(commitMixedQuizOperation(key, { ...op, startedAt: "replaced", operationId: "old" }), /replaced/);
 });
