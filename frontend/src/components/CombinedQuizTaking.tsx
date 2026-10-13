@@ -18,6 +18,7 @@ import RubyText from "./RubyText";
 import GrammarDescriptionsPanel from "./GrammarDescriptionsPanel";
 import QuizLoadState from "./QuizLoadState";
 import QuizSyncBadge from "./QuizSyncBadge";
+import RecentWordGroupBadges from "./RecentWordGroupBadges";
 import { useQuizPrefetch } from "../hooks/useQuizPrefetch";
 import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
 import {
@@ -1019,7 +1020,13 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
           {reviewQ.kind === "word" ? t("sectionVocabulary") : t("sectionGrammar")}
         </span>
         {reviewWord ? (
-          <h2 className="max-w-full break-words px-2 text-center text-xl sm:text-3xl font-bold text-gray-100">{reviewWord.term}</h2>
+          <>
+            <RecentWordGroupBadges
+              groupAddedAt={reviewWord.groupAddedAt}
+              suppressB={removedFromBIds.has(bKey("word", reviewWord.wordId))}
+            />
+            <h2 className="max-w-full break-words px-2 text-center text-xl sm:text-3xl font-bold text-gray-100">{reviewWord.term}</h2>
+          </>
         ) : (
           <h2 className="max-w-full break-words px-2 text-center text-xl sm:max-w-lg sm:text-3xl font-bold text-gray-100">
             {reviewGrammar!.statement || reviewGrammarItem?.statement}
@@ -1620,7 +1627,13 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       </span>
 
       {wordQuestion ? (
-        <h2 className="max-w-full break-words px-2 text-center text-xl sm:text-3xl font-bold text-gray-100">{wordQuestion.term}</h2>
+        <>
+          <RecentWordGroupBadges
+            groupAddedAt={wordQuestion.groupAddedAt}
+            suppressB={removedFromBIds.has(bKey("word", wordQuestion.wordId))}
+          />
+          <h2 className="max-w-full break-words px-2 text-center text-xl sm:text-3xl font-bold text-gray-100">{wordQuestion.term}</h2>
+        </>
       ) : (
         // Grammar prompt: the grammar element itself — descriptions revealed on answer
         <h2 className="max-w-full break-words px-2 text-center text-xl sm:max-w-lg sm:text-3xl font-bold text-gray-100">

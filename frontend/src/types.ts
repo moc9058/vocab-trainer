@@ -42,6 +42,8 @@ export interface QuizQuestion {
   examples?: Example[];
   userCorrect?: boolean;
   hanjaReadings?: HanjaReading[];
+  /** Latest live word-group additions, tracked independently for Group A and B. */
+  groupAddedAt?: Partial<Record<GroupCategory, string>>;
 }
 
 export interface QuizSession {

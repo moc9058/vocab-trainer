@@ -692,7 +692,10 @@ Adding to a **category-A** group is a **move**: a word belongs to at most one Gr
 group (they are the lesson structure, not overlapping tags), so the server strips the
 words from every other category-A group of the language. Category B is untouched — a
 Group B set is a contextual subset drawn on top of A, and several may hold the
-same word. Grammar groups have no such rule.
+same word. A real addition records the category's latest addition time on the word;
+moving between A groups or joining another B group resets that category's 24-hour
+`NEW` window, while an idempotent add to the same group does not. Grammar groups
+have no such rule.
 
 #### `POST /api/vocab/:language/file` — Create new language file
 
@@ -813,10 +816,13 @@ The response returns a lightweight session — questions contain only `wordId` a
 
 **Body:** `{ "wordIds": ["zh-000001", "zh-000002"] }`.
 
-Returns `{ "questions": [...] }` with definitions, transliteration and examples for
-existing requested words. IDs whose documents were deleted are omitted. No session
-is required. The word, combined, mixed and article quizzes share this endpoint;
-there is no positional `offset` / `limit` hydration API.
+Returns `{ "questions": [...] }` with definitions, transliteration, examples and optional
+`groupAddedAt: { A?: ISO timestamp, B?: ISO timestamp }` for existing requested words.
+The timestamps are returned only while the word currently belongs to that category; quiz
+cards display independent `A NEW` / `B NEW` badges for the rolling 24 hours after each
+addition. IDs whose documents were deleted are omitted. No session is required. The word,
+combined, mixed and article quizzes share this endpoint; there is no positional `offset` /
+`limit` hydration API.
 
 #### `POST /api/quiz/answer` — Submit an answer
 
@@ -1344,7 +1350,7 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | Firestore Collection | Contents                                              |
 | -------------------- | ----------------------------------------------------- |
 | `languages`          | Language metadata (word count, topics)                 |
-| `words`              | Vocabulary words (one document per word)               |
+| `words`              | Vocabulary words (one document per word), including optional `addedToGroupAAt` / `addedToGroupBAt` membership-activity timestamps |
 | `example_sentences`  | Normalized example sentences shared across words (id, sentence, translation, segments, language, ownerWordId); words reference these via `exampleIds` and `appearsInIds` arrays |
 | `example_sentence_index` | Dedup lookup by sentence text (composite key: `{language}_{sha256(sentence).slice(0,16)}` → exampleId) |
 | `id_maps`            | Term → word ID mappings and next ID counter            |

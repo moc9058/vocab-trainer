@@ -9,6 +9,7 @@ import { getGroups } from "../api/vocab";
 import RubyText from "./RubyText";
 import QuizLoadState from "./QuizLoadState";
 import QuizSyncBadge from "./QuizSyncBadge";
+import RecentWordGroupBadges from "./RecentWordGroupBadges";
 import { useQuizPrefetch } from "../hooks/useQuizPrefetch";
 import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
 import { getOutboxState } from "../utils/answerOutbox";
@@ -403,6 +404,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
         <p className="text-sm text-gray-400">
           {sessionReviewIndex + 1} / {sessionLog.length}
         </p>
+        <RecentWordGroupBadges groupAddedAt={reviewQuestion.groupAddedAt} />
         <h2 className="max-w-full break-words px-2 text-center text-xl sm:text-3xl font-bold text-gray-100">
           {reviewQuestion.term}
         </h2>
@@ -665,6 +667,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
           </div>
         </div>
       )}
+      <RecentWordGroupBadges groupAddedAt={question!.groupAddedAt} />
       <h2 className="max-w-full break-words px-2 text-center text-xl sm:text-3xl font-bold text-gray-100">{question!.term}</h2>
 
       {!showingAnswer ? (

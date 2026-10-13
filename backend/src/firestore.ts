@@ -4,6 +4,7 @@ import { initializeMixedScope } from "./mixed-quiz-scope.js";
 import { Firestore, FieldValue, FieldPath } from "@google-cloud/firestore";
 import { createHash } from "crypto";
 import { isLookupableTerm, wordIndexDocId } from "./word-index-id.js";
+import { applyWordGroupMemberAction, liveWordGroupAddedAt } from "./word-group-recency.js";
 import type {
   Word,
   ExampleSentence,
@@ -71,6 +72,9 @@ const wordGroups = db.collection("word_groups");
 interface WordRaw extends Word {
   exampleIds?: string[];
   appearsInIds?: string[];
+  /** Internal storage metadata; stripped from ordinary Word API responses. */
+  addedToGroupAAt?: string;
+  addedToGroupBAt?: string;
 }
 
 /** A group doc id that resolved to no document — routes map this to 404. */
@@ -420,6 +424,10 @@ export async function getWord(wordId: string): Promise<Word | null> {
  *  `getExampleSentencesByIds` / `lookupWordsByTerms`. Result order is not meaningful;
  *  every caller maps by id. */
 export async function getWordsByIds(wordIds: string[]): Promise<Word[]> {
+  return hydrateWords(await getRawWordsByIds(wordIds));
+}
+
+async function getRawWordsByIds(wordIds: string[]): Promise<WordRaw[]> {
   const unique = [...new Set(wordIds)];
   if (unique.length === 0) return [];
   const CHUNK = 100;
@@ -428,8 +436,39 @@ export async function getWordsByIds(wordIds: string[]): Promise<Word[]> {
   const batches = await Promise.all(
     chunks.map((chunk) => db.getAll(...chunk.map((id) => words.doc(id))))
   );
-  const rawWords = batches.flat().filter((d) => d.exists).map(docToWord);
-  return hydrateWords(rawWords);
+  return batches.flat().filter((d) => d.exists).map(docToWord);
+}
+
+/**
+ * Quiz-only word hydration metadata. The timestamps live on word documents, while
+ * group documents remain the source of truth for whether the word is currently in
+ * A and/or B. Joining the two here prevents a stale timestamp from displaying after
+ * the word leaves that category.
+ */
+export async function getWordsForQuizHydration(
+  language: string,
+  wordIds: string[]
+): Promise<Array<{ word: Word; groupAddedAt?: Partial<Record<GroupCategory, string>> }>> {
+  const rawWords = await getRawWordsByIds(wordIds);
+  const [hydrated, groups] = await Promise.all([
+    hydrateWords(rawWords),
+    getWordGroups(language),
+  ]);
+  const rawById = new Map(rawWords.map((word) => [word.id, word]));
+  const activeA = new Set(groups.filter((group) => group.category !== "B").flatMap((group) => group.wordIds));
+  const activeB = new Set(groups.filter((group) => group.category === "B").flatMap((group) => group.wordIds));
+
+  return hydrated.map((word) => {
+    const raw = rawById.get(word.id);
+    const groupAddedAt = liveWordGroupAddedAt(raw, {
+      A: activeA.has(word.id),
+      B: activeB.has(word.id),
+    });
+    return {
+      word,
+      ...(groupAddedAt ? { groupAddedAt } : {}),
+    };
+  });
 }
 
 export async function addWord(
@@ -704,6 +743,8 @@ function docToWord(doc: FirebaseFirestore.DocumentSnapshot): WordRaw {
     level: d.level,
     notes: d.notes,
     ...(d.hanjaReadings ? { hanjaReadings: d.hanjaReadings } : {}),
+    ...(typeof d.addedToGroupAAt === "string" ? { addedToGroupAAt: d.addedToGroupAAt } : {}),
+    ...(typeof d.addedToGroupBAt === "string" ? { addedToGroupBAt: d.addedToGroupBAt } : {}),
     // New format fields
     ...(isNewFormat ? { exampleIds: d.exampleIds, appearsInIds: d.appearsInIds ?? [] } : {}),
   };
@@ -1352,13 +1393,13 @@ async function hydrateWords(rawWords: WordRaw[]): Promise<Word[]> {
 
   if (allIds.size === 0) {
     // All words are either old-format (already have examples) or have no examples
-    return rawWords.map(({ exampleIds, appearsInIds, ...word }) => word);
+    return rawWords.map(({ exampleIds, appearsInIds, addedToGroupAAt, addedToGroupBAt, ...word }) => word);
   }
 
   const exSentences = await getExampleSentencesByIds([...allIds]);
   const exMap = new Map(exSentences.map((es) => [es.id, es]));
 
-  return rawWords.map(({ exampleIds, appearsInIds, ...word }) => {
+  return rawWords.map(({ exampleIds, appearsInIds, addedToGroupAAt, addedToGroupBAt, ...word }) => {
     if (!exampleIds) return word; // Old format — examples already populated
 
     const ownExamples: Example[] = [];
@@ -3079,31 +3120,57 @@ export async function modifyWordGroupMembers(
   wordIds: string[],
   action: "add" | "remove"
 ): Promise<WordGroup> {
-  const group = await db.runTransaction(async (tx) => {
-    const ref = wordGroups.doc(groupId);
-    const doc = await tx.get(ref);
-    if (!doc.exists) throw new GroupNotFoundError(`Group '${groupId}' not found`);
-    const current: string[] = doc.data()!.wordIds ?? [];
-    let next: string[];
-    if (action === "add") {
-      const toAdd = new Set(current);
-      for (const id of wordIds) toAdd.add(id);
-      next = [...toAdd];
-    } else {
-      const toRemove = new Set(wordIds);
-      next = current.filter((id) => !toRemove.has(id));
-    }
-    tx.update(ref, { wordIds: next });
-    return {
-      id: doc.data()!.id as string,
-      language: doc.data()!.language as string,
-      name: doc.data()!.name as string,
-      wordIds: next,
-      createdAt: doc.data()!.createdAt as string,
-      order: typeof doc.data()!.order === "number" ? doc.data()!.order as number : undefined,
-      ...(doc.data()!.category === "B" ? { category: "B" as const } : {}),
-    };
-  });
+  // One group write plus at most 400 word timestamp writes stays below Firestore's
+  // 500-write transaction limit. De-duplication also prevents a repeated id within
+  // one request from being mistaken for two additions.
+  const MEMBER_MUTATION_CHUNK = 400;
+  const uniqueWordIds = [...new Set(wordIds)];
+  const chunks = uniqueWordIds.length > 0
+    ? Array.from({ length: Math.ceil(uniqueWordIds.length / MEMBER_MUTATION_CHUNK) }, (_, index) =>
+        uniqueWordIds.slice(index * MEMBER_MUTATION_CHUNK, (index + 1) * MEMBER_MUTATION_CHUNK)
+      )
+    : [[]];
+  let group: WordGroup | null = null;
+
+  for (const chunk of chunks) {
+    group = await db.runTransaction(async (tx) => {
+      const ref = wordGroups.doc(groupId);
+      const doc = await tx.get(ref);
+      if (!doc.exists) throw new GroupNotFoundError(`Group '${groupId}' not found`);
+      const data = doc.data()!;
+      const current: string[] = data.wordIds ?? [];
+      const { next, newlyAdded } = applyWordGroupMemberAction(current, chunk, action);
+
+      // Read before any writes. Invalid/dangling ids retain the historical group API
+      // behavior, but never create ghost word documents just to hold a timestamp.
+      const wordDocs = newlyAdded.length > 0
+        ? await Promise.all(newlyAdded.map((id) => tx.get(words.doc(id))))
+        : [];
+      tx.update(ref, { wordIds: next });
+      if (action === "add" && newlyAdded.length > 0) {
+        const timestampField = data.category === "B" ? "addedToGroupBAt" : "addedToGroupAAt";
+        const addedAt = new Date().toISOString();
+        wordDocs.forEach((wordDoc, index) => {
+          if (wordDoc.exists && wordDoc.data()!.language === data.language) {
+            tx.update(words.doc(newlyAdded[index]), { [timestampField]: addedAt });
+          }
+        });
+      }
+
+      return {
+        id: data.id as string,
+        language: data.language as string,
+        name: data.name as string,
+        wordIds: next,
+        createdAt: data.createdAt as string,
+        order: typeof data.order === "number" ? data.order as number : undefined,
+        ...(data.category === "B" ? { category: "B" as const } : {}),
+      };
+    });
+  }
+
+  // The loop always runs once, including for an empty id list.
+  const updatedGroup = group!;
 
   // Category A is EXCLUSIVE: adding a word to an A group MOVES it there. The A
   // groups are the lesson structure — a partition of the library, not overlapping
@@ -3114,16 +3181,16 @@ export async function modifyWordGroupMembers(
   // Every add path in the app (smart-add queue, chips, drafts, the group picker, the
   // word editor, the article importer) funnels through this one function, which is
   // why the invariant needs no cooperation from the callers.
-  if (action === "add" && group.category !== "B" && wordIds.length > 0) {
+  if (action === "add" && updatedGroup.category !== "B" && uniqueWordIds.length > 0) {
     try {
-      await removeWordsFromOtherCategoryAGroups(group.language, wordIds, group.id);
+      await removeWordsFromOtherCategoryAGroups(updatedGroup.language, uniqueWordIds, updatedGroup.id);
     } catch (err) {
       // The add above is already committed, so a throw here must not turn the
       // route into a failure the client would retry — the response has to
       // report the add truthfully. The leftover state is "word in two A
       // groups", which the next add self-repairs and
       // scripts/dedupe-word-group-membership.ts sweeps in bulk.
-      console.error(`[modifyWordGroupMembers] post-add A-move failed for group ${group.id} (self-healing):`, err);
+      console.error(`[modifyWordGroupMembers] post-add A-move failed for group ${updatedGroup.id} (self-healing):`, err);
     }
   }
   // The REMOVE side of the same invariant: a category-B group is the
@@ -3131,19 +3198,19 @@ export async function modifyWordGroupMembers(
   // last category-A group must leave every B set too. The helper re-checks
   // remaining A membership from a fresh read, so a move (whose add committed
   // first) keeps B intact.
-  if (action === "remove" && group.category !== "B" && wordIds.length > 0) {
+  if (action === "remove" && updatedGroup.category !== "B" && uniqueWordIds.length > 0) {
     try {
-      await removeOrphanedWordsFromCategoryBGroups(group.language, wordIds);
+      await removeOrphanedWordsFromCategoryBGroups(updatedGroup.language, uniqueWordIds);
     } catch (err) {
       // Same contract as the add branch: the remove is committed, so this
       // cleanup must not fail the route. The leftover is a stranded B
       // membership — unlike the two-A-groups race it does NOT self-heal, but
       // every in-app remove funnels through here, so the window is a lost
       // request, not a code path.
-      console.error(`[modifyWordGroupMembers] post-remove B-strip failed for group ${group.id}:`, err);
+      console.error(`[modifyWordGroupMembers] post-remove B-strip failed for group ${updatedGroup.id}:`, err);
     }
   }
-  return group;
+  return updatedGroup;
 }
 
 /**
@@ -3402,10 +3469,20 @@ export async function normalizeWordGroupMembership(
   // Phase 2 — the top group's additions, in their own commits. A batch must not carry
   // two writes for one document, and the top group may need both a removal above and
   // an addition here.
-  for (let s = 0; s < toAdd.length; s += NORMALIZE_ARRAY_CHUNK) {
-    await wordGroups.doc(top.id).update({
-      wordIds: FieldValue.arrayUnion(...toAdd.slice(s, s + NORMALIZE_ARRAY_CHUNK)),
+  // Each newly admitted word is also timestamped as a real Group-A addition.
+  // Keep one group write + word writes under the batch cap and commit them together.
+  const normalizeAddedAt = new Date().toISOString();
+  const NORMALIZE_ADD_CHUNK = NORMALIZE_MAX_BATCH - 1;
+  for (let s = 0; s < toAdd.length; s += NORMALIZE_ADD_CHUNK) {
+    const ids = toAdd.slice(s, s + NORMALIZE_ADD_CHUNK);
+    const addBatch = db.batch();
+    addBatch.update(wordGroups.doc(top.id), {
+      wordIds: FieldValue.arrayUnion(...ids),
     });
+    for (const id of ids) {
+      addBatch.update(words.doc(id), { addedToGroupAAt: normalizeAddedAt });
+    }
+    await addBatch.commit();
   }
 
   return { ...result, applied: true, groups: await getWordGroups(language) };

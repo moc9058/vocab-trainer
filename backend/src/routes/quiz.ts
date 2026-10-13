@@ -9,6 +9,7 @@ import {
   createQuizSession,
   mutateQuizSession,
   getWordsByIds,
+  getWordsForQuizHydration,
   flagWord,
   getWordGroup,
 } from "../firestore.js";
@@ -221,15 +222,16 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request) => {
-      const wordsData = await getWordsByIds(request.body.wordIds);
-      const wordMap = new Map(wordsData.map((w) => [w.id, w]));
+      const wordsData = await getWordsForQuizHydration(request.params.language, request.body.wordIds);
+      const wordMap = new Map(wordsData.map((entry) => [entry.word.id, entry]));
 
       // Skip ids with no live word doc rather than emitting an empty-definition question —
       // the client keeps its slim entry and shows the term alone.
       const questions: QuizQuestion[] = [];
       for (const wordId of new Set(request.body.wordIds)) {
-        const word = wordMap.get(wordId);
-        if (!word) continue;
+        const entry = wordMap.get(wordId);
+        if (!entry) continue;
+        const { word, groupAddedAt } = entry;
         questions.push({
           wordId,
           term: word.term,
@@ -237,6 +239,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
           transliteration: word.transliteration,
           examples: word.examples ?? [],
           ...(word.hanjaReadings ? { hanjaReadings: word.hanjaReadings } : {}),
+          ...(groupAddedAt ? { groupAddedAt } : {}),
         });
       }
 
