@@ -117,9 +117,13 @@ available, and report any verification that could not be performed.
 
 ## Delivery and deployment
 
-- Honor the user's current commit/push/deploy scope; these are separate actions.
-  A requested push does not imply permission to deploy. Check the branch and working
-  tree, preserve unrelated edits, and do not force-push to resolve remote changes.
+- Unless the user explicitly opts out, finish every completed task by committing the
+  intended changes, pushing `master` with `git push origin master`, and deploying.
+  Check the branch and working tree first and preserve unrelated edits. If the current
+  branch is not `master`, or the correct push branch is otherwise ambiguous, ask the
+  user which branch to use instead of switching, merging or guessing. Never force-push.
+- Treat push and deploy as distinct outcomes: do not claim either one succeeded until
+  its command completes, and report a failure or unavailable prerequisite precisely.
 - The production command is `./deploy.sh`; defaults target
   `vocab-trainer-490014` in `asia-northeast1`. Windows uses `.\deploy.ps1`.
   Both services deploy to Cloud Run.
