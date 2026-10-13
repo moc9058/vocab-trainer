@@ -9,6 +9,7 @@ import QuizLoadState from "./QuizLoadState";
 import QuizSyncBadge from "./QuizSyncBadge";
 import { useQuizPrefetch } from "../hooks/useQuizPrefetch";
 import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
+import { getOutboxState } from "../utils/answerOutbox";
 import { applyGrammarAnswerLocally } from "../utils/quizLocal";
 import {
   appendSessionReview,
@@ -123,6 +124,9 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
   // Apply new group weights mid-session: the server reorders the unanswered tail and
   // returns the full session; jump to the first unanswered question of the new order.
   async function applyWeights() {
+    // The response replaces the whole local session. Wait until every local-first answer has
+    // landed, otherwise an older server snapshot can make an answered item pending again.
+    if (getOutboxState().pending || getOutboxState().failed) return;
     if (applyingWeights || hasInvalidWeightDraft) return;
     setApplyingWeights(true);
     try {
@@ -151,7 +155,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
 
   /** Local-first — see `utils/quizLocal.ts`. The write is queued, never awaited. */
   function handleGrade(correct: boolean) {
-    if (!question || gradedIndexRef.current === currentIndex) return;
+    if (!question || applyingWeights || gradedIndexRef.current === currentIndex) return;
     gradedIndexRef.current = currentIndex;
 
     outbox.enqueue({
@@ -441,7 +445,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
             </button>
             <button
               onClick={applyWeights}
-              disabled={applyingWeights || hasInvalidWeightDraft}
+              disabled={applyingWeights || hasInvalidWeightDraft || outbox.pending > 0 || outbox.failed > 0}
               className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs text-white hover:bg-emerald-500 disabled:opacity-50"
             >
               {applyingWeights ? "..." : t("applyWeights")}
@@ -498,12 +502,14 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
           <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
             <button
               onClick={() => handleGrade(true)}
+              disabled={applyingWeights}
               className="w-full sm:w-auto rounded-lg bg-green-600 px-6 py-3 sm:py-2 text-white hover:bg-green-700 disabled:opacity-50"
             >
               {t("iWasCorrect")}
             </button>
             <button
               onClick={() => handleGrade(false)}
+              disabled={applyingWeights}
               className="w-full sm:w-auto rounded-lg bg-red-600 px-6 py-3 sm:py-2 text-white hover:bg-red-700 disabled:opacity-50"
             >
               {t("iWasWrong")}

@@ -1544,6 +1544,27 @@ export async function updateQuizSession(session: QuizSession): Promise<void> {
   await quizSessions.doc(session.language).set(clean);
 }
 
+/** Serialize session-wide mutations (resume reorder, review boundary and weights) with
+ * answer writes. Firestore retries this callback when the session document changes after
+ * it was read, so an older snapshot cannot restore an already-answered question. */
+export async function mutateQuizSession<T>(
+  language: string,
+  mutate: (session: QuizSession | null) => Promise<T> | T,
+): Promise<T> {
+  return db.runTransaction(async tx => {
+    const ref = quizSessions.doc(language);
+    const doc = await tx.get(ref);
+    const session = doc.exists ? normalizeQuizSitting(docToSession(doc)) : null;
+    const result = await mutate(session);
+    if (session) {
+      const data: Record<string, unknown> = { ...session, questions: slimQuestions(session.questions) };
+      delete data.sessionId;
+      tx.set(ref, Object.fromEntries(Object.entries(data).filter(([_, value]) => value !== undefined)));
+    }
+    return result;
+  });
+}
+
 function docToSession(doc: FirebaseFirestore.DocumentSnapshot): QuizSession {
   const d = doc.data()!;
   return {
@@ -2215,6 +2236,10 @@ export async function deleteGrammarProgressForLanguage(language: string): Promis
 export async function getGrammarQuizSession(language: string): Promise<GrammarQuizSession | null> {
   const doc = await grammarQuizSessions.doc(language).get();
   if (!doc.exists) return null;
+  return docToGrammarQuizSession(doc);
+}
+
+function docToGrammarQuizSession(doc: FirebaseFirestore.DocumentSnapshot): GrammarQuizSession {
   const d = doc.data()!;
   return normalizeQuizSitting({
     sessionId: doc.id,
@@ -2240,6 +2265,24 @@ export async function saveGrammarQuizSession(session: GrammarQuizSession): Promi
   await grammarQuizSessions.doc(session.language).set(clean);
 }
 
+export async function mutateGrammarQuizSession<T>(
+  language: string,
+  mutate: (session: GrammarQuizSession | null) => Promise<T> | T,
+): Promise<T> {
+  return db.runTransaction(async tx => {
+    const ref = grammarQuizSessions.doc(language);
+    const doc = await tx.get(ref);
+    const session = doc.exists ? docToGrammarQuizSession(doc) : null;
+    const result = await mutate(session);
+    if (session) {
+      const data: Record<string, unknown> = { ...session };
+      delete data.sessionId;
+      tx.set(ref, Object.fromEntries(Object.entries(data).filter(([_, value]) => value !== undefined)));
+    }
+    return result;
+  });
+}
+
 // ========== Expression Recall Quiz Sessions (keyed by language) ==========
 //
 // Its OWN collection, unlike the LLM-graded writing quiz which is a subfield of
@@ -2255,6 +2298,12 @@ export async function getExpressionRecallSession(
 ): Promise<ExpressionRecallSession | null> {
   const doc = await expressionRecallSessions.doc(language).get();
   if (!doc.exists) return null;
+  return docToExpressionRecallSession(doc);
+}
+
+function docToExpressionRecallSession(
+  doc: FirebaseFirestore.DocumentSnapshot
+): ExpressionRecallSession {
   const d = doc.data()!;
   return normalizeQuizSitting({
     sessionId: doc.id,
@@ -2280,6 +2329,24 @@ export async function saveExpressionRecallSession(
   delete data.sessionId;
   const clean = Object.fromEntries(Object.entries(data).filter(([_, v]) => v !== undefined));
   await expressionRecallSessions.doc(session.language).set(clean);
+}
+
+export async function mutateExpressionRecallSession<T>(
+  language: string,
+  mutate: (session: ExpressionRecallSession | null) => Promise<T> | T,
+): Promise<T> {
+  return db.runTransaction(async tx => {
+    const ref = expressionRecallSessions.doc(language);
+    const doc = await tx.get(ref);
+    const session = doc.exists ? docToExpressionRecallSession(doc) : null;
+    const result = await mutate(session);
+    if (session) {
+      const data: Record<string, unknown> = { ...session };
+      delete data.sessionId;
+      tx.set(ref, Object.fromEntries(Object.entries(data).filter(([_, value]) => value !== undefined)));
+    }
+    return result;
+  });
 }
 
 export async function deleteExpressionRecallSession(language: string): Promise<boolean> {

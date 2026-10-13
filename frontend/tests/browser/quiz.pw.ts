@@ -102,3 +102,68 @@ test('End session reviews only that sitting and returns to the existing quiz', a
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Start New', exact: true })).toBeVisible();
 });
+
+for (const kind of ['word', 'grammar'] as const) {
+  test(`${kind} weights wait for an in-flight Wrong answer`, async ({ page }) => {
+    const questions = kind === 'word'
+      ? [
+          { wordId: 'a', term: '甲' },
+          { wordId: 'b', term: '乙' },
+        ]
+      : [
+          { grammarId: 'a', statement: 'A grammar' },
+          { grammarId: 'b', statement: 'B grammar' },
+        ];
+    const session = {
+      sessionId: 'chinese', language: 'chinese', startedAt: 'start', status: 'in-progress',
+      reviewedQuestionCount: 0, score: { correct: 0, total: 2 }, questions,
+      groupMembership: { lesson: ['a', 'b'] }, groupWeights: { lesson: 1 },
+      ...(kind === 'word' ? { wordIds: ['a', 'b'] } : {}),
+    };
+    let releaseAnswer!: () => void;
+    const answerGate = new Promise<void>((resolve) => { releaseAnswer = resolve; });
+    let weightCalls = 0;
+    await page.addInitScript(value => { (window as any).fixture = value; }, session);
+    await page.route(url => url.pathname.startsWith('/api/'), async route => {
+      const path = new URL(route.request().url()).pathname;
+      if (path === '/api/quiz/hydrate/chinese') {
+        await route.fulfill({ json: { questions: [
+          { wordId: 'a', term: '甲', definitions: [], examples: [] },
+          { wordId: 'b', term: '乙', definitions: [], examples: [] },
+        ] } });
+      } else if (path === '/api/flagged/chinese/ids') {
+        await route.fulfill({ json: { wordIds: [], count: 0 } });
+      } else if (path === '/api/vocab/chinese/groups') {
+        await route.fulfill({ json: [{ id: 'lesson', name: 'Lesson', wordIds: ['a', 'b'] }] });
+      } else if (path === '/api/grammar/chinese/items/batch') {
+        await route.fulfill({ json: { items: [
+          { id: 'a', statement: 'A grammar', descriptions: [], examples: [] },
+          { id: 'b', statement: 'B grammar', descriptions: [], examples: [] },
+        ] } });
+      } else if (path === '/api/grammar/chinese/groups') {
+        await route.fulfill({ json: [{ id: 'lesson', name: 'Lesson', grammarIds: ['a', 'b'] }] });
+      } else if (path === (kind === 'word' ? '/api/quiz/answer' : '/api/grammar-quiz/answer')) {
+        await answerGate;
+        await route.fulfill({ json: { session } });
+      } else if (path.endsWith('/weights')) {
+        weightCalls += 1;
+        await route.fulfill({ json: session });
+      } else {
+        await route.fulfill({ status: 500, json: { error: `Unexpected API ${path}` } });
+      }
+    });
+
+    await page.goto(`/tests/browser/harness.html?mode=${kind}`);
+    await page.getByRole('button', { name: /Show.*Answer/ }).click();
+    await page.getByRole('button', { name: 'Wrong', exact: true }).click();
+    await page.getByRole('button', { name: /Adjust Weights/ }).click();
+    const apply = page.getByRole('button', { name: 'Apply', exact: true });
+    await expect(apply).toBeDisabled();
+    expect(weightCalls).toBe(0);
+
+    releaseAnswer();
+    await expect(apply).toBeEnabled();
+    await apply.click();
+    await expect.poll(() => weightCalls).toBe(1);
+  });
+}

@@ -40,6 +40,20 @@ try {
       const response = await app.inject({ method: 'PUT', url: `/${c.route}/session/language/chinese/reviewed`, payload: { startedAt: 'smoke' } });
       assert.equal(response.statusCode, 200, `${c.route}: ${response.body}`);
     };
+    // The standard quiz routes used to perform independent read/modify/write cycles here.
+    // A resume that read before the answer and saved afterward could restore `a` as pending.
+    if (c.route === 'word' || c.route === 'grammar' || c.route === 'recall') {
+      const [answerResponse, resumeResponse] = await Promise.all([
+        app.inject({ method: 'POST', url: `/${c.route}/answer`, payload: { ...c.body('a'), correct: false } }),
+        app.inject(`/${c.route}/session/language/chinese`),
+      ]);
+      assert.equal(answerResponse.statusCode, 200, `${c.route}: ${answerResponse.body}`);
+      assert.equal(resumeResponse.statusCode, 200, `${c.route}: ${resumeResponse.body}`);
+      const raced = (await ref.get()).data()!;
+      const a = raced.questions.find((q: any) => (q.wordId ?? q.grammarId ?? q.expressionId) === 'a');
+      assert.equal(a.userCorrect, false, `${c.route}: concurrent resume restored Wrong as pending`);
+      await ref.set(c.data);
+    }
     await answer('a', false);
     let saved = (await ref.get()).data()!;
     assert.equal(saved.questions.length, 2);

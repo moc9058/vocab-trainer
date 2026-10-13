@@ -7,8 +7,8 @@ import {
   getGrammarProgressForLanguage,
   getGrammarComponentProgress,
   updateGrammarComponentProgress,
-  getGrammarQuizSession,
   saveGrammarQuizSession,
+  mutateGrammarQuizSession,
   lookupWordsByTerms,
   addWord,
   getNextWordId,
@@ -173,28 +173,34 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     },
-    async (request, reply) => {
+    async (request) => {
       const { language, grammarId, correct } = request.body;
+      const session = await mutateGrammarQuizSession(language, (current) => {
+        if (!current) throw fastify.httpErrors.notFound("No grammar quiz session found");
+        if (current.status === "completed") throw fastify.httpErrors.badRequest("Session already completed");
 
-      const session = await getGrammarQuizSession(language);
-      if (!session) return reply.notFound("No grammar quiz session found");
-      if (session.status === "completed") return reply.badRequest("Session already completed");
+        const question = current.questions.find(
+          (q) => q.grammarId === grammarId && q.userCorrect === undefined
+        );
+        if (!question) throw fastify.httpErrors.notFound("Question not found in session");
 
-      const question = session.questions.find(
-        (q) => q.grammarId === grammarId && q.userCorrect === undefined
-      );
-      if (!question) return reply.notFound("Question not found in session");
-
-      question.userCorrect = correct;
-      if (correct) {
-        session.score.correct++;
-      } else {
-        // A wrong answer means it's no longer "already-correct": drop it from the mastered
-        // bucket so its retry is treated as a normal (unmastered) item for the rest of the session.
-        if (session.correctMembership) {
-          session.correctMembership = session.correctMembership.filter((id) => id !== grammarId);
+        question.userCorrect = correct;
+        if (correct) {
+          current.score.correct++;
+        } else {
+          // A wrong answer means it's no longer "already-correct": drop it from the mastered
+          // bucket so its retry is treated as a normal item for the rest of the session.
+          if (current.correctMembership) {
+            current.correctMembership = current.correctMembership.filter((id) => id !== grammarId);
+          }
         }
-      }
+
+        if (current.questions.every((q) => q.userCorrect !== undefined)) {
+          current.status = "completed";
+          current.completedAt = new Date().toISOString();
+        }
+        return current;
+      });
 
       // Update grammar progress
       const gp = await getGrammarComponentProgress(language, grammarId);
@@ -209,14 +215,6 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       gp.lastReviewed = new Date().toISOString();
       await updateGrammarComponentProgress(language, grammarId, gp);
 
-      // Check if session is complete
-      const allAnswered = session.questions.every((q) => q.userCorrect !== undefined);
-      if (allAnswered) {
-        session.status = "completed";
-        session.completedAt = new Date().toISOString();
-      }
-
-      await saveGrammarQuizSession(session);
       return { session, grammarProgress: gp };
     }
   );
@@ -226,9 +224,8 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
   // a refresh or a resume-from-home gives a freshly ordered quiz rather than the stale tail.
   fastify.get<{ Params: { language: string } }>(
     "/session/language/:language",
-    async (request, reply) => {
-      const session = await getGrammarQuizSession(request.params.language);
-      if (!session) return reply.notFound("No grammar quiz session found");
+    async (request) => mutateGrammarQuizSession(request.params.language, (session) => {
+      if (!session) throw fastify.httpErrors.notFound("No grammar quiz session found");
 
       const answered: GrammarQuizQuestion[] = [];
       const unanswered: GrammarQuizQuestion[] = [];
@@ -237,24 +234,20 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
         else unanswered.push(q);
       }
       session.questions = [...answered, ...reweightUnansweredGrammar(unanswered, session)];
-      await saveGrammarQuizSession(session);
-
       return session;
-    }
+    })
   );
 
   fastify.put<{ Params: { language: string }; Body: { startedAt: string } }>(
     "/session/language/:language/reviewed",
-    async (request, reply) => {
-      const session = await getGrammarQuizSession(request.params.language);
-      if (!session) return reply.notFound("No grammar quiz session found");
+    async (request) => mutateGrammarQuizSession(request.params.language, (session) => {
+      if (!session) throw fastify.httpErrors.notFound("No grammar quiz session found");
       if (session.startedAt !== request.body.startedAt) {
-        return reply.conflict("The quiz session has been replaced");
+        throw fastify.httpErrors.conflict("The quiz session has been replaced");
       }
       Object.assign(session, finishQuizSitting(session));
-      await saveGrammarQuizSession(session);
       return { reviewedQuestionCount: session.reviewedQuestionCount };
-    }
+    })
   );
 
   // Adjust per-group weights mid-session: store the new weights and reorder the
@@ -277,10 +270,9 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     },
-    async (request, reply) => {
-      const session = await getGrammarQuizSession(request.params.language);
-      if (!session) return reply.notFound("No grammar quiz session found");
-      if (session.status === "completed") return reply.badRequest("Session already completed");
+    async (request) => mutateGrammarQuizSession(request.params.language, async (session) => {
+      if (!session) throw fastify.httpErrors.notFound("No grammar quiz session found");
+      if (session.status === "completed") throw fastify.httpErrors.badRequest("Session already completed");
 
       session.groupWeights = { ...session.groupWeights, ...request.body.groupWeights };
       if (request.body.correctWeight !== undefined) {
@@ -299,10 +291,8 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
         else unanswered.push(q);
       }
       session.questions = [...answered, ...reweightUnansweredGrammar(unanswered, session)];
-      await saveGrammarQuizSession(session);
-
       return session;
-    }
+    })
   );
 
   // Check which terms are missing from the word DB

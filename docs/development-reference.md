@@ -205,6 +205,14 @@ wrong item for the next sitting. The mixed quiz uses the ordinary weighted draw 
 retains explicit Group B removals in A; out-of-scope items are excluded. The existing
 serial answer outbox sends review completion before any next-sitting answer.
 
+Session-wide writes that can reorder or replace the pending tail (resume, review completion
+and weight changes) run through Firestore transactions for word, grammar, expression-recall
+and combined sessions. This is load-bearing with local-first grading: a transaction retries
+when an answer lands after its read, instead of writing an older pending copy back over that
+answer. The word and grammar weight controls are disabled while the answer outbox has pending
+or unacknowledged failed writes, grading is disabled while a weight request is in flight, and
+Dashboard defers resume/session-list reads until pending answers have drained.
+
 The review completion screen offers **Return to Quiz** for an unfinished test. Natural
 exhaustion (including a final Wrong) displays **Quiz Complete** and **Review Session**;
 its review completion offers **Start New**. Finishing review cannot reopen a completed

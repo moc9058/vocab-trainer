@@ -3,8 +3,8 @@ import type { FastifyPluginAsync } from "fastify";
 import {
   getAllExpressions,
   getExpressionGroup,
-  getExpressionRecallSession,
   saveExpressionRecallSession,
+  mutateExpressionRecallSession,
   deleteExpressionRecallSession,
 } from "../firestore.js";
 import type {
@@ -194,30 +194,25 @@ const expressionRecallQuizRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     },
-    async (request, reply) => {
+    async (request) => {
       const { language, expressionId, correct } = request.body;
+      const session = await mutateExpressionRecallSession(language, (current) => {
+        if (!current) throw fastify.httpErrors.notFound("No expression recall session found");
+        if (current.status === "completed") throw fastify.httpErrors.badRequest("Session already completed");
 
-      const session = await getExpressionRecallSession(language);
-      if (!session) return reply.notFound("No expression recall session found");
-      if (session.status === "completed") return reply.badRequest("Session already completed");
+        const question = current.questions.find(
+          (q) => q.expressionId === expressionId && q.userCorrect === undefined
+        );
+        if (!question) throw fastify.httpErrors.notFound("Question not found in session");
 
-      const question = session.questions.find(
-        (q) => q.expressionId === expressionId && q.userCorrect === undefined
-      );
-      if (!question) return reply.notFound("Question not found in session");
-
-      question.userCorrect = correct;
-      if (correct) {
-        session.score.correct++;
-      }
-
-      const allAnswered = session.questions.every((q) => q.userCorrect !== undefined);
-      if (allAnswered) {
-        session.status = "completed";
-        session.completedAt = new Date().toISOString();
-      }
-
-      await saveExpressionRecallSession(session);
+        question.userCorrect = correct;
+        if (correct) current.score.correct++;
+        if (current.questions.every((q) => q.userCorrect !== undefined)) {
+          current.status = "completed";
+          current.completedAt = new Date().toISOString();
+        }
+        return current;
+      });
       return { session };
     }
   );
@@ -225,9 +220,8 @@ const expressionRecallQuizRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /session/language/:language — resume, re-drawing the unanswered tail.
   fastify.get<{ Params: { language: string } }>(
     "/session/language/:language",
-    async (request, reply) => {
-      const session = await getExpressionRecallSession(request.params.language);
-      if (!session) return reply.notFound("No expression recall session found");
+    async (request) => mutateExpressionRecallSession(request.params.language, (session) => {
+      if (!session) throw fastify.httpErrors.notFound("No expression recall session found");
 
       const answered: ExpressionRecallQuestion[] = [];
       const unanswered: ExpressionRecallQuestion[] = [];
@@ -236,24 +230,20 @@ const expressionRecallQuizRoutes: FastifyPluginAsync = async (fastify) => {
         else unanswered.push(q);
       }
       session.questions = [...answered, ...reweightUnanswered(unanswered, session)];
-      await saveExpressionRecallSession(session);
-
       return session;
-    }
+    })
   );
 
   fastify.put<{ Params: { language: string }; Body: { startedAt: string } }>(
     "/session/language/:language/reviewed",
-    async (request, reply) => {
-      const session = await getExpressionRecallSession(request.params.language);
-      if (!session) return reply.notFound("No expression recall session found");
+    async (request) => mutateExpressionRecallSession(request.params.language, (session) => {
+      if (!session) throw fastify.httpErrors.notFound("No expression recall session found");
       if (session.startedAt !== request.body.startedAt) {
-        return reply.conflict("The quiz session has been replaced");
+        throw fastify.httpErrors.conflict("The quiz session has been replaced");
       }
       Object.assign(session, finishQuizSitting(session));
-      await saveExpressionRecallSession(session);
       return { reviewedQuestionCount: session.reviewedQuestionCount };
-    }
+    })
   );
 
   fastify.delete<{ Params: { language: string } }>(

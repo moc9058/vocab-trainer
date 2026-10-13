@@ -33,6 +33,8 @@ removals, zero weights and migration details.
 
 A session (sitting) is the set of questions answered continuously until **End session**.
 A Wrong answer never repeats in that sitting, including after a refresh or weight change.
+Weight changes and resume reads wait for locally queued answers, and session-wide server
+updates are transactional so a stale reorder cannot restore an answered item.
 Ending early opens a review of the answers since the previous boundary. After reviewing,
 **Return to Quiz** continues the same test in a new sitting; wrong items become eligible
 once again alongside the unanswered questions. Answers and scores are retained.

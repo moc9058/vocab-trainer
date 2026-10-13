@@ -37,6 +37,7 @@ import { useWordQueue } from "../hooks/useWordQueue";
 import { useGrammarQueue } from "../hooks/useGrammarQueue";
 import type { QuizSession, GrammarQuizSession, CombinedQuizSession, ImportQuizPool } from "../types";
 import { hasPendingSessionReview, sessionReviewKey } from "../utils/sessionReview";
+import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
 
 /** The two article quizzes: every saved import session's vocabulary and grammar, split by
  *  meta-group. "A" is everything those articles put in the library; "B" is the subset also
@@ -75,6 +76,9 @@ export default function Dashboard() {
     subPath === "/import-quiz-a" ? "A" : subPath === "/import-quiz-b" ? "B" : null;
   const { t, language: uiLang, setLanguage } = useI18n();
   const { settings } = useSettings();
+  // Keep session-refetching reads behind the same serial boundary as local-first answers.
+  // Quiz screens subscribe separately for their badges; the queue itself is module-level.
+  const quizOutbox = useAnswerOutbox();
   const { enqueue, enqueueUpdate, pendingTerms, queueLength, processingTerms, succeededTerms, pendingDraftIds, activeCount, recentResults, clearResults, refreshSignal } = useWordQueue();
   const { enqueue: enqueueGrammar, enqueueUpdate: enqueueGrammarUpdate, pendingTerms: grammarPendingTerms, processingTerms: grammarProcessingTerms, pendingDraftIds: grammarPendingDraftIds, queueLength: grammarQueueLength, activeCount: grammarActiveCount, recentResults: grammarRecentResults, clearResults: clearGrammarResults, refreshSignal: grammarRefreshSignal } = useGrammarQueue();
   const [visibleToast, setVisibleToast] = useState<{ id: string; term: string; success: boolean; error?: string } | null>(null);
@@ -137,36 +141,36 @@ export default function Dashboard() {
   // user to the home screen whenever they refreshed on a weak connection, making an
   // in-progress quiz look like it had vanished.
   useEffect(() => {
-    if (subPath !== "/quiz" || activeQuiz) return;
+    if (subPath !== "/quiz" || activeQuiz || quizOutbox.pending > 0) return;
     setRecoveryError(false);
     getCurrentSession(language ?? "").then(session => {
       if (session) setActiveQuiz(session);
       else navigate(`/${language}`, { replace: true });
     }).catch(() => setRecoveryError(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subPath, language, recoveryAttempt]);
+  }, [subPath, language, recoveryAttempt, quizOutbox.pending]);
 
   // Session recovery: navigate to /:language/grammar-quiz → fetch active session if state is empty
   useEffect(() => {
-    if (subPath !== "/grammar-quiz" || activeGrammarQuiz) return;
+    if (subPath !== "/grammar-quiz" || activeGrammarQuiz || quizOutbox.pending > 0) return;
     setRecoveryError(false);
     getCurrentGrammarSession(language ?? "").then(session => {
       if (session) setActiveGrammarQuiz(session);
       else navigate(`/${language}`, { replace: true });
     }).catch(() => setRecoveryError(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subPath, language, recoveryAttempt]);
+  }, [subPath, language, recoveryAttempt, quizOutbox.pending]);
 
   // Session recovery: navigate to /:language/combined-quiz → fetch active session if state is empty
   useEffect(() => {
-    if (subPath !== "/combined-quiz" || activeCombinedQuiz) return;
+    if (subPath !== "/combined-quiz" || activeCombinedQuiz || quizOutbox.pending > 0) return;
     setRecoveryError(false);
     getCurrentCombinedSession(language ?? "").then(session => {
       if (session) setActiveCombinedQuiz(session);
       else navigate(`/${language}`, { replace: true });
     }).catch(() => setRecoveryError(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subPath, language, recoveryAttempt]);
+  }, [subPath, language, recoveryAttempt, quizOutbox.pending]);
 
   // Retired standalone route: old bookmarks open the mixed quiz.
   useEffect(() => {
@@ -175,19 +179,19 @@ export default function Dashboard() {
 
   // Session recovery: navigate to /:language/mixed-quiz → fetch active session if state is empty
   useEffect(() => {
-    if (subPath !== "/mixed-quiz" || activeMixedQuiz) return;
+    if (subPath !== "/mixed-quiz" || activeMixedQuiz || quizOutbox.pending > 0) return;
     setRecoveryError(false);
     getCurrentCombinedSession(language ?? "", "mixed").then(session => {
       if (session) setActiveMixedQuiz(session);
       else navigate(`/${language}`, { replace: true });
     }).catch(() => setRecoveryError(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subPath, language, recoveryAttempt, activeMixedQuiz]);
+  }, [subPath, language, recoveryAttempt, activeMixedQuiz, quizOutbox.pending]);
 
   // Session recovery: /:language/import-quiz-a|b → fetch that category's active session.
   // One effect for both, since the category is derived from the path.
   useEffect(() => {
-    if (!articleQuizCategory || activeArticleQuizzes[articleQuizCategory]) return;
+    if (!articleQuizCategory || activeArticleQuizzes[articleQuizCategory] || quizOutbox.pending > 0) return;
     const category = articleQuizCategory;
     setRecoveryError(false);
     getCurrentCombinedSession(language ?? "", articleQuizVariant(category)).then(session => {
@@ -195,7 +199,7 @@ export default function Dashboard() {
       else navigate(`/${language}`, { replace: true });
     }).catch(() => setRecoveryError(true));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subPath, language, recoveryAttempt]);
+  }, [subPath, language, recoveryAttempt, quizOutbox.pending]);
 
 
   // Check for translation history scoped to the current language
@@ -1015,6 +1019,7 @@ export default function Dashboard() {
         ) : (
           <EmptyState
             language={language ?? ""}
+            deferSessionLoad={quizOutbox.pending > 0}
             onResume={(session) => { setActiveQuiz(session); navigate(`/${language}/quiz`); }}
             onResumeGrammar={(session) => { setActiveGrammarQuiz(session); navigate(`/${language}/grammar-quiz`); }}
             onResumeCombined={(session) => { setActiveCombinedQuiz(session); navigate(`/${language}/combined-quiz`); }}

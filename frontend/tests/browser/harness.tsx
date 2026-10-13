@@ -4,6 +4,8 @@ import { useEffect } from 'react';
 import { I18nProvider } from '../../src/i18n/context';
 import { SettingsProvider } from '../../src/settings/context';
 import CombinedQuizTaking from '../../src/components/CombinedQuizTaking';
+import QuizTaking from '../../src/components/QuizTaking';
+import GrammarQuizTaking from '../../src/components/GrammarQuizTaking';
 import { useImportSession } from '../../src/hooks/useImportSession';
 import { useWordQueue } from '../../src/hooks/useWordQueue';
 import { useGrammarQueue } from '../../src/hooks/useGrammarQueue';
@@ -24,6 +26,10 @@ function ImportHarness() {
   </main>;
 }
 const fixture = (window as any).fixture;
+const mode = new URLSearchParams(location.search).get('mode');
 createRoot(document.getElementById('root')!).render(<I18nProvider><SettingsProvider>
-  {new URLSearchParams(location.search).get('mode') === 'import' ? <ImportHarness /> : <CombinedQuizTaking session={fixture} variant="mixed" onComplete={() => {}} onBrowse={() => {}} onStartNew={() => {}} />}
+  {mode === 'import' ? <ImportHarness />
+    : mode === 'word' ? <QuizTaking session={fixture} onComplete={() => {}} onBrowse={() => {}} onStartNew={() => {}} />
+    : mode === 'grammar' ? <GrammarQuizTaking session={fixture} onComplete={() => {}} onStartNew={() => {}} />
+    : <CombinedQuizTaking session={fixture} variant="mixed" onComplete={() => {}} onBrowse={() => {}} onStartNew={() => {}} />}
 </SettingsProvider></I18nProvider>);

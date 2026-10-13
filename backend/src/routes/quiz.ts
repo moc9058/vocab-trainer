@@ -6,10 +6,8 @@ import {
   getWordProgress,
   updateWordProgress,
   getProgressForLanguage,
-  getQuizSession,
-  getQuizSessionByLanguage,
   createQuizSession,
-  updateQuizSession,
+  mutateQuizSession,
   getWordsByIds,
   flagWord,
   getWordGroup,
@@ -265,25 +263,32 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     },
-    async (request, reply) => {
+    async (request) => {
       const { sessionId, wordId, correct, flagWordIds } = request.body;
-      const session = await getQuizSession(sessionId);
-      if (!session) return reply.notFound(`Session '${sessionId}' not found`);
-      if (session.status === "completed") return reply.badRequest("Session already completed");
+      const session = await mutateQuizSession(sessionId, (current) => {
+        if (!current) throw fastify.httpErrors.notFound(`Session '${sessionId}' not found`);
+        if (current.status === "completed") throw fastify.httpErrors.badRequest("Session already completed");
 
-      const question = session.questions.find((q) => q.wordId === wordId && q.userCorrect === undefined);
-      if (!question) return reply.notFound(`Word '${wordId}' not in this session`);
+        const question = current.questions.find((q) => q.wordId === wordId && q.userCorrect === undefined);
+        if (!question) throw fastify.httpErrors.notFound(`Word '${wordId}' not in this session`);
 
-      question.userCorrect = correct;
-      if (correct) {
-        session.score.correct++;
-      } else {
-        // A wrong answer means it's no longer "already-correct": drop it from the mastered
-        // bucket so its retry is treated as a normal (unmastered) item for the rest of the session.
-        if (session.correctMembership) {
-          session.correctMembership = session.correctMembership.filter((id) => id !== wordId);
+        question.userCorrect = correct;
+        if (correct) {
+          current.score.correct++;
+        } else {
+          // A wrong answer means it's no longer "already-correct": drop it from the mastered
+          // bucket so its retry is treated as a normal item for the rest of the session.
+          if (current.correctMembership) {
+            current.correctMembership = current.correctMembership.filter((id) => id !== wordId);
+          }
         }
-      }
+
+        if (current.questions.every((q) => q.userCorrect !== undefined)) {
+          current.status = "completed";
+          current.completedAt = new Date().toISOString();
+        }
+        return current;
+      });
 
       // Update progress
       const wp: WordProgress = { ...(await getWordProgress(session.language, wordId)) };
@@ -306,14 +311,6 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         );
       }
 
-      // Check if session is complete
-      const allAnswered = session.questions.every((q) => q.userCorrect !== undefined);
-      if (allAnswered) {
-        session.status = "completed";
-        session.completedAt = new Date().toISOString();
-      }
-
-      await updateQuizSession(session);
       return { session, wordProgress: wp };
     }
   );
@@ -321,9 +318,8 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
   // Get current session for a language (lightweight — no word data)
   fastify.get<{ Params: { language: string } }>(
     "/session/language/:language",
-    async (request, reply) => {
-      const session = await getQuizSessionByLanguage(request.params.language);
-      if (!session) return reply.notFound("No session found for this language");
+    async (request) => mutateQuizSession(request.params.language, (session) => {
+      if (!session) throw fastify.httpErrors.notFound("No session found for this language");
 
       const answered: QuizQuestion[] = [];
       const unanswered: QuizQuestion[] = [];
@@ -334,25 +330,21 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       // Preserve weighted ordering on resume when this was a weighted (grouped) session;
       // otherwise fall back to a uniform shuffle of the remaining questions.
       session.questions = [...answered, ...reweightUnanswered(unanswered, session)];
-      await updateQuizSession(session);
-
       return session;
-    }
+    })
   );
 
   // Advance the durable End Session boundary after the user finishes that review.
   fastify.put<{ Params: { language: string }; Body: { startedAt: string } }>(
     "/session/language/:language/reviewed",
-    async (request, reply) => {
-      const session = await getQuizSessionByLanguage(request.params.language);
-      if (!session) return reply.notFound("No session found for this language");
+    async (request) => mutateQuizSession(request.params.language, (session) => {
+      if (!session) throw fastify.httpErrors.notFound("No session found for this language");
       if (session.startedAt !== request.body.startedAt) {
-        return reply.conflict("The quiz session has been replaced");
+        throw fastify.httpErrors.conflict("The quiz session has been replaced");
       }
       Object.assign(session, finishQuizSitting(session));
-      await updateQuizSession(session);
       return { reviewedQuestionCount: session.reviewedQuestionCount };
-    }
+    })
   );
 
   // Adjust per-group weights mid-session: store the new weights and reorder the
@@ -376,10 +368,9 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     },
-    async (request, reply) => {
-      const session = await getQuizSessionByLanguage(request.params.language);
-      if (!session) return reply.notFound("No session found for this language");
-      if (session.status === "completed") return reply.badRequest("Session already completed");
+    async (request) => mutateQuizSession(request.params.language, async (session) => {
+      if (!session) throw fastify.httpErrors.notFound("No session found for this language");
+      if (session.status === "completed") throw fastify.httpErrors.badRequest("Session already completed");
 
       session.groupWeights = { ...session.groupWeights, ...request.body.groupWeights };
       if (request.body.correctWeight !== undefined) {
@@ -399,10 +390,8 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         else unanswered.push(q);
       }
       session.questions = [...answered, ...reweightUnanswered(unanswered, session)];
-      await updateQuizSession(session);
-
       return session;
-    }
+    })
   );
 };
 

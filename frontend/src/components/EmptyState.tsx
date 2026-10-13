@@ -10,6 +10,9 @@ import { hasPendingSessionReview, sessionReviewKey } from "../utils/sessionRevie
 
 interface Props {
   language: string;
+  /** Session GETs also reorder and persist the pending tail. Do not let them overtake an
+   * answer still draining from the module-level outbox. */
+  deferSessionLoad?: boolean;
   onResume: (session: QuizSession) => void;
   onResumeGrammar: (session: GrammarQuizSession) => void;
   onResumeCombined: (session: CombinedQuizSession) => void;
@@ -37,7 +40,7 @@ interface Props {
   onAddExpression: () => void;
 }
 
-export default function EmptyState({ language, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onResumeMixed, onMixedQuiz, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onImport, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onStartExpressionRecall, onBrowseExpressions, onAddExpression }: Props) {
+export default function EmptyState({ language, deferSessionLoad = false, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onResumeMixed, onMixedQuiz, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onImport, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onStartExpressionRecall, onBrowseExpressions, onAddExpression }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const isoCode = urlLanguageToIsoCode(language) ?? language;
@@ -60,6 +63,10 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
   useEffect(() => {
     if (!language) {
       setLoading(false);
+      return;
+    }
+    if (deferSessionLoad) {
+      setLoading(true);
       return;
     }
     let cancelled = false;
@@ -106,7 +113,7 @@ export default function EmptyState({ language, onResume, onResumeGrammar, onResu
       }
     })();
     return () => { cancelled = true; };
-  }, [language, showMixed]);
+  }, [language, showMixed, deferSessionLoad]);
 
   return (
     <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
