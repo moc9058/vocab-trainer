@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../i18n/context";
 import ImportDestinationRail from "./ImportDestinationRail";
+import ImportFullTextModal from "./ImportFullTextModal";
 import ImportSentenceCard, { type ImportDestination } from "./ImportSentenceCard";
 import {
   findWordHome,
@@ -136,6 +137,7 @@ export default function ImportReview({
    *  is required on the wire (`ImportSession`), so "which sentence" and "open or
    *  shut" are kept apart rather than smuggling a -1 into the saved document. */
   const [collapsed, setCollapsed] = useState(false);
+  const [showFullText, setShowFullText] = useState(false);
 
   function focus(index: number) {
     if (index === focused) {
@@ -214,6 +216,12 @@ export default function ImportReview({
             </div>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+            <button
+              onClick={() => setShowFullText(true)}
+              className="whitespace-nowrap rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-300 hover:border-gray-500 hover:text-white"
+            >
+              {t("importViewFullText")}
+            </button>
             <button
               onClick={toggleTranslations}
               aria-pressed={showTranslations}
@@ -450,6 +458,9 @@ export default function ImportReview({
           </button>
         </div>
       </div>
+      {showFullText && (
+        <ImportFullTextModal session={session} onClose={() => setShowFullText(false)} />
+      )}
     </div>
   );
 }

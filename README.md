@@ -244,7 +244,8 @@ cd backend && FIRESTORE_PROJECT=vocab-trainer-490014 npx tsx scripts/migrate-llm
 
 Reads OpenAI API and model settings from `.env` and writes them to Firestore `config/llm`. The backend will automatically fetch LLM config from Firestore when `.env` is not available (e.g., in deployed environments).
 
-Note this uploads only the API key and the two **tier defaults**. Per-feature model
+Note this uploads only the API key, the two **tier defaults**, and the optional
+model-unavailable fallback. Per-feature model
 assignment lives in a separate document, `config/llm_models`, which is edited from the
 in-app **LLM Models** screen (language-select page → System) and takes effect within
 30 seconds without a redeploy. Keeping them apart is deliberate: this script does a full
@@ -1390,6 +1391,7 @@ only the standalone `migrate-db-config-to-firestore.ts --archives` touches.
 | `OPENAI_API_KEY`       | —                | OpenAI API key (falls back to Firestore `config/llm`) |
 | `OPENAI_MODEL_MINI`    | —                | Default model for fast tasks such as smart-add and segmentation (falls back to Firestore `config/llm`; overridden by `config/llm_models` if set there) |
 | `OPENAI_MODEL_FULL`    | —                | Default model for translation/analysis and speaking/writing (falls back to Firestore `config/llm`; overridden by `config/llm_models` if set there) |
+| `OPENAI_MODEL_FALLBACK` | —               | Optional one-time fallback used only when the selected model is unavailable or inaccessible |
 | `FIRESTORE_PROJECT`    | —                | Google Cloud project ID (required for Firestore in deployed environments) |
 | `FIRESTORE_EMULATOR_HOST` | —             | Unset = real Firestore. Set automatically by the local entrypoints (`dev:local`, `seed:load`, docker compose) to route all Firestore clients to the emulator. Never put it in `.env` — the deploy config-upload scripts read that file and must reach production |
 | `GOOGLE_CLIENT_ID`     | —                | OAuth 2.0 client ID (falls back to Firestore `config/auth`) |

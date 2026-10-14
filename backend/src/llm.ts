@@ -23,6 +23,7 @@ const STREAM_IDLE_MS = 30_000;
 let client: OpenAI | null = null;
 let modelMini = "";
 let modelFull = "";
+let modelFallback = "";
 let initPromise: Promise<void> | null = null;
 
 async function loadLLMConfig(): Promise<void> {
@@ -53,6 +54,7 @@ async function loadLLMConfig(): Promise<void> {
         "OPENAI_API_KEY",
         "OPENAI_MODEL_MINI",
         "OPENAI_MODEL_FULL",
+        "OPENAI_MODEL_FALLBACK",
       ]) {
         if (!process.env[key] && data[key]) {
           process.env[key] = data[key] as string;
@@ -85,6 +87,7 @@ async function ensureInit(): Promise<void> {
       });
       modelMini = process.env.OPENAI_MODEL_MINI;
       modelFull = process.env.OPENAI_MODEL_FULL ?? "";
+      modelFallback = process.env.OPENAI_MODEL_FALLBACK ?? "";
     })();
     // A rejected promise would otherwise stay cached for the process lifetime,
     // so a first call made before the config was reachable would keep rethrowing
@@ -299,47 +302,93 @@ async function callLLMWithSignal(opts: LLMCallOptions, signal: AbortSignal): Pro
     ? { type: "json_schema", json_schema: schema }
     : { type: "json_object" }) as { type: "json_object" };
 
-  if (!onChunk) {
-    const response = await cl.chat.completions.create(
-      { model, messages, response_format }, { signal },
-    );
+  let streamedContent = false;
+  const emitChunk = onChunk
+    ? (chunk: string) => {
+        streamedContent = true;
+        onChunk(chunk);
+      }
+    : undefined;
+
+  try {
+    return await runCompletion(model, emitChunk);
+  } catch (err) {
     signal.throwIfAborted();
-    recordUsage(response.usage, model, "callLLM", route);
-    return response.choices[0]?.message?.content ?? "";
+    if (
+      !modelFallback ||
+      modelFallback === model ||
+      streamedContent ||
+      !isModelUnavailable(err)
+    ) {
+      throw err;
+    }
+    console.warn(
+      `LLM model '${model}' is unavailable for ${route}; retrying once with '${modelFallback}'.`
+    );
+    return runCompletion(modelFallback, emitChunk);
   }
 
-  const abortController = new AbortController();
-  const stream = await cl.chat.completions.create(
-    { model, messages, response_format, stream: true, stream_options: { include_usage: true } },
-    { signal: AbortSignal.any([signal, abortController.signal]) }
-  );
-  let full = "";
-  let usage: CompletionUsage | undefined;
-  let idledOut = false;
-  const armIdle = () => setTimeout(() => { idledOut = true; abortController.abort(); }, STREAM_IDLE_MS);
-  let idleTimer = armIdle();
-  try {
-    for await (const chunk of stream) {
-      clearTimeout(idleTimer);
-      idleTimer = armIdle();
-      const delta = chunk.choices[0]?.delta?.content ?? "";
-      if (delta) {
-        full += delta;
-        onChunk(delta);
-      }
-      if (chunk.usage) {
-        usage = chunk.usage;
-      }
+  async function runCompletion(activeModel: string, chunkHandler?: (chunk: string) => void) {
+    if (!chunkHandler) {
+      const response = await cl.chat.completions.create(
+        { model: activeModel, messages, response_format }, { signal },
+      );
+      signal.throwIfAborted();
+      recordUsage(response.usage, activeModel, "callLLM", route);
+      return response.choices[0]?.message?.content ?? "";
     }
-  } catch (err) {
-    if (idledOut) throw new Error("LLM stream stalled for 30s.");
-    throw err;
-  } finally {
-    clearTimeout(idleTimer);
+
+    const abortController = new AbortController();
+    const stream = await cl.chat.completions.create(
+      {
+        model: activeModel,
+        messages,
+        response_format,
+        stream: true,
+        stream_options: { include_usage: true },
+      },
+      { signal: AbortSignal.any([signal, abortController.signal]) }
+    );
+    let full = "";
+    let usage: CompletionUsage | undefined;
+    let idledOut = false;
+    const armIdle = () => setTimeout(() => {
+      idledOut = true;
+      abortController.abort();
+    }, STREAM_IDLE_MS);
+    let idleTimer = armIdle();
+    try {
+      for await (const chunk of stream) {
+        clearTimeout(idleTimer);
+        idleTimer = armIdle();
+        const delta = chunk.choices[0]?.delta?.content ?? "";
+        if (delta) {
+          full += delta;
+          chunkHandler(delta);
+        }
+        if (chunk.usage) {
+          usage = chunk.usage;
+        }
+      }
+    } catch (err) {
+      if (idledOut) throw new Error("LLM stream stalled for 30s.");
+      throw err;
+    } finally {
+      clearTimeout(idleTimer);
+    }
+    signal.throwIfAborted();
+    recordUsage(usage, activeModel, "callLLM", route);
+    return full;
   }
-  signal.throwIfAborted();
-  recordUsage(usage, model, "callLLM", route);
-  return full;
+}
+
+/** Retry only failures that mean the selected model is absent or inaccessible.
+ * Rate limits, authentication failures, timeouts and content errors must retain
+ * their original semantics rather than silently doubling work or cost. */
+function isModelUnavailable(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const apiError = err as { status?: number; code?: string | null };
+  return apiError.status === 403 || apiError.status === 404 || apiError.code === "model_not_found";
 }
 
 export function stripMarkdownFences(text: string): string {

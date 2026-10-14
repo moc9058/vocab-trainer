@@ -115,7 +115,9 @@ Extract the grammar points THIS sentence illustrates.
   below, when any are given. These are concise pattern schemas, not prose.
   Write every grammatical element abbreviation in LOWERCASE — `s`, `v`, `o`, `c`,
   `n`, `adj`, `adv`, `aux` and the like. `s + v + o`, never `S + V + O`. This holds
-  even if a style-reference entry below still uses capitals.
+  even if a style-reference entry below still uses capitals. Use uppercase `A` and
+  `B` only for whole clauses/propositions that cannot be represented by a
+  part-of-speech abbreviation.
 - `description` — a short Japanese explanation of what the pattern means and when
   it is used.
 - `excerpt` — the SHORTEST verbatim substring of this sentence's `text` that shows
@@ -124,12 +126,21 @@ Extract the grammar points THIS sentence illustrates.
   it. For "The report was written by the committee." with statement
   `s + be + v-ed + by + n` the excerpt is "was written by the committee".
 
-Go through EVERY sentence and extract each pattern it demonstrates — tenses and
-aspect, passive, modality, relative clauses, conditionals, comparatives, infinitive
-and gerund frames, participle clauses, existential `there + be`, it-clefts, and fixed
-collocations. A sentence with nothing beyond a plain SVO clause contributes an empty
-`grammar` array, but do not leave a sentence unexamined. Do not worry about whether a
-pattern is already registered — duplicates are handled downstream.
+Silently perform a grammar pass over EVERY sentence after tokenizing its words.
+Check, in order: marked argument and complement structures; tense, aspect, modality
+and negation; passive and causative constructions; relative, noun and adverbial
+clauses; conditionals and comparison; infinitive, gerund and participle frames;
+inversion, emphasis and clefts; existential `there + be`; reported speech; phrasal
+or prepositional frames; and fixed functional collocations. Emit each independently
+teachable pattern the sentence genuinely demonstrates, even when one sentence
+contains several.
+
+Keep the selection useful rather than mechanical: plain SVO, a bare noun phrase or
+an isolated part of speech is not a grammar point. Do not invent a broader pattern
+than the verbatim `excerpt` proves, and do not emit the same normalized `statement`
+twice for one sentence. A sentence with no non-trivial pattern contributes an empty
+`grammar` array. Do not worry about whether a pattern is already registered —
+duplicates are handled downstream.
 
 ## Output
 

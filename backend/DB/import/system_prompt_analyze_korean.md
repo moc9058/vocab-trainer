@@ -100,7 +100,9 @@ Extract the grammar points THIS sentence illustrates.
   below, when any are given. These are concise pattern schemas, not prose.
   Write every grammatical element abbreviation in LOWERCASE — `s`, `v`, `o`, `c`,
   `n`, `adj`, `adv`, `aux` and the like. 「n＋을/를＋v」, never 「N＋을/를＋V」. This
-  holds even if a style-reference entry below still uses capitals.
+  holds even if a style-reference entry below still uses capitals. Use uppercase
+  `A` and `B` only for whole clauses/propositions that cannot be represented by a
+  part-of-speech abbreviation.
 - `description` — a short Japanese explanation of what the pattern means and when
   it is used.
 - `excerpt` — the SHORTEST verbatim substring of this sentence's `text` that shows
@@ -108,11 +110,20 @@ Extract the grammar points THIS sentence illustrates.
   this is copied character-for-character out of the sentence, so the reader can find
   it. For 「비가 와서 못 갔다.」 with statement 「v＋아/어서」 the excerpt is 「와서」.
 
-Go through EVERY sentence and extract each pattern it demonstrates — connective
-endings, honorific and speech levels, passive/causative, conditional frames, fixed
-expressions. A sentence with nothing beyond a plain predicate contributes an empty
-`grammar` array, but do not leave a sentence unexamined. Do not worry about whether a
-pattern is already registered — duplicates are handled downstream.
+Silently perform a grammar pass over EVERY sentence after segmenting its words.
+Check, in order: particles and marked topic/argument structures; tense, aspect,
+modality and negation; connective and sentence-final endings; honorific and speech
+levels; passive and causative; relative/adverbial clauses; conditionals,
+comparisons and reported speech; and fixed functional expressions. Emit each
+independently teachable pattern the sentence genuinely demonstrates, even when one
+sentence contains several.
+
+Keep the selection useful rather than mechanical: a plain predicate, a bare noun
+phrase or an isolated part of speech is not a grammar point. Do not invent a broader
+pattern than the verbatim `excerpt` proves, and do not emit the same normalized
+`statement` twice for one sentence. A sentence with no non-trivial pattern
+contributes an empty `grammar` array. Do not worry about whether a pattern is already
+registered — duplicates are handled downstream.
 
 ## Output
 

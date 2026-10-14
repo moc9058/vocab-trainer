@@ -1,5 +1,33 @@
 import { test, expect, type Page } from '@playwright/test';
 
+test('full source modal renders paragraphs and persists the pinyin preference', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).fixture = {
+      id: 'full-text', language: 'chinese', title: '你好', text: '你好。\n第二段。',
+      paragraphs: [
+        { sentences: [{ index: 0, text: '你好。' }] },
+        { sentences: [{ index: 1, text: '第二段。' }] },
+      ],
+      items: [
+        { id: 'w1', kind: 'word', sentenceIndex: 0, order: 0, term: '你', transliteration: 'nǐ', origin: 'llm', status: 'pending' },
+        { id: 'w2', kind: 'word', sentenceIndex: 0, order: 1, term: '好', transliteration: 'hǎo', origin: 'llm', status: 'pending' },
+      ],
+      groupBNames: [], focusedSentenceIndex: 0, status: 'in-progress', createdAt: '', updatedAt: '',
+    };
+  });
+  await page.goto('/tests/browser/harness.html?mode=import-full-text');
+  await expect(page.locator('article p')).toHaveCount(2);
+  await expect(page.locator('article p').first()).toContainText('。');
+  await expect(page.getByRole('dialog')).toContainText('第二段。');
+  await expect(page.locator('rt')).toHaveCount(2);
+  await page.getByRole('button', { name: 'Pinyin: on' }).click();
+  await expect(page.locator('rt')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('rt')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.getByText('closed')).toBeVisible();
+});
+
 type Scenario = 'followup' | 'lost-response' | 'conflict' | 'both';
 async function setup(page: Page, scenario: Scenario) {
   let stored = false;

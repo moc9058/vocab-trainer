@@ -14,6 +14,7 @@ import {
   requiresVerbatimTerms,
   sentenceCoverage,
   sentenceItems,
+  sentenceRubySegments,
   wordMismatch,
 } from "./importSession";
 import type {
@@ -52,6 +53,20 @@ function wordItem(
 
 const terms = (items: ImportItem[], sentenceIndex: number) =>
   sentenceItems(items, sentenceIndex).words.map((w) => w.term);
+
+describe("sentenceRubySegments", () => {
+  it("uses only live rows and keeps text when a reading is missing", () => {
+    const items = [
+      wordItem("你", 0, { transliteration: "nǐ" }),
+      wordItem("好", 0),
+      wordItem("旧", 0, { transliteration: "jiù", status: "skipped" }),
+    ];
+    expect(sentenceRubySegments(items, 0)).toEqual([
+      { text: "你", transliteration: "nǐ" },
+      { text: "好" },
+    ]);
+  });
+});
 
 describe("sentenceCoverage", () => {
   it("lets a Chinese sentence stay exact when a misattributed word shares a character", () => {

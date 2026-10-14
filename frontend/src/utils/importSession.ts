@@ -192,6 +192,19 @@ export function sentenceItems(items: ImportItem[], sentenceIndex: number) {
   };
 }
 
+/** RubyText segments for the read-only whole-source view. They come from the live
+ * review rows so edits, merges, splits and removals are reflected immediately. */
+export function sentenceRubySegments(items: ImportItem[], sentenceIndex: number) {
+  return sentenceItems(items, sentenceIndex).words
+    .map((word) => ({
+      text: word.term.trim(),
+      ...(word.transliteration?.trim()
+        ? { transliteration: word.transliteration.trim() }
+        : {}),
+    }))
+    .filter((segment) => segment.text.length > 0);
+}
+
 /**
  * Terms this session knows to be in the library, keyed by TERM rather than by row:
  * an article repeats its vocabulary, so registering 「経済」 in sentence 3 also settles

@@ -28,23 +28,29 @@ const db = new Firestore({
   databaseId: process.env.FIRESTORE_DATABASE_ID || "vocab-database",
 });
 
-const KEYS = [
+const REQUIRED_KEYS = [
   "OPENAI_API_KEY",
   "OPENAI_MODEL_MINI",
   "OPENAI_MODEL_FULL",
 ] as const;
+const OPTIONAL_KEYS = ["OPENAI_MODEL_FALLBACK"] as const;
 
 async function main() {
   const data: Record<string, string> = {};
   const missing: string[] = [];
 
-  for (const key of KEYS) {
+  for (const key of REQUIRED_KEYS) {
     const val = process.env[key];
     if (val) {
       data[key] = val;
     } else {
       missing.push(key);
     }
+  }
+
+  for (const key of OPTIONAL_KEYS) {
+    const val = process.env[key];
+    if (val) data[key] = val;
   }
 
   if (missing.length > 0) {

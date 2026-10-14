@@ -299,6 +299,34 @@ test("nesting still backfills a repeated word, and lowercases grammar abbreviati
   assert.equal(analysis.grammar[0].statement, "s＋是＋o");
 });
 
+test("grammar notation uses half-width lowercase abbreviations but preserves clause slots", () => {
+  const raw = JSON.stringify({ paragraphs: [{ sentences: [{
+    text: "如果下雨，我们就回家。",
+    words: [],
+    grammar: [{
+      statement: "如果＋Ａ，Ｂ＋Ｖ＋Ｏ",
+      description: "条件を表す",
+      excerpt: "如果下雨，我们就回家",
+    }],
+  }] }] });
+  const { analysis } = normalizeAnalysis(raw, "chinese");
+  assert.equal(analysis.grammar[0].statement, "如果＋A，B＋v＋o");
+});
+
+test("duplicate normalized grammar statements in one sentence collapse to one row", () => {
+  const raw = JSON.stringify({ paragraphs: [{ sentences: [{
+    text: "书被他拿走了。",
+    words: [],
+    grammar: [
+      { statement: "Ｏ＋被＋Ｎ＋Ｖ", description: "受け身", excerpt: "书被他拿走" },
+      { statement: "o＋被＋n＋v", description: "被構文", excerpt: "被他拿走" },
+    ],
+  }] }] });
+  const { analysis } = normalizeAnalysis(raw, "chinese");
+  assert.equal(analysis.grammar.length, 1);
+  assert.equal(analysis.grammar[0].statement, "o＋被＋n＋v");
+});
+
 test("the pre-nesting flat shape is still accepted", () => {
   // `config/import` is pushed separately from the code, so a local emulator can be
   // holding an older snapshot of the schema and prompts.

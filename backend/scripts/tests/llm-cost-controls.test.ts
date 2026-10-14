@@ -9,8 +9,10 @@ mock.module("dotenv", { namedExports: { config: () => ({}) } });
 process.env.OPENAI_API_KEY = "test-key";
 process.env.OPENAI_MODEL_MINI = "test-model";
 process.env.OPENAI_MODEL_FULL = "test-model";
+process.env.OPENAI_MODEL_FALLBACK = "fallback-model";
 let clientOptions: Record<string, unknown>;
 let complete: (body: any, options: { signal: AbortSignal }) => Promise<any>;
+const loggedModels: string[] = [];
 mock.module("openai", { defaultExport: class {
   constructor(options: Record<string, unknown>) { clientOptions = options; }
   chat = { completions: { create: (body: any, options: { signal: AbortSignal }) => complete(body, options) } };
@@ -18,7 +20,7 @@ mock.module("openai", { defaultExport: class {
 mock.module("../../src/firestore.js", { namedExports: {
   getLLMModelConfig: async () => null,
   ensureModelInCostConfig: async () => {},
-  logTokenUsage: async () => {},
+  logTokenUsage: async (entry: { model: string }) => { loggedModels.push(entry.model); },
   languageExists: async () => true,
   getImportConfig: async () => ({ analyzeSchema: {}, analyzePrompts: { chinese: "test" } }),
   getAllGrammarItems: async () => [],
@@ -49,6 +51,50 @@ test("nonstreaming calls carry cancellation and configure bounded retries", asyn
   assert.equal(await callLLM(opts), "result");
   assert.equal(clientOptions!.maxRetries, 2);
   assert.equal(clientOptions!.timeout, 120_000);
+});
+
+test("an unavailable primary model retries once with the configured fallback", async () => {
+  const models: string[] = [];
+  complete = async (body) => {
+    models.push(body.model);
+    if (body.model === "test-model") {
+      throw Object.assign(new Error("model not found"), { status: 404, code: "model_not_found" });
+    }
+    return {
+      choices: [{ message: { content: "fallback result" } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    };
+  };
+  loggedModels.length = 0;
+  assert.equal(await callLLM(opts), "fallback result");
+  await nextTurn();
+  assert.deepEqual(models, ["test-model", "fallback-model"]);
+  assert.deepEqual(loggedModels, ["fallback-model"]);
+});
+
+test("rate limits do not trigger the model fallback", async () => {
+  const models: string[] = [];
+  complete = async (body) => {
+    models.push(body.model);
+    throw Object.assign(new Error("rate limited"), { status: 429, code: "rate_limit_exceeded" });
+  };
+  await assert.rejects(callLLM(opts), /rate limited/);
+  assert.deepEqual(models, ["test-model"]);
+});
+
+test("a stream that already emitted content never restarts on the fallback", async () => {
+  const models: string[] = [];
+  complete = async (body) => {
+    models.push(body.model);
+    return {
+      async *[Symbol.asyncIterator]() {
+        yield { choices: [{ delta: { content: "partial" } }] };
+        throw Object.assign(new Error("model unavailable"), { status: 404 });
+      },
+    };
+  };
+  await assert.rejects(callLLM({ ...opts, onChunk: () => {} }), /model unavailable/);
+  assert.deepEqual(models, ["test-model"]);
 });
 
 test("the total deadline aborts even before stream headers arrive", async (t) => {

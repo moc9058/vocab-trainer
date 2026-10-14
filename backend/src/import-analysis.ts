@@ -35,15 +35,12 @@ import type {
  * suffix (`v-ing`) falls outside the run and survives untouched.
  */
 const GRAMMAR_ABBREVIATIONS = new Set([
-  "s", "v", "o", "c", "a", "b", "n", "m",
+  "s", "v", "o", "c", "n", "m",
   "adj", "adv", "aux", "pron", "prep", "conj", "num", "part",
   "np", "vp", "ap", "pp",
   "sv", "svo", "svc", "svoo", "svoc",
 ]);
 
-const FULLWIDTH_UPPER_START = 0xff21;
-const FULLWIDTH_UPPER_END = 0xff3a;
-const FULLWIDTH_TO_LOWER_OFFSET = 0x20;
 /** Half- and full-width Latin letters, since textbook notation uses both (Ｖ＋Ｏ). */
 const LATIN_RUN = /[A-Za-zＡ-Ｚａ-ｚ]+/g;
 
@@ -53,27 +50,23 @@ function foldWidth(run: string): string {
   );
 }
 
-/** Lowercases without changing width, so 「Ｖ」 becomes 「ｖ」 rather than "v". */
-function lowerKeepingWidth(run: string): string {
-  return run.replace(/[A-ZＡ-Ｚ]/g, (ch) => {
-    const code = ch.codePointAt(0)!;
-    return code >= FULLWIDTH_UPPER_START && code <= FULLWIDTH_UPPER_END
-      ? String.fromCodePoint(code + FULLWIDTH_TO_LOWER_OFFSET)
-      : ch.toLowerCase();
-  });
-}
-
 /**
- * Force grammar-element abbreviations to lowercase (「V＋O」 → 「v＋o」). Applied on
+ * Canonicalize grammar-element abbreviations to half-width lowercase
+ * (「Ｖ＋Ｏ」 → 「v＋o」). Applied on
  * BOTH sides of the LLM call: to the style examples going out (40 uppercase entries
  * would otherwise out-vote the instruction, being the last thing the model reads)
  * and to the statements coming back. Only whole runs that ARE an abbreviation are
- * touched, so real words in a statement keep their casing.
+ * touched, so real words in a statement keep their casing. Uppercase A/B are
+ * deliberately preserved as generic clause/proposition slots when a part-of-speech
+ * abbreviation cannot express the pattern.
  */
 export function lowercaseGrammarAbbreviations(statement: string): string {
-  return statement.replace(LATIN_RUN, (run) =>
-    GRAMMAR_ABBREVIATIONS.has(foldWidth(run).toLowerCase()) ? lowerKeepingWidth(run) : run
-  );
+  return statement.replace(LATIN_RUN, (run) => {
+    const folded = foldWidth(run);
+    if (folded === "A" || folded === "B") return folded;
+    const key = folded.toLowerCase();
+    return GRAMMAR_ABBREVIATIONS.has(key) ? key : run;
+  });
 }
 
 // ---------- occurrence matching ----------
@@ -509,17 +502,17 @@ export function normalizeAnalysis(
   const uniqueWords = deduplicateWords(backfillRepeatedWords(words.words),
     index => sentences.find(s => s.index === index)?.text ?? "", termOccurrences);
   repair.redundant += words.words.length - uniqueWords.length;
+  const normalizedGrammar = grammar.grammar.map((g) => ({
+    ...g,
+    statement: lowercaseGrammarAbbreviations(g.statement),
+  }));
   return {
     analysis: {
       paragraphs,
       words: uniqueWords,
-      grammar: grammar.grammar.filter((g, i, all) => all.findIndex(other =>
+      grammar: normalizedGrammar.filter((g, i, all) => all.findIndex(other =>
         other.sentenceIndex === g.sentenceIndex &&
-        lowercaseGrammarAbbreviations(other.statement).trim() === lowercaseGrammarAbbreviations(g.statement).trim() &&
-        other.description?.trim() === g.description?.trim()) === i).map((g) => ({
-        ...g,
-        statement: lowercaseGrammarAbbreviations(g.statement),
-      })),
+        other.statement.trim() === g.statement.trim()) === i),
     },
     repair,
   };
