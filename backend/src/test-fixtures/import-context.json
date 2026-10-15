@@ -1,0 +1,198 @@
+{
+  "paragraphs": [
+    {
+      "sentences": [
+        {
+          "text": "该公司该采取行动了。",
+          "translation": "その会社はそろそろ行動すべきだ。",
+          "explanationLanguage": "ja",
+          "overview": "「该公司」が主語で、「该…了」が行動すべき時点に達したことを示す。",
+          "ambiguityNotes": [],
+          "words": [
+            {
+              "term": "该",
+              "surface": "该",
+              "occurrence": 0,
+              "transliteration": "gāi",
+              "meaning": "その",
+              "partOfSpeech": "function",
+              "role": "会社を限定する連体修飾",
+              "reasoning": "後続の動詞句と文脈から判断する。",
+              "contrast": "",
+              "senseKey": "该-その"
+            },
+            {
+              "term": "公司",
+              "surface": "公司",
+              "occurrence": 0,
+              "transliteration": "gōng sī",
+              "meaning": "会社",
+              "partOfSpeech": "verb",
+              "role": "",
+              "reasoning": "後続の動詞句と文脈から判断する。",
+              "contrast": "",
+              "senseKey": "公司-会社"
+            },
+            {
+              "term": "该",
+              "surface": "该",
+              "occurrence": 1,
+              "transliteration": "gāi",
+              "meaning": "そろそろ〜すべき",
+              "partOfSpeech": "function",
+              "role": "動詞句に係る助動詞",
+              "reasoning": "後続の動詞句と文脈から判断する。",
+              "contrast": "",
+              "senseKey": "该-そろそろ〜すべき"
+            },
+            {
+              "term": "采取",
+              "surface": "采取",
+              "occurrence": 0,
+              "transliteration": "cǎi qǔ",
+              "meaning": "取る",
+              "partOfSpeech": "verb",
+              "role": "",
+              "reasoning": "後続の動詞句と文脈から判断する。",
+              "contrast": "",
+              "senseKey": "采取-取る"
+            },
+            {
+              "term": "行动",
+              "surface": "行动",
+              "occurrence": 0,
+              "transliteration": "xíng dòng",
+              "meaning": "行動",
+              "partOfSpeech": "verb",
+              "role": "",
+              "reasoning": "後続の動詞句と文脈から判断する。",
+              "contrast": "",
+              "senseKey": "行动-行動"
+            },
+            {
+              "term": "了",
+              "surface": "了",
+              "occurrence": 0,
+              "transliteration": "le",
+              "meaning": "状況変化",
+              "partOfSpeech": "function",
+              "role": "文末で新しい状況を示す",
+              "reasoning": "後続の動詞句と文脈から判断する。",
+              "contrast": "",
+              "senseKey": "了-状況変化"
+            }
+          ],
+          "grammar": [
+            {
+              "statement": "该+v+了",
+              "description": "そろそろ〜すべき時だ",
+              "excerpt": "该采取行动了",
+              "roleInSentence": "行動すべき段階に達したことを示す",
+              "elements": [
+                {
+                  "wordIndices": [
+                    2
+                  ],
+                  "role": "助動詞",
+                  "explanation": "行動すべき時点を示す",
+                  "fixed": true
+                },
+                {
+                  "wordIndices": [
+                    3,
+                    4
+                  ],
+                  "role": "動詞句",
+                  "explanation": "行うべき動作",
+                  "fixed": false
+                },
+                {
+                  "wordIndices": [
+                    5
+                  ],
+                  "role": "文末助詞",
+                  "explanation": "新しい状況への変化",
+                  "fixed": true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "sentences": [
+        {
+          "text": "我还没还书。",
+          "translation": "私はまだ本を返していない。",
+          "explanationLanguage": "ja",
+          "overview": "前の还は副詞、後の还是動詞。没は返却の未実現を示す。",
+          "ambiguityNotes": [],
+          "words": [
+            {
+              "term": "我",
+              "surface": "我",
+              "occurrence": 0,
+              "transliteration": "wǒ",
+              "meaning": "私",
+              "partOfSpeech": "verb",
+              "role": "",
+              "reasoning": "後続の動詞句と文脈から判断する。",
+              "contrast": "",
+              "senseKey": "我-私"
+            },
+            {
+              "term": "还",
+              "surface": "还",
+              "occurrence": 0,
+              "transliteration": "hái",
+              "meaning": "まだ",
+              "partOfSpeech": "function",
+              "role": "未実現状態の継続",
+              "reasoning": "後続の動詞句と文脈から判断する。",
+              "contrast": "返す huán とは異なる",
+              "senseKey": "还-まだ"
+            },
+            {
+              "term": "没",
+              "surface": "没",
+              "occurrence": 0,
+              "transliteration": "méi",
+              "meaning": "まだ〜ない",
+              "partOfSpeech": "verb",
+              "role": "",
+              "reasoning": "後続の動詞句と文脈から判断する。",
+              "contrast": "",
+              "senseKey": "没-まだ〜ない"
+            },
+            {
+              "term": "还",
+              "surface": "还",
+              "occurrence": 1,
+              "transliteration": "huán",
+              "meaning": "返す",
+              "partOfSpeech": "function",
+              "role": "書籍を目的語に取る動詞",
+              "reasoning": "後続の動詞句と文脈から判断する。",
+              "contrast": "継続 hái とは異なる",
+              "senseKey": "还-返す"
+            },
+            {
+              "term": "书",
+              "surface": "书",
+              "occurrence": 0,
+              "transliteration": "shū",
+              "meaning": "本",
+              "partOfSpeech": "verb",
+              "role": "",
+              "reasoning": "後続の動詞句と文脈から判断する。",
+              "contrast": "",
+              "senseKey": "书-本"
+            }
+          ],
+          "grammar": []
+        }
+      ]
+    }
+  ]
+}

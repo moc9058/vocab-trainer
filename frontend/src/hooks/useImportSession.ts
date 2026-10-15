@@ -136,6 +136,7 @@ export function useImportSession({
       const saved = await updateImportSession(language, current.id, {
         title: current.title,
         items: current.items,
+        paragraphs: current.paragraphs,
         wordGroupId: current.wordGroupId,
         grammarGroupId: current.grammarGroupId,
         groupBNames: current.groupBNames,
@@ -300,11 +301,11 @@ export function useImportSession({
   const patchItem = useCallback(
     (id: string, updates: Partial<ImportItem>, immediate = false) => {
       setItems(
-        (items) => items.map((i) => (i.id === id ? ({ ...i, ...updates, edited: true } as ImportItem) : i)),
+        (items) => items.map((i) => (i.id === id ? ({ ...i, ...updates, ...(("meaning" in updates || "description" in updates) ? { explanationLanguage: descriptionLanguage } : {}), edited: true } as ImportItem) : i)),
         immediate
       );
     },
-    [setItems]
+    [setItems, descriptionLanguage]
   );
 
   /**
@@ -606,10 +607,14 @@ export function useImportSession({
               ...(item.meaning?.trim()
                 ? {
                     definitions: [
-                      { partOfSpeech: "", text: { [descriptionLanguage]: item.meaning.trim() } },
+                      { partOfSpeech: "", text: { [item.explanationLanguage ?? (item.origin === "llm" ? "ja" : descriptionLanguage)]: item.meaning.trim() } },
                     ],
                   }
                 : {}),
+              ...(sentence && item.meaning?.trim() ? { sourceContext: {
+                sentence, surface: item.sourceTerm === item.term.trim() ? item.surface ?? item.term.trim() : item.term.trim(), contextualMeaning: item.meaning.trim(),
+                explanationLanguage: item.explanationLanguage ?? (item.origin === "llm" ? "ja" : descriptionLanguage),
+              } } : {}),
               ...(sentence ? { examples: [{ sentence, translation: "" }] } : {}),
               ...(groupIds.length > 0 ? { groupIds } : {}),
             },
@@ -655,7 +660,7 @@ export function useImportSession({
             id: `grammar-${language}-${Date.now()}${Math.random().toString(36).slice(2, 6)}`,
             statement: item.statement.trim(),
             descriptions: [
-              { partOfSpeech: "", text: { [descriptionLanguage]: item.description.trim() } },
+              { partOfSpeech: "", text: { [item.explanationLanguage ?? (item.origin === "llm" ? "ja" : descriptionLanguage)]: item.description.trim() } },
             ],
             ...(sentence ? { examples: [{ sentence, translation: "" }] } : {}),
           },

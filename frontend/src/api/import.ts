@@ -1,6 +1,7 @@
 import { deleteRequest, fetchJson, postJson, putJson, CREDENTIALS, notifyIfUnauthorized } from "./client";
 import type {
   ImportAnalysisResult,
+  ImportReadingAnalysis,
   ImportQuizPool,
   ImportSession,
   ImportSessionSummary,
@@ -169,4 +170,8 @@ export function extractStreamingSentences(partial: string): string[] {
     }
   }
   return out;
+}
+
+export function generateImportSentenceExplanation(language: string, sessionId: string, sentenceIndex: number, signal?: AbortSignal): Promise<{ sentenceIndex: number; readingAnalysis: ImportReadingAnalysis }> {
+  return postJson(`/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(sessionId)}/sentences/${sentenceIndex}/explanation`, {}, signal);
 }

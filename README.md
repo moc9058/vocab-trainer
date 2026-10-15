@@ -1468,20 +1468,58 @@ Both app Dockerfiles use **Node 24 Alpine** with multi-stage builds to keep imag
 `docker compose up --build` runs the full stack against the emulator and never
 touches production. See [Local Development & Verification](#local-development--verification) for the workflow.
 
+### Source reader and contextual explanations
+
+New and resumed source reviews open in **Full text** mode. Tap a word for its
+contextual reading and meaning; tap the sentence background or its ↗ button for
+sentence structure, constructions and their elements. **Sentence mode** retains
+inline editing and the existing Group A/B registration controls. Chinese pinyin
+visibility remains a display preference.
+
+New analysis distinguishes each occurrence, including different uses of the same
+spelling in one sentence. Verified fixed function elements may be omitted from
+separate registration rows when their grammar explanation covers them; content
+words inside construction slots remain candidates. Existing articles remain readable.
+**Explain this sentence / Update explanation** generates only the selected sentence's
+details and saves them without replacing candidate rows or group assignments.
+
+Articles longer than 1,200 characters receive compact contextual readings/glosses;
+detailed syntax is generated per sentence on demand. Source input is limited to
+8,000 characters, and the saved session has a conservative 900,000-byte budget
+below Firestore's document limit. Very dense articles can exceed that budget even
+in compact mode; import those in smaller sections. Partial or rewritten source
+analysis is rejected rather than saved.
+
+New-word registration supplies the original sentence and contextual meaning to
+smart-add. Supplied senses retain their multilingual alignment; additional senses
+need an explicit stable distinction and contrasting example. Paraphrases alone do
+not create extra senses. Registering an existing word only adds the selected group
+membership; its dictionary definitions are not rewritten.
+
+Import prompts/schema and vocabulary smart-add prompts/schema ship with
+`./deploy.sh --prompts`; no session or dictionary bulk migration is required.
+
 ### Import extraction and retry guarantees
 
-Extraction uses one analysis LLM call. Deterministic cleanup consolidates equivalent
+Initial extraction uses one analysis LLM call. Sentence explanations are separate, explicit requests. Deterministic cleanup consolidates equivalent
 word rows within each sentence and removes short fragments occurring only inside
 longer extracted words (e.g. 翼 inside 左翼). Independent occurrences, distinct readings
 or senses, and uncertain inflections remain. The client applies the same cleanup on
 saved analyses while preserving explicit edits and registration knowledge. Grammar
-cleanup uses identical sentence/pattern/description, never overlap with vocabulary.
+cleanup retains distinct constructions; only validated fixed function elements
+contribute additional coverage or allow separate word candidates to be omitted.
 
 Import word registration can recover an existing entity after HTTP 409 or a lost
 create response, then finish the selected group writes. A failed follow-up retains
 the entity ID and exact destination group IDs; Retry B does not create the word again.
 The shared queue reports the final recovered outcome, and simultaneous A/B presses
 serialize creation before resolving group names. These checks do not call an LLM.
+
+Import API regression tests (mock store and LLM, Node 24, no cloud):
+
+```bash
+npm run test:import --prefix backend
+```
 
 Browser regression tests (mock APIs, no cloud):
 

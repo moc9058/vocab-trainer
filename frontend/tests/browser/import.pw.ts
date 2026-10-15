@@ -91,3 +91,144 @@ for (const scenario of ['followup', 'lost-response', 'conflict', 'both'] as cons
     expect(state.creates()).toBe(1);
   });
 }
+
+// Test the actual review, including its persistence hook; the importer queue recovery tests above remain unchanged.
+async function reviewSetup(page: Page, detailed = true) {
+  const { default: analysis } = await import('../../src/utils/__fixtures__/import-context.json', { with: { type: 'json' } });
+  const paragraph = structuredClone(analysis.paragraphs[0]);
+  const explanation = paragraph.sentences[0].readingAnalysis;
+  if (!detailed) delete (paragraph.sentences[0] as any).readingAnalysis;
+  let saved: any = { id: 'article', language: 'chinese', title: 'Context', text: paragraph.sentences[0].text,
+    paragraphs: [paragraph], items: detailed ? [] : [{ id: 'old', kind: 'word', sentenceIndex: 0, order: 0, term: '该', transliteration: 'gāi', meaning: 'その', origin: 'llm', status: 'pending' }],
+    groupBNames: [], focusedSentenceIndex: 0, status: 'in-progress', createdAt: '', updatedAt: '' };
+  let writes = 0, generations = 0;
+  await page.route(url => url.pathname.startsWith('/api/'), async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/explanation')) {
+      generations++;
+      await route.fulfill({ json: { sentenceIndex: 0, readingAnalysis: explanation } }); return;
+    }
+    if (path === '/api/import/chinese/sessions/article') {
+      if (route.request().method() === 'PUT') { writes++; saved = { ...saved, ...route.request().postDataJSON() }; }
+      await route.fulfill({ json: saved }); return;
+    }
+    if (path.endsWith('/check-terms')) { await route.fulfill({ json: { existing: {} } }); return; }
+    await route.fulfill({ json: [] });
+  });
+  await page.goto('/tests/browser/harness.html?mode=import-review');
+  await expect(page.getByTestId('import-full-text-reader')).toBeVisible();
+  return { writes: () => writes, generations: () => generations, saved: () => saved };
+}
+
+test('review opens full text, distinguishes repeated words, explains grammar and switches to the existing editor', async ({ page }) => {
+  const state = await reviewSetup(page);
+  const reader = page.getByTestId('import-full-text-reader');
+  const gai = reader.getByRole('button', { name: '该', exact: true });
+  await gai.nth(0).click();
+  await expect(page.getByRole('dialog')).toContainText('その');
+  await page.keyboard.press('Escape');
+  await expect(gai.nth(0)).toBeFocused();
+  await gai.nth(1).click();
+  await expect(page.getByRole('dialog')).toContainText('そろそろ〜すべき');
+  await page.getByRole('dialog').getByRole('button', { name: '该+v+了', exact: true }).click();
+  await expect(gai.nth(1)).toHaveClass(/bg-emerald/);
+  await page.keyboard.press('Escape');
+  await reader.getByRole('button', { name: 'Sentence explanation 1', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('主語');
+  expect(state.generations()).toBe(0);
+  expect(state.writes()).toBe(0);
+  await page.getByRole('dialog').getByRole('button', { name: 'Open sentence editor' }).click();
+  await expect(reader).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Sentence mode', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Full text', exact: true }).click();
+  await expect(reader).toBeVisible();
+});
+
+test('legacy articles generate one sentence explanation, persist it, and retain all candidate and destination data', async ({ page }) => {
+  const state = await reviewSetup(page, false);
+  const beforeItems = structuredClone(state.saved().items);
+  await page.getByRole('button', { name: 'Sentence explanation 1', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('no detailed sentence analysis');
+  await page.getByRole('button', { name: 'Explain this sentence' }).click();
+  await expect(page.getByRole('dialog')).toContainText('主語');
+  await expect.poll(() => state.writes()).toBe(1);
+  expect(state.generations()).toBe(1);
+  expect(state.saved().items).toEqual(beforeItems);
+  expect(state.saved().groupBNames).toEqual([]);
+  expect(state.saved().paragraphs[0].sentences[0].readingAnalysis.version).toBe(1);
+  await page.reload();
+  await expect(page.getByTestId('import-full-text-reader')).toBeVisible();
+  expect(state.generations()).toBe(1);
+  await page.getByRole('button', { name: 'Sentence explanation 1', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('主語');
+});
+
+test('mobile full text fits 360px and its explanation sheet restores focus and scrolling', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  const state = await reviewSetup(page);
+  await page.getByRole('button', { name: '该', exact: true }).nth(1).click();
+  await expect(page.getByRole('dialog')).toHaveAttribute('aria-modal', 'true');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('dialog').getByRole('button', { name: 'Close full text' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: '该', exact: true }).nth(1)).toBeFocused();
+  expect(await page.evaluate(() => document.body.style.overflow)).toBe('');
+  expect(state.writes()).toBe(0);
+});
+
+test('generation errors are visible and retry does not change the original article rows', async ({ page }) => {
+  const state = await reviewSetup(page, false);
+  let fail = true;
+  await page.route('**/sentences/0/explanation', async route => {
+    if (!fail) { await route.fallback(); return; }
+    await route.fulfill({ status: 503, json: { message: 'temporarily unavailable' } });
+  });
+  await page.getByRole('button', { name: 'Sentence explanation 1', exact: true }).click();
+  await page.getByRole('button', { name: 'Explain this sentence' }).click();
+  await expect(page.getByRole('alert')).toContainText('503');
+  expect(state.writes()).toBe(0);
+  fail = false;
+  await page.getByRole('button', { name: 'Explain this sentence' }).click();
+  await expect(page.getByRole('dialog')).toContainText('主語');
+  await expect.poll(() => state.writes()).toBe(1);
+});
+
+test('late explanations are cancelled when leaving full text, and cannot overwrite the session', async ({ page }) => {
+  const state = await reviewSetup(page, false);
+  let release: (() => void) | undefined;
+  let calls = 0;
+  await page.route('**/sentences/0/explanation', async route => {
+    calls++;
+    await new Promise<void>(resolve => { release = resolve; });
+    await route.fallback().catch(() => {});
+  });
+  await page.getByRole('button', { name: 'Sentence explanation 1', exact: true }).click();
+  await page.getByRole('button', { name: 'Explain this sentence' }).evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
+  await expect.poll(() => calls).toBe(1);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Sentence mode', exact: true }).click();
+  release?.();
+  await page.getByRole('button', { name: 'Full text', exact: true }).click();
+  await page.getByRole('button', { name: 'Sentence explanation 1', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('no detailed sentence analysis');
+  expect(state.writes()).toBe(0);
+});
+
+test('a failed explanation save keeps the existing warning and can be retried', async ({ page }) => {
+  const state = await reviewSetup(page, false);
+  let fail = true;
+  await page.route('**/sessions/article', async route => {
+    if (fail && route.request().method() === 'PUT') { await route.fulfill({ status: 503, json: { message: 'save unavailable' } }); return; }
+    await route.fallback();
+  });
+  await page.getByRole('button', { name: 'Sentence explanation 1', exact: true }).click();
+  await page.getByRole('button', { name: 'Explain this sentence' }).click();
+  await expect(page.getByText("Couldn't save", { exact: true })).toBeVisible();
+  expect(state.writes()).toBe(0);
+  await page.keyboard.press('Escape');
+  fail = false;
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect.poll(() => state.writes()).toBe(1);
+  await expect(page.getByText("Couldn't save", { exact: true })).toHaveCount(0);
+});

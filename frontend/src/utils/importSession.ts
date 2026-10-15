@@ -132,7 +132,7 @@ export function buildImportItems(
     const hits = termOccurrences(text, term);
     // The nth listing of a term takes its nth occurrence; if the model listed it
     // more times than it occurs, everything past the last one piles onto it.
-    const at = hits[Math.min(nth, hits.length - 1)] ?? -1;
+    const at = w.range?.start ?? hits[Math.min(nth, hits.length - 1)] ?? -1;
     let order: number;
     if (at === -1) {
       // Not a verbatim substring. Routine for Japanese and Korean, where the prompts
@@ -155,6 +155,7 @@ export function buildImportItems(
       status: "pending",
       origin: "llm",
       term,
+      ...(w.occurrenceId ? { occurrenceId: w.occurrenceId, range: w.range, surface: w.surface, sourceTerm: w.sourceTerm, explanationLanguage: w.explanationLanguage } : {}),
       ...(w.transliteration?.trim() ? { transliteration: w.transliteration.trim() } : {}),
       ...(w.meaning?.trim() ? { meaning: w.meaning.trim() } : {}),
       ...(existing[term] ? { existingWordId: existing[term] } : {}),
@@ -171,12 +172,16 @@ export function buildImportItems(
       origin: "llm",
       statement,
       description: (g.description ?? "").trim(),
+      ...(g.constructionId ? { constructionId: g.constructionId, fixedElements: g.fixedElements, explanationLanguage: g.explanationLanguage } : {}),
       ...(g.excerpt?.trim() ? { excerpt: g.excerpt.trim() } : {}),
       ...(existingGrammar[statement] ? { existingGrammarId: existingGrammar[statement] } : {}),
     } satisfies ImportGrammarItem;
   });
 
-  let items = deduplicateImportItems([...words, ...grammar], analysis.paragraphs);
+  const fixed = grammar.flatMap(g => g.kind === "grammar" ? (g.fixedElements ?? []).map(e => ({ ...e, sentenceIndex: g.sentenceIndex })) : []);
+  const candidates = words.filter(w => w.kind !== "word" || !w.occurrenceId || !w.range || !fixed.some(e =>
+    e.sentenceIndex === w.sentenceIndex && e.range.start === w.range!.start && e.range.end === w.range!.end));
+  let items = deduplicateImportItems([...candidates, ...grammar], analysis.paragraphs);
   for (const [sentenceIndex, text] of sentenceById) {
     items = materializeGaps(items, sentenceIndex, text, language);
   }
@@ -756,8 +761,8 @@ export function materializeGaps(
   sentenceText: string,
   language: string
 ): ImportItem[] {
-  const { words } = sentenceItems(items, sentenceIndex);
-  const coverage = sentenceCoverage(sentenceText, words, language);
+  const { words, grammar } = sentenceItems(items, sentenceIndex);
+  const coverage = sentenceCoverage(sentenceText, words, language, grammar);
   if (coverage.complete || coverage.approximate) return items;
 
   let next = items;
@@ -1057,26 +1062,40 @@ export interface SentenceCoverage {
  * The analysis is asked to segment a sentence exhaustively, so a complete
  * sentence is the normal case and a gap means something was missed — the gap is
  * highlighted so it can be selected and added. Only live word rows count;
- * grammar rows are pattern NOTATION (「随着～，越来越～」) rather than a substring of
- * the sentence, so they cannot be matched positionally and never contribute.
+ * grammar statements are pattern NOTATION, so neither statements nor entire excerpts
+ * claim coverage. Only validated fixedElements from live grammar rows contribute.
  */
 export function sentenceCoverage(
   sentence: string,
   words: ImportWordItem[],
   /** Backend full-name language ("chinese"). Only an inflected language gets the
    *  prefix fallback below — see the comment on it. */
-  language: string
+  language: string,
+  grammar: ImportGrammarItem[] = []
 ): SentenceCoverage {
   const covered = new Array<boolean>(sentence.length).fill(false);
   const mark = (at: number, len: number) => {
     for (let i = at; i < at + len && i < covered.length; i++) covered[i] = true;
   };
+  for (const point of grammar) {
+    // Only validated fixed FUNCTION elements, never the whole grammar excerpt.
+    if (point.status === "skipped" || point.edited) continue;
+    for (const element of point.fixedElements ?? []) {
+      const { start, end } = element.range;
+      if (Number.isInteger(start) && start >= 0 && end > start && end <= sentence.length &&
+          sentence.slice(start, end) === element.surface && element.meaning.trim() && element.transliteration?.trim()) mark(start, end - start);
+    }
+  }
   const inflected = INFLECTED_LANGUAGES.has(language);
 
   let approximate = false;
   for (const word of words) {
     const term = word.term.trim();
     if (!term) continue;
+    if (word.range && word.sourceTerm === term && word.surface && sentence.slice(word.range.start, word.range.end) === word.surface) {
+      mark(word.range.start, word.range.end - word.range.start);
+      continue;
+    }
     // Every occurrence: a word listed once per sentence is meant to cover all of
     // its occurrences in that sentence.
     const hits = termOccurrences(sentence, term);
@@ -1134,7 +1153,7 @@ export function coverageRuns(
 /** Clean old analyses without deleting manual edits, merge/split history or registration claims. */
 export function deduplicateImportItems(items: ImportItem[], paragraphs: ImportAnalysisResult["paragraphs"]): ImportItem[] {
   const texts = new Map(flattenSentences(paragraphs).map(s => [s.index, s.text]));
-  const automatic = (row: ImportItem) => isLive(row) && !row.edited && (row.origin === "llm" || row.origin === "gap") && !row.sourceIds?.length;
+  const automatic = (row: ImportItem) => !(row.kind === "word" && row.occurrenceId) && isLive(row) && !row.edited && (row.origin === "llm" || row.origin === "gap") && !row.sourceIds?.length;
   const words = items.filter((i): i is ImportWordItem => i.kind === "word" && automatic(i));
   const result = deduplicateWords(words, i => texts.get(i) ?? "", termOccurrences,
     (a, b) => {

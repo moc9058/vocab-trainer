@@ -9,6 +9,7 @@ import GrammarQuizTaking from '../../src/components/GrammarQuizTaking';
 import { useImportSession } from '../../src/hooks/useImportSession';
 import { useWordQueue } from '../../src/hooks/useWordQueue';
 import { useGrammarQueue } from '../../src/hooks/useGrammarQueue';
+import ImportReview from '../../src/components/import/ImportReview';
 import ImportFullTextModal from '../../src/components/import/ImportFullTextModal';
 import type { ImportSession } from '../../src/types';
 import '../../src/index.css';
@@ -28,6 +29,16 @@ function ImportHarness() {
   </main>;
 }
 
+function ImportReviewHarness() {
+  const words = useWordQueue();
+  const grammar = useGrammarQueue();
+  const review = useImportSession({ language: 'chinese', onQueue: words.enqueue, onGrammarQueue: grammar.enqueue, descriptionLanguage: 'ja' });
+  useEffect(() => { void review.load('article'); }, []);
+  return review.session ? <ImportReview session={review.session} allWordGroups={[]} allGrammarGroups={[]}
+    membershipOverlay={review.membershipOverlay} saveStatus={review.saveStatus} saveError={review.saveError}
+    onRetrySave={review.flush} onPatch={review.patch} onSetItems={review.setItems} onPatchItem={review.patchItem}
+    onRegister={review.registerItem} onExit={() => {}} /> : <p>Loading</p>;
+}
 function ImportFullTextHarness() {
   const [open, setOpen] = useState(true);
   return open
@@ -48,7 +59,8 @@ const fixture = (window as any).fixture ?? (mode === 'import-full-text' ? {
   groupBNames: [], focusedSentenceIndex: 0, status: 'in-progress', createdAt: '', updatedAt: '',
 } : undefined);
 createRoot(document.getElementById('root')!).render(<I18nProvider><SettingsProvider>
-  {mode === 'import' ? <ImportHarness />
+  {mode === 'import-review' ? <ImportReviewHarness />
+    : mode === 'import' ? <ImportHarness />
     : mode === 'import-full-text' ? <ImportFullTextHarness />
     : mode === 'word' ? <QuizTaking session={fixture} onComplete={() => {}} onBrowse={() => {}} onStartNew={() => {}} />
     : mode === 'grammar' ? <GrammarQuizTaking session={fixture} onComplete={() => {}} onStartNew={() => {}} />

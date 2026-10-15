@@ -98,6 +98,7 @@ export function smartAddWord(
   language: string,
   data: {
     term: string;
+    sourceContext?: import("../types").ImportSourceContext;
     transliteration?: string;
     definitions?: Meaning[];
     topics?: string[];

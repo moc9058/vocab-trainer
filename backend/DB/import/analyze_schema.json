@@ -26,7 +26,10 @@
                   "text",
                   "translation",
                   "words",
-                  "grammar"
+                  "grammar",
+                  "overview",
+                  "explanationLanguage",
+                  "ambiguityNotes"
                 ],
                 "properties": {
                   "text": {
@@ -43,7 +46,14 @@
                       "required": [
                         "term",
                         "transliteration",
-                        "meaning"
+                        "meaning",
+                        "surface",
+                        "partOfSpeech",
+                        "role",
+                        "reasoning",
+                        "contrast",
+                        "senseKey",
+                        "occurrence"
                       ],
                       "properties": {
                         "term": {
@@ -54,6 +64,28 @@
                         },
                         "meaning": {
                           "type": "string"
+                        },
+                        "surface": {
+                          "type": "string"
+                        },
+                        "partOfSpeech": {
+                          "type": "string"
+                        },
+                        "role": {
+                          "type": "string"
+                        },
+                        "reasoning": {
+                          "type": "string"
+                        },
+                        "contrast": {
+                          "type": "string"
+                        },
+                        "senseKey": {
+                          "type": "string"
+                        },
+                        "occurrence": {
+                          "type": "integer",
+                          "minimum": 0
                         }
                       }
                     }
@@ -66,7 +98,9 @@
                       "required": [
                         "statement",
                         "description",
-                        "excerpt"
+                        "excerpt",
+                        "roleInSentence",
+                        "elements"
                       ],
                       "properties": {
                         "statement": {
@@ -77,8 +111,54 @@
                         },
                         "excerpt": {
                           "type": "string"
+                        },
+                        "roleInSentence": {
+                          "type": "string"
+                        },
+                        "elements": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "wordIndices",
+                              "role",
+                              "explanation",
+                              "fixed"
+                            ],
+                            "properties": {
+                              "wordIndices": {
+                                "type": "array",
+                                "items": {
+                                  "type": "integer",
+                                  "minimum": 0
+                                }
+                              },
+                              "role": {
+                                "type": "string"
+                              },
+                              "explanation": {
+                                "type": "string"
+                              },
+                              "fixed": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
                         }
                       }
+                    }
+                  },
+                  "overview": {
+                    "type": "string"
+                  },
+                  "explanationLanguage": {
+                    "type": "string"
+                  },
+                  "ambiguityNotes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
                     }
                   }
                 }

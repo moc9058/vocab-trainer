@@ -191,8 +191,8 @@ export default function ImportSentenceCard({
   // something it missed — show it in the sentence itself rather than as a count
   // the reader has to reconcile by eye.
   const coverage = useMemo(
-    () => sentenceCoverage(sentence.text, words, language),
-    [sentence.text, words, language]
+    () => sentenceCoverage(sentence.text, words, language, grammar),
+    [sentence.text, words, language, grammar]
   );
   const runs = useMemo(() => coverageRuns(sentence.text, coverage), [sentence.text, coverage]);
 

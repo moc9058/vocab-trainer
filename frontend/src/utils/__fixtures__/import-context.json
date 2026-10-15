@@ -1,0 +1,486 @@
+{
+  "paragraphs": [
+    {
+      "sentences": [
+        {
+          "index": 0,
+          "text": "该公司该采取行动了。",
+          "readingAnalysis": {
+            "version": 1,
+            "sourceText": "该公司该采取行动了。",
+            "explanationLanguage": "ja",
+            "overview": "「该公司」が主語で、「该…了」が行動すべき時点に達したことを示す。",
+            "ambiguityNotes": [],
+            "occurrences": [
+              {
+                "id": "s0-o0",
+                "range": {
+                  "start": 0,
+                  "end": 1
+                },
+                "surface": "该",
+                "lemma": "该",
+                "transliteration": "gāi",
+                "contextualMeaning": "その",
+                "explanationLanguage": "ja",
+                "partOfSpeech": "function",
+                "role": "会社を限定する連体修飾",
+                "reasoning": "後続の動詞句と文脈から判断する。",
+                "contrast": "",
+                "senseKey": "该-その",
+                "constructionIds": []
+              },
+              {
+                "id": "s0-o1",
+                "range": {
+                  "start": 1,
+                  "end": 3
+                },
+                "surface": "公司",
+                "lemma": "公司",
+                "transliteration": "gōng sī",
+                "contextualMeaning": "会社",
+                "explanationLanguage": "ja",
+                "partOfSpeech": "verb",
+                "role": "",
+                "reasoning": "後続の動詞句と文脈から判断する。",
+                "contrast": "",
+                "senseKey": "公司-会社",
+                "constructionIds": []
+              },
+              {
+                "id": "s0-o2",
+                "range": {
+                  "start": 3,
+                  "end": 4
+                },
+                "surface": "该",
+                "lemma": "该",
+                "transliteration": "gāi",
+                "contextualMeaning": "そろそろ〜すべき",
+                "explanationLanguage": "ja",
+                "partOfSpeech": "function",
+                "role": "動詞句に係る助動詞",
+                "reasoning": "後続の動詞句と文脈から判断する。",
+                "contrast": "",
+                "senseKey": "该-そろそろ〜すべき",
+                "constructionIds": [
+                  "s0-c0"
+                ]
+              },
+              {
+                "id": "s0-o3",
+                "range": {
+                  "start": 4,
+                  "end": 6
+                },
+                "surface": "采取",
+                "lemma": "采取",
+                "transliteration": "cǎi qǔ",
+                "contextualMeaning": "取る",
+                "explanationLanguage": "ja",
+                "partOfSpeech": "verb",
+                "role": "",
+                "reasoning": "後続の動詞句と文脈から判断する。",
+                "contrast": "",
+                "senseKey": "采取-取る",
+                "constructionIds": [
+                  "s0-c0"
+                ]
+              },
+              {
+                "id": "s0-o4",
+                "range": {
+                  "start": 6,
+                  "end": 8
+                },
+                "surface": "行动",
+                "lemma": "行动",
+                "transliteration": "xíng dòng",
+                "contextualMeaning": "行動",
+                "explanationLanguage": "ja",
+                "partOfSpeech": "verb",
+                "role": "",
+                "reasoning": "後続の動詞句と文脈から判断する。",
+                "contrast": "",
+                "senseKey": "行动-行動",
+                "constructionIds": [
+                  "s0-c0"
+                ]
+              },
+              {
+                "id": "s0-o5",
+                "range": {
+                  "start": 8,
+                  "end": 9
+                },
+                "surface": "了",
+                "lemma": "了",
+                "transliteration": "le",
+                "contextualMeaning": "状況変化",
+                "explanationLanguage": "ja",
+                "partOfSpeech": "function",
+                "role": "文末で新しい状況を示す",
+                "reasoning": "後続の動詞句と文脈から判断する。",
+                "contrast": "",
+                "senseKey": "了-状況変化",
+                "constructionIds": [
+                  "s0-c0"
+                ]
+              }
+            ],
+            "constructions": [
+              {
+                "id": "s0-c0",
+                "statement": "该+v+了",
+                "ranges": [
+                  {
+                    "start": 3,
+                    "end": 4
+                  },
+                  {
+                    "start": 4,
+                    "end": 6
+                  },
+                  {
+                    "start": 6,
+                    "end": 8
+                  },
+                  {
+                    "start": 8,
+                    "end": 9
+                  }
+                ],
+                "meaning": "そろそろ〜すべき時だ",
+                "roleInSentence": "行動すべき段階に達したことを示す",
+                "elements": [
+                  {
+                    "occurrenceIds": [
+                      "s0-o2"
+                    ],
+                    "role": "助動詞",
+                    "explanation": "行動すべき時点を示す",
+                    "fixed": true
+                  },
+                  {
+                    "occurrenceIds": [
+                      "s0-o3",
+                      "s0-o4"
+                    ],
+                    "role": "動詞句",
+                    "explanation": "行うべき動作",
+                    "fixed": false
+                  },
+                  {
+                    "occurrenceIds": [
+                      "s0-o5"
+                    ],
+                    "role": "文末助詞",
+                    "explanation": "新しい状況への変化",
+                    "fixed": true
+                  }
+                ]
+              }
+            ]
+          },
+          "translation": "その会社はそろそろ行動すべきだ。"
+        }
+      ]
+    },
+    {
+      "sentences": [
+        {
+          "index": 1,
+          "text": "我还没还书。",
+          "readingAnalysis": {
+            "version": 1,
+            "sourceText": "我还没还书。",
+            "explanationLanguage": "ja",
+            "overview": "前の还は副詞、後の还是動詞。没は返却の未実現を示す。",
+            "ambiguityNotes": [],
+            "occurrences": [
+              {
+                "id": "s1-o0",
+                "range": {
+                  "start": 0,
+                  "end": 1
+                },
+                "surface": "我",
+                "lemma": "我",
+                "transliteration": "wǒ",
+                "contextualMeaning": "私",
+                "explanationLanguage": "ja",
+                "partOfSpeech": "verb",
+                "role": "",
+                "reasoning": "後続の動詞句と文脈から判断する。",
+                "contrast": "",
+                "senseKey": "我-私",
+                "constructionIds": []
+              },
+              {
+                "id": "s1-o1",
+                "range": {
+                  "start": 1,
+                  "end": 2
+                },
+                "surface": "还",
+                "lemma": "还",
+                "transliteration": "hái",
+                "contextualMeaning": "まだ",
+                "explanationLanguage": "ja",
+                "partOfSpeech": "function",
+                "role": "未実現状態の継続",
+                "reasoning": "後続の動詞句と文脈から判断する。",
+                "contrast": "返す huán とは異なる",
+                "senseKey": "还-まだ",
+                "constructionIds": []
+              },
+              {
+                "id": "s1-o2",
+                "range": {
+                  "start": 2,
+                  "end": 3
+                },
+                "surface": "没",
+                "lemma": "没",
+                "transliteration": "méi",
+                "contextualMeaning": "まだ〜ない",
+                "explanationLanguage": "ja",
+                "partOfSpeech": "verb",
+                "role": "",
+                "reasoning": "後続の動詞句と文脈から判断する。",
+                "contrast": "",
+                "senseKey": "没-まだ〜ない",
+                "constructionIds": []
+              },
+              {
+                "id": "s1-o3",
+                "range": {
+                  "start": 3,
+                  "end": 4
+                },
+                "surface": "还",
+                "lemma": "还",
+                "transliteration": "huán",
+                "contextualMeaning": "返す",
+                "explanationLanguage": "ja",
+                "partOfSpeech": "function",
+                "role": "書籍を目的語に取る動詞",
+                "reasoning": "後続の動詞句と文脈から判断する。",
+                "contrast": "継続 hái とは異なる",
+                "senseKey": "还-返す",
+                "constructionIds": []
+              },
+              {
+                "id": "s1-o4",
+                "range": {
+                  "start": 4,
+                  "end": 5
+                },
+                "surface": "书",
+                "lemma": "书",
+                "transliteration": "shū",
+                "contextualMeaning": "本",
+                "explanationLanguage": "ja",
+                "partOfSpeech": "verb",
+                "role": "",
+                "reasoning": "後続の動詞句と文脈から判断する。",
+                "contrast": "",
+                "senseKey": "书-本",
+                "constructionIds": []
+              }
+            ],
+            "constructions": []
+          },
+          "translation": "私はまだ本を返していない。"
+        }
+      ]
+    }
+  ],
+  "words": [
+    {
+      "term": "该",
+      "transliteration": "gāi",
+      "meaning": "その",
+      "sentenceIndex": 0,
+      "occurrenceId": "s0-o0",
+      "surface": "该",
+      "sourceTerm": "该",
+      "range": {
+        "start": 0,
+        "end": 1
+      },
+      "explanationLanguage": "ja"
+    },
+    {
+      "term": "公司",
+      "transliteration": "gōng sī",
+      "meaning": "会社",
+      "sentenceIndex": 0,
+      "occurrenceId": "s0-o1",
+      "surface": "公司",
+      "sourceTerm": "公司",
+      "range": {
+        "start": 1,
+        "end": 3
+      },
+      "explanationLanguage": "ja"
+    },
+    {
+      "term": "该",
+      "transliteration": "gāi",
+      "meaning": "そろそろ〜すべき",
+      "sentenceIndex": 0,
+      "occurrenceId": "s0-o2",
+      "surface": "该",
+      "sourceTerm": "该",
+      "range": {
+        "start": 3,
+        "end": 4
+      },
+      "explanationLanguage": "ja"
+    },
+    {
+      "term": "采取",
+      "transliteration": "cǎi qǔ",
+      "meaning": "取る",
+      "sentenceIndex": 0,
+      "occurrenceId": "s0-o3",
+      "surface": "采取",
+      "sourceTerm": "采取",
+      "range": {
+        "start": 4,
+        "end": 6
+      },
+      "explanationLanguage": "ja"
+    },
+    {
+      "term": "行动",
+      "transliteration": "xíng dòng",
+      "meaning": "行動",
+      "sentenceIndex": 0,
+      "occurrenceId": "s0-o4",
+      "surface": "行动",
+      "sourceTerm": "行动",
+      "range": {
+        "start": 6,
+        "end": 8
+      },
+      "explanationLanguage": "ja"
+    },
+    {
+      "term": "了",
+      "transliteration": "le",
+      "meaning": "状況変化",
+      "sentenceIndex": 0,
+      "occurrenceId": "s0-o5",
+      "surface": "了",
+      "sourceTerm": "了",
+      "range": {
+        "start": 8,
+        "end": 9
+      },
+      "explanationLanguage": "ja"
+    },
+    {
+      "term": "我",
+      "transliteration": "wǒ",
+      "meaning": "私",
+      "sentenceIndex": 1,
+      "occurrenceId": "s1-o0",
+      "surface": "我",
+      "sourceTerm": "我",
+      "range": {
+        "start": 0,
+        "end": 1
+      },
+      "explanationLanguage": "ja"
+    },
+    {
+      "term": "还",
+      "transliteration": "hái",
+      "meaning": "まだ",
+      "sentenceIndex": 1,
+      "occurrenceId": "s1-o1",
+      "surface": "还",
+      "sourceTerm": "还",
+      "range": {
+        "start": 1,
+        "end": 2
+      },
+      "explanationLanguage": "ja"
+    },
+    {
+      "term": "没",
+      "transliteration": "méi",
+      "meaning": "まだ〜ない",
+      "sentenceIndex": 1,
+      "occurrenceId": "s1-o2",
+      "surface": "没",
+      "sourceTerm": "没",
+      "range": {
+        "start": 2,
+        "end": 3
+      },
+      "explanationLanguage": "ja"
+    },
+    {
+      "term": "还",
+      "transliteration": "huán",
+      "meaning": "返す",
+      "sentenceIndex": 1,
+      "occurrenceId": "s1-o3",
+      "surface": "还",
+      "sourceTerm": "还",
+      "range": {
+        "start": 3,
+        "end": 4
+      },
+      "explanationLanguage": "ja"
+    },
+    {
+      "term": "书",
+      "transliteration": "shū",
+      "meaning": "本",
+      "sentenceIndex": 1,
+      "occurrenceId": "s1-o4",
+      "surface": "书",
+      "sourceTerm": "书",
+      "range": {
+        "start": 4,
+        "end": 5
+      },
+      "explanationLanguage": "ja"
+    }
+  ],
+  "grammar": [
+    {
+      "statement": "该+v+了",
+      "description": "そろそろ〜すべき時だ",
+      "sentenceIndex": 0,
+      "constructionId": "s0-c0",
+      "explanationLanguage": "ja",
+      "fixedElements": [
+        {
+          "range": {
+            "start": 3,
+            "end": 4
+          },
+          "surface": "该",
+          "transliteration": "gāi",
+          "meaning": "そろそろ〜すべき"
+        },
+        {
+          "range": {
+            "start": 8,
+            "end": 9
+          },
+          "surface": "了",
+          "transliteration": "le",
+          "meaning": "状況変化"
+        }
+      ],
+      "excerpt": "该采取行动了"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../i18n/context";
 import ImportDestinationRail from "./ImportDestinationRail";
-import ImportFullTextModal from "./ImportFullTextModal";
+import ImportFullTextReader from "./ImportFullTextReader";
 import ImportSentenceCard, { type ImportDestination } from "./ImportSentenceCard";
 import {
   findWordHome,
@@ -61,8 +61,8 @@ export default function ImportReview({
   const gapsBySentence = useMemo(() => {
     const map = new Map<number, number>();
     for (const s of sentences) {
-      const { words } = sentenceItems(session.items, s.index);
-      map.set(s.index, sentenceCoverage(s.text, words, session.language).missing);
+      const { words, grammar } = sentenceItems(session.items, s.index);
+      map.set(s.index, sentenceCoverage(s.text, words, session.language, grammar).missing);
     }
     return map;
   }, [sentences, session.items, session.language]);
@@ -137,7 +137,19 @@ export default function ImportReview({
    *  is required on the wire (`ImportSession`), so "which sentence" and "open or
    *  shut" are kept apart rather than smuggling a -1 into the saved document. */
   const [collapsed, setCollapsed] = useState(false);
-  const [showFullText, setShowFullText] = useState(false);
+  const [viewMode, setViewMode] = useState<"fullText" | "sentences">("fullText");
+  const scrollPositions = useRef({ fullText: 0, sentences: 0 });
+  const editingRef = useRef(false);
+  function switchMode(mode: "fullText" | "sentences") {
+    scrollPositions.current[viewMode] = window.scrollY;
+    setViewMode(mode);
+  }
+  useEffect(() => { setViewMode("fullText"); scrollPositions.current = { fullText: 0, sentences: 0 }; }, [session.id]);
+  useEffect(() => {
+    if (editingRef.current) { editingRef.current = false; focusRef.current?.scrollIntoView({ block: "start" }); return; }
+    const frame = requestAnimationFrame(() => window.scrollTo({ top: scrollPositions.current[viewMode], behavior: "instant" }));
+    return () => cancelAnimationFrame(frame);
+  }, [viewMode]);
 
   function focus(index: number) {
     if (index === focused) {
@@ -171,6 +183,7 @@ export default function ImportReview({
    *  staring at some unrelated paragraph further down. */
   const hasScrolledRef = useRef(false);
   useEffect(() => {
+    if (viewMode !== "sentences") return;
     focusRef.current?.scrollIntoView({
       block: "start",
       behavior: hasScrolledRef.current ? "smooth" : "auto",
@@ -217,12 +230,15 @@ export default function ImportReview({
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-2">
             <button
-              onClick={() => setShowFullText(true)}
+              onClick={() => switchMode("fullText")}
+              aria-pressed={viewMode === "fullText"}
               className="whitespace-nowrap rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-300 hover:border-gray-500 hover:text-white"
             >
-              {t("importViewFullText")}
+              {t("importFullTextMode")}
             </button>
-            <button
+            <button onClick={() => switchMode("sentences")} aria-pressed={viewMode === "sentences"}
+              className="whitespace-nowrap rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-300 hover:border-gray-500 hover:text-white">{t("importSentenceMode")}</button>
+            {viewMode === "sentences" && <button
               onClick={toggleTranslations}
               aria-pressed={showTranslations}
               className={`whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs ${
@@ -232,7 +248,7 @@ export default function ImportReview({
               }`}
             >
               {showTranslations ? t("importHideTranslation") : t("importShowTranslation")}
-            </button>
+            </button>}
             <button
               onClick={onExit}
               className="whitespace-nowrap rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-200 sm:text-sm"
@@ -278,6 +294,12 @@ export default function ImportReview({
           </div>
         )}
 
+        {viewMode === "fullText" ? <ImportFullTextReader key={session.id} session={session} onPatch={onPatch}
+          onEditSentence={index => {
+            editingRef.current = true;
+            switchMode("sentences"); setCollapsed(false);
+            onPatch(s => ({ ...s, focusedSentenceIndex: index }));
+          }} /> : <>
         {/* Grid placement is explicit so the destination can lead on a phone —
             where it is unreachable at the bottom — and still be the right-hand
             sidebar from `lg`. */}
@@ -457,10 +479,8 @@ export default function ImportReview({
             {t("importNextSentence")} ▶
           </button>
         </div>
+        </>}
       </div>
-      {showFullText && (
-        <ImportFullTextModal session={session} onClose={() => setShowFullText(false)} />
-      )}
     </div>
   );
 }

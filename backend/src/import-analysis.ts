@@ -1,3 +1,4 @@
+import { normalizeReadingSentence, type RawReadingSentence } from "./import-reading-analysis.js";
 import { deduplicateWords } from "./import-dedup.js";
 /**
  * The pure half of `routes/import.ts`: turning the model's raw analysis JSON into
@@ -408,7 +409,7 @@ export function backfillRepeatedWords(
 // ---------- normalization ----------
 
 /** What the model returns: words and grammar nested inside their own sentence. */
-interface RawSentence {
+interface RawSentence extends RawReadingSentence {
   text?: string;
   translation?: string;
   words?: Omit<ImportExtractedWord, "sentenceIndex">[];
@@ -462,11 +463,18 @@ export function normalizeAnalysis(
     const sentences: ImportSentence[] = [];
     for (const s of p.sentences ?? []) {
       const sentenceIndex = index++;
+      const contextual = (s.overview !== undefined || s.explanationLanguage !== undefined) ? normalizeReadingSentence(s, sentenceIndex, termOccurrences, lowercaseGrammarAbbreviations) : null;
       sentences.push({
         index: sentenceIndex,
         text: s.text ?? "",
+        ...(contextual && s.overview !== undefined ? { readingAnalysis: contextual.reading } : {}),
         ...(s.translation ? { translation: s.translation } : {}),
       });
+      if (contextual) {
+        nestedWords.push(...contextual.words);
+        nestedGrammar.push(...contextual.grammar);
+        continue;
+      }
       for (const w of s.words ?? []) {
         if (w?.term?.trim()) nestedWords.push({ ...w, sentenceIndex });
       }
@@ -488,7 +496,8 @@ export function normalizeAnalysis(
     );
   }
 
-  const words = repairWordAttribution(nestedWords, sentences, language);
+  const contextualWords = nestedWords.filter(w => w.occurrenceId);
+  const words = repairWordAttribution(nestedWords.filter(w => !w.occurrenceId), sentences, language);
   const grammar = repairGrammarAttribution(nestedGrammar, sentences);
   const repair: AttributionRepairSummary = {
     reassigned: words.summary.reassigned + grammar.summary.reassigned,
@@ -509,7 +518,7 @@ export function normalizeAnalysis(
   return {
     analysis: {
       paragraphs,
-      words: uniqueWords,
+      words: [...uniqueWords, ...contextualWords],
       grammar: normalizedGrammar.filter((g, i, all) => all.findIndex(other =>
         other.sentenceIndex === g.sentenceIndex &&
         other.statement.trim() === g.statement.trim()) === i),

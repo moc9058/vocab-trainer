@@ -1,3 +1,5 @@
+import { sourceMatchesSentences } from "../import-reading-analysis.js";
+import { compactImportSchema, COMPACT_IMPORT_INSTRUCTIONS } from "../import-analysis-config.js";
 import type { FastifyPluginAsync } from "fastify";
 import { callLLM, stripMarkdownFences } from "../llm.js";
 import { openSSE } from "../sse.js";
@@ -104,6 +106,10 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
           .filter(Boolean)
           .slice(0, STYLE_EXAMPLE_LIMIT);
 
+        if (text.length > 1200) {
+          analyzeSchema = compactImportSchema(analyzeSchema);
+          basePrompt += COMPACT_IMPORT_INSTRUCTIONS;
+        }
         sendEvent("analysis-start", {});
         let legacyText = "";
         const raw = await callLLM({
@@ -124,6 +130,12 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
         });
 
         const { analysis, repair } = normalizeAnalysis(stripMarkdownFences(raw), language);
+        if (!sourceMatchesSentences(text, analysis.paragraphs.flatMap(p => p.sentences).map(s => s.text))) {
+          throw new Error("Analysis changed or omitted source text. Try importing fewer paragraphs.");
+        }
+        if (Buffer.byteLength(JSON.stringify(analysis), "utf8") > 850_000) {
+          throw new Error("Analysis is too large to save. Import the source in smaller sections.");
+        }
         if (repairChangedAnything(repair)) {
           // The model still files the odd word under a sentence it does not occur in.
           // Log what was corrected: silently reshaping the analysis would make a
@@ -158,6 +170,49 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
         close();
       }
     }
+  );
+
+  // Return explanations only. Existing candidates, registrations and groups are never rewritten.
+  fastify.post<{ Params: { language: string; sessionId: string; sentenceIndex: string } }>(
+    "/:language/sessions/:sessionId/sentences/:sentenceIndex/explanation",
+    async (request, reply) => {
+      const { language, sessionId } = request.params;
+      const session = await getImportSession(sessionId);
+      if (!session || session.language !== language) return reply.notFound("Import session not found");
+      const index = Number(request.params.sentenceIndex);
+      if (!Number.isInteger(index) || index < 0) return reply.badRequest("Invalid sentence index");
+      const sentences = session.paragraphs.flatMap(p => p.sentences);
+      const at = sentences.findIndex(s => s.index === index);
+      if (at < 0) return reply.notFound("Sentence not found");
+      const sentence = sentences[at];
+      try {
+        const config = await loadConfig();
+        const prompt = config.analyzePrompts?.[language];
+        if (!prompt) return reply.badRequest("No import prompt configured for language");
+        const raw = await callLLM({
+          system: prompt + "\nAnalyze ONLY target as exactly one sentence. before/after are context, never output them. Preserve target verbatim, even if it contains sentence punctuation.",
+          user: JSON.stringify({ target: sentence.text, before: sentences[at - 1]?.text ?? "", after: sentences[at + 1]?.text ?? "" }),
+          schema: config.analyzeSchema, tier: "full", route: "import/sentence-explanation",
+        });
+        const { analysis } = normalizeAnalysis(stripMarkdownFences(raw), language);
+        const result = analysis.paragraphs.flatMap(p => p.sentences);
+        if (result.length !== 1 || result[0].text !== sentence.text || !result[0].readingAnalysis) {
+          return reply.badGateway("The explanation did not match the source. Check the import prompt configuration and retry.");
+        }
+        const readingAnalysis = result[0].readingAnalysis;
+        // The one-sentence model response is normalized at position 0; retain the article namespace.
+        const reindex = (id: string) => id.replace(/^s0-/, `s${index}-`);
+        readingAnalysis.occurrences = readingAnalysis.occurrences.map(word => ({ ...word,
+          id: reindex(word.id), constructionIds: word.constructionIds.map(reindex) }));
+        readingAnalysis.constructions = readingAnalysis.constructions.map(point => ({ ...point,
+          id: reindex(point.id), elements: point.elements.map(element => ({ ...element, occurrenceIds: element.occurrenceIds.map(reindex) })) }));
+        if (Buffer.byteLength(JSON.stringify(readingAnalysis), "utf8") > 150_000) return reply.badGateway("Explanation is too large");
+        return { sentenceIndex: index, readingAnalysis };
+      } catch (err) {
+        request.log.error(err);
+        return reply.badGateway("Failed to generate the sentence explanation. Please retry.");
+      }
+    },
   );
 
   // ===== Import sessions =====
@@ -244,6 +299,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.notFound(`Language '${language}' not found`);
       }
       const body = request.body;
+      if (Buffer.byteLength(JSON.stringify(body), "utf8") > 900_000) return reply.badRequest("Article is too large. Split it into smaller sections.");
       const now = new Date().toISOString();
       const session = await saveImportSession({
         language,
@@ -267,7 +323,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
     "/:language/sessions/:sessionId",
     async (request, reply) => {
       const session = await getImportSession(request.params.sessionId);
-      if (!session) return reply.notFound("Import session not found");
+      if (!session || session.language !== request.params.language) return reply.notFound("Import session not found");
       return session;
     }
   );
@@ -298,6 +354,9 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     async (request, reply) => {
+      const existing = await getImportSession(request.params.sessionId);
+      if (!existing || existing.language !== request.params.language) return reply.notFound("Import session not found");
+      if (Buffer.byteLength(JSON.stringify({ ...existing, ...request.body }), "utf8") > 900_000) return reply.badRequest("Article is too large. Split it into smaller sections.");
       const updated = await updateImportSession(request.params.sessionId, request.body);
       if (!updated) return reply.notFound("Import session not found");
       return updated;

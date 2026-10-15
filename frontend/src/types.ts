@@ -561,7 +561,56 @@ export interface ExpressionRecallSession {
 
 // ========== Import (analyze an external article into words + grammar) ==========
 
+export interface ImportTextRange {
+  start: number;
+  end: number;
+}
+
+/** A verified occurrence in the original sentence; independent of registration rows. */
+export interface ImportOccurrence {
+  id: string;
+  range: ImportTextRange;
+  surface: string;
+  lemma: string;
+  transliteration?: string;
+  contextualMeaning: string;
+  explanationLanguage: string;
+  partOfSpeech: string;
+  role: string;
+  reasoning: string;
+  contrast: string;
+  senseKey: string;
+  constructionIds: string[];
+}
+
+export interface ImportConstruction {
+  id: string;
+  statement: string;
+  ranges: ImportTextRange[];
+  meaning: string;
+  roleInSentence: string;
+  elements: { occurrenceIds: string[]; role: string; explanation: string; fixed: boolean }[];
+}
+
+export interface ImportReadingAnalysis {
+  version: 1;
+  sourceText: string;
+  explanationLanguage: string;
+  overview: string;
+  ambiguityNotes: string[];
+  occurrences: ImportOccurrence[];
+  constructions: ImportConstruction[];
+}
+
+export interface ImportSourceContext {
+  sentence: string;
+  surface: string;
+  contextualMeaning: string;
+  explanationLanguage: string;
+}
+
 export interface ImportSentence {
+  readingAnalysis?: ImportReadingAnalysis;
   /** Position across the whole article (0-based); assigned server-side. */
   index: number;
   text: string;
@@ -573,6 +622,11 @@ export interface ImportParagraph {
 }
 
 export interface ImportExtractedWord {
+  occurrenceId?: string;
+  surface?: string;
+  sourceTerm?: string;
+  range?: ImportTextRange;
+  explanationLanguage?: string;
   term: string;
   transliteration?: string;
   /** Short gloss, for the review list only — the real definitions come from smart-add. */
@@ -587,6 +641,9 @@ export interface ImportExtractedWord {
 }
 
 export interface ImportExtractedGrammar {
+  constructionId?: string;
+  explanationLanguage?: string;
+  fixedElements?: { range: ImportTextRange; surface: string; transliteration?: string; meaning: string }[];
   /** Pattern notation, e.g. "～的话：〜なら". */
   statement: string;
   description: string;
@@ -674,6 +731,11 @@ interface ImportItemBase {
 }
 
 export interface ImportWordItem extends ImportItemBase {
+  occurrenceId?: string;
+  surface?: string;
+  sourceTerm?: string;
+  range?: ImportTextRange;
+  explanationLanguage?: string;
   kind: "word";
   term: string;
   transliteration?: string;
@@ -685,6 +747,9 @@ export interface ImportWordItem extends ImportItemBase {
 }
 
 export interface ImportGrammarItem extends ImportItemBase {
+  constructionId?: string;
+  explanationLanguage?: string;
+  fixedElements?: { range: ImportTextRange; surface: string; transliteration?: string; meaning: string }[];
   kind: "grammar";
   statement: string;
   description: string;

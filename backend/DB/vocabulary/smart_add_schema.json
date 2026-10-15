@@ -3,7 +3,13 @@
   "strict": false,
   "schema": {
     "type": "object",
-    "required": ["term", "definitions", "examples", "topics", "notes"],
+    "required": [
+      "term",
+      "definitions",
+      "examples",
+      "topics",
+      "notes"
+    ],
     "properties": {
       "term": {
         "type": "string",
@@ -18,7 +24,10 @@
         "description": "Array of meanings for this word",
         "items": {
           "type": "object",
-          "required": ["partOfSpeech", "text"],
+          "required": [
+            "partOfSpeech",
+            "text"
+          ],
           "properties": {
             "partOfSpeech": {
               "type": "string",
@@ -27,12 +36,28 @@
             "pinyins": {
               "type": "array",
               "description": "Pronunciations for this specific definition (Chinese only; use multiple entries for polyphonic characters with distinct readings per meaning)",
-              "items": { "type": "string" }
+              "items": {
+                "type": "string"
+              }
             },
             "text": {
               "type": "object",
               "description": "Definitions keyed by language code (e.g. { \"ja\": \"...\", \"en\": \"...\", \"ko\": \"...\" })",
-              "additionalProperties": { "type": "string" }
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "inputDefinitionIndex": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "distinctSenseReason": {
+              "type": "string"
+            },
+            "contrastExample": {
+              "type": "string"
             }
           }
         }
@@ -42,7 +67,9 @@
         "description": "Example sentences using the word",
         "items": {
           "type": "object",
-          "required": ["sentence"],
+          "required": [
+            "sentence"
+          ],
           "properties": {
             "sentence": {
               "type": "string",
@@ -56,10 +83,16 @@
               "description": "Word-level segments with transliteration (for Chinese)",
               "items": {
                 "type": "object",
-                "required": ["text"],
+                "required": [
+                  "text"
+                ],
                 "properties": {
-                  "text": { "type": "string" },
-                  "pinyin": { "type": "string" }
+                  "text": {
+                    "type": "string"
+                  },
+                  "pinyin": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -69,7 +102,9 @@
       "topics": {
         "type": "array",
         "description": "Topic categories for this word",
-        "items": { "type": "string" }
+        "items": {
+          "type": "string"
+        }
       },
       "level": {
         "type": "string",

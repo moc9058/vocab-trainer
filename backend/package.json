@@ -14,7 +14,8 @@
     "test:mixed": "node --experimental-test-module-mocks --import tsx --test scripts/tests/mixed-*.test.ts",
     "start": "node dist/index.js",
     "migrate": "tsx scripts/migrate-to-firestore.ts",
-    "export": "tsx scripts/export-from-firestore.ts"
+    "export": "tsx scripts/export-from-firestore.ts",
+    "test:import": "node --experimental-test-module-mocks --import tsx --test scripts/tests/import-*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",

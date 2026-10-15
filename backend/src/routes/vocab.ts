@@ -1,3 +1,4 @@
+import { contextualDefinitions, sourceContextInstructions } from "../import-definitions.js";
 import type { FastifyBaseLogger, FastifyPluginAsync } from "fastify";
 import {
   languageExists,
@@ -227,6 +228,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
     Params: { language: string };
     Body: {
       term: string;
+      sourceContext?: import("../types.js").ImportSourceContext;
       transliteration?: string;
       definitions?: { partOfSpeech: string; text: Record<string, string> }[];
       topics?: string[];
@@ -243,6 +245,14 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
           type: "object",
           required: ["term"],
           properties: {
+            sourceContext: {
+              type: "object", additionalProperties: false,
+              required: ["sentence", "surface", "contextualMeaning", "explanationLanguage"],
+              properties: {
+                sentence: { type: "string", maxLength: 8000 }, surface: { type: "string", minLength: 1 },
+                contextualMeaning: { type: "string", maxLength: 2000 }, explanationLanguage: { type: "string", enum: ["ja", "en", "ko", "zh"] },
+              },
+            },
             term: { type: "string" },
             transliteration: { type: "string" },
             definitions: {
@@ -328,10 +338,11 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         userInput.level = body.level || null;
       }
       userInput.notes = body.notes || null;
+      if (body.sourceContext) userInput.sourceContext = body.sourceContext;
 
       const promptTemplate = vocabConfig.smartAddPrompts[language]
         ?? vocabConfig.smartAddPrompts["default"];
-      const systemPrompt = fillPlaceholders(promptTemplate, {
+      let systemPrompt = fillPlaceholders(promptTemplate, {
         LANGUAGE: language,
         DEFINITION_LANGUAGES: defLangStr,
         EXAMPLE_TRANSLATION_SPEC: exTranslationSpec,
@@ -341,6 +352,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         LEVELS_LINE: langLevels ? `\nAllowed levels: ${langLevels.join(", ")}` : "",
       });
 
+      if (body.sourceContext) systemPrompt += sourceContextInstructions(body.sourceContext);
       const userPrompt = JSON.stringify(userInput, null, 2);
 
       let llmResult: Record<string, unknown>;
@@ -355,9 +367,17 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       // Merge: user-provided fields take priority; definitions & examples get supplemented
       const userDefs = body.definitions ?? [];
       const userDefCount = userDefs.length;
-      const llmDefs = (llmResult.definitions as { partOfSpeech: string; text: Record<string, string>; pinyins?: string[] }[]) || [];
+      const generatedDefs = (llmResult.definitions as { partOfSpeech: string; text: Record<string, string>; pinyins?: string[] }[]) || [];
       const userExCount = body.examples?.length ?? 0;
       const llmExamples = (llmResult.examples as { sentence: string; translation: string }[]) || [];
+
+      const llmDefs = body.sourceContext && userDefs.length > 0
+        ? contextualDefinitions(generatedDefs, userDefs) : generatedDefs;
+
+      if (body.sourceContext && userDefs.length > 0 && llmDefs.slice(0, userDefs.length).some((def, index) =>
+        ALL_DEFINITION_LANGUAGES.some(code => !(def.text?.[code]?.trim() || userDefs[index]?.text?.[code]?.trim())))) {
+        return reply.badGateway("Generated definitions did not preserve the supplied meanings in every language. Please retry.");
+      }
 
       // For each user-provided definition, keep the user's text in whatever
       // languages they supplied, and fill in the missing-language entries from

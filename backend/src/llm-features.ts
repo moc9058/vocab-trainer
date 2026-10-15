@@ -94,7 +94,7 @@ export const LLM_FEATURES: LLMFeature[] = [
   },
   {
     key: "import-analyze",
-    routes: ["import/analyze-stream"],
+    routes: ["import/analyze-stream", "import/sentence-explanation"],
     defaultTier: "full",
     label: "Article import analysis",
     description:
