@@ -43,6 +43,23 @@ services:
       firestore:
         condition: service_healthy
 
+  import-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["node", "dist/import-local-worker.js"]
+    restart: on-failure
+    environment:
+      - FIRESTORE_EMULATOR_HOST=firestore:8080
+      - FIRESTORE_PROJECT=vocab-trainer-490014
+      - FIRESTORE_DATABASE_ID=vocab-database
+    env_file:
+      - path: .env
+        required: false
+    depends_on:
+      firestore:
+        condition: service_healthy
+
   frontend:
     build:
       context: ./frontend

@@ -1,5 +1,6 @@
 import { deleteRequest, fetchJson, postJson, putJson, CREDENTIALS, notifyIfUnauthorized } from "./client";
 import type {
+  ImportAnalysisJobSummary,
   ImportAnalysisResult,
   ImportReadingAnalysis,
   ImportQuizPool,
@@ -9,7 +10,7 @@ import type {
 
 // ----- Import sessions (paused, resumable article reviews) -----
 
-type NewImportSession = Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean };
+type NewImportSession = Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean; analyzeAsJob?: boolean };
 
 /** The list carries the article quizzes' `pool` alongside the summaries: the handler
  *  already reads every session document in full, so deriving it there costs nothing,
@@ -37,7 +38,7 @@ export function getImportSession(language: string, sessionId: string, signal?: A
 export function updateImportSession(
   language: string,
   sessionId: string,
-  updates: Partial<NewImportSession> & { analysisCheckpoint?: number }
+  updates: Partial<NewImportSession> & { analysisCheckpoint?: number; analysisRevision?: number }
 ): Promise<ImportSession> {
   return putJson(
     `/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(sessionId)}`,
@@ -161,4 +162,19 @@ export function generateImportSentenceExplanation(language: string, sessionId: s
 
 export function analyzeNextImportPart(language: string, sessionId: string, chunkIndex: number, signal?: AbortSignal): Promise<ImportSession> {
   return postJson(`/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(sessionId)}/analyze-next`, { chunkIndex }, signal);
+}
+
+const jobSignal = (signal?: AbortSignal) => signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000);
+const jobPath = (language: string, id: string) => `/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(id)}/analysis-job`;
+export function getImportAnalysisJob(language: string, id: string, signal?: AbortSignal): Promise<ImportAnalysisJobSummary> {
+  return fetchJson(jobPath(language, id), jobSignal(signal));
+}
+export function startImportAnalysisJob(language: string, id: string, idempotencyKey: string, analysisRevision: number, signal?: AbortSignal): Promise<ImportAnalysisJobSummary> {
+  return postJson(jobPath(language, id), { idempotencyKey, analysisRevision }, jobSignal(signal));
+}
+export function resumeImportAnalysisJob(language: string, id: string, idempotencyKey: string, signal?: AbortSignal): Promise<ImportAnalysisJobSummary> {
+  return postJson(jobPath(language, id) + '/resume', { idempotencyKey }, jobSignal(signal));
+}
+export function pauseImportAnalysisJob(language: string, id: string, idempotencyKey: string): Promise<ImportAnalysisJobSummary> {
+  return postJson(jobPath(language, id) + '/pause', { idempotencyKey }, jobSignal());
 }

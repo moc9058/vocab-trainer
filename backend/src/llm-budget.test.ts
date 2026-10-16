@@ -109,3 +109,18 @@ test("closing a real SSE connection aborts its LLM signal", async (t) => {
   });
   await cancelled;
 });
+
+test('only the authenticated import worker route receives the 540 second budget', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const app = Fastify(); installLLMBudgets(app); t.after(() => app.close());
+  await app.register(async child => {
+    child.post('/run', async () => {
+      const signal = getLLMRequestSignal()!;
+      t.mock.timers.tick(180_000); assert.equal(signal.aborted, false);
+      t.mock.timers.tick(360_000); return { aborted: signal.aborted };
+    });
+    child.post('/reconcile', async () => { const signal = getLLMRequestSignal()!; t.mock.timers.tick(180_000); return { aborted: signal.aborted }; });
+  }, { prefix: '/internal/import-analysis' });
+  assert.deepEqual((await app.inject({ method: 'POST', url: '/internal/import-analysis/run' })).json(), { aborted: true });
+  assert.deepEqual((await app.inject({ method: 'POST', url: '/internal/import-analysis/reconcile' })).json(), { aborted: true });
+});

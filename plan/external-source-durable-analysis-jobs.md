@@ -1,12 +1,12 @@
 # 外部ソース解析：費用を抑えた一括／複数文処理と永続ジョブ化
 
 作成日: 2026-10-16（日本時間）
-状態: **計画のみ。未実装。**
+状態: **実装・ローカル検証完了（2026-10-17）。本番確認の結果は実装作業の最終報告を参照。**
 基準コード: `master` / `2cfe7d3`。実装開始時に最新の AGENTS.md とコードを再確認する。
 
 ## 1. 依頼・範囲・判断
 
-今回の依頼は「文ごとのLLM呼び出しによる費用について意見を示し、それ以外の接続中断対策を具体的に計画する」こと。インフラ作成、実装、モデル変更は今回の作業に含めない。
+当初の依頼は「文ごとのLLM呼び出しによる費用について意見を示し、それ以外の接続中断対策を具体的に計画する」こと。その後の実装依頼により、本計画の実装と必要インフラの構築を実施。モデル割当は維持する。
 
 **推奨:** 文は意味・表示・保存結果の単位として保持する。一回のLLM呼び出しには、短いソースなら全文、長いソースなら複数の完全な文をまとめて渡す。一文一呼び出しを必須にしない。全文を含む一括解析も許容するが、最大8,000文字の全ケースで一括処理を強制しない。
 
@@ -396,3 +396,65 @@ git diff --check
 - [Cloud Tasks: Issues and limitations](https://docs.cloud.google.com/tasks/docs/common-pitfalls): 重複実行を想定したhandler設計が必要。
 
 ここに記載したqueue構成・期限・retry回数・データモデルは本アプリ向けの提案であり、公式資料が定めた必須値ではない。
+
+
+## 15. 実装記録（2026-10-17）
+
+この節が現在の実装。上の提案との差異は以下のとおり。
+
+- `import_analysis_jobs/{sessionId}` の一つの現在レコードにchunks・snapshot・lease・dispatch sequence・`nextWakeAt`を保存し、このレコード自体をtransactional outboxとした。バッチごとの独立したdispatch文書は作らない。解析結果/試行/action keyはsubcollectionへ分離した。原文上限8,000文字の範囲でsnapshotも別途850,000 byteまで検証する。
+- `analysisProgress` version 1は原文の分割と表示/保存チェックポイントとして残る。`analysisJobRef` version 2、`analysisRevision`、`analysisState`を追加し、処理方式と保存保護を区別した。新規入力は `analyzeAsJob`。旧部分解析は再開時にjobへ移し、既存chunksをそのまま保持する。
+- 原文の完全な文をIntl.Segmenterで分け、複数文を600 UTF-16文字を目安にまとめる。一文が目安を超えればそのまま一バッチとし、文字位置で切らない。短文は全文一括。workerはsentenceTextsを渡し、原文全体だけでなく文単位の対応も検証する。旧clientのv1専用分割処理は互換目的で残したが、移行済み記事には使わせない。出力上限や有限試行後のtimeoutでは、明示的な再開時に未完了の複数文batchだけを文境界で小さく再計画する。保存済み範囲・一文の途中は分割しない。
+- Cloud Tasks + 同じbackendのOIDC保護route + 毎分Schedulerを実装・構築した。queue concurrency 1、LLM 540秒/dispatch 600秒/Cloud Run 660秒。署名・audience・issuer・許可SA・email_verifiedを検証し、Cookieのみ/偽queue headerでは起動できない。ローカルHTTPの無認証workerは作らず、別のemulator専用プロセスが同じ関数を実行する。
+- active jobへの同時再開は同じjobを返す。lease/fencing、有限retry、durable result、attempt単位のusage receipt、送信予定の再照合、期限切れleaseの復旧、削除tombstone、七日後のpayload cleanupを実装。既存のusage log/daily aggregateへ一度だけ反映。結果保存前の外部応答喪失による課金の再発は保証できない。
+- 編集/登録はactive中に露出させず、pause後に再開できる。再開前に既存save/登録queueをdrain。旧PUTの新規解析への上書きをrevision+checkpoint+phaseで拒否。辞書へのA/B登録処理自体は変更していない。
+- ブラウザーは短いGETを3秒からbackoffして監視し、通信断はreconnecting表示で再照合。画面離脱はpollingだけ停止。受付応答喪失も同じjobを読む。診断は原文・認証情報を含めず、client一分間隔、server一分20件/instanceまでに制限する。
+- one-time setupとnormal deploy preflightを追加。通常deployはworker環境をupdate-env-varsで維持し、旧要求向けに210秒の移行drainを設定。コード/プロンプト互換移行だけで、辞書/記事のbulk rewriteはしない。
+
+### 15.1 限定した実LLM測定
+
+既存のimportモデル割当を変更せず、合成した中国語ソースで計測。測定結果はモデル・文体・出力の変動を含むサンプルであり、費用/処理時間の保証ではない。金額には換算していない。
+
+| 入力と処理 | LLM回数 | 入力tokens | 出力tokens | 所要時間 | 原文保持 |
+| --- | ---: | ---: | ---: | ---: | --- |
+| 288文字・全文一括（測定1） | 1 | 1,731 | 7,440 | 112.9秒 | 成功 |
+| 同じ288文字・全文一括（測定2） | 1 | 1,731 | 7,232 | 106.5秒 | 成功 |
+| 同じ288文字・144文字ずつの複数文batch | 2 | 3,464 | 7,869 | 合計125.4秒 | 両方成功 |
+| 576文字・永続jobで全文一括 | 1 | 1,899 | 14,405 | 約216秒（polling観測） | 24文・404候補を保存 |
+
+一括より分割時の入力反復が大きいことと、576文字でも540秒期限内で完了することを確認したため、600文字を初期のまとめ方の目安に採用した。これはtoken推定器によるモデルごとの自動最適化ではなく、現在のモデルでの保守的な運用初期値。8,000文字や極端に長い一文での成功・価格は保証しない。モデル変更時は同じbenchmarkを再実行する。上限エラーで自動の文中分割を行わない。
+
+全文二回でprovider報告cached inputは0/1,728、二分割は各1,545だった。キャッシュの有無で入力費用は変わるが、出力は毎回生成される。生のprovider usageにはcache_write_tokensも含まれ、benchmark/result receiptに残る。既存cost画面のモデル別価格設定は今回変更していないため、請求書との完全一致を主張しない。
+
+576文字jobの受付は約49ms。処理中に同じ受付keyを再送しても同じjobとなり、完了後resumeでも再解析されなかった。ローカル専用記事は確認後削除し、辞書/Group A/Bへの登録は行っていない。smoke helperのDELETEで空JSON Content-Typeを送る不具合を修正した（アプリのDELETE経路は影響なし）。
+
+### 15.2 再実行コマンド
+
+```bash
+# queue/SA/Schedulerを明示的に初期構築または更新
+npx --prefix backend tsx backend/scripts/setup-import-jobs.ts vocab-trainer-490014 asia-northeast1
+# normal deployの前提だけ確認
+node backend/scripts/check-import-jobs.mjs vocab-trainer-490014 asia-northeast1
+# mock LLM + 専用demo projectのemulator transaction試験
+npm run test:import:emulator --prefix backend
+# 実LLMを使う小さい専用記事でHTTP smoke（完了後に専用記事を削除）
+npx --prefix backend tsx backend/scripts/smoke-import-jobs.ts http://localhost:5173
+# 明示的に本番smoke: gcloudでサインイン中の許可ユーザーで専用記事だけ作成・削除
+npx --prefix backend tsx backend/scripts/smoke-import-jobs.ts https://vocab-trainer-frontend-839843597381.asia-northeast1.run.app --allow-production
+# 実LLM benchmark: emulatorを明示し、最大呼び出し回数も指定（以下は最大5）
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIRESTORE_PROJECT=vocab-trainer-490014 FIRESTORE_DATABASE_ID=vocab-database npx --prefix backend tsx backend/scripts/benchmark-import-analysis.ts /tmp/source.txt /tmp/report.json 300 5
+```
+
+PowerShellでは環境変数を `$env:NAME=...` で設定する。実LLMコマンドは通常testに含めない。追加のクラウドリソースの費用はLLM費用とは別。Cloud Tasks/Schedulerの実接続は本番の専用記事で確認し、結果は実装作業の最終報告に記載する。
+
+
+### 15.3 ローカル検証結果
+
+- backend build、unit87件、既存import route6件、mixed route4件が成功。
+- ジョブのemulator integration7件が成功（mock LLM、専用demo project）。同時実行、pause/編集再開、stale PUT、旧API拒否、保存結果復旧、有限retry、worker認証、失効leaseとpause、削除cleanup、文境界の明示的再計画を確認。
+- frontend type-check、unit94件、build、Playwright24件が成功。通信断からの追従、受付応答喪失、画面離脱後の完了、編集drain、既存A/B追加復旧・全文読解も確認。
+- Docker/Firestore emulator + 実LLMの576文字HTTP smokeで受付・保存・重複受付・完了後resumeを確認。
+- Bash syntax、normal deploy preflight、差分/リンク検証が成功。
+- PowerShell実行はpwsh未導入のため未実施。独立したstaging projectは作らず、local/mock検証と本番の小さい専用記事による限定smokeで確認する。
+
+上のPhase A～Fチェックリストは当初の詳細設計記録として残す。実装の採否・差異・測定結果・実施した確認の正本は本節。料金の自動最適化、全モデル/全言語の実LLM benchmark、任意のサイズでの成功保証は実装済みと主張しない。

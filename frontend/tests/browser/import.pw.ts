@@ -233,45 +233,55 @@ test('a failed explanation save keeps the existing warning and can be retried', 
   await expect(page.getByText("Couldn't save", { exact: true })).toHaveCount(0);
 });
 
-async function checkpointSetup(page: Page, scenario: 'timeout' | 'lost' | 'cancel') {
-  let stored: any = null;
-  const calls: number[] = [];
-  let secondFails = true;
-  let release: (() => void) | undefined;
+async function durableSetup(page: Page, scenario: 'reconnect' | 'lost' | 'pause' | 'running' | 'complete') {
+  let stored: any = null, job: any = null, starts = 0, llmCalls = 0, broken = false;
+  const saved: any[] = [];
+  function part(index: number) {
+    stored.paragraphs.push({ sentences: [{ index, text: stored.analysisProgress.chunks[index] }] });
+    stored.items.push({ id: `row${index}`, kind: 'word', sentenceIndex: index, order: 0, term: index === 0 ? '你好' : '第二段', transliteration: index === 0 ? 'nǐ hǎo' : '', meaning: 'test', origin: 'llm', status: 'pending' });
+    stored.analysisProgress.nextChunk = index + 1;
+    job.nextBatch = index + 1; job.completedSentences = index + 1; job.revision++;
+    stored.analysisRevision = job.revision;
+  }
+  function complete() {
+    while (stored.analysisProgress.nextChunk < 2) part(stored.analysisProgress.nextChunk);
+    job.state = 'completed'; stored.analysisState = 'completed'; job.revision++; stored.analysisRevision = job.revision;
+  }
   await page.route(url => url.pathname.startsWith('/api/'), async route => {
-    const path = new URL(route.request().url()).pathname;
-    const method = route.request().method();
+    const path = new URL(route.request().url()).pathname, method = route.request().method();
     if (path.endsWith('/check-terms')) { await route.fulfill({ json: { existing: {} } }); return; }
     if (path === '/api/import/chinese/sessions') {
       if (method === 'POST') {
-        const body = route.request().postDataJSON();
-        expect(body.analyzeInParts).toBe(true);
+        const body = route.request().postDataJSON(); expect(body.analyzeAsJob).toBe(true);
         stored = { ...body, id: 'parts', createdAt: '', updatedAt: '', paragraphs: [], items: [], analysisProgress: { version: 1, chunks: ['你好。', '第二段。'], nextChunk: 0 } };
         await route.fulfill({ status: 201, json: stored }); return;
       }
       await route.fulfill({ json: { sessions: stored ? [{ ...stored, totalCount: stored.items.length, registeredCount: 0 }] : [], pool: { wordIds: [], grammarIds: [] } } }); return;
     }
-    if (path.endsWith('/analyze-next')) {
-      const index = route.request().postDataJSON().chunkIndex;
-      calls.push(index);
-      if (index === 1 && secondFails) {
-        secondFails = false;
-        if (scenario === 'timeout') { await route.fulfill({ status: 504, json: { code: 'IMPORT_TIMEOUT', message: 'Analysis timed out.' } }); return; }
-        if (scenario === 'cancel') {
-          await new Promise<void>(resolve => { release = resolve; });
-          await route.abort().catch(() => {}); return;
-        }
-      }
-      if (index === stored.analysisProgress.nextChunk) {
-        stored.paragraphs.push({ sentences: [{ index, text: stored.analysisProgress.chunks[index] }] });
-        stored.items.push({ id: `row${index}`, kind: 'word', sentenceIndex: index, order: 0, term: index === 0 ? '你好' : '第二段', transliteration: index === 0 ? 'nǐ hǎo' : '', meaning: 'test', origin: 'llm', status: 'pending' });
-        stored.analysisProgress.nextChunk++;
-      }
-      if (scenario === 'lost' && index === 1) { await route.abort('connectionreset'); return; }
-      await route.fulfill({ json: stored }); return;
+    if (path.endsWith('/analysis-job') && method === 'POST') {
+      starts++; llmCalls++;
+      job = { id: 'parts', generation: 1, state: 'running', revision: 1, nextBatch: 0, totalBatches: 2, completedSentences: 0, pauseRequested: false, updatedAt: '' };
+      stored.analysisJobRef = { version: 2, jobId: 'parts', generation: 1 }; stored.analysisState = 'running'; stored.analysisRevision = 1;
+      if (scenario === 'pause') part(0);
+      if (scenario === 'complete') complete();
+      if (scenario === 'lost') { await route.abort('connectionreset'); return; }
+      await route.fulfill({ status: 202, json: job }); return;
+    }
+    if (path.endsWith('/analysis-job') && method === 'GET') {
+      if (scenario === 'reconnect' && !broken) { broken = true; await route.abort('connectionreset'); return; }
+      await route.fulfill({ json: job }); return;
+    }
+    if (path.endsWith('/analysis-job/pause')) {
+      job.state = 'paused'; job.pauseRequested = true; job.revision++; stored.analysisState = 'paused'; stored.analysisRevision = job.revision;
+      await route.fulfill({ status: 202, json: job }); return;
+    }
+    if (path.endsWith('/analysis-job/resume')) {
+      expect(stored.items[0].meaning).toBe('edited contextual meaning');
+      llmCalls++; job.pauseRequested = false; complete();
+      await route.fulfill({ status: 202, json: job }); return;
     }
     if (path === '/api/import/chinese/sessions/parts') {
-      if (method === 'PUT') stored = { ...stored, ...route.request().postDataJSON() };
+      if (method === 'PUT') { saved.push(route.request().postDataJSON()); stored = { ...stored, ...route.request().postDataJSON() }; }
       await route.fulfill({ json: stored }); return;
     }
     await route.fulfill({ json: [] });
@@ -280,61 +290,48 @@ async function checkpointSetup(page: Page, scenario: 'timeout' | 'lost' | 'cance
   await page.getByRole('button', { name: /Import a new source/ }).click();
   await page.locator('textarea').fill('你好。第二段。');
   await page.getByRole('button', { name: 'Analyze', exact: true }).click();
-  return { calls, stored: () => stored, release: () => release?.() };
+  await expect.poll(() => starts).toBe(1);
+  return { stored: () => stored, calls: () => llmCalls, starts: () => starts, complete, saved };
 }
 
-test('initial analysis saves each part and resumes only the failed part after a reload', async ({ page }) => {
-  const state = await checkpointSetup(page, 'timeout');
-  await expect(page.getByRole('alert')).toContainText('timed out');
-  await expect(page.getByText('Not yet analyzed', { exact: true })).toBeVisible();
-  expect(state.stored().analysisProgress.nextChunk).toBe(1);
-  const first = structuredClone(state.stored().items[0]);
-  await page.reload();
+test('transport interruption reconnects to the same durable job and follows later completion', async ({ page }) => {
+  const state = await durableSetup(page, 'reconnect');
+  await expect(page.getByText(/Reconnecting to check analysis/)).toBeVisible();
+  state.complete();
+  await expect(page.getByRole('button', { name: '第二段', exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('alert')).toHaveCount(0); expect(state.calls()).toBe(1); expect(state.starts()).toBe(1);
+});
+
+test('lost acceptance response recovers the accepted job without issuing another paid call', async ({ page }) => {
+  const state = await durableSetup(page, 'lost');
+  await expect(page.getByRole('button', { name: 'Pause after the current part' })).toBeVisible();
+  state.complete();
+  await expect(page.getByRole('button', { name: '第二段', exact: true })).toBeVisible({ timeout: 10000 });
+  expect(state.starts()).toBe(1); expect(state.calls()).toBe(1);
+});
+
+test('returning to the list leaves the job running; reopening shows independently completed results', async ({ page }) => {
+  const state = await durableSetup(page, 'running');
+  await expect(page.getByRole('button', { name: 'Pause after the current part' })).toBeVisible();
+  await page.getByRole('button', { name: 'Imports', exact: true }).click();
+  state.complete();
   await page.getByRole('button', { name: /你好。第二段。/ }).click();
-  await page.getByRole('button', { name: 'Continue analysis' }).click();
-  await expect(page.getByRole('button', { name: '第二段', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Continue analysis' })).toHaveCount(0);
-  expect(state.calls).toEqual([0, 1, 1]);
-  expect(state.stored().items[0]).toEqual(first);
-  expect(state.stored().analysisProgress.nextChunk).toBe(2);
+  await expect(page.getByRole('button', { name: '第二段', exact: true })).toBeVisible(); expect(state.calls()).toBe(1);
 });
 
-test('a lost final response recovers the saved checkpoint without a duplicate analysis or misleading error', async ({ page }) => {
-  const state = await checkpointSetup(page, 'lost');
-  await expect(page.getByRole('button', { name: '第二段', exact: true })).toBeVisible();
-  await expect(page.getByRole('alert')).toHaveCount(0);
-  expect(state.calls).toEqual([0, 1]);
-  expect(state.stored().items).toHaveLength(2);
-});
-
-test('cancel preserves completed parts and later continues from the checkpoint', async ({ page }) => {
-  const state = await checkpointSetup(page, 'cancel');
-  await expect.poll(() => state.calls.length).toBe(2);
-  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-  state.release();
-  await page.getByRole('button', { name: /你好。第二段。/ }).click();
-  await expect(page.getByRole('button', { name: '你好', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Continue analysis' }).click();
-  await expect(page.getByRole('button', { name: '第二段', exact: true })).toBeVisible();
-  expect(state.calls).toEqual([0, 1, 1]);
-});
-
-test('continuing analysis drains pending edits before appending the next saved part', async ({ page }) => {
-  const state = await checkpointSetup(page, 'timeout');
-  await expect(page.getByRole('alert')).toContainText('timed out');
+test('pause exposes saved content; resume drains edits and only processes the unfinished work', async ({ page }) => {
+  const state = await durableSetup(page, 'pause');
+  await page.getByRole('button', { name: 'Pause after the current part' }).click();
+  await expect(page.getByRole('button', { name: 'Continue analysis' })).toBeVisible({ timeout: 10000 });
   await page.getByRole('button', { name: 'Sentence mode', exact: true }).click();
   await page.getByPlaceholder('Meaning (fill in after a split or merge)').fill('edited contextual meaning');
   await page.getByRole('button', { name: 'Continue analysis', exact: true }).click();
   await expect(page.getByRole('button', { name: '第二段', exact: true })).toBeVisible();
-  expect(state.stored().items[0].meaning).toBe('edited contextual meaning');
-  expect(state.stored().analysisCheckpoint).toBe(1);
-  expect(state.calls).toEqual([0, 1, 1]);
+  expect(state.stored().items[0].meaning).toBe('edited contextual meaning'); expect(state.saved[0].analysisRevision).toBeDefined(); expect(state.calls()).toBe(2);
 });
 
-test('a completed compact import explains a selected sentence once and reuses the saved explanation', async ({ page }) => {
-  const state = await checkpointSetup(page, 'timeout');
-  await expect(page.getByRole('alert')).toContainText('timed out');
-  await page.getByRole('button', { name: 'Continue analysis' }).click();
+test('a completed durable import explains a selected sentence once and saves it for reuse', async ({ page }) => {
+  const state = await durableSetup(page, 'complete');
   await expect(page.getByRole('button', { name: '第二段', exact: true })).toBeVisible();
   let generations = 0;
   await page.route('**/sentences/0/explanation', async route => {
@@ -346,6 +343,5 @@ test('a completed compact import explains a selected sentence once and reuses th
   await expect.poll(() => state.stored().paragraphs[0].sentences[0].readingAnalysis?.version).toBe(1);
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Sentence explanation 1', exact: true }).click();
-  await expect(page.getByRole('dialog')).toContainText('挨拶の文です。');
-  expect(generations).toBe(1);
+  await expect(page.getByRole('dialog')).toContainText('挨拶の文です。'); expect(generations).toBe(1);
 });

@@ -9,7 +9,7 @@ import { logTokenUsage, ensureModelInCostConfig, getLLMModelConfig } from "./fir
 import { ROUTE_TO_FEATURE, LLM_FEATURES } from "./llm-features.js";
 import {
   getLLMRequestSignal, withLLMBudget, awaitWithLLMSignal, LLM_BUDGET_MS,
-  IMPORT_LLM_BUDGET_MS, LLM_ATTEMPT_TIMEOUT_MS,
+  IMPORT_LLM_BUDGET_MS, LLM_ATTEMPT_TIMEOUT_MS, IMPORT_WORKER_BUDGET_MS,
 } from "./llm-budget.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -271,10 +271,12 @@ export interface LLMCallOptions {
   tier?: LLMTier;
   schema?: Record<string, unknown>;
   onChunk?: (chunk: string) => void;
+  /** Server-owned worker settings; never taken from a public request body. */
+  worker?: { model: string; onUsage: (usage: CompletionUsage | undefined, model: string) => Promise<void> };
 }
 
 export async function callLLM(opts: LLMCallOptions): Promise<string> {
-  const timeoutMs = opts.route === "import/analyze-stream"
+  const timeoutMs = opts.worker ? IMPORT_WORKER_BUDGET_MS : opts.route === "import/analyze-stream"
     ? IMPORT_LLM_BUDGET_MS : LLM_BUDGET_MS;
   return withLLMBudget(timeoutMs, getLLMRequestSignal(), async (signal) => {
     try {
@@ -290,7 +292,7 @@ export async function callLLM(opts: LLMCallOptions): Promise<string> {
 async function callLLMWithSignal(opts: LLMCallOptions, signal: AbortSignal): Promise<string> {
   const { system, user, route, tier = "mini", schema, onChunk } = opts;
   const cl = await awaitWithLLMSignal(createOpenAIClient(), signal);
-  const model = await awaitWithLLMSignal(resolveModel(tier, route), signal);
+  const model = opts.worker?.model ?? await awaitWithLLMSignal(resolveModel(tier, route), signal);
   signal.throwIfAborted();
   const messages = [
     { role: "system" as const, content: system },
@@ -315,6 +317,7 @@ async function callLLMWithSignal(opts: LLMCallOptions, signal: AbortSignal): Pro
   } catch (err) {
     signal.throwIfAborted();
     if (
+      opts.worker ||
       !modelFallback ||
       modelFallback === model ||
       streamedContent ||
@@ -331,10 +334,12 @@ async function callLLMWithSignal(opts: LLMCallOptions, signal: AbortSignal): Pro
   async function runCompletion(activeModel: string, chunkHandler?: (chunk: string) => void) {
     if (!chunkHandler) {
       const response = await cl.chat.completions.create(
-        { model: activeModel, messages, response_format }, { signal },
+        { model: activeModel, messages, response_format }, { signal, ...(opts.worker ? { timeout: IMPORT_WORKER_BUDGET_MS, maxRetries: 0 } : {}) },
       );
       signal.throwIfAborted();
-      recordUsage(response.usage, activeModel, "callLLM", route);
+      if (opts.worker) await opts.worker.onUsage(response.usage, activeModel);
+      else recordUsage(response.usage, activeModel, "callLLM", route);
+      if (opts.worker && response.choices[0]?.finish_reason !== "stop") throw new Error("IMPORT_OUTPUT_LIMIT");
       return response.choices[0]?.message?.content ?? "";
     }
 

@@ -1,3 +1,4 @@
+import { planImportBatches, jobActive } from "../import-jobs.js";
 import { splitImportSource, appendImportPart, subdivideImportPart, ImportCheckpointError } from "../import-parts.js";
 import { sourceMatchesSentences } from "../import-reading-analysis.js";
 import { compactImportSchema, COMPACT_IMPORT_INSTRUCTIONS } from "../import-analysis-config.js";
@@ -184,13 +185,14 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
       const expected = request.body.chunkIndex;
       const session = await getImportSession(sessionId);
       if (!session || session.language !== language) return reply.notFound("Import session not found");
+      if (session.analysisJobRef) return reply.code(409).send({ code: "IMPORT_USE_JOB", message: "Reload to monitor the existing analysis job." });
       const progress = session.analysisProgress;
       if (!progress) return reply.badRequest("This article has no pending analysis");
       if (progress.nextChunk > expected || progress.nextChunk === progress.chunks.length) return session;
       if (progress.nextChunk !== expected) return reply.conflict("Reload the article before continuing analysis.");
       const source = progress.chunks[expected];
       const checkpoint = (analysis: ImportAnalysisResult, existing: Record<string, string> = {}, existingGrammar: Record<string, string> = {}) => mutateImportSession(sessionId, current => {
-        if (!current || current.language !== language || (current.text !== session.text || (current.analysisProgress?.nextChunk === expected && current.analysisProgress.chunks[expected] !== source))) throw new ImportCheckpointError(409, "The article changed. Reload before continuing.");
+        if (!current || current.analysisJobRef || current.language !== language || (current.text !== session.text || (current.analysisProgress?.nextChunk === expected && current.analysisProgress.chunks[expected] !== source))) throw new ImportCheckpointError(409, "The article changed. Reload before continuing.");
         return appendImportPart(current, expected, analysis, existing, existingGrammar);
       });
       try {
@@ -240,6 +242,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
       const { language, sessionId } = request.params;
       const session = await getImportSession(sessionId);
       if (!session || session.language !== language) return reply.notFound("Import session not found");
+      if (jobActive(session.analysisState)) return reply.conflict("Pause analysis before generating an explanation.");
       const index = Number(request.params.sentenceIndex);
       if (!Number.isInteger(index) || index < 0) return reply.badRequest("Invalid sentence index");
       const sentences = session.paragraphs.flatMap(p => p.sentences);
@@ -321,6 +324,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
             totalCount: s.items?.length ?? 0,
             registeredCount: (s.items ?? []).filter((i) => i.status === "registered").length,
             status: s.status,
+            ...(s.analysisState ? { analysisState: s.analysisState } : {}),
             createdAt: s.createdAt,
             updatedAt: s.updatedAt,
           })
@@ -332,7 +336,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{
     Params: { language: string };
-    Body: Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean };
+    Body: Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean; analyzeAsJob?: boolean };
   }>(
     "/:language/sessions",
     {
@@ -342,6 +346,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
           required: ["text", "paragraphs", "items"],
           properties: {
             analyzeInParts: { type: "boolean" },
+            analyzeAsJob: { type: "boolean" },
             title: { type: "string" },
             text: { type: "string" },
             paragraphs: { type: "array" },
@@ -362,15 +367,16 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const body = request.body;
       if (Buffer.byteLength(JSON.stringify(body), "utf8") > 900_000) return reply.badRequest("Article is too large. Split it into smaller sections.");
-      if (body.analyzeInParts && (!body.text.trim() || body.text.length > MAX_TEXT_LENGTH)) return reply.badRequest("Source text must contain 1–8000 characters");
+      if ((body.analyzeInParts || body.analyzeAsJob) && (!body.text.trim() || body.text.length > MAX_TEXT_LENGTH)) return reply.badRequest("Source text must contain 1–8000 characters");
       const now = new Date().toISOString();
       const session = await saveImportSession({
         language,
+        ...(body.analyzeAsJob ? { analysisRevision: 0 } : {}),
         title: body.title?.trim() || body.text.slice(0, 40),
         text: body.text,
-        paragraphs: body.analyzeInParts ? [] : body.paragraphs ?? [],
-        items: body.analyzeInParts ? [] : body.items ?? [],
-        ...(body.analyzeInParts ? { analysisProgress: { version: 1 as const, chunks: splitImportSource(body.text), nextChunk: 0 } } : {}),
+        paragraphs: (body.analyzeInParts || body.analyzeAsJob) ? [] : body.paragraphs ?? [],
+        items: (body.analyzeInParts || body.analyzeAsJob) ? [] : body.items ?? [],
+        ...(body.analyzeInParts || body.analyzeAsJob ? { analysisProgress: { version: 1 as const, chunks: body.analyzeAsJob ? planImportBatches(body.text, language) : splitImportSource(body.text), nextChunk: 0 } } : {}),
         wordGroupId: body.wordGroupId,
         grammarGroupId: body.grammarGroupId,
         groupBNames: body.groupBNames ?? [],
@@ -396,7 +402,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
   // `updatedAt` is stamped server-side.
   fastify.put<{
     Params: { language: string; sessionId: string };
-    Body: Partial<Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt">> & { analysisCheckpoint?: number };
+    Body: Partial<Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt">> & { analysisCheckpoint?: number; analysisRevision?: number };
   }>(
     "/:language/sessions/:sessionId",
     {
@@ -405,6 +411,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
           type: "object",
           properties: {
             analysisCheckpoint: { type: "integer", minimum: 0 },
+            analysisRevision: { type: "integer", minimum: 0 },
             title: { type: "string" },
             text: { type: "string" },
             paragraphs: { type: "array" },
@@ -426,8 +433,9 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
         try {
           return await mutateImportSession(request.params.sessionId, current => {
             if (!current || current.language !== request.params.language) throw new ImportCheckpointError(404, "Import session not found");
+            if (current.analysisJobRef && (jobActive(current.analysisState) || request.body.analysisRevision !== current.analysisRevision)) throw new ImportCheckpointError(409, "Pause analysis and reload before saving edits.");
             if ((request.body.text !== undefined && request.body.text !== current.text) || request.body.analysisCheckpoint !== current.analysisProgress?.nextChunk) throw new ImportCheckpointError(409, "Analysis progressed in another window. Reload before saving edits.");
-            const { analysisProgress: _progress, analysisCheckpoint: _checkpoint, ...updates } = request.body;
+            const { analysisProgress: _progress, analysisCheckpoint: _checkpoint, analysisJobRef: _job, analysisRevision: _revision, analysisState: _state, ...updates } = request.body;
             const next = { ...current, ...updates, analysisProgress: current.analysisProgress, updatedAt: new Date().toISOString() };
             if (Buffer.byteLength(JSON.stringify(next), "utf8") > 900_000) throw new ImportCheckpointError(413, "Article is too large. Split it into smaller sections.");
             return next;
@@ -437,7 +445,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
           throw err;
         }
       }
-      const { analysisProgress: _progress, analysisCheckpoint: _checkpoint, ...updates } = request.body;
+      const { analysisProgress: _progress, analysisCheckpoint: _checkpoint, analysisJobRef: _job, analysisRevision: _revision, analysisState: _state, ...updates } = request.body;
       const updated = await updateImportSession(request.params.sessionId, updates);
       if (!updated) return reply.notFound("Import session not found");
       return updated;

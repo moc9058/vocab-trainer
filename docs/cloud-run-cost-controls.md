@@ -8,7 +8,7 @@ sequential translation stages, parallel target languages, configuration lookup,
 connection establishment and SDK retry delays. Article analysis at
 `/api/import/:language/analyze-stream` gets 600 seconds. The model catalog probes
 also use the request signal. Maintenance scripts calling `callLLM` outside HTTP
-receive the same limit per call.
+receive the same limit per call, except the durable import worker described below.
 
 The OpenAI client retries at most twice and limits each connection/non-streaming
 attempt to 120 seconds. Streaming uses a separate 30-second idle timer after
@@ -17,6 +17,17 @@ of returning incomplete output for persistence. Client disconnection aborts mode
 requests and stops SSE keep-alives. Shared configuration reads may finish in the
 background, but a cancelled caller stops waiting and cannot start a new model call.
 Ordinary database writes, including quiz answer commits, are not cancelled.
+
+Durable import jobs use `/internal/import-analysis/run` with a 540-second shared
+budget and a 540-second SDK attempt timeout, with SDK retries disabled. Cloud Tasks
+has a 600-second dispatch deadline and concurrency 1. Firestore limits automatic
+LLM attempts to three per batch. Public job acceptance/status requests do not wait
+for LLM completion, and browser disconnects do not abort the independent task.
+A minute-based Scheduler recovers durable dispatch intents and expired leases.
+Worker usage receipts atomically update the existing usage log/daily totals once
+per attempt, including cached and reasoning tokens; absent provider usage stays
+unknown. See the [job implementation record](../plan/external-source-durable-analysis-jobs.md).
+Queue, Scheduler and Firestore costs are separate from LLM usage.
 
 Both deployment scripts pin these settings for both services:
 
@@ -37,8 +48,8 @@ instances is a scaling control, not a guaranteed monthly spending cap.
 
 ## Streaming and logging
 
-The updated frontend requests `{ text, streamFormat: "chunks" }` for article
-analysis. The server emits `analysis-chunk` with `{ chunk }`, and the frontend
+Legacy cached frontends request `{ text, streamFormat: "chunks" }` for article
+analysis. The current frontend uses durable jobs. The server emits `analysis-chunk` with `{ chunk }`, and the frontend
 accumulates it locally before invoking its existing `onDelta(fullText)` callback.
 For cached clients omitting `streamFormat`, the server retains `analysis-delta`
 with `{ text: fullText }`. The updated frontend also accepts that older format,

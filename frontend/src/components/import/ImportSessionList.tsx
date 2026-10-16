@@ -97,6 +97,7 @@ export default function ImportSessionList({
                   <p className="truncate text-sm text-gray-100">{s.title}</p>
                   <p className="mt-0.5 text-[11px] text-gray-500">
                     {new Date(s.updatedAt).toLocaleString()}
+                    {s.analysisState && <span className="ml-2 text-indigo-300">{t(({ queued: "importJobQueued", running: "importJobRunning", paused: "importJobPaused", failed: "importJobFailed", completed: "importJobCompleted", cancelled: "importJobCancelled" } as const)[s.analysisState])}</span>}
                   </p>
                 </button>
                 <div className="mt-2 flex items-center gap-3">

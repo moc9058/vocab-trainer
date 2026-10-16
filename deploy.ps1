@@ -184,8 +184,12 @@ if ($Uploads.Count -gt 0) {
     Write-Host "==> No config upload requested (use -Llm, -Auth and/or -Prompts)"
 }
 
+node backend/scripts/check-import-jobs.mjs $ProjectId $Region
+Invoke-Checked "import job deployment prerequisites"
+
 # Deploy backend to Cloud Run
 Write-Host "==> Deploying backend to Cloud Run..."
+$ImportMigrateAfter = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() + 210000
 gcloud run deploy vocab-trainer-backend `
   --project="$ProjectId" `
   --region="$Region" `
@@ -203,7 +207,7 @@ gcloud run deploy vocab-trainer-backend `
   --cpu-throttling `
   --cpu-boost `
   --timeout=660 `
-  --set-env-vars="FIRESTORE_DATABASE_ID=vocab-database"
+  --update-env-vars="FIRESTORE_DATABASE_ID=vocab-database,IMPORT_JOB_MIGRATE_AFTER=$ImportMigrateAfter"
 Invoke-Checked "gcloud run deploy vocab-trainer-backend"
 
 # Get backend URL
@@ -242,7 +246,7 @@ gcloud run deploy vocab-trainer-frontend `
   --cpu-throttling `
   --cpu-boost `
   --timeout=660 `
-  --set-env-vars="BACKEND_URL=$BackendUrl"
+  --update-env-vars="BACKEND_URL=$BackendUrl"
 Invoke-Checked "gcloud run deploy vocab-trainer-frontend"
 
 $FrontendUrl = gcloud run services describe vocab-trainer-frontend `

@@ -15,7 +15,8 @@
     "start": "node dist/index.js",
     "migrate": "tsx scripts/migrate-to-firestore.ts",
     "export": "tsx scripts/export-from-firestore.ts",
-    "test:import": "node --experimental-test-module-mocks --import tsx --test scripts/tests/import-*.test.ts"
+    "test:import": "node --experimental-test-module-mocks --import tsx --test scripts/tests/import-*.test.ts",
+    "test:import:emulator": "node scripts/run-import-job-emulator-tests.mjs"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",
@@ -27,8 +28,10 @@
     "@fastify/cors": "^11.2.0",
     "@fastify/sensible": "^6.0.4",
     "@google-cloud/firestore": "^8.3.0",
+    "@google-cloud/tasks": "^7.3.0",
     "dotenv": "^17.3.1",
     "fastify": "^5.8.2",
+    "google-auth-library": "^11.3.1",
     "openai": "^6.29.0"
   }
 }

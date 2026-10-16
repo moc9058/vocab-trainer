@@ -33,7 +33,7 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error";
 /** Free-text edits settle at this cadence; everything consequential flushes at once. */
 const AUTOSAVE_DEBOUNCE_MS = 1200;
 
-type NewSessionInput = Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean };
+type NewSessionInput = Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean; analyzeAsJob?: boolean };
 
 interface Options {
   /** Backend full-name language, e.g. "chinese". */
@@ -137,6 +137,7 @@ export function useImportSession({
     try {
       const saved = await updateImportSession(language, current.id, {
         title: current.title,
+        ...(current.analysisJobRef ? { analysisRevision: current.analysisRevision } : {}),
         ...(current.analysisProgress ? { analysisCheckpoint: current.analysisProgress.nextChunk } : {}),
         items: current.items,
         paragraphs: current.paragraphs,
@@ -260,6 +261,9 @@ export function useImportSession({
   const load = useCallback(
     async (sessionId: string): Promise<ImportSession> => {
       const loaded = await getImportSession(language, sessionId);
+      if (loaded.analysisState === "queued" || loaded.analysisState === "running") {
+        setMembershipOverlay(new Map()); setSession(loaded); setSaveStatus("saved"); return loaded;
+      }
       const terms = libraryClaimTerms(loaded.items);
       const grammarIds = claimedGrammarIds(loaded.items);
       const [wordProbe, grammarProbe] = await Promise.allSettled([

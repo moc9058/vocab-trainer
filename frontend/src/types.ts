@@ -770,7 +770,18 @@ export type ImportItem = ImportWordItem | ImportGrammarItem;
  * are NOT stored separately, so there is no drift between what the LLM extracted and
  * what the user edited. `paragraphs` keeps the article structure for the review UI.
  */
+export type ImportAnalysisState = "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
+export interface ImportAnalysisJobSummary {
+  id: string; generation: number; state: ImportAnalysisState; revision: number;
+  nextBatch: number; totalBatches: number; completedSentences: number;
+  pauseRequested: boolean; updatedAt: string;
+  error?: { code: string; retryable: boolean };
+}
+
 export interface ImportSession {
+  analysisJobRef?: { version: 2; jobId: string; generation: number };
+  analysisRevision?: number;
+  analysisState?: ImportAnalysisState;
   /** Server-owned checkpoints for bounded initial analysis; absent on legacy articles. */
   analysisProgress?: { version: 1; chunks: string[]; nextChunk: number };
   id: string;
@@ -803,6 +814,7 @@ export interface ImportQuizPool {
 }
 
 export interface ImportSessionSummary {
+  analysisState?: ImportAnalysisState;
   id: string;
   language: string;
   title: string;

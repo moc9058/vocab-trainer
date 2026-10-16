@@ -1483,19 +1483,27 @@ words inside construction slots remain candidates. Existing articles remain read
 **Explain this sentence / Update explanation** generates only the selected sentence's
 details and saves them without replacing candidate rows or group assignments.
 
-Initial analysis always uses compact contextual readings/glosses. Sources are split
-into parts of at most 300 UTF-16 characters, preferring sentence/clause/paragraph
-boundaries. Unusually long sentences are divided into sections. Each part is
-analyzed in a separate bounded request and committed to Firestore before the next
-starts. Detailed syntax is generated when a sentence is first selected, then saved for reuse.
-Older articles retain their explicit **Explain this sentence** button.
+Initial analysis uses compact contextual readings/glosses in a durable server job.
+Short sources are sent together; longer sources are grouped at complete sentence
+boundaries (currently a 600 UTF-16-character target, not a hard cut). A long sentence
+stays intact. Detailed syntax is generated when a sentence is first selected, then
+saved for reuse. Older articles retain their explicit **Explain this sentence** button.
 
-Completed parts survive timeouts, lost responses, cancellation and reloads. Open the
-saved article and choose **Continue analysis** to process only the remaining parts.
-An over-time part above 120 characters is subdivided further for the next retry.
-The reader shows the remaining unprocessed source too. Existing candidate edits,
-registrations and Group A/B destinations are retained. A lost final response is
-recovered by reading the saved checkpoint rather than reporting a false failure.
+Acceptance returns HTTP 202 without waiting for the LLM. The browser checks a small
+status response and reconnects after network failures. Returning to the list or
+closing the page leaves the job running. **Pause after the current part** saves the
+current result before pausing; **Continue analysis** resumes unfinished work.
+Active jobs cannot be edited or registered until paused. Existing edits, registrations
+and Group A/B destinations are retained. Concurrent resume requests attach to the same
+job rather than issuing another LLM call. Old partial sources migrate on resume without
+rewriting their saved fragments. Their original pending chunks remain compatible.
+
+Cloud Tasks invokes an OIDC-authenticated worker, with a 540-second LLM deadline,
+a 600-second task deadline and at most three automatic LLM attempts per part.
+Firestore leases prevent concurrent generation, saved results avoid generation after
+an apply-only failure, and a minute-based Cloud Scheduler reconciles stranded work.
+There is no exactly-once billing guarantee if a process dies before saving an external
+model response. Completed/cancelled job payloads are cleaned after seven days.
 
 Source input is limited to 8,000 characters, and the saved session has a conservative
 900,000-byte budget below Firestore's document limit. Dense articles can still
@@ -1513,11 +1521,32 @@ membership; its dictionary definitions are not rewritten.
 Import prompts/schema and vocabulary smart-add prompts/schema ship with
 `./deploy.sh --prompts` when those files change. The resumable analysis flow uses
 the existing prompt configuration with a compact runtime schema and needs only
-a code deployment. No session or dictionary bulk migration is required.
+a code deployment after one-time queue setup. No session or dictionary bulk migration is required.
+
+One-time durable import infrastructure setup (explicitly creates/updates the queue,
+service account, scheduler and backend environment):
+
+```bash
+npx --prefix backend tsx backend/scripts/setup-import-jobs.ts vocab-trainer-490014 asia-northeast1
+```
+
+Normal deploys validate these prerequisites and preserve their environment settings.
+Local Compose includes a separate emulator-only `import-worker`; `./local.sh dev`
+and `./local.ps1 dev` start that worker too. Internal HTTP worker routes reject local
+network calls; the local process invokes the same job functions directly.
+See [the job plan and implementation record](plan/external-source-durable-analysis-jobs.md).
+
+Explicit emulator regression suite (mock LLM; requires a running emulator):
+
+```bash
+npm run test:import:emulator --prefix backend
+```
+
+The suite uses an isolated `demo-import-jobs` project and never rewrites local seed data.
 
 ### Import extraction and retry guarantees
 
-Initial extraction uses one compact LLM call per saved part. Sentence explanations are separate, explicit requests. Legacy deterministic cleanup consolidates equivalent
+Initial extraction uses one compact LLM call per planned batch, with bounded retries. Sentence explanations are separate, explicit requests. Legacy deterministic cleanup consolidates equivalent
 word rows within each sentence and removes short fragments occurring only inside
 longer extracted words (e.g. 翼 inside 左翼). Independent occurrences, distinct readings
 or senses, and uncertain inflections remain. The client applies the same cleanup on

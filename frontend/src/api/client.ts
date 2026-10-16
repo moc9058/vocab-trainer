@@ -28,10 +28,13 @@ function notifyIfUnauthorized(res: Response): void {
  */
 export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  readonly code?: string;
+  readonly retryable?: boolean;
+  constructor(status: number, message: string, details?: { code?: string; retryable?: boolean }) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = details?.code; this.retryable = details?.retryable;
   }
 }
 
@@ -44,9 +47,10 @@ export function isRetryableError(err: unknown): boolean {
 async function errorFromResponse(res: Response): Promise<Error> {
   notifyIfUnauthorized(res);
   const body = await res.text().catch(() => "");
+  let details; try { details = JSON.parse(body); } catch { /* Non-JSON gateway error. */ }
   return new ApiError(
     res.status,
-    `API error: ${res.status}${body ? ` – ${body}` : ` ${res.statusText}`}`
+    `API error: ${res.status}${body ? ` – ${body}` : ` ${res.statusText}`}`, details
   );
 }
 

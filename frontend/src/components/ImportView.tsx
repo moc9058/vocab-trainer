@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n/context";
 import {
-  analyzeNextImportPart,
-  getImportSession,
+  startImportAnalysisJob,
+  resumeImportAnalysisJob,
   deleteImportSession,
   listImportSessions,
 } from "../api/import";
@@ -12,6 +12,7 @@ import ImportReview from "./import/ImportReview";
 import ImportSessionList from "./import/ImportSessionList";
 import { useImportGroups } from "../hooks/useImportGroups";
 import { useImportSession } from "../hooks/useImportSession";
+import { useImportAnalysisJob } from "../hooks/useImportAnalysisJob";
 import { ApiError } from "../api/client";
 import { deriveArticleQuizPools, poolSize } from "../utils/importQuizPool";
 import type { ImportQuizPool, ImportSession, ImportSessionSummary } from "../types";
@@ -42,7 +43,6 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
   const [phase, setPhase] = useState<Phase>("sessions");
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [analysisCount, setAnalysisCount] = useState({ done: 0, total: 0 });
   const [descriptionLanguage, setDescriptionLanguage] = useState("ja");
 
   const [sessions, setSessions] = useState<ImportSessionSummary[]>([]);
@@ -86,6 +86,13 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
     onMembershipChanged: groups.reload,
   });
 
+  const monitor = useImportAnalysisJob(language, acceptAnalysisSession, job => {
+    setError(job.state === "failed" ? t(job.error?.code === "IMPORT_STORAGE_LIMIT" ? "importAnalysisTooLarge"
+      : job.error?.code === "IMPORT_CONFIG_ERROR" ? "importJobConfigError"
+      : (job.error?.code === "IMPORT_OUTPUT_LIMIT" && !job.error.retryable) || job.error?.code === "IMPORT_INVALID_OUTPUT" ? "importJobOutputError" : "importAnalysisRetryHint") : null);
+    setPhase("review");
+  });
+
   const refreshSessions = useCallback(() => {
     setListLoading(true);
     listImportSessions(language)
@@ -122,60 +129,36 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
 
   async function handleAnalyze(existing?: ImportSession) {
     if (abortRef.current || (!existing && !text.trim())) return;
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setError(null); setPhase("analyzing");
-    setAnalysisCount({ done: existing?.analysisProgress?.nextChunk ?? 0, total: existing?.analysisProgress?.chunks.length ?? 0 });
+    const controller = new AbortController(); abortRef.current = controller;
+    monitor.stop(); setError(null); setPhase("analyzing");
     let current = existing;
+    const key = crypto.randomUUID();
     try {
-      if (existing) current = await prepareAnalysis() ?? existing;
-      else current = await create({
-        title: text.trim().slice(0, 40), text: text.trim(), paragraphs: [], items: [], analyzeInParts: true,
+      current = existing ? await prepareAnalysis() ?? existing : await create({
+        title: text.trim().slice(0, 40), text: text.trim(), paragraphs: [], items: [], analyzeAsJob: true,
         ...draftDestination, focusedSentenceIndex: 0, status: "in-progress",
       }, controller.signal);
       if (controller.signal.aborted) return;
-      let progress = current.analysisProgress;
-      if (!progress) throw new Error("Reload the page to start resumable analysis.");
-      setAnalysisCount({ done: progress.nextChunk, total: progress.chunks.length });
-      while (progress.nextChunk < progress.chunks.length) {
-        current = await analyzeNextImportPart(language, current.id, progress.nextChunk, controller.signal);
-        if (controller.signal.aborted) return;
-        acceptAnalysisSession(current);
-        progress = current.analysisProgress!;
-        setAnalysisCount({ done: progress.nextChunk, total: progress.chunks.length });
-      }
-      setPhase("review");
+      if (current.analysisJobRef) await resumeImportAnalysisJob(language, current.id, key, controller.signal);
+      else await startImportAnalysisJob(language, current.id, key, current.analysisRevision ?? 0, controller.signal);
+      if (!controller.signal.aborted) monitor.watch(current.id, { key, revision: current.analysisRevision ?? 0 });
     } catch (err) {
       if (controller.signal.aborted) return;
-      const message = err instanceof ApiError
-        ? err.status === 504 ? t("importAnalysisTimeout") : err.status === 413 ? t("importAnalysisTooLarge") : err.status >= 500 ? t("importAnalysisRetryHint") : err.message
-        : err instanceof TypeError ? t("importAnalysisInterrupted") : err instanceof Error ? err.message : String(err);
-      // A response can be lost AFTER a checkpoint commits. Read the authoritative count before retrying.
-      if (current) {
-        try {
-          const latest = await getImportSession(language, current.id, controller.signal);
-          if (controller.signal.aborted) return;
-          acceptAnalysisSession(latest);
-          if (latest.analysisProgress && latest.analysisProgress.nextChunk === latest.analysisProgress.chunks.length) {
-            setError(null); setPhase("review"); return;
-          }
-        } catch { /* Keep the last saved checkpoint available; do not discard the article. */ }
-      }
-      if (controller.signal.aborted) return;
-      setError(message); setPhase(current ? "review" : "input");
-    } finally {
-      if (abortRef.current === controller) abortRef.current = null;
-    }
+      if (current && !(err instanceof ApiError)) {
+        // Lost acceptance response: query the SAME durable job; never create a replacement.
+        monitor.watch(current.id, { key, revision: current.analysisRevision ?? 0 });
+      } else { setError(err instanceof Error ? err.message : String(err)); setPhase(current ? "review" : "input"); }
+    } finally { if (abortRef.current === controller) abortRef.current = null; }
   }
 
   async function handleResume(sessionId: string) {
-    setError(null);
+    monitor.stop(); setError(null);
     try {
-      await load(sessionId);
-      setPhase("review");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    }
+      const loaded = await load(sessionId);
+      if (loaded.analysisJobRef) {
+        setPhase("analyzing"); monitor.watch(sessionId);
+      } else setPhase("review");
+    } catch (err) { setError(err instanceof Error ? err.message : String(err)); }
   }
 
   async function handleDelete(sessionId: string) {
@@ -188,7 +171,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
   }
 
   function exitToList() {
-    close();
+    monitor.stop(); close();
     setText("");
     setPhase("sessions");
     refreshSessions();
@@ -211,7 +194,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
         onRegister={registerItem}
         onExit={exitToList}
         analysisError={error}
-        onContinueAnalysis={error === t("importAnalysisTooLarge") ? undefined : () => void handleAnalyze(session)}
+        onContinueAnalysis={(error === t("importAnalysisTooLarge") || monitor.job?.error?.retryable === false) ? undefined : () => void handleAnalyze(session)}
       />
     );
   }
@@ -219,22 +202,26 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
   // ===== ANALYZING =====
   if (phase === "analyzing") {
     const progress = session?.analysisProgress;
+    const job = monitor.job;
     const completed = session?.paragraphs.flatMap(p => p.sentences) ?? [];
     return (
       <div className="h-full overflow-y-auto overflow-x-hidden">
         <div className="mx-auto max-w-3xl px-3 py-4 sm:p-6">
           <div className="mb-5 flex items-center gap-3">
             <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
-            <span className="text-sm text-gray-300">{t("importAnalyzing")} {analysisCount.done} / {analysisCount.total || "…"}</span>
+            <span className="text-sm text-gray-300">{monitor.reconnecting ? t("importJobReconnecting") : t("importAnalyzing")} {job ? `${job.nextBatch} / ${job.totalBatches}` : "…"}</span>
             <button
-              onClick={() => { abortRef.current?.abort(); abortRef.current = null; close(); setPhase("sessions"); refreshSessions(); }}
+              onClick={() => { abortRef.current?.abort(); abortRef.current = null; monitor.stop(); close(); setPhase("sessions"); refreshSessions(); }}
               className="ml-auto shrink-0 text-sm text-gray-400 hover:text-gray-200"
             >
-              {t("cancel")}
+              {t("importBackToSessions")}
             </button>
           </div>
-          <p className="mb-4 text-sm text-gray-400">{t("importAnalysisCheckpointHint")}</p>
-          {progress && <p className="mb-4 line-clamp-3 whitespace-pre-wrap text-sm text-gray-500">{progress.chunks[analysisCount.done]}</p>}
+          <p className="mb-4 text-sm text-gray-400">{t("importJobBackgroundHint")}</p>
+          {monitor.error && <p role="alert" className="mb-3 text-sm text-red-300">{monitor.error}</p>}
+          {job && <button type="button" disabled={job.pauseRequested} onClick={() => void monitor.pause()}
+            className="mb-4 rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-300 disabled:opacity-40">{job.pauseRequested ? t("importJobPausing") : t("importJobPause")}</button>}
+          {progress && <p className="mb-4 line-clamp-3 whitespace-pre-wrap text-sm text-gray-500">{progress.chunks[job?.nextBatch ?? progress.nextChunk]}</p>}
           <ol className="space-y-2">
             {completed.map((s, i) => (
               <li key={i} className="flex gap-2 text-sm leading-relaxed text-gray-300 sm:gap-3">

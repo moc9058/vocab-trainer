@@ -178,8 +178,11 @@ else
   echo "==> No config upload requested (use --llm, --auth and/or --prompts)"
 fi
 
+node backend/scripts/check-import-jobs.mjs "${PROJECT_ID}" "${REGION}"
+
 # Deploy backend to Cloud Run
 echo "==> Deploying backend to Cloud Run..."
+IMPORT_MIGRATE_AFTER="$(( $(date +%s) * 1000 + 210000 ))"
 gcloud run deploy vocab-trainer-backend \
   --project="${PROJECT_ID}" \
   --region="${REGION}" \
@@ -197,7 +200,7 @@ gcloud run deploy vocab-trainer-backend \
   --cpu-throttling \
   --cpu-boost \
   --timeout=660 \
-  --set-env-vars="FIRESTORE_DATABASE_ID=vocab-database"
+  --update-env-vars="FIRESTORE_DATABASE_ID=vocab-database,IMPORT_JOB_MIGRATE_AFTER=${IMPORT_MIGRATE_AFTER}"
 
 # Get backend URL
 BACKEND_URL=$(gcloud run services describe vocab-trainer-backend \
@@ -232,7 +235,7 @@ gcloud run deploy vocab-trainer-frontend \
   --cpu-throttling \
   --cpu-boost \
   --timeout=660 \
-  --set-env-vars="BACKEND_URL=${BACKEND_URL}"
+  --update-env-vars="BACKEND_URL=${BACKEND_URL}"
 
 FRONTEND_URL=$(gcloud run services describe vocab-trainer-frontend \
   --project="${PROJECT_ID}" \

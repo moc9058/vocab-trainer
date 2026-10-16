@@ -30,6 +30,8 @@ import expressionRoutes from "./routes/expressions.js";
 import expressionQuizRoutes from "./routes/expression-quiz.js";
 import expressionRecallQuizRoutes from "./routes/expression-recall-quiz.js";
 import metricsRoutes from "./routes/metrics.js";
+import importJobRoutes from "./routes/import-jobs.js";
+import { importWorkerRoutes } from "./routes/import-worker.js";
 import importRoutes from "./routes/import.js";
 import llmConfigRoutes from "./routes/llm-config.js";
 
@@ -73,6 +75,7 @@ await fastify.register(sensible);
 const PUBLIC_PATH_PREFIXES = ["/api/auth/"];
 
 fastify.addHook("onRequest", async (request, reply) => {
+  if (request.method === "POST" && ["/internal/import-analysis/run", "/internal/import-analysis/reconcile"].includes(request.url.split("?")[0])) return; // Dedicated OIDC hook, never an unauthenticated worker.
   const cfg = getAuthConfig();
   if (!cfg) return;
 
@@ -107,6 +110,8 @@ await fastify.register(expressionQuizRoutes, { prefix: "/api/expression-quiz" })
 await fastify.register(expressionRecallQuizRoutes, { prefix: "/api/expression-recall-quiz" });
 await fastify.register(metricsRoutes, { prefix: "/api/metrics" });
 await fastify.register(importRoutes, { prefix: "/api/import" });
+await fastify.register(importJobRoutes, { prefix: "/api/import" });
+await fastify.register(importWorkerRoutes, { prefix: "/internal/import-analysis" });
 await fastify.register(llmConfigRoutes, { prefix: "/api/llm-config" });
 
 const port = parseInt(process.env.PORT ?? "3000", 10);
