@@ -1534,7 +1534,7 @@ Normal deploys validate these prerequisites and preserve their environment setti
 Local Compose includes a separate emulator-only `import-worker`; `./local.sh dev`
 and `./local.ps1 dev` start that worker too. Internal HTTP worker routes reject local
 network calls; the local process invokes the same job functions directly.
-See [the job plan and implementation record](plan/external-source-durable-analysis-jobs.md).
+See [the source implementation and verification record](docs/external-source-implementation-audit.md).
 
 Explicit emulator regression suite (mock LLM; requires a running emulator):
 

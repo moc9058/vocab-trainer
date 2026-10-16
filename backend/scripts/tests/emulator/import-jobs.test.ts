@@ -125,3 +125,48 @@ test('output limits only retry on explicit resume and split multiple complete se
   assert.ok(next.chunks.every(s => s.endsWith('。'))); assert.equal(next.nextBatch, 0);
   assert.equal(next.generation, failed.generation + 1); outputLimit = false;
 });
+
+test('an 8000-character source completes across sentence batches with exact source coverage and bounded storage', async () => {
+  const text = '这是一段用于验证保存和显示的外部文本。'.repeat(500).slice(0, 8000);
+  assert.equal(text.length, 8000);
+  let j = await make(text);
+  assert.ok(j.totalBatches > 1);
+  const started = performance.now();
+  while (j.state === 'queued') {
+    await jobs.runAnalysisTask(payload(j)); j = (await jobs.getAnalysisJob(j.id))!;
+  }
+  assert.equal(j.state, 'completed');
+  const s = (await db.doc(`import_sessions/${j.id}`).get()).data()!;
+  const { sourceMatchesSentences } = await import('../../../src/import-reading-analysis.js');
+  assert.equal(sourceMatchesSentences(text, s.paragraphs.flatMap((p: any) => p.sentences).map((v: any) => v.text)), true);
+  assert.equal(s.analysisProgress.chunks.join(''), text);
+  assert.equal(s.analysisProgress.nextChunk, j.totalBatches);
+  const bytes = Buffer.byteLength(JSON.stringify(s)); assert.ok(bytes < 900_000);
+  console.log(JSON.stringify({ mockLargeSource: true, sourceCharacters: text.length, batches: j.totalBatches, sentences: j.completedSentences, savedBytes: bytes, elapsedMs: Math.round(performance.now() - started) }));
+});
+
+test('a dense 8000-character source hitting the document limit retains committed work and unprocessed original text', async () => {
+  const text = '甲乙丙丁戊己庚辛壬癸。'.repeat(800).slice(0, 8000);
+  let j = await make(text);
+  await jobs.runAnalysisTask(payload(j)); j = (await jobs.getAnalysisJob(j.id))!;
+  const ref = db.doc(`import_sessions/${j.id}`), before = (await ref.get()).data()!;
+  assert.equal(before.analysisProgress.nextChunk, 1);
+  const leased = (await jobs.claimAnalysisJob(payload(j)))!;
+  const source = leased.chunks[leased.nextBatch];
+  // Valid source-aligned analysis with unusually verbose contextual glosses.
+  const { normalizeAnalysis } = await import('../../../src/import-analysis.js');
+  const sentences = [...new Intl.Segmenter('zh', { granularity: 'sentence' }).segment(source)].map(s => ({ text: s.segment.trim(), explanationLanguage: 'ja', grammar: [], words: [
+    { term: '甲', surface: '甲', occurrence: 0, transliteration: 'jiǎ', meaning: '長い文脈説明'.repeat(1000) },
+  ] }));
+  const analysis = normalizeAnalysis(JSON.stringify({ paragraphs: [{ sentences }] }), 'chinese').analysis;
+  const result = { analysis, existing: {}, existingGrammar: {} };
+  await assert.rejects(jobs.commitAnalysisResult(leased, result), /too large/i);
+  const stopped = (await jobs.failAnalysisJob(leased, new Error('IMPORT_STORAGE_LIMIT')))!;
+  assert.equal(stopped.state, 'failed'); assert.equal(stopped.error?.retryable, false);
+  const after = (await ref.get()).data()!;
+  assert.deepEqual(after.items, before.items); assert.deepEqual(after.paragraphs, before.paragraphs);
+  assert.equal(after.analysisProgress.nextChunk, 1);
+  assert.equal(after.analysisProgress.chunks.join(''), text);
+  assert.ok(after.analysisProgress.chunks.slice(1).join('').length > 0);
+  assert.deepEqual(after.groupBNames, before.groupBNames);
+});

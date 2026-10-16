@@ -26,7 +26,7 @@ for LLM completion, and browser disconnects do not abort the independent task.
 A minute-based Scheduler recovers durable dispatch intents and expired leases.
 Worker usage receipts atomically update the existing usage log/daily totals once
 per attempt, including cached and reasoning tokens; absent provider usage stays
-unknown. See the [job implementation record](../plan/external-source-durable-analysis-jobs.md).
+unknown. See the [job implementation record](external-source-implementation-audit.md).
 Queue, Scheduler and Firestore costs are separate from LLM usage.
 
 Both deployment scripts pin these settings for both services:

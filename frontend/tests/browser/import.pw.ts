@@ -345,3 +345,40 @@ test('a completed durable import explains a selected sentence once and saves it 
   await page.getByRole('button', { name: 'Sentence explanation 1', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('挨拶の文です。'); expect(generations).toBe(1);
 });
+
+test('an 8000-character partial source stays readable on mobile, switches modes and preserves the unprocessed tail', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  const unit = '这是一段用于验证保存和显示的外部文本。';
+  const text = unit.repeat(500).slice(0, 8000);
+  const completed = unit.repeat(20), tail = text.slice(completed.length);
+  let saved: any = { id: 'article', language: 'chinese', title: 'Large source', text, groupBNames: [],
+    status: 'in-progress', createdAt: '', updatedAt: '', focusedSentenceIndex: 0,
+    analysisState: 'failed', analysisRevision: 3, analysisJobRef: { version: 2, jobId: 'article', generation: 1 },
+    analysisProgress: { version: 1, chunks: [completed, tail], nextChunk: 1 },
+    paragraphs: [{ sentences: Array.from({ length: 20 }, (_, index) => ({ index, text: unit })) }],
+    items: Array.from({ length: 20 }, (_, index) => ({ id: `row-${index}`, kind: 'word', sentenceIndex: index, order: 0, term: unit.slice(0, -1), meaning: '保存済みの説明', origin: 'llm', status: 'pending' })) };
+  let calls = 0;
+  await page.route(url => url.pathname.startsWith('/api/'), async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/explanation') || path.endsWith('/analysis-job') || path.endsWith('/analyze-next')) calls++;
+    if (path === '/api/import/chinese/sessions/article') {
+      if (route.request().method() === 'PUT') saved = { ...saved, ...route.request().postDataJSON() };
+      await route.fulfill({ json: saved }); return;
+    }
+    if (path.endsWith('/check-terms')) { await route.fulfill({ json: { existing: {} } }); return; }
+    await route.fulfill({ json: [] });
+  });
+  const started = Date.now();
+  await page.goto('/tests/browser/harness.html?mode=import-review');
+  const reader = page.getByTestId('import-full-text-reader');
+  await expect(reader).toBeVisible();
+  await expect(reader.locator('article')).toContainText(unit);
+  await expect(reader.locator('section p')).toHaveText(tail);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole('button', { name: 'Sentence mode', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Sentence mode', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Full text', exact: true }).click();
+  await expect(reader.locator('section p')).toHaveText(tail);
+  expect(calls).toBe(0); expect(saved.text.length).toBe(8000);
+  console.log(JSON.stringify({ largeSourceUiMs: Date.now() - started, sourceCharacters: 8000, viewport: 360 }));
+});
