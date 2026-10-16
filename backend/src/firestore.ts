@@ -3630,3 +3630,18 @@ export async function commitMixedQuizOperation(
     return next;
   });
 }
+
+/** Atomic checkpoints keep completed analysis and concurrent registration/edit writes intact. */
+export async function mutateImportSession(
+  sessionId: string, mutate: (session: ImportSession | null) => ImportSession,
+): Promise<ImportSession> {
+  return db.runTransaction(async tx => {
+    const ref = importSessions.doc(sessionId);
+    const snapshot = await tx.get(ref);
+    const current = snapshot.exists ? { id: snapshot.id, ...snapshot.data() } as ImportSession : null;
+    const next = mutate(current);
+    const { id: _id, ...data } = next;
+    tx.set(ref, data);
+    return next;
+  });
+}

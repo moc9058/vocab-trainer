@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n/context";
 import {
-  analyzeImportStream,
+  analyzeNextImportPart,
+  getImportSession,
   deleteImportSession,
-  extractStreamingSentences,
   listImportSessions,
 } from "../api/import";
 import { getGrammarSettings } from "../api/grammar";
@@ -12,9 +12,9 @@ import ImportReview from "./import/ImportReview";
 import ImportSessionList from "./import/ImportSessionList";
 import { useImportGroups } from "../hooks/useImportGroups";
 import { useImportSession } from "../hooks/useImportSession";
-import { buildImportItems } from "../utils/importSession";
+import { ApiError } from "../api/client";
 import { deriveArticleQuizPools, poolSize } from "../utils/importQuizPool";
-import type { ImportQuizPool, ImportSessionSummary } from "../types";
+import type { ImportQuizPool, ImportSession, ImportSessionSummary } from "../types";
 import type { useWordQueue } from "../hooks/useWordQueue";
 import type { useGrammarQueue } from "../hooks/useGrammarQueue";
 
@@ -33,12 +33,7 @@ type Phase = "sessions" | "input" | "analyzing" | "review";
 const MAX_TEXT = 8000;
 /** Stable identity so the pool memo doesn't re-run on every render before the fetch lands. */
 const EMPTY_POOL: ImportQuizPool = { wordIds: [], grammarIds: [] };
-/**
- * Past roughly this much text, exhaustive per-sentence segmentation produces more
- * JSON than the model will emit in one response and the analysis comes back
- * truncated. Not a hard cap — the article may be mostly short sentences — so it
- * warns rather than blocks.
- */
+/** Long sources get a reminder that completed parts are saved and can be resumed. */
 const LONG_TEXT_WARNING = 1500;
 
 /** Phase router for the article importer; all session state lives in `useImportSession`. */
@@ -47,7 +42,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
   const [phase, setPhase] = useState<Phase>("sessions");
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [streamText, setStreamText] = useState("");
+  const [analysisCount, setAnalysisCount] = useState({ done: 0, total: 0 });
   const [descriptionLanguage, setDescriptionLanguage] = useState("ja");
 
   const [sessions, setSessions] = useState<ImportSessionSummary[]>([]);
@@ -70,6 +65,8 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
 
   const {
     session,
+    prepareAnalysis,
+    acceptAnalysisSession,
     saveStatus,
     saveError,
     membershipOverlay,
@@ -123,54 +120,51 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
   // Cancel an in-flight analysis if the view unmounts.
   useEffect(() => () => abortRef.current?.abort(), []);
 
-  async function handleAnalyze() {
-    if (!text.trim()) return;
-    setError(null);
-    setStreamText("");
-    setPhase("analyzing");
-
+  async function handleAnalyze(existing?: ImportSession) {
+    if (abortRef.current || (!existing && !text.trim())) return;
     const controller = new AbortController();
     abortRef.current = controller;
+    setError(null); setPhase("analyzing");
+    setAnalysisCount({ done: existing?.analysisProgress?.nextChunk ?? 0, total: existing?.analysisProgress?.chunks.length ?? 0 });
+    let current = existing;
     try {
-      await analyzeImportStream(
-        language,
-        text.trim(),
-        {
-          onDelta: setStreamText,
-          onResult: async (analysis, existing, existingGrammar) => {
-            try {
-              // Persisted immediately: the analysis is the expensive part, and a
-              // session created only on first edit would lose it on a stray back-tap.
-              await create({
-                title: text.trim().slice(0, 40),
-                text: text.trim(),
-                paragraphs: analysis.paragraphs,
-                items: buildImportItems(analysis, existing, existingGrammar, language),
-                wordGroupId: draftDestination.wordGroupId,
-                grammarGroupId: draftDestination.grammarGroupId,
-                groupBNames: draftDestination.groupBNames,
-                focusedSentenceIndex: analysis.paragraphs[0]?.sentences[0]?.index ?? 0,
-                status: "in-progress",
-              });
-              setPhase("review");
-            } catch (err) {
-              setError(err instanceof Error ? err.message : String(err));
-              setPhase("input");
-            }
-          },
-          onError: (err) => {
-            setError(err.message);
-            setPhase("input");
-          },
-        },
-        controller.signal
-      );
+      if (existing) current = await prepareAnalysis() ?? existing;
+      else current = await create({
+        title: text.trim().slice(0, 40), text: text.trim(), paragraphs: [], items: [], analyzeInParts: true,
+        ...draftDestination, focusedSentenceIndex: 0, status: "in-progress",
+      }, controller.signal);
+      if (controller.signal.aborted) return;
+      let progress = current.analysisProgress;
+      if (!progress) throw new Error("Reload the page to start resumable analysis.");
+      setAnalysisCount({ done: progress.nextChunk, total: progress.chunks.length });
+      while (progress.nextChunk < progress.chunks.length) {
+        current = await analyzeNextImportPart(language, current.id, progress.nextChunk, controller.signal);
+        if (controller.signal.aborted) return;
+        acceptAnalysisSession(current);
+        progress = current.analysisProgress!;
+        setAnalysisCount({ done: progress.nextChunk, total: progress.chunks.length });
+      }
+      setPhase("review");
     } catch (err) {
       if (controller.signal.aborted) return;
-      setError(err instanceof Error ? err.message : String(err));
-      setPhase("input");
+      const message = err instanceof ApiError
+        ? err.status === 504 ? t("importAnalysisTimeout") : err.status === 413 ? t("importAnalysisTooLarge") : err.status >= 500 ? t("importAnalysisRetryHint") : err.message
+        : err instanceof TypeError ? t("importAnalysisInterrupted") : err instanceof Error ? err.message : String(err);
+      // A response can be lost AFTER a checkpoint commits. Read the authoritative count before retrying.
+      if (current) {
+        try {
+          const latest = await getImportSession(language, current.id, controller.signal);
+          if (controller.signal.aborted) return;
+          acceptAnalysisSession(latest);
+          if (latest.analysisProgress && latest.analysisProgress.nextChunk === latest.analysisProgress.chunks.length) {
+            setError(null); setPhase("review"); return;
+          }
+        } catch { /* Keep the last saved checkpoint available; do not discard the article. */ }
+      }
+      if (controller.signal.aborted) return;
+      setError(message); setPhase(current ? "review" : "input");
     } finally {
-      abortRef.current = null;
+      if (abortRef.current === controller) abortRef.current = null;
     }
   }
 
@@ -216,33 +210,38 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
         onPatchItem={patchItem}
         onRegister={registerItem}
         onExit={exitToList}
+        analysisError={error}
+        onContinueAnalysis={error === t("importAnalysisTooLarge") ? undefined : () => void handleAnalyze(session)}
       />
     );
   }
 
   // ===== ANALYZING =====
   if (phase === "analyzing") {
-    const sentences = extractStreamingSentences(streamText);
+    const progress = session?.analysisProgress;
+    const completed = session?.paragraphs.flatMap(p => p.sentences) ?? [];
     return (
       <div className="h-full overflow-y-auto overflow-x-hidden">
         <div className="mx-auto max-w-3xl px-3 py-4 sm:p-6">
           <div className="mb-5 flex items-center gap-3">
             <span className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
-            <span className="text-sm text-gray-300">{t("importAnalyzing")}</span>
+            <span className="text-sm text-gray-300">{t("importAnalyzing")} {analysisCount.done} / {analysisCount.total || "…"}</span>
             <button
-              onClick={() => { abortRef.current?.abort(); abortRef.current = null; setPhase("input"); }}
+              onClick={() => { abortRef.current?.abort(); abortRef.current = null; close(); setPhase("sessions"); refreshSessions(); }}
               className="ml-auto shrink-0 text-sm text-gray-400 hover:text-gray-200"
             >
               {t("cancel")}
             </button>
           </div>
+          <p className="mb-4 text-sm text-gray-400">{t("importAnalysisCheckpointHint")}</p>
+          {progress && <p className="mb-4 line-clamp-3 whitespace-pre-wrap text-sm text-gray-500">{progress.chunks[analysisCount.done]}</p>}
           <ol className="space-y-2">
-            {sentences.map((s, i) => (
+            {completed.map((s, i) => (
               <li key={i} className="flex gap-2 text-sm leading-relaxed text-gray-300 sm:gap-3">
                 <span className="mt-0.5 w-5 shrink-0 text-right font-mono text-[11px] text-gray-600 sm:w-6">
                   {i + 1}
                 </span>
-                <span className="min-w-0 break-words">{s}</span>
+                <span className="min-w-0 break-words">{s.text}</span>
               </li>
             ))}
           </ol>
@@ -313,7 +312,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
                 autoSelectLatest
               />
               <button
-                onClick={handleAnalyze}
+                onClick={() => void handleAnalyze()}
                 disabled={!text.trim()}
                 className="w-full rounded-xl bg-indigo-600 px-5 py-3 font-medium text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
               >

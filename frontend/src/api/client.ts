@@ -53,8 +53,8 @@ async function errorFromResponse(res: Response): Promise<Error> {
 /** Exported so the streaming call sites, which bypass these helpers, share the behaviour. */
 export { CREDENTIALS, notifyIfUnauthorized };
 
-export async function fetchJson<T>(path: string): Promise<T> {
-  const res = await fetch(path, { credentials: CREDENTIALS });
+export async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  const res = await fetch(path, { credentials: CREDENTIALS, signal });
   if (!res.ok) throw await errorFromResponse(res);
   return res.json() as Promise<T>;
 }

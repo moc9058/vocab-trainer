@@ -21,6 +21,8 @@ const TRANSLATION_PREF_KEY = "importShowTranslations";
 
 interface Props {
   session: ImportSession;
+  analysisError?: string | null;
+  onContinueAnalysis?: () => void;
   /** From the shared `useImportGroups` read — both the destination selects and the
    *  membership chips are views of these same documents. */
   allWordGroups: WordGroup[];
@@ -41,6 +43,8 @@ interface Props {
 
 export default function ImportReview({
   session,
+  analysisError,
+  onContinueAnalysis,
   allWordGroups,
   allGrammarGroups,
   membershipOverlay,
@@ -257,6 +261,17 @@ export default function ImportReview({
             </button>
           </div>
         </header>
+
+        {analysisError && <p role="alert" className="mb-3 rounded-lg border border-red-800 bg-red-950/40 p-3 text-sm text-red-300">{analysisError}</p>}
+        {session.analysisProgress && session.analysisProgress.nextChunk < session.analysisProgress.chunks.length && (
+          <div className="mb-4 rounded-lg border border-indigo-800 bg-indigo-950/30 p-3 text-sm text-indigo-200">
+            <p>{t("importAnalysisPaused")} {session.analysisProgress.nextChunk} / {session.analysisProgress.chunks.length}</p>
+            <p className="mt-1 text-xs text-gray-400">{t("importAnalysisCheckpointHint")}</p>
+            {onContinueAnalysis && <button type="button" onClick={onContinueAnalysis}
+              disabled={session.items.some(item => item.status === "queued") || saveStatus === "error"}
+              className="mt-3 rounded-lg bg-indigo-600 px-3 py-2 text-white disabled:opacity-40">{t("importContinueAnalysis")}</button>}
+          </div>
+        )}
 
         {/* Only ever shown for a session analyzed before words were nested inside
             their sentence: the model used to emit the sentence index as a number it

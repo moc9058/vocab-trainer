@@ -40,3 +40,29 @@ it("accepts the full-text frames from an older backend during deployment", async
   await analyzeImportStream("english", "article", { onDelta });
   expect(onDelta.mock.calls).toEqual([["a"], ["ab"]]);
 });
+
+it("keeps the server timeout when the stream errors after its terminal event", async () => {
+  const body = new ReadableStream<Uint8Array>({ start(controller) {
+    controller.enqueue(new TextEncoder().encode('event: error\ndata: {"message":"LLM processing exceeded its 600s time limit."}\n\n'));
+    setTimeout(() => { try { controller.error(new TypeError('Load failed')); } catch {} }, 5);
+  } });
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body)));
+  const onError = vi.fn();
+  await expect(analyzeImportStream('chinese','test',{onError})).resolves.toBeUndefined();
+  expect(onError).toHaveBeenCalledOnce();
+  expect(onError.mock.calls[0][0].message).toContain('600s');
+});
+
+it("waits for async result persistence before completing and does not swallow callback failures", async () => {
+  mockStream('event: analysis-result\ndata: {"analysis":{},"existing":{}}\n\nevent: done\ndata: {}\n\n');
+  const order: string[] = [];
+  await analyzeImportStream('english','test',{onResult:async()=>{await Promise.resolve();order.push('saved');},onDone:()=>{order.push('done');}});
+  expect(order).toEqual(['saved','done']);
+  mockStream('event: analysis-result\ndata: {"analysis":{}}\n\n');
+  await expect(analyzeImportStream('english','test',{onResult:()=>{throw new Error('save failed');}})).rejects.toThrow('save failed');
+});
+
+it("reports an interrupted stream without inventing a successful completion", async () => {
+  mockStream('event: analysis-start\ndata: {}\n\n');
+  await expect(analyzeImportStream('chinese','test',{})).rejects.toThrow('Connection closed unexpectedly');
+});

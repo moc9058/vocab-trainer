@@ -9,7 +9,7 @@ import type {
 
 // ----- Import sessions (paused, resumable article reviews) -----
 
-type NewImportSession = Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt">;
+type NewImportSession = Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean };
 
 /** The list carries the article quizzes' `pool` alongside the summaries: the handler
  *  already reads every session document in full, so deriving it there costs nothing,
@@ -22,21 +22,22 @@ export function listImportSessions(
 
 export function createImportSession(
   language: string,
-  session: NewImportSession
+  session: NewImportSession,
+  signal?: AbortSignal
 ): Promise<ImportSession> {
-  return postJson(`/api/import/${encodeURIComponent(language)}/sessions`, session);
+  return postJson(`/api/import/${encodeURIComponent(language)}/sessions`, session, signal);
 }
 
-export function getImportSession(language: string, sessionId: string): Promise<ImportSession> {
+export function getImportSession(language: string, sessionId: string, signal?: AbortSignal): Promise<ImportSession> {
   return fetchJson(
-    `/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(sessionId)}`
+    `/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(sessionId)}`, signal
   );
 }
 
 export function updateImportSession(
   language: string,
   sessionId: string,
-  updates: Partial<NewImportSession>
+  updates: Partial<NewImportSession> & { analysisCheckpoint?: number }
 ): Promise<ImportSession> {
   return putJson(
     `/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(sessionId)}`,
@@ -60,7 +61,7 @@ export interface AnalyzeImportCallbacks {
     analysis: ImportAnalysisResult,
     existing: Record<string, string>,
     existingGrammar: Record<string, string>
-  ) => void;
+  ) => void | Promise<void>;
   onDone?: () => void;
   onError?: (err: Error) => void;
 }
@@ -98,55 +99,37 @@ export async function analyzeImportStream(
   let currentEvent = "";
   let accumulated = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() ?? "";
-
-    for (const line of lines) {
-      if (line.startsWith("event: ")) {
-        currentEvent = line.slice(7);
-      } else if (line.startsWith("data: ") && currentEvent) {
-        try {
-          const data = JSON.parse(line.slice(6));
-          switch (currentEvent) {
-            case "analysis-start":
-              accumulated = "";
-              callbacks.onStart?.();
-              break;
-            case "analysis-chunk":
-              accumulated += data.chunk;
-              callbacks.onDelta?.(accumulated);
-              break;
-            case "analysis-delta":
-              accumulated = data.text;
-              callbacks.onDelta?.(accumulated);
-              break;
-            case "analysis-result":
-              callbacks.onResult?.(data.analysis, data.existing ?? {}, data.existingGrammar ?? {});
-              break;
-            case "done":
-              terminated = true;
-              callbacks.onDone?.();
-              break;
-            case "error":
-              terminated = true;
-              callbacks.onError?.(new Error(data.message ?? "Unknown error"));
-              break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const rawLine of lines) {
+        const line = rawLine.replace(/\r$/, "");
+        if (line.startsWith("event: ")) currentEvent = line.slice(7);
+        else if (line.startsWith("data: ") && currentEvent) {
+          let data;
+          try { data = JSON.parse(line.slice(6)); } catch { currentEvent = ""; continue; }
+          const event = currentEvent;
+          currentEvent = "";
+          switch (event) {
+            case "analysis-start": accumulated = ""; callbacks.onStart?.(); break;
+            case "analysis-chunk": accumulated += data.chunk; callbacks.onDelta?.(accumulated); break;
+            case "analysis-delta": accumulated = data.text; callbacks.onDelta?.(accumulated); break;
+            case "analysis-result": await callbacks.onResult?.(data.analysis, data.existing ?? {}, data.existingGrammar ?? {}); break;
+            case "done": terminated = true; callbacks.onDone?.(); return;
+            case "error": terminated = true; callbacks.onError?.(new Error(data.message ?? "Unknown error")); return;
           }
-        } catch {
-          // ignore malformed JSON
         }
-        currentEvent = "";
       }
     }
-  }
-
-  if (!terminated) {
-    callbacks.onError?.(new Error("Connection closed unexpectedly"));
+    if (!terminated) throw new Error("Connection closed unexpectedly");
+  } finally {
+    // Stop reading immediately after a terminal event. A subsequent network failure must not overwrite it.
+    void reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
 }
 
@@ -174,4 +157,8 @@ export function extractStreamingSentences(partial: string): string[] {
 
 export function generateImportSentenceExplanation(language: string, sessionId: string, sentenceIndex: number, signal?: AbortSignal): Promise<{ sentenceIndex: number; readingAnalysis: ImportReadingAnalysis }> {
   return postJson(`/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(sessionId)}/sentences/${sentenceIndex}/explanation`, {}, signal);
+}
+
+export function analyzeNextImportPart(language: string, sessionId: string, chunkIndex: number, signal?: AbortSignal): Promise<ImportSession> {
+  return postJson(`/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(sessionId)}/analyze-next`, { chunkIndex }, signal);
 }

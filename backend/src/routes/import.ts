@@ -1,3 +1,4 @@
+import { splitImportSource, appendImportPart, subdivideImportPart, ImportCheckpointError } from "../import-parts.js";
 import { sourceMatchesSentences } from "../import-reading-analysis.js";
 import { compactImportSchema, COMPACT_IMPORT_INSTRUCTIONS } from "../import-analysis-config.js";
 import type { FastifyPluginAsync } from "fastify";
@@ -17,9 +18,11 @@ import {
   getImportSessions,
   getImportSession,
   updateImportSession,
+  mutateImportSession,
   deleteImportSession,
 } from "../firestore.js";
 import type {
+  ImportAnalysisResult,
   ImportQuizPool,
   ImportSession,
   ImportSessionSummary,
@@ -76,6 +79,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { language } = request.params;
       const { text } = request.body;
+      if (text.length > 600) return reply.badRequest("Reload the page to use resumable article analysis for long sources.");
 
       if (!(await languageExists(language))) {
         return reply.notFound(`Language '${language}' not found`);
@@ -106,10 +110,8 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
           .filter(Boolean)
           .slice(0, STYLE_EXAMPLE_LIMIT);
 
-        if (text.length > 1200) {
-          analyzeSchema = compactImportSchema(analyzeSchema);
-          basePrompt += COMPACT_IMPORT_INSTRUCTIONS;
-        }
+        analyzeSchema = compactImportSchema(analyzeSchema);
+        basePrompt += COMPACT_IMPORT_INSTRUCTIONS;
         sendEvent("analysis-start", {});
         let legacyText = "";
         const raw = await callLLM({
@@ -170,6 +172,65 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
         close();
       }
     }
+  );
+
+  // Each request handles one small part and commits it before returning. No long browser stream.
+  fastify.post<{ Params: { language: string; sessionId: string }; Body: { chunkIndex: number } }>(
+    "/:language/sessions/:sessionId/analyze-next",
+    { schema: { body: { type: "object", required: ["chunkIndex"], additionalProperties: false,
+      properties: { chunkIndex: { type: "integer", minimum: 0 } } } } },
+    async (request, reply) => {
+      const { language, sessionId } = request.params;
+      const expected = request.body.chunkIndex;
+      const session = await getImportSession(sessionId);
+      if (!session || session.language !== language) return reply.notFound("Import session not found");
+      const progress = session.analysisProgress;
+      if (!progress) return reply.badRequest("This article has no pending analysis");
+      if (progress.nextChunk > expected || progress.nextChunk === progress.chunks.length) return session;
+      if (progress.nextChunk !== expected) return reply.conflict("Reload the article before continuing analysis.");
+      const source = progress.chunks[expected];
+      const checkpoint = (analysis: ImportAnalysisResult, existing: Record<string, string> = {}, existingGrammar: Record<string, string> = {}) => mutateImportSession(sessionId, current => {
+        if (!current || current.language !== language || (current.text !== session.text || (current.analysisProgress?.nextChunk === expected && current.analysisProgress.chunks[expected] !== source))) throw new ImportCheckpointError(409, "The article changed. Reload before continuing.");
+        return appendImportPart(current, expected, analysis, existing, existingGrammar);
+      });
+      try {
+        if (!source.trim()) return await checkpoint({ paragraphs: [], words: [], grammar: [] });
+        const config = await loadConfig();
+        const prompt = config.analyzePrompts?.[language];
+        if (!prompt) return reply.badRequest("No import prompt configured for language");
+        const grammarItems = await getAllGrammarItems(language);
+        const raw = await callLLM({ system: buildAnalyzeSystemPrompt(prompt + COMPACT_IMPORT_INSTRUCTIONS +
+          "\nAnalyze ONLY target. before/after are context, never output them. Preserve target verbatim; it may be a section of a long sentence.",
+          grammarItems.map(g => g.statement).filter(Boolean).slice(0, STYLE_EXAMPLE_LIMIT)),
+          user: JSON.stringify({ target: source, before: progress.chunks[expected - 1]?.slice(-100) ?? "", after: progress.chunks[expected + 1]?.slice(0, 100) ?? "" }),
+          schema: compactImportSchema(config.analyzeSchema), tier: "full", route: "import/analyze-part" });
+        const { analysis } = normalizeAnalysis(stripMarkdownFences(raw), language);
+        if (!sourceMatchesSentences(source, analysis.paragraphs.flatMap(p => p.sentences).map(s => s.text))) {
+          return reply.badGateway("Analysis changed or omitted source text. Retry this part.");
+        }
+        const existing: Record<string, string> = {};
+        for (const match of await lookupWordsByTerms(language, [...new Set(analysis.words.map(w => w.term.trim()).filter(Boolean))])) existing[match.term] = match.id;
+        const existingGrammar: Record<string, string> = {};
+        for (const point of grammarItems) {
+          const key = lowercaseGrammarAbbreviations(point.statement ?? "").trim();
+          if (key && !existingGrammar[key]) existingGrammar[key] = point.id;
+        }
+        return await checkpoint(analysis, existing, existingGrammar);
+      } catch (err) {
+        request.log.error({ err, sessionId, chunkIndex: expected }, "import part analysis failed");
+        if (err instanceof ImportCheckpointError) return reply.code(err.statusCode).send({ message: err.message });
+        const message = err instanceof Error ? err.message : "";
+        if (/time limit|timeout|timed out/i.test(message)) {
+          await mutateImportSession(sessionId, current => {
+            if (!current || current.language !== language) throw new ImportCheckpointError(404, "Import session not found");
+            return subdivideImportPart(current, expected, source);
+          });
+        }
+        return reply.code(/time limit|timeout|timed out/i.test(message) ? 504 : 502).send({
+          code: /time limit|timeout|timed out/i.test(message) ? "IMPORT_TIMEOUT" : "IMPORT_ANALYSIS_FAILED",
+          message: /time limit|timeout|timed out/i.test(message) ? "Analysis timed out. Completed parts are saved. Retry the remaining part." : "Could not analyze this part. Completed parts are saved. Retry to continue." });
+      }
+    },
   );
 
   // Return explanations only. Existing candidates, registrations and groups are never rewritten.
@@ -271,7 +332,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{
     Params: { language: string };
-    Body: Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt">;
+    Body: Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean };
   }>(
     "/:language/sessions",
     {
@@ -280,6 +341,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
           type: "object",
           required: ["text", "paragraphs", "items"],
           properties: {
+            analyzeInParts: { type: "boolean" },
             title: { type: "string" },
             text: { type: "string" },
             paragraphs: { type: "array" },
@@ -300,13 +362,15 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const body = request.body;
       if (Buffer.byteLength(JSON.stringify(body), "utf8") > 900_000) return reply.badRequest("Article is too large. Split it into smaller sections.");
+      if (body.analyzeInParts && (!body.text.trim() || body.text.length > MAX_TEXT_LENGTH)) return reply.badRequest("Source text must contain 1–8000 characters");
       const now = new Date().toISOString();
       const session = await saveImportSession({
         language,
         title: body.title?.trim() || body.text.slice(0, 40),
         text: body.text,
-        paragraphs: body.paragraphs ?? [],
-        items: body.items ?? [],
+        paragraphs: body.analyzeInParts ? [] : body.paragraphs ?? [],
+        items: body.analyzeInParts ? [] : body.items ?? [],
+        ...(body.analyzeInParts ? { analysisProgress: { version: 1 as const, chunks: splitImportSource(body.text), nextChunk: 0 } } : {}),
         wordGroupId: body.wordGroupId,
         grammarGroupId: body.grammarGroupId,
         groupBNames: body.groupBNames ?? [],
@@ -332,7 +396,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
   // `updatedAt` is stamped server-side.
   fastify.put<{
     Params: { language: string; sessionId: string };
-    Body: Partial<Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt">>;
+    Body: Partial<Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt">> & { analysisCheckpoint?: number };
   }>(
     "/:language/sessions/:sessionId",
     {
@@ -340,6 +404,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
         body: {
           type: "object",
           properties: {
+            analysisCheckpoint: { type: "integer", minimum: 0 },
             title: { type: "string" },
             text: { type: "string" },
             paragraphs: { type: "array" },
@@ -357,7 +422,23 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
       const existing = await getImportSession(request.params.sessionId);
       if (!existing || existing.language !== request.params.language) return reply.notFound("Import session not found");
       if (Buffer.byteLength(JSON.stringify({ ...existing, ...request.body }), "utf8") > 900_000) return reply.badRequest("Article is too large. Split it into smaller sections.");
-      const updated = await updateImportSession(request.params.sessionId, request.body);
+      if (existing.analysisProgress) {
+        try {
+          return await mutateImportSession(request.params.sessionId, current => {
+            if (!current || current.language !== request.params.language) throw new ImportCheckpointError(404, "Import session not found");
+            if ((request.body.text !== undefined && request.body.text !== current.text) || request.body.analysisCheckpoint !== current.analysisProgress?.nextChunk) throw new ImportCheckpointError(409, "Analysis progressed in another window. Reload before saving edits.");
+            const { analysisProgress: _progress, analysisCheckpoint: _checkpoint, ...updates } = request.body;
+            const next = { ...current, ...updates, analysisProgress: current.analysisProgress, updatedAt: new Date().toISOString() };
+            if (Buffer.byteLength(JSON.stringify(next), "utf8") > 900_000) throw new ImportCheckpointError(413, "Article is too large. Split it into smaller sections.");
+            return next;
+          });
+        } catch (err) {
+          if (err instanceof ImportCheckpointError) return reply.code(err.statusCode).send({ message: err.message });
+          throw err;
+        }
+      }
+      const { analysisProgress: _progress, analysisCheckpoint: _checkpoint, ...updates } = request.body;
+      const updated = await updateImportSession(request.params.sessionId, updates);
       if (!updated) return reply.notFound("Import session not found");
       return updated;
     }

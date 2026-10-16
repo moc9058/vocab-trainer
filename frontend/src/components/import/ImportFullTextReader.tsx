@@ -24,6 +24,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
   sessionRef.current = session;
   const requestRef = useRef(0);
   const requestController = useRef<AbortController | null>(null);
+  const autoRequested = useRef(new Set<string>());
   useEffect(() => {
     requestController.current?.abort(); requestController.current = null;
     setSelected(null); setError(null); setBusy(false); requestRef.current++;
@@ -88,6 +89,15 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
     } finally { if (request === requestRef.current) { setBusy(false); requestController.current = null; } }
   }
 
+  // New compact imports load syntax on the first explicit sentence selection; old articles keep the manual button.
+  useEffect(() => {
+    if (!sentence || selected?.occurrenceId || !session.analysisProgress || reading || !onPatch || busy) return;
+    const key = `${session.id}:${sentence.index}:${sentence.text}`;
+    if (autoRequested.current.has(key)) return;
+    autoRequested.current.add(key);
+    void generate();
+  }, [selected?.sentenceIndex, selected?.occurrenceId, session.id, reading, busy]);
+
   return <div className={`min-w-0 ${selected ? "lg:pr-[26rem]" : ""}`} data-testid="import-full-text-reader">
     {session.language === "chinese" && <button type="button" aria-pressed={showPinyin}
       onClick={() => setShowPinyin(value => { localStorage.setItem(PINYIN_KEY, value ? "0" : "1"); return !value; })}
@@ -126,6 +136,10 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
         })}
       </p>)}
     </article>
+    {session.analysisProgress && session.analysisProgress.nextChunk < session.analysisProgress.chunks.length && <section className="mt-6 text-gray-400">
+      <h4 className="mb-2 text-xs">{t("importPendingSource")}</h4>
+      <p className="whitespace-pre-wrap break-words text-[17px] leading-relaxed">{session.analysisProgress.chunks.slice(session.analysisProgress.nextChunk).join("")}</p>
+    </section>}
 
     {sentence && selected && <>
       <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={close} />

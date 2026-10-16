@@ -1483,12 +1483,26 @@ words inside construction slots remain candidates. Existing articles remain read
 **Explain this sentence / Update explanation** generates only the selected sentence's
 details and saves them without replacing candidate rows or group assignments.
 
-Articles longer than 1,200 characters receive compact contextual readings/glosses;
-detailed syntax is generated per sentence on demand. Source input is limited to
-8,000 characters, and the saved session has a conservative 900,000-byte budget
-below Firestore's document limit. Very dense articles can exceed that budget even
-in compact mode; import those in smaller sections. Partial or rewritten source
-analysis is rejected rather than saved.
+Initial analysis always uses compact contextual readings/glosses. Sources are split
+into parts of at most 300 UTF-16 characters, preferring sentence/clause/paragraph
+boundaries. Unusually long sentences are divided into sections. Each part is
+analyzed in a separate bounded request and committed to Firestore before the next
+starts. Detailed syntax is generated when a sentence is first selected, then saved for reuse.
+Older articles retain their explicit **Explain this sentence** button.
+
+Completed parts survive timeouts, lost responses, cancellation and reloads. Open the
+saved article and choose **Continue analysis** to process only the remaining parts.
+An over-time part above 120 characters is subdivided further for the next retry.
+The reader shows the remaining unprocessed source too. Existing candidate edits,
+registrations and Group A/B destinations are retained. A lost final response is
+recovered by reading the saved checkpoint rather than reporting a false failure.
+
+Source input is limited to 8,000 characters, and the saved session has a conservative
+900,000-byte budget below Firestore's document limit. Dense articles can still
+exceed that budget; saved parts remain available and the remaining source should be
+imported separately. Partial or rewritten analysis is rejected before committing.
+The legacy streaming endpoint asks cached clients to reload for sources over 600
+characters. Its terminal errors are preserved even if the connection fails afterward.
 
 New-word registration supplies the original sentence and contextual meaning to
 smart-add. Supplied senses retain their multilingual alignment; additional senses
@@ -1497,11 +1511,13 @@ not create extra senses. Registering an existing word only adds the selected gro
 membership; its dictionary definitions are not rewritten.
 
 Import prompts/schema and vocabulary smart-add prompts/schema ship with
-`./deploy.sh --prompts`; no session or dictionary bulk migration is required.
+`./deploy.sh --prompts` when those files change. The resumable analysis flow uses
+the existing prompt configuration with a compact runtime schema and needs only
+a code deployment. No session or dictionary bulk migration is required.
 
 ### Import extraction and retry guarantees
 
-Initial extraction uses one analysis LLM call. Sentence explanations are separate, explicit requests. Deterministic cleanup consolidates equivalent
+Initial extraction uses one compact LLM call per saved part. Sentence explanations are separate, explicit requests. Legacy deterministic cleanup consolidates equivalent
 word rows within each sentence and removes short fragments occurring only inside
 longer extracted words (e.g. 翼 inside 左翼). Independent occurrences, distinct readings
 or senses, and uncertain inflections remain. The client applies the same cleanup on

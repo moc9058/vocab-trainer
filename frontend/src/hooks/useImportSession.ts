@@ -33,7 +33,7 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error";
 /** Free-text edits settle at this cadence; everything consequential flushes at once. */
 const AUTOSAVE_DEBOUNCE_MS = 1200;
 
-type NewSessionInput = Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt">;
+type NewSessionInput = Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean };
 
 interface Options {
   /** Backend full-name language, e.g. "chinese". */
@@ -101,6 +101,8 @@ export function useImportSession({
   const pendingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
+  const saveWaiters = useRef<(() => void)[]>([]);
+  const saveFailure = useRef<string | null>(null);
   /**
    * `kind term` → the CREATE currently running for it.
    *
@@ -122,7 +124,7 @@ export function useImportSession({
 
   const save = useCallback(async () => {
     const current = sessionRef.current;
-    if (!current) return;
+    if (!current) { pendingRef.current = false; saveWaiters.current.splice(0).forEach(resolve => resolve()); return; }
     if (savingRef.current) {
       // Exactly one PUT in flight; the follow-up re-reads current state, so the
       // last write always carries the newest edits.
@@ -135,6 +137,7 @@ export function useImportSession({
     try {
       const saved = await updateImportSession(language, current.id, {
         title: current.title,
+        ...(current.analysisProgress ? { analysisCheckpoint: current.analysisProgress.nextChunk } : {}),
         items: current.items,
         paragraphs: current.paragraphs,
         wordGroupId: current.wordGroupId,
@@ -145,20 +148,24 @@ export function useImportSession({
       });
       // Only the server-owned stamp is taken back; local state stays authoritative
       // so edits made during the request are not reverted.
-      if (sessionRef.current) {
+      if (sessionRef.current?.id === current.id) {
         setSession({ ...sessionRef.current, updatedAt: saved.updatedAt });
       }
       setSaveStatus("saved");
       setSaveError(null);
+      saveFailure.current = null;
     } catch (err) {
       dirtyRef.current = true;
       setSaveStatus("error");
-      setSaveError(err instanceof Error ? err.message : String(err));
+      saveFailure.current = err instanceof Error ? err.message : String(err);
+      setSaveError(saveFailure.current);
     } finally {
       savingRef.current = false;
       if (pendingRef.current) {
         pendingRef.current = false;
         void save();
+      } else {
+        saveWaiters.current.splice(0).forEach(resolve => resolve());
       }
     }
   }, [language, setSession]);
@@ -171,6 +178,25 @@ export function useImportSession({
     }
     void save();
   }, [save]);
+
+  /** Pause UI edits and drain autosave before handing the session to server-side analysis. */
+  const prepareAnalysis = useCallback(async () => {
+    if (sessionRef.current?.items.some(item => item.status === "queued")) throw new Error("Wait for pending registrations before continuing analysis.");
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (savingRef.current || dirtyRef.current) await new Promise<void>(resolve => {
+      saveWaiters.current.push(resolve);
+      if (savingRef.current) pendingRef.current = true;
+      else void save();
+    });
+    if (dirtyRef.current) throw new Error(saveFailure.current ?? "Save the article before continuing analysis.");
+    return sessionRef.current;
+  }, [save]);
+
+  const acceptAnalysisSession = useCallback((next: ImportSession) => {
+    if (dirtyRef.current || savingRef.current) throw new Error("Unsaved edits must be saved before loading analysis.");
+    setSession(next);
+    setSaveStatus("saved"); setSaveError(null);
+  }, [setSession]);
 
   const scheduleSave = useCallback(() => {
     dirtyRef.current = true;
@@ -207,8 +233,9 @@ export function useImportSession({
 
   /** Created the moment the analysis lands, so the expensive LLM result is never at risk. */
   const create = useCallback(
-    async (input: NewSessionInput): Promise<ImportSession> => {
-      const created = await createImportSession(language, input);
+    async (input: NewSessionInput, signal?: AbortSignal): Promise<ImportSession> => {
+      const created = await createImportSession(language, input, signal);
+      signal?.throwIfAborted();
       setMembershipOverlay(new Map());
       setSession(created);
       setSaveStatus("saved");
@@ -696,6 +723,8 @@ export function useImportSession({
 
   return {
     session,
+    prepareAnalysis,
+    acceptAnalysisSession,
     saveStatus,
     saveError,
     membershipOverlay,

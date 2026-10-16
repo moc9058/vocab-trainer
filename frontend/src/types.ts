@@ -771,6 +771,8 @@ export type ImportItem = ImportWordItem | ImportGrammarItem;
  * what the user edited. `paragraphs` keeps the article structure for the review UI.
  */
 export interface ImportSession {
+  /** Server-owned checkpoints for bounded initial analysis; absent on legacy articles. */
+  analysisProgress?: { version: 1; chunks: string[]; nextChunk: number };
   id: string;
   /** Backend full-name language, e.g. "chinese". */
   language: string;
