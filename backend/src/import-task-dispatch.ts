@@ -38,7 +38,7 @@ export async function enqueueImportJob(job: ImportJob): Promise<void> {
       httpRequest: { httpMethod: 'POST', url: `${process.env.IMPORT_WORKER_URL}/internal/import-analysis/run`,
         headers: { 'Content-Type': 'application/json' },
         body: Buffer.from(JSON.stringify({ jobId: job.id, generation: job.generation, batch: job.nextBatch, sequence: job.sequence })).toString('base64'),
-        oidcToken: { serviceAccountEmail: process.env.IMPORT_TASK_ACCOUNT!, audience: process.env.IMPORT_WORKER_URL! } } } });
+        oidcToken: { serviceAccountEmail: process.env.IMPORT_TASK_ACCOUNT!, audience: process.env.IMPORT_WORKER_URL! } } } }, { timeout: 3000, retry: null });
   } catch (err) {
     if ((err as { code?: number }).code !== 6) throw err; // ALREADY_EXISTS: acknowledgement was lost.
   }

@@ -404,7 +404,7 @@ git diff --check
 
 - `import_analysis_jobs/{sessionId}` の一つの現在レコードにchunks・snapshot・lease・dispatch sequence・`nextWakeAt`を保存し、このレコード自体をtransactional outboxとした。バッチごとの独立したdispatch文書は作らない。解析結果/試行/action keyはsubcollectionへ分離した。原文上限8,000文字の範囲でsnapshotも別途850,000 byteまで検証する。
 - `analysisProgress` version 1は原文の分割と表示/保存チェックポイントとして残る。`analysisJobRef` version 2、`analysisRevision`、`analysisState`を追加し、処理方式と保存保護を区別した。新規入力は `analyzeAsJob`。旧部分解析は再開時にjobへ移し、既存chunksをそのまま保持する。
-- 原文の完全な文をIntl.Segmenterで分け、複数文を600 UTF-16文字を目安にまとめる。一文が目安を超えればそのまま一バッチとし、文字位置で切らない。短文は全文一括。workerはsentenceTextsを渡し、原文全体だけでなく文単位の対応も検証する。旧clientのv1専用分割処理は互換目的で残したが、移行済み記事には使わせない。出力上限や有限試行後のtimeoutでは、明示的な再開時に未完了の複数文batchだけを文境界で小さく再計画する。保存済み範囲・一文の途中は分割しない。
+- 原文の完全な文をIntl.Segmenterで分け、複数文を600 UTF-16文字を目安にまとめる。一文が目安を超えればそのまま一バッチとし、文字位置で切らない。短文は全文一括。queue送信APIも3秒・SDK retryなしに制限し、失敗は永続予定からSchedulerが回復する。workerはsentenceTextsを渡し、原文全体だけでなく文単位の対応も検証する。旧clientのv1専用分割処理はemulator互換目的で残したが、本番でjob構成が有効なら旧clientには再読み込みを要求する。移行済み記事には使わせない。出力上限や有限試行後のtimeoutでは、明示的な再開時に未完了の複数文batchだけを文境界で小さく再計画する。保存済み範囲・一文の途中は分割しない。
 - Cloud Tasks + 同じbackendのOIDC保護route + 毎分Schedulerを実装・構築した。queue concurrency 1、LLM 540秒/dispatch 600秒/Cloud Run 660秒。署名・audience・issuer・許可SA・email_verifiedを検証し、Cookieのみ/偽queue headerでは起動できない。ローカルHTTPの無認証workerは作らず、別のemulator専用プロセスが同じ関数を実行する。
 - active jobへの同時再開は同じjobを返す。lease/fencing、有限retry、durable result、attempt単位のusage receipt、送信予定の再照合、期限切れleaseの復旧、削除tombstone、七日後のpayload cleanupを実装。既存のusage log/daily aggregateへ一度だけ反映。結果保存前の外部応答喪失による課金の再発は保証できない。
 - 編集/登録はactive中に露出させず、pause後に再開できる。再開前に既存save/登録queueをdrain。旧PUTの新規解析への上書きをrevision+checkpoint+phaseで拒否。辞書へのA/B登録処理自体は変更していない。
@@ -450,7 +450,7 @@ PowerShellでは環境変数を `$env:NAME=...` で設定する。実LLMコマ�
 
 ### 15.3 ローカル検証結果
 
-- backend build、unit87件、既存import route6件、mixed route4件が成功。
+- backend build、unit87件、import/dispatch回帰8件（既存route6件＋queue送信2件）、mixed route4件が成功。
 - ジョブのemulator integration7件が成功（mock LLM、専用demo project）。同時実行、pause/編集再開、stale PUT、旧API拒否、保存結果復旧、有限retry、worker認証、失効leaseとpause、削除cleanup、文境界の明示的再計画を確認。
 - frontend type-check、unit94件、build、Playwright24件が成功。通信断からの追従、受付応答喪失、画面離脱後の完了、編集drain、既存A/B追加復旧・全文読解も確認。
 - Docker/Firestore emulator + 実LLMの576文字HTTP smokeで受付・保存・重複受付・完了後resumeを確認。

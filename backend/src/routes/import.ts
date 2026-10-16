@@ -1,3 +1,4 @@
+import { jobsConfigured, localJobs } from "../import-task-dispatch.js";
 import { planImportBatches, jobActive } from "../import-jobs.js";
 import { splitImportSource, appendImportPart, subdivideImportPart, ImportCheckpointError } from "../import-parts.js";
 import { sourceMatchesSentences } from "../import-reading-analysis.js";
@@ -185,7 +186,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
       const expected = request.body.chunkIndex;
       const session = await getImportSession(sessionId);
       if (!session || session.language !== language) return reply.notFound("Import session not found");
-      if (session.analysisJobRef) return reply.code(409).send({ code: "IMPORT_USE_JOB", message: "Reload to monitor the existing analysis job." });
+      if (session.analysisJobRef || (!localJobs() && jobsConfigured())) return reply.code(409).send({ code: "IMPORT_USE_JOB", message: "Reload to monitor the existing analysis job." });
       const progress = session.analysisProgress;
       if (!progress) return reply.badRequest("This article has no pending analysis");
       if (progress.nextChunk > expected || progress.nextChunk === progress.chunks.length) return session;
