@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import fixture from "./__fixtures__/import-context.json";
 import type { ImportAnalysisResult, ImportItem } from "../types";
 import { buildImportItems, materializeGaps, sentenceCoverage, sentenceItems, splitWordItem, undoDerivation } from "./importSession";
-import { fixedGrammarOccurrenceIds, readingOccurrences, readingConstructions, validReading } from "./importReadingAnalysis";
+import { fixedGrammarOccurrenceIds, occurrenceConstructions, readingOccurrences, readingConstructions, validReading } from "./importReadingAnalysis";
 
 const analysis = fixture as ImportAnalysisResult;
 const sentence = analysis.paragraphs[0].sentences[0];
@@ -105,4 +105,16 @@ it("reader markers distinguish fixed grammar from same-spelling words and variab
   expect([...fixedGrammarOccurrenceIds(compact, items, occurrences)]).toEqual([...fixed]);
   const edited = items.map(item => item.kind === "grammar" ? { ...item, edited: true, statement: "edited" } : item);
   expect(fixedGrammarOccurrenceIds(sentence, edited, occurrences).size).toBe(0);
+});
+
+it("links compact fixed elements by occurrence while leaving repeated spelling and variable slots separate", () => {
+  const compact = { ...sentence, readingAnalysis: undefined };
+  const items = fresh();
+  const words = readingOccurrences(compact, items);
+  const points = readingConstructions(compact, items);
+  expect(points).toHaveLength(1);
+  expect(words.filter(word => occurrenceConstructions(word, points).length).map(word => word.range.start)).toEqual([3, 8]);
+  expect(points[0].ranges).toEqual([{ start: 3, end: 4 }, { start: 8, end: 9 }]);
+  const removed = items.map(item => item.kind === "grammar" ? { ...item, status: "skipped" as const } : item);
+  expect(readingOccurrences(compact, removed).some(word => word.range.start === 8)).toBe(false);
 });

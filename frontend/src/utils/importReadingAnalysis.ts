@@ -51,23 +51,33 @@ export function readingOccurrences(sentence: ImportSentence, items: ImportItem[]
     if (row && (row.status === "skipped" || row.term.trim() !== word.lemma)) continue;
     add(word);
   }
+  // Compact imports can retain fixed elements only on grammar rows, without occurrence data.
+  for (const item of items) {
+    if (item.kind !== "grammar" || item.sentenceIndex !== sentence.index || item.status === "skipped" || item.edited) continue;
+    for (const element of item.fixedElements ?? []) add({
+      id: `grammar-${item.id}-${element.range.start}`, range: element.range, surface: element.surface, lemma: element.surface,
+      transliteration: element.transliteration, contextualMeaning: element.meaning, explanationLanguage: item.explanationLanguage ?? "ja",
+      partOfSpeech: "", role: "", reasoning: "", contrast: "", senseKey: "", constructionIds: [item.constructionId ?? item.id],
+    });
+  }
   return result.sort((a, b) => a.range.start - b.range.start);
 }
 
 export function readingConstructions(sentence: ImportSentence, items: ImportItem[]): ImportConstruction[] {
   const rows = items.filter(item => item.kind === "grammar" && item.sentenceIndex === sentence.index);
   const reading = validReading(sentence);
-  if (reading) return reading.constructions.filter(point => {
+  const detailed = reading?.constructions.filter(point => {
     const row = rows.find(row => row.kind === "grammar" && row.statement === point.statement) ?? rows.find(row => row.kind === "grammar" && row.constructionId === point.id);
     return !row || (row.status !== "skipped" && row.kind === "grammar" && row.statement === point.statement);
   }).map(point => {
     const row = rows.find(row => row.kind === "grammar" && row.statement === point.statement) ?? rows.find(row => row.kind === "grammar" && row.constructionId === point.id);
     return row?.kind === "grammar" ? { ...point, meaning: row.description } : point;
-  });
-  return rows.flatMap(row => row.kind === "grammar" && row.status !== "skipped" ? [{
-    id: row.id, statement: row.statement, meaning: row.description, roleInSentence: "",
-    ranges: row.excerpt ? termOccurrences(sentence.text, row.excerpt).map(start => ({ start, end: start + row.excerpt!.length })) : [], elements: [],
-  }] : []);
+  }) ?? [];
+  return [...detailed, ...rows.flatMap(row => row.kind === "grammar" && row.status !== "skipped"
+    && !reading?.constructions.some(point => point.id === row.constructionId || point.statement === row.statement) ? [{
+    id: row.constructionId ?? row.id, statement: row.statement, meaning: row.description, roleInSentence: "",
+    ranges: !row.edited && row.fixedElements?.length ? row.fixedElements.filter(element => sentence.text.slice(element.range.start, element.range.end) === element.surface).map(element => element.range) : row.excerpt ? termOccurrences(sentence.text, row.excerpt).map(start => ({ start, end: start + row.excerpt!.length })) : [], elements: [],
+  }] : [])];
 }
 
 /** Only fixed grammar elements get a grammar marker; variable content slots remain words. */
@@ -84,4 +94,11 @@ export function fixedGrammarOccurrenceIds(sentence: ImportSentence, items: Impor
   return new Set(occurrences.filter(word => elements.some(element =>
     element.range.start === word.range.start && element.range.end === word.range.end && element.surface === word.surface
     && sentence.text.slice(element.range.start, element.range.end) === element.surface)).map(word => word.id));
+}
+
+/** Resolve sentence-local links without guessing from spelling or broad legacy excerpts. */
+export function occurrenceConstructions(word: ImportOccurrence, points: ImportConstruction[]): ImportConstruction[] {
+  return points.filter(point => word.constructionIds.includes(point.id)
+    || point.elements.some(element => element.occurrenceIds.includes(word.id))
+    || point.ranges.some(range => range.start === word.range.start && range.end === word.range.end));
 }

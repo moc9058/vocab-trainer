@@ -404,3 +404,47 @@ test('reader shows fixed grammar boundaries, keeps variable words distinct and r
   await page.reload();
   await expect(reader.getByRole('button', { name: 'Boundaries: off', exact: true })).toHaveAttribute('aria-pressed', 'false');
 });
+
+for (const compact of [false, true]) {
+  test(`touching a grammar element links its partner in the mobile preview (${compact ? 'compact' : 'detailed'})`, async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    const state = await reviewSetup(page);
+    if (compact) {
+      const { buildImportItems } = await import('../../src/utils/importSession');
+      const { default: analysis } = await import('../../src/utils/__fixtures__/import-context.json', { with: { type: 'json' } });
+      state.saved().items = buildImportItems(analysis as any, {}, {}, 'chinese');
+      delete state.saved().paragraphs[0].sentences[0].readingAnalysis;
+      await page.reload();
+    }
+    const reader = page.getByTestId('import-full-text-reader');
+    const gai = reader.getByRole('button', { name: '该', exact: true });
+    await gai.nth(1).click();
+    await expect(gai.nth(1)).toHaveClass(/bg-emerald/);
+    await expect(reader.locator('article').getByRole('button', { name: '了', exact: true })).toHaveClass(/bg-emerald/);
+    await expect(gai.nth(0)).not.toHaveClass(/bg-emerald/);
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('button', { name: '该+v+了', exact: true })).toHaveAttribute('aria-pressed', 'true');
+    await expect(dialog.getByTestId('import-sentence-preview').locator('[class*="bg-emerald-900"]')).toHaveCount(compact ? 2 : 4);
+    await page.screenshot({ path: `/tmp/vocab-linked-${compact ? 'compact' : 'detailed'}.png` });
+    await page.keyboard.press('Escape');
+    await expect(gai.nth(1)).not.toHaveClass(/bg-emerald/);
+    expect(state.generations()).toBe(0);
+    expect(state.writes()).toBe(0);
+  });
+}
+
+test('overlapping constructions switch highlights while retaining the touched occurrence', async ({ page }) => {
+  const state = await reviewSetup(page);
+  const reading = state.saved().paragraphs[0].sentences[0].readingAnalysis;
+  reading.constructions.push({ id: 'second', statement: '该+v', ranges: [{ start: 3, end: 4 }, { start: 4, end: 6 }], meaning: 'second pattern', roleInSentence: '', elements: [] });
+  reading.occurrences[2].constructionIds.push('second');
+  await page.reload();
+  const reader = page.getByTestId('import-full-text-reader');
+  await reader.getByRole('button', { name: '该', exact: true }).nth(1).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: '该+v', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: '该+v', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(dialog.getByRole('button', { name: '该+v+了', exact: true })).toHaveAttribute('aria-pressed', 'false');
+  await expect(reader.locator('article').getByRole('button', { name: '了', exact: true })).not.toHaveClass(/bg-emerald/);
+  await expect(dialog).toContainText('そろそろ〜すべき');
+});

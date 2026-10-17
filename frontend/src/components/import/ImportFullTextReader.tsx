@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../i18n/context";
 import { generateImportSentenceExplanation } from "../../api/import";
-import { fixedGrammarOccurrenceIds, readingConstructions, readingOccurrences, validReading } from "../../utils/importReadingAnalysis";
+import { fixedGrammarOccurrenceIds, occurrenceConstructions, readingConstructions, readingOccurrences, validReading } from "../../utils/importReadingAnalysis";
 import type { ImportSession } from "../../types";
 import RubyText from "../RubyText";
 
@@ -61,7 +61,20 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
   const fixedGrammar = sentence ? fixedGrammarOccurrenceIds(sentence, session.items, occurrences) : new Set<string>();
   const word = occurrences.find(word => word.id === selected?.occurrenceId);
   const constructions = sentence ? readingConstructions(sentence, session.items) : [];
-  const activeConstruction = constructions.find(point => point.id === selected?.constructionId);
+  const relatedConstructions = word ? occurrenceConstructions(word, constructions) : constructions;
+  const activeConstruction = relatedConstructions.find(point => point.id === selected?.constructionId)
+    ?? (word ? relatedConstructions[0] : undefined);
+  const emphasized = (start: number, end: number) => activeConstruction?.ranges.some(range => range.start < end && range.end > start);
+  function sentencePreview() {
+    if (!sentence) return null;
+    const cuts = [...new Set([0, sentence.text.length, ...occurrences.flatMap(token => [token.range.start, token.range.end]),
+      ...(activeConstruction?.ranges.flatMap(range => [range.start, range.end]) ?? [])])]
+      .filter(offset => offset >= 0 && offset <= sentence.text.length).sort((a, b) => a - b);
+    return cuts.slice(0, -1).map((start, index) => {
+      const end = cuts[index + 1];
+      return <span key={start} className={`${emphasized(start, end) ? "rounded bg-emerald-900/60 text-emerald-100" : ""} ${word && word.range.start <= start && word.range.end >= end ? "underline decoration-indigo-300 decoration-2 underline-offset-4" : ""}`}>{sentence.text.slice(start, end)}</span>;
+    });
+  }
   const reading = sentence ? validReading(sentence) : undefined;
   const gestureRef = useRef<{ x: number; y: number } | null>(null);
   const movedRef = useRef(false);
@@ -131,7 +144,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
           const tokens = readingOccurrences(value, session.items);
           const points = readingConstructions(value, session.items);
           const grammarIds = fixedGrammarOccurrenceIds(value, session.items, tokens);
-          const highlight = value.index === selected?.sentenceIndex ? points.find(point => point.id === selected.constructionId) : undefined;
+          const highlight = value.index === selected?.sentenceIndex ? activeConstruction : undefined;
           const parts: React.ReactNode[] = [];
           let cursor = 0;
           for (const token of tokens) {
@@ -182,7 +195,18 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
           </div>
           <button type="button" onClick={close} aria-label={t("importCloseFullText")} className="rounded px-3 py-1 text-gray-400 hover:bg-gray-800">×</button>
         </header>
-        <p className="mb-3 break-words text-base leading-relaxed text-gray-200">{sentence.text}</p>
+        {relatedConstructions.length > 0 && <div className="mb-3 text-xs">
+          <p className="mb-2 text-gray-400">{t("importLinkedConstruction")}</p>
+          <div className="flex flex-wrap gap-2">
+            {relatedConstructions.map(point => <button key={point.id} type="button" aria-pressed={activeConstruction?.id === point.id}
+              onClick={() => setSelected(current => current && ({ ...current, constructionId: point.id }))}
+              className={`max-w-full break-words rounded-lg border px-3 py-2 text-left ${activeConstruction?.id === point.id ? "border-emerald-500 bg-emerald-950/60 text-emerald-200" : "border-gray-700 text-gray-300 hover:bg-gray-800"}`}>
+              {point.statement}
+            </button>)}
+          </div>
+          {activeConstruction && <p className="mt-2 text-emerald-300">{t("importLinkedConstructionHint")}</p>}
+        </div>}
+        <p data-testid="import-sentence-preview" className="mb-3 break-words text-base leading-loose text-gray-200">{sentencePreview()}</p>
         {sentence.translation && <p className="mb-4 text-sm text-indigo-200/80">{sentence.translation}</p>}
         {word && <div className="mb-4 space-y-2 rounded-xl bg-indigo-950/30 p-3 text-sm text-gray-200">
           {word.transliteration && <p className="font-mono text-indigo-300">{word.transliteration}</p>}
@@ -194,9 +218,9 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
           <button type="button" onClick={() => setSelected({ sentenceIndex: sentence.index })} className="text-indigo-300 underline">{t("importSentenceExplanation")}</button>
         </div>}
         {!word && reading?.overview && <p className="mb-4 whitespace-pre-wrap text-sm leading-relaxed text-gray-200">{reading.overview}</p>}
-        {(word ? constructions.filter(point => word.constructionIds.includes(point.id)) : constructions).map(point => <section key={point.id} className="mb-3 rounded-xl border border-emerald-900/70 p-3 text-sm text-gray-200">
+        {relatedConstructions.map(point => <section key={point.id} className="mb-3 rounded-xl border border-emerald-900/70 p-3 text-sm text-gray-200">
           <p className="mb-1 text-xs text-emerald-400/80">{t("importReaderGrammar")}</p>
-          <button type="button" onClick={() => setSelected({ sentenceIndex: sentence.index, constructionId: point.id })} className="break-words text-left font-semibold text-emerald-300">{point.statement}</button>
+          <h4 className="break-words font-semibold text-emerald-300">{point.statement}</h4>
           <p className="mt-1 whitespace-pre-wrap">{point.meaning}</p>
           {point.roleInSentence && <p className="mt-2 text-gray-400">{point.roleInSentence}</p>}
           {point.elements.map((element, index) => <p key={index} className="mt-2 border-l border-gray-700 pl-2">
