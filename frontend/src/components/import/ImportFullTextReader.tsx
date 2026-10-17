@@ -142,7 +142,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
               title={`${t(isGrammar ? "importReaderGrammarElement" : "importReaderWord")}: ${token.surface}`}
               data-reading-kind={isGrammar ? "grammar" : "word"}
               onClick={event => select(event, { sentenceIndex: value.index, occurrenceId: token.id })}
-              className={`rounded px-0.5 text-left border-b-2 ${showBoundaries ? isGrammar ? "border-dotted border-emerald-400/80" : "border-solid border-indigo-400/40" : "border-transparent"} hover:bg-indigo-900/50 focus-visible:outline-2 focus-visible:outline-indigo-400 ${emphasized ? "bg-emerald-900/60 text-emerald-100" : selected?.sentenceIndex === value.index && selected.occurrenceId === token.id ? "bg-indigo-900/60" : ""}`}>
+              className={`mx-px rounded px-0.5 text-left border-b-2 ${showBoundaries ? isGrammar ? "border-dotted border-emerald-400/80" : "border-solid border-indigo-400/40" : "border-transparent"} hover:bg-indigo-900/50 focus-visible:outline-2 focus-visible:outline-indigo-400 ${emphasized ? "bg-emerald-900/60 text-emerald-100" : selected?.sentenceIndex === value.index && selected.occurrenceId === token.id ? "bg-indigo-900/60" : ""}`}>
               <RubyText text={token.surface} segments={session.language === "chinese" && showPinyin && token.transliteration ? [{ text: token.surface, transliteration: token.transliteration }] : undefined} />
             </button>);
             cursor = token.range.end;
