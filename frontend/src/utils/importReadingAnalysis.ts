@@ -69,3 +69,19 @@ export function readingConstructions(sentence: ImportSentence, items: ImportItem
     ranges: row.excerpt ? termOccurrences(sentence.text, row.excerpt).map(start => ({ start, end: start + row.excerpt!.length })) : [], elements: [],
   }] : []);
 }
+
+/** Only fixed grammar elements get a grammar marker; variable content slots remain words. */
+export function fixedGrammarOccurrenceIds(sentence: ImportSentence, items: ImportItem[], occurrences: ImportOccurrence[]): Set<string> {
+  const reading = validReading(sentence);
+  const fixed = readingConstructions(sentence, items).flatMap(point => point.elements
+    .filter(element => element.fixed)
+    .flatMap(element => reading?.occurrences.filter(word => element.occurrenceIds.includes(word.id)) ?? []));
+  // Compact imports retain fixed ranges on the editable grammar rows, without detailed constructions.
+  const compact = items.flatMap(item => item.kind === "grammar" && item.sentenceIndex === sentence.index && item.status !== "skipped" && !item.edited
+    && !reading?.constructions.some(point => point.id === item.constructionId || point.statement === item.statement)
+    ? item.fixedElements ?? [] : []);
+  const elements = [...fixed, ...compact];
+  return new Set(occurrences.filter(word => elements.some(element =>
+    element.range.start === word.range.start && element.range.end === word.range.end && element.surface === word.surface
+    && sentence.text.slice(element.range.start, element.range.end) === element.surface)).map(word => word.id));
+}

@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import fixture from "./__fixtures__/import-context.json";
 import type { ImportAnalysisResult, ImportItem } from "../types";
 import { buildImportItems, materializeGaps, sentenceCoverage, sentenceItems, splitWordItem, undoDerivation } from "./importSession";
-import { readingOccurrences, readingConstructions, validReading } from "./importReadingAnalysis";
+import { fixedGrammarOccurrenceIds, readingOccurrences, readingConstructions, validReading } from "./importReadingAnalysis";
 
 const analysis = fixture as ImportAnalysisResult;
 const sentence = analysis.paragraphs[0].sentences[0];
@@ -91,4 +91,18 @@ it("regenerated occurrence IDs may change while range-linked inflected words kee
     occurrences: [{ id: "regenerated", range: { start: 0, end: 5 }, surface: "食べました", lemma: "食べる", contextualMeaning: "食事する", transliteration: "tabemashita", explanationLanguage: "ja", partOfSpeech: "verb", role: "過去の述語", reasoning: "ました", contrast: "", senseKey: "eat", constructionIds: [] }] } };
   const row: ImportItem = { id: "word", kind: "word", sentenceIndex: 3, order: 0, status: "pending", origin: "llm", term: "食べる", sourceTerm: "食べる", surface: "食べました", range: { start: 0, end: 5 }, occurrenceId: "old-id" };
   expect(readingOccurrences(sentence, [row])[0].role).toBe("過去の述語");
+});
+
+it("reader markers distinguish fixed grammar from same-spelling words and variable slots", () => {
+  const items = fresh();
+  const occurrences = readingOccurrences(sentence, items);
+  const fixed = fixedGrammarOccurrenceIds(sentence, items, occurrences);
+  expect(occurrences.filter(word => fixed.has(word.id)).map(word => word.range.start)).toEqual([3, 8]);
+  const removed = items.map(item => item.kind === "grammar" ? { ...item, status: "skipped" as const } : item);
+  expect(fixedGrammarOccurrenceIds(sentence, removed, occurrences).size).toBe(0);
+  const compact = structuredClone(sentence);
+  compact.readingAnalysis!.constructions = [];
+  expect([...fixedGrammarOccurrenceIds(compact, items, occurrences)]).toEqual([...fixed]);
+  const edited = items.map(item => item.kind === "grammar" ? { ...item, edited: true, statement: "edited" } : item);
+  expect(fixedGrammarOccurrenceIds(sentence, edited, occurrences).size).toBe(0);
 });

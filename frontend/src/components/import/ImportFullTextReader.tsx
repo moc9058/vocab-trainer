@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../i18n/context";
 import { generateImportSentenceExplanation } from "../../api/import";
-import { readingConstructions, readingOccurrences, validReading } from "../../utils/importReadingAnalysis";
+import { fixedGrammarOccurrenceIds, readingConstructions, readingOccurrences, validReading } from "../../utils/importReadingAnalysis";
 import type { ImportSession } from "../../types";
 import RubyText from "../RubyText";
 
+const BOUNDARIES_KEY = "importShowTextBoundaries";
 const PINYIN_KEY = "importShowFullTextPinyin";
 interface Props {
   session: ImportSession;
@@ -15,6 +16,7 @@ interface Props {
 export default function ImportFullTextReader({ session, onEditSentence, onPatch }: Props) {
   const { t } = useI18n();
   const [showPinyin, setShowPinyin] = useState(() => localStorage.getItem(PINYIN_KEY) !== "0");
+  const [showBoundaries, setShowBoundaries] = useState(() => localStorage.getItem(BOUNDARIES_KEY) !== "0");
   const [selected, setSelected] = useState<{ sentenceIndex: number; occurrenceId?: string; constructionId?: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -56,6 +58,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
 
   const sentence = selected ? session.paragraphs.flatMap(p => p.sentences).find(s => s.index === selected.sentenceIndex) : undefined;
   const occurrences = sentence ? readingOccurrences(sentence, session.items) : [];
+  const fixedGrammar = sentence ? fixedGrammarOccurrenceIds(sentence, session.items, occurrences) : new Set<string>();
   const word = occurrences.find(word => word.id === selected?.occurrenceId);
   const constructions = sentence ? readingConstructions(sentence, session.items) : [];
   const activeConstruction = constructions.find(point => point.id === selected?.constructionId);
@@ -99,6 +102,21 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
   }, [selected?.sentenceIndex, selected?.occurrenceId, session.id, reading, busy]);
 
   return <div className={`min-w-0 ${selected ? "lg:pr-[26rem]" : ""}`} data-testid="import-full-text-reader">
+    <div className="mb-5 space-y-2 text-xs text-gray-400">
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" aria-pressed={showBoundaries}
+          onClick={() => setShowBoundaries(value => { localStorage.setItem(BOUNDARIES_KEY, value ? "0" : "1"); return !value; })}
+          className="rounded-lg border border-gray-700 px-3 py-2 text-indigo-200">
+          {t("importTextBoundaries")}: {showBoundaries ? t("importBoundariesOn") : t("importBoundariesOff")}
+        </button>
+        {showBoundaries && <>
+          <span className="border-b border-indigo-400/70 px-1 pb-0.5">{t("importReaderWord")}</span>
+          <span className="border-b-2 border-dotted border-emerald-400/80 px-1 pb-0.5">{t("importReaderGrammarElement")}</span>
+        </>}
+        <span>↗ {t("importSentenceExplanation")}</span>
+      </div>
+      <p>{t("importReaderBoundaryHint")}</p>
+    </div>
     {session.language === "chinese" && <button type="button" aria-pressed={showPinyin}
       onClick={() => setShowPinyin(value => { localStorage.setItem(PINYIN_KEY, value ? "0" : "1"); return !value; })}
       className="mb-5 rounded-lg border border-gray-700 px-3 py-2 text-xs text-indigo-200">
@@ -112,15 +130,19 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
         {paragraph.sentences.map((value, sentenceIndex) => {
           const tokens = readingOccurrences(value, session.items);
           const points = readingConstructions(value, session.items);
+          const grammarIds = fixedGrammarOccurrenceIds(value, session.items, tokens);
           const highlight = value.index === selected?.sentenceIndex ? points.find(point => point.id === selected.constructionId) : undefined;
           const parts: React.ReactNode[] = [];
           let cursor = 0;
           for (const token of tokens) {
             if (token.range.start > cursor) parts.push(value.text.slice(cursor, token.range.start));
             const emphasized = highlight?.ranges.some(range => range.start < token.range.end && range.end > token.range.start);
+            const isGrammar = grammarIds.has(token.id);
             parts.push(<button key={token.id} type="button" aria-label={token.surface}
+              title={`${t(isGrammar ? "importReaderGrammarElement" : "importReaderWord")}: ${token.surface}`}
+              data-reading-kind={isGrammar ? "grammar" : "word"}
               onClick={event => select(event, { sentenceIndex: value.index, occurrenceId: token.id })}
-              className={`rounded px-0.5 text-left hover:bg-indigo-900/50 focus-visible:outline-2 focus-visible:outline-indigo-400 ${emphasized ? "bg-emerald-900/60 text-emerald-100" : selected?.sentenceIndex === value.index && selected.occurrenceId === token.id ? "bg-indigo-900/60" : ""}`}>
+              className={`rounded px-0.5 text-left border-b-2 ${showBoundaries ? isGrammar ? "border-dotted border-emerald-400/80" : "border-solid border-indigo-400/40" : "border-transparent"} hover:bg-indigo-900/50 focus-visible:outline-2 focus-visible:outline-indigo-400 ${emphasized ? "bg-emerald-900/60 text-emerald-100" : selected?.sentenceIndex === value.index && selected.occurrenceId === token.id ? "bg-indigo-900/60" : ""}`}>
               <RubyText text={token.surface} segments={session.language === "chinese" && showPinyin && token.transliteration ? [{ text: token.surface, transliteration: token.transliteration }] : undefined} />
             </button>);
             cursor = token.range.end;
@@ -132,6 +154,11 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
             <button type="button" aria-label={`${t("importSentenceExplanation")} ${value.index + 1}`}
               onClick={event => select(event, { sentenceIndex: value.index })}
               className="mx-1 inline-flex min-h-8 items-center rounded px-1.5 align-middle text-xs text-gray-500 hover:bg-gray-800 hover:text-indigo-200">↗<span className="sr-only">{t("importSentenceExplanation")}</span></button>
+            {points.length > 0 && <button type="button"
+              onClick={event => select(event, { sentenceIndex: value.index, constructionId: points[0].id })}
+              className="mx-1 inline-flex min-h-8 items-center rounded border border-emerald-900/80 px-2 align-middle text-xs text-emerald-300 hover:bg-emerald-950/50 focus-visible:outline-2 focus-visible:outline-emerald-400">
+              {t("importReaderGrammar")} {points.length}
+            </button>}
           </span>;
         })}
       </p>)}
@@ -147,7 +174,12 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
         aria-label={t("importSentenceExplanation")}
         className="fixed inset-x-0 bottom-0 z-50 max-h-[78dvh] overflow-y-auto overscroll-contain rounded-t-2xl border border-gray-700 bg-gray-900 p-4 shadow-2xl outline-none sm:p-6 lg:inset-x-auto lg:bottom-4 lg:right-4 lg:top-48 lg:max-h-none lg:w-[min(26rem,45vw)] lg:rounded-2xl">
         <header className="mb-3 flex items-start gap-3">
-          <h3 className="min-w-0 flex-1 font-semibold text-indigo-200">{word?.surface ?? activeConstruction?.statement ?? t("importSentenceExplanation")}</h3>
+          <div className="min-w-0 flex-1">
+            <p className={`mb-1 text-xs ${word && !fixedGrammar.has(word.id) ? "text-indigo-300" : "text-emerald-300"}`}>
+              {word ? t(fixedGrammar.has(word.id) ? "importReaderGrammarElement" : "importReaderWord") : activeConstruction ? t("importReaderGrammar") : t("importSentenceExplanation")}
+            </p>
+            <h3 className="font-semibold text-indigo-200">{word?.surface ?? activeConstruction?.statement ?? t("importSentenceExplanation")}</h3>
+          </div>
           <button type="button" onClick={close} aria-label={t("importCloseFullText")} className="rounded px-3 py-1 text-gray-400 hover:bg-gray-800">×</button>
         </header>
         <p className="mb-3 break-words text-base leading-relaxed text-gray-200">{sentence.text}</p>
@@ -163,6 +195,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
         </div>}
         {!word && reading?.overview && <p className="mb-4 whitespace-pre-wrap text-sm leading-relaxed text-gray-200">{reading.overview}</p>}
         {(word ? constructions.filter(point => word.constructionIds.includes(point.id)) : constructions).map(point => <section key={point.id} className="mb-3 rounded-xl border border-emerald-900/70 p-3 text-sm text-gray-200">
+          <p className="mb-1 text-xs text-emerald-400/80">{t("importReaderGrammar")}</p>
           <button type="button" onClick={() => setSelected({ sentenceIndex: sentence.index, constructionId: point.id })} className="break-words text-left font-semibold text-emerald-300">{point.statement}</button>
           <p className="mt-1 whitespace-pre-wrap">{point.meaning}</p>
           {point.roleInSentence && <p className="mt-2 text-gray-400">{point.roleInSentence}</p>}

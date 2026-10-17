@@ -382,3 +382,25 @@ test('an 8000-character partial source stays readable on mobile, switches modes 
   expect(calls).toBe(0); expect(saved.text.length).toBe(8000);
   console.log(JSON.stringify({ largeSourceUiMs: Date.now() - started, sourceCharacters: 8000, viewport: 360 }));
 });
+
+test('reader shows fixed grammar boundaries, keeps variable words distinct and remembers a clean reading view', async ({ page }) => {
+  await reviewSetup(page);
+  const reader = page.getByTestId('import-full-text-reader');
+  const words = reader.locator('article [data-reading-kind="word"]');
+  const grammar = reader.locator('article [data-reading-kind="grammar"]');
+  await expect(words).toHaveCount(4);
+  await expect(grammar).toHaveCount(2);
+  await expect(grammar.first()).toHaveText('该gāi');
+  await expect(grammar.first()).toHaveClass(/border-dotted/);
+  await reader.getByRole('button', { name: 'Grammar 1', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('该+v+了');
+  await expect(grammar.first()).toHaveClass(/bg-emerald/);
+  await page.keyboard.press('Escape');
+  await expect(reader.getByRole('button', { name: 'Grammar 1', exact: true })).toBeFocused();
+  await reader.getByRole('button', { name: 'Boundaries: on', exact: true }).click();
+  await expect(grammar.first()).toHaveClass(/border-transparent/);
+  await grammar.first().click();
+  await expect(page.getByRole('dialog')).toContainText('Grammar element');
+  await page.reload();
+  await expect(reader.getByRole('button', { name: 'Boundaries: off', exact: true })).toHaveAttribute('aria-pressed', 'false');
+});
