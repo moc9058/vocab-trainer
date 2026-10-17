@@ -2,7 +2,7 @@ import { jobsConfigured, localJobs } from "../import-task-dispatch.js";
 import { planImportBatches, jobActive } from "../import-jobs.js";
 import { splitImportSource, appendImportPart, subdivideImportPart, ImportCheckpointError } from "../import-parts.js";
 import { sourceMatchesSentences } from "../import-reading-analysis.js";
-import { compactImportSchema, COMPACT_IMPORT_INSTRUCTIONS } from "../import-analysis-config.js";
+import { compactImportSchema, COMPACT_IMPORT_INSTRUCTIONS, IMPORT_ELEMENT_INSTRUCTIONS } from "../import-analysis-config.js";
 import type { FastifyPluginAsync } from "fastify";
 import { callLLM, stripMarkdownFences } from "../llm.js";
 import { openSSE } from "../sse.js";
@@ -255,7 +255,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
         const prompt = config.analyzePrompts?.[language];
         if (!prompt) return reply.badRequest("No import prompt configured for language");
         const raw = await callLLM({
-          system: prompt + "\nAnalyze ONLY target as exactly one sentence. before/after are context, never output them. Preserve target verbatim, even if it contains sentence punctuation.",
+          system: prompt + IMPORT_ELEMENT_INSTRUCTIONS + "\nAnalyze ONLY target as exactly one sentence. before/after are context, never output them. Preserve target verbatim, even if it contains sentence punctuation.",
           user: JSON.stringify({ target: sentence.text, before: sentences[at - 1]?.text ?? "", after: sentences[at + 1]?.text ?? "" }),
           schema: config.analyzeSchema, tier: "full", route: "import/sentence-explanation",
         });
@@ -305,7 +305,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
           // Merges and splits leave their sources behind as `skipped` tombstones so the
           // operation stays undoable; they are not live rows. Mirrors `isLive` in
           // frontend/src/utils/importSession.ts, which has no backend twin to import.
-          if (item.status === "skipped") continue;
+          if (item.status === "skipped" || (item.kind === "word" && item.suppressedByGrammar)) continue;
           if (item.kind === "word") {
             if (item.existingWordId) wordIds.add(item.existingWordId);
           } else if (item.existingGrammarId) {
@@ -322,8 +322,8 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
             id: s.id,
             language: s.language,
             title: s.title,
-            totalCount: s.items?.length ?? 0,
-            registeredCount: (s.items ?? []).filter((i) => i.status === "registered").length,
+            totalCount: (s.items ?? []).filter(i => !(i.kind === "word" && i.suppressedByGrammar)).length,
+            registeredCount: (s.items ?? []).filter((i) => i.status === "registered" && !(i.kind === "word" && i.suppressedByGrammar)).length,
             status: s.status,
             ...(s.analysisState ? { analysisState: s.analysisState } : {}),
             createdAt: s.createdAt,

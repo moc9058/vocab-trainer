@@ -1,4 +1,4 @@
-import type { ImportConstruction, ImportItem, ImportOccurrence, ImportSentence, ImportWordItem } from "../types";
+import type { ImportConstruction, ImportItem, ImportOccurrence, ImportSentence, ImportSession, ImportWordItem } from "../types";
 import { termOccurrences } from "./importSession";
 
 export function validReading(sentence: ImportSentence) {
@@ -33,7 +33,7 @@ export function readingOccurrences(sentence: ImportSentence, items: ImportItem[]
       continue;
     }
     // A later sentence-only explanation is independent of old untouched review rows.
-    if (original.length && !edited(row) && !row.occurrenceId) continue;
+    if (original.length && !edited(row)) continue;
     const term = row.term.trim();
     const starts = row.range && row.sourceTerm === term && row.surface && sentence.text.slice(row.range.start, row.range.end) === row.surface
       ? [row.range.start] : termOccurrences(sentence.text, term);
@@ -67,10 +67,10 @@ export function readingConstructions(sentence: ImportSentence, items: ImportItem
   const rows = items.filter(item => item.kind === "grammar" && item.sentenceIndex === sentence.index);
   const reading = validReading(sentence);
   const detailed = reading?.constructions.filter(point => {
-    const row = rows.find(row => row.kind === "grammar" && row.statement === point.statement) ?? rows.find(row => row.kind === "grammar" && row.constructionId === point.id);
-    return !row || (row.status !== "skipped" && row.kind === "grammar" && row.statement === point.statement);
+    const row = rows.find(row => row.kind === "grammar" && patternKey(row.statement) === patternKey(point.statement)) ?? rows.find(row => row.kind === "grammar" && row.constructionId === point.id);
+    return !row || (row.status !== "skipped" && row.kind === "grammar" && patternKey(row.statement) === patternKey(point.statement));
   }).map(point => {
-    const row = rows.find(row => row.kind === "grammar" && row.statement === point.statement) ?? rows.find(row => row.kind === "grammar" && row.constructionId === point.id);
+    const row = rows.find(row => row.kind === "grammar" && patternKey(row.statement) === patternKey(point.statement)) ?? rows.find(row => row.kind === "grammar" && row.constructionId === point.id);
     return row?.kind === "grammar" ? { ...point, meaning: row.description } : point;
   }) ?? [];
   return [...detailed, ...rows.flatMap(row => row.kind === "grammar" && row.status !== "skipped"
@@ -135,4 +135,50 @@ export function constructionParts(sentence: ImportSentence, point: ImportConstru
   // Compact sessions know fixed units only; content slots require a sentence explanation.
   return words.filter(word => fixedIds.has(word.id) && point.ranges.some(range => range.start === word.range.start && range.end === word.range.end))
     .map(word => ({ key: `${point.id}-${word.id}`, label: word.surface, fixed: true, slotIndex: -1, role: "", explanation: "", words: [word] }));
+}
+
+const patternKey = (value: string) => value.replace(/\s/gu, "");
+
+/** Attach analysis to existing candidates without replacing edits, IDs or registration receipts. */
+export function reconcileReadingSession(session: ImportSession): ImportSession {
+  let items = [...session.items];
+  for (const sentence of session.paragraphs.flatMap(p => p.sentences)) {
+    const reading = validReading(sentence);
+    if (!reading) {
+      items = items.map(item => { if (item.kind !== "word" || item.sentenceIndex !== sentence.index || !item.suppressedByGrammar) return item;
+        const { suppressedByGrammar: _old, ...rest } = item; return rest; });
+      continue;
+    }
+    for (const point of reading.constructions) {
+      const existing = items.find(item => item.kind === "grammar" && item.sentenceIndex === sentence.index
+        && (item.constructionId === point.id || patternKey(item.statement) === patternKey(point.statement)));
+      if (existing && (existing.edited || existing.status === "skipped")) continue;
+      const fixedIds = new Set(point.elements.filter(element => element.fixed).flatMap(element => element.occurrenceIds));
+      const fixedElements = reading.occurrences.filter(word => fixedIds.has(word.id)).map(word => ({ range: word.range, surface: word.surface, transliteration: word.transliteration, meaning: word.contextualMeaning }));
+      if (existing) items = items.map(item => item.id === existing.id ? { ...item, constructionId: point.id, fixedElements } as ImportItem : item);
+      else items.push({ id: `reading-grammar-${sentence.index}-${point.id}`, kind: "grammar", sentenceIndex: sentence.index, order: point.ranges[0]?.start ?? 0,
+        origin: "llm", status: "pending", statement: point.statement, description: point.meaning, constructionId: point.id, fixedElements,
+        explanationLanguage: reading.explanationLanguage });
+    }
+    const occurrences = readingOccurrences(sentence, items);
+    const fixed = fixedGrammarOccurrenceIds(sentence, items, occurrences);
+    items = items.map(item => {
+      if (item.kind !== "word" || item.sentenceIndex !== sentence.index) return item;
+      const match = occurrences.find(word => item.range ? item.range.start === word.range.start && item.range.end === word.range.end
+        && (item.surface ?? item.term) === word.surface : item.occurrenceId === word.id);
+      const suppressed = !item.edited && item.status !== "queued" && !!match && fixed.has(match.id);
+      if (!!item.suppressedByGrammar === suppressed) return item;
+      const { suppressedByGrammar: _old, ...rest } = item;
+      return suppressed ? { ...rest, suppressedByGrammar: true } : rest;
+    });
+  }
+  return JSON.stringify(items) === JSON.stringify(session.items) ? session : { ...session, items };
+}
+
+export function readingWordCandidate(sentence: ImportSentence, word: ImportOccurrence, items: ImportItem[]): ImportWordItem {
+  const existing = items.find((item): item is ImportWordItem => item.kind === "word" && item.sentenceIndex === sentence.index && item.status !== "skipped"
+    && (item.range ? item.range.start === word.range.start && item.range.end === word.range.end && (item.surface ?? item.term) === word.surface : item.term === word.lemma));
+  return existing ?? { id: `reading-word-${sentence.index}-${word.id}`, kind: "word", sentenceIndex: sentence.index, order: word.range.start,
+    origin: "llm", status: "pending", term: word.lemma, surface: word.surface, sourceTerm: word.lemma, range: word.range,
+    occurrenceId: word.id, meaning: word.contextualMeaning, transliteration: word.transliteration, explanationLanguage: word.explanationLanguage };
 }

@@ -10,6 +10,7 @@ test('compact schema remains strict, does not mutate loaded config and preserves
   assert.equal(sentence.properties.overview, undefined);
   assert.equal(sentence.properties.words.items.properties.reasoning, undefined);
   assert.ok(sentence.properties.words.items.properties.occurrence);
+  assert.ok(sentence.properties.grammar.items.properties.elements, "slot boundaries must survive compact imports");
   assert.ok(schema.schema.properties.paragraphs.items.properties.sentences.items.properties.overview);
   const check = (node: any) => {
     if (!node || typeof node !== 'object') return;

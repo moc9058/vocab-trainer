@@ -6,6 +6,7 @@ import {
 } from "../api/import";
 import { checkTerms, modifyGroupMembers } from "../api/vocab";
 import { getGrammarItemsByIds, modifyGrammarGroupMembers } from "../api/grammar";
+import { reconcileReadingSession } from "../utils/importReadingAnalysis";
 import { resolveGroupBTargets } from "../utils/groupB";
 import {
   claimedGrammarIds,
@@ -284,11 +285,11 @@ export function useImportSession({
             : null,
       });
       const cleaned = deduplicateImportItems(items, loaded.paragraphs);
-      const next = { ...loaded, items: cleaned };
+      const next = reconcileReadingSession({ ...loaded, items: cleaned });
       setMembershipOverlay(new Map());
       setSession(next);
       setSaveStatus("saved");
-      if (changed || JSON.stringify(cleaned) !== JSON.stringify(items)) flush();
+      if (changed || JSON.stringify(next.items) !== JSON.stringify(items)) flush();
       return next;
     },
     [language, setSession, flush]
@@ -315,7 +316,7 @@ export function useImportSession({
     (updater: (s: ImportSession) => ImportSession, immediate = false) => {
       const current = sessionRef.current;
       if (!current) return;
-      setSession(updater(current));
+      setSession(reconcileReadingSession(updater(current)));
       if (immediate) flush();
       else scheduleSave();
     },
@@ -485,7 +486,7 @@ export function useImportSession({
       // made the second button dead until the first finished. NOT `isLocked` either,
       // which covers `registered`: a row already in Group A must still accept a Group B
       // press. `isLocked` stays the rule for EDITING the row's text.
-      if (!current || !started || started.status === "skipped") return;
+      if (!current || !started || !isLive(started)) return;
       if (started.registrations?.[target]?.status === "queued") return;
       const key = itemKey(started);
       if (!key) return;

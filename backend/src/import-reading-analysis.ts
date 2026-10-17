@@ -83,8 +83,8 @@ export function normalizeReadingSentence(
     for (const word of linked) word.constructionIds.push(id);
     reading.constructions.push({ id, statement, ranges: linked.map(word => word.range),
       meaning: point.description, roleInSentence: point.roleInSentence ?? "", elements });
-    const fixedIds = new Set(elements.filter(element => element.fixed && element.explanation.trim()).flatMap(element => element.occurrenceIds));
-    const fixedElements = linked.filter(word => fixedIds.has(word.id) && word.contextualMeaning.trim() && word.transliteration?.trim())
+    const fixedIds = new Set(elements.filter(element => element.fixed).flatMap(element => element.occurrenceIds));
+    const fixedElements = linked.filter(word => fixedIds.has(word.id))
       .map(word => ({ range: word.range, surface: word.surface, transliteration: word.transliteration, meaning: word.contextualMeaning }));
     grammar.push({ statement, description: point.description, sentenceIndex, constructionId: id,
       explanationLanguage: language, fixedElements,
@@ -103,4 +103,11 @@ export function sourceMatchesSentences(source: string, sentences: string[]): boo
     cursor = start + sentence.length;
   }
   return sentences.length > 0 && !source.slice(cursor).trim();
+}
+
+/** Preserve sentence-local links when a compact batch is appended to an existing article. */
+export function rebaseReadingAnalysis(reading: ImportReadingAnalysis, offset: number): ImportReadingAnalysis {
+  const reindex = (id: string) => id.replace(/^s(\d+)-/, (_match, index) => `s${Number(index) + offset}-`);
+  return { ...reading, occurrences: reading.occurrences.map(word => ({ ...word, id: reindex(word.id), constructionIds: word.constructionIds.map(reindex) })),
+    constructions: reading.constructions.map(point => ({ ...point, id: reindex(point.id), elements: point.elements.map(element => ({ ...element, occurrenceIds: element.occurrenceIds.map(reindex) })) })) };
 }

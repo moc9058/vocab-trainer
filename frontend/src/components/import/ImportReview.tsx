@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../i18n/context";
 import ImportDestinationRail from "./ImportDestinationRail";
 import ImportFullTextReader from "./ImportFullTextReader";
-import ImportSentenceCard, { type ImportDestination } from "./ImportSentenceCard";
+import ImportSentenceCard, { type ImportDestination, RegisterControls } from "./ImportSentenceCard";
 import {
   findWordHome,
   flattenSentences,
@@ -309,12 +309,22 @@ export default function ImportReview({
           </div>
         )}
 
-        {viewMode === "fullText" ? <ImportFullTextReader key={session.id} session={session} onPatch={onPatch}
+        {viewMode === "fullText" ? <>
+          <div className="mb-4"><ImportDestinationRail language={session.language} allWordGroups={allWordGroups} allGrammarGroups={allGrammarGroups}
+            wordGroupId={session.wordGroupId} grammarGroupId={session.grammarGroupId} groupBNames={session.groupBNames}
+            onChange={patch => onPatch(s => ({ ...s, ...patch }), true)} collapsible /></div>
+          <ImportFullTextReader key={session.id} session={session} onPatch={onPatch}
+          renderRegistration={item => <RegisterControls item={item}
+            destination={{ aGroupId: item.kind === "word" ? destination.wordGroupId : destination.grammarGroupId,
+              aGroupName: item.kind === "word" ? destination.wordGroupName : destination.grammarGroupName, bNames: destination.groupBNames }}
+            groups={(item.kind === "word" ? wordGroupsByTerm.get(item.term) : grammarGroupsById.get(item.existingGrammarId ?? "")) ?? { a: [], b: [], aIds: [] }}
+            inLibrary={item.kind === "word" ? inLibrary.has(item.term) : !!item.existingGrammarId}
+            onRegister={target => { if (!session.items.some(row => row.id === item.id)) onSetItems(items => [...items, item], true); onRegister(item.id, target); }} />}
           onEditSentence={index => {
             editingRef.current = true;
             switchMode("sentences"); setCollapsed(false);
             onPatch(s => ({ ...s, focusedSentenceIndex: index }));
-          }} /> : <>
+          }} /></> : <>
         {/* Grid placement is explicit so the destination can lead on a phone —
             where it is unreachable at the bottom — and still be the right-hand
             sidebar from `lg`. */}

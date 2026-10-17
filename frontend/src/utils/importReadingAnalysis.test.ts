@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import fixture from "./__fixtures__/import-context.json";
 import type { ImportAnalysisResult, ImportItem } from "../types";
 import { buildImportItems, materializeGaps, sentenceCoverage, sentenceItems, splitWordItem, undoDerivation } from "./importSession";
-import { constructionParts, fixedGrammarOccurrenceIds, occurrenceConstructions, readingOccurrences, readingConstructions, validReading } from "./importReadingAnalysis";
+import { constructionParts, fixedGrammarOccurrenceIds, occurrenceConstructions, readingOccurrences, readingConstructions, reconcileReadingSession, validReading } from "./importReadingAnalysis";
 
 const analysis = fixture as ImportAnalysisResult;
 const sentence = analysis.paragraphs[0].sentences[0];
@@ -140,4 +140,17 @@ it("separates A and B from fixed grammar using validated elements rather than th
   expect(constructionParts(current, point, words.filter(word => word.id !== "o1"), new Set()).map(part => part.label)).not.toContain("A");
   expect(constructionParts({ ...current, text: "changed" }, point, words, new Set())).toEqual([]);
   expect(constructionParts(current, { ...point, elements: [], ranges: [words[2].range] }, words, new Set(["o2"])).map(part => part.fixed)).toEqual([true]);
+});
+
+it("sentence analysis suppresses only fixed occurrences while preserving edited rows and registration receipts", () => {
+  const words = sentence.readingAnalysis!.occurrences;
+  const items: ImportItem[] = [...fresh(), { id: "fixed-old", kind: "word", sentenceIndex: 0, order: 3, status: "registered", origin: "llm", term: "该", surface: "该", sourceTerm: "该", range: words[2].range, occurrenceId: words[2].id,
+    existingWordId: "library-word", registrations: { A: { status: "registered" } } }];
+  const session: any = { id: "test", paragraphs: [{ sentences: [sentence] }], items };
+  const next = reconcileReadingSession(session);
+  expect(next.items.find(item => item.id === "fixed-old")).toMatchObject({ suppressedByGrammar: true, status: "registered", existingWordId: "library-word", registrations: { A: { status: "registered" } } });
+  expect(sentenceItems(next.items, 0).words.map(word => word.term)).toEqual(["该", "公司", "采取", "行动"]);
+  const removed = reconcileReadingSession({ ...next, items: next.items.map(item => item.kind === "grammar" ? { ...item, status: "skipped" as const } : item) });
+  expect(removed.items.find(item => item.id === "fixed-old")?.kind === "word" && (removed.items.find(item => item.id === "fixed-old") as any).suppressedByGrammar).toBeUndefined();
+  expect(reconcileReadingSession(next)).toBe(next);
 });

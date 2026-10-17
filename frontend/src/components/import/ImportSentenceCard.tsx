@@ -874,7 +874,7 @@ function GrammarRow({
  * which button is spinning, which one failed — and those are read PER DESTINATION from
  * `item.registrations`, so the two writes never speak for each other.
  */
-function RegisterControls({
+export function RegisterControls({
   item,
   destination,
   groups,
@@ -947,23 +947,22 @@ function RegisterControls({
         rescuedAsDraft={stateA?.rescuedAsDraft}
         onRegister={() => onRegister("A")}
       />
-      {/* Nothing to add to until a Group B set is picked in the destination rail. */}
-      {destination.bNames.length > 0 && (
+      {/* Keep B discoverable; choosing a destination enables it. */}
         <DestinationButton
           badge="B"
           tone="b"
           name={destination.bNames.join(" · ")}
           fallbackLabel={t("importAdd")}
-          title={blocked ?? t("importAddToDestB")}
+          title={blocked ?? (destination.bNames.length ? t("importAddToDestB") : t("importChooseGroupB"))}
           done={doneB}
           busy={stateB?.status === "queued"}
           failed={stateB?.status === "failed"}
-          disabled={stateB?.status === "queued" || Boolean(blocked)}
+          disabled={stateB?.status === "queued" || Boolean(blocked) || destination.bNames.length === 0}
           error={stateB?.error}
           rescuedAsDraft={stateB?.rescuedAsDraft}
           onRegister={() => onRegister("B")}
         />
-      )}
+      {destination.bNames.length === 0 && <span className="text-xs text-gray-500">{t("importChooseGroupB")}</span>}
     </span>
   );
 }
@@ -1063,7 +1062,7 @@ function DestinationButton({
           <span className="min-w-0 max-w-[6.5rem] truncate">{name}</span>
         </>
       ) : (
-        <span className="whitespace-nowrap">{fallbackLabel}</span>
+        <span className="whitespace-nowrap">{badge} {fallbackLabel}</span>
       )}
     </button>
   );

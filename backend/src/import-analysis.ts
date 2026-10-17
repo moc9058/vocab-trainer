@@ -467,7 +467,7 @@ export function normalizeAnalysis(
       sentences.push({
         index: sentenceIndex,
         text: s.text ?? "",
-        ...(contextual && s.overview !== undefined ? { readingAnalysis: contextual.reading } : {}),
+        ...(contextual && (s.overview !== undefined || contextual.reading.constructions.some(point => point.elements.length)) ? { readingAnalysis: contextual.reading } : {}),
         ...(s.translation ? { translation: s.translation } : {}),
       });
       if (contextual) {

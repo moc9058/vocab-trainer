@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../i18n/context";
 import { generateImportSentenceExplanation } from "../../api/import";
-import { constructionParts, fixedGrammarOccurrenceIds, occurrenceConstructions, readingConstructions, readingOccurrences, validReading } from "../../utils/importReadingAnalysis";
+import { constructionParts, fixedGrammarOccurrenceIds, occurrenceConstructions, readingWordCandidate, reconcileReadingSession, readingConstructions, readingOccurrences, validReading } from "../../utils/importReadingAnalysis";
 import type { ConstructionPart } from "../../utils/importReadingAnalysis";
-import type { ImportSession } from "../../types";
+import type { ImportItem, ImportSession } from "../../types";
 import RubyText from "../RubyText";
 
 const BOUNDARIES_KEY = "importShowTextBoundaries";
@@ -18,11 +18,12 @@ function partStyle(part: ConstructionPart) {
 const PINYIN_KEY = "importShowFullTextPinyin";
 interface Props {
   session: ImportSession;
+  renderRegistration?: (item: ImportItem) => React.ReactNode;
   onEditSentence?: (index: number) => void;
   onPatch?: (updater: (session: ImportSession) => ImportSession, immediate?: boolean) => void;
 }
 
-export default function ImportFullTextReader({ session, onEditSentence, onPatch }: Props) {
+export default function ImportFullTextReader({ session, onEditSentence, onPatch, renderRegistration }: Props) {
   const { t } = useI18n();
   const [showPinyin, setShowPinyin] = useState(() => localStorage.getItem(PINYIN_KEY) !== "0");
   const [showBoundaries, setShowBoundaries] = useState(() => localStorage.getItem(BOUNDARIES_KEY) !== "0");
@@ -73,8 +74,11 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
   const relatedConstructions = word ? occurrenceConstructions(word, constructions) : constructions;
   const activeConstruction = relatedConstructions.find(point => point.id === selected?.constructionId)
     ?? (word ? relatedConstructions[0] : undefined);
+  const grammarCandidate = (id: string, statement: string) => session.items.find(item => item.kind === "grammar" && item.sentenceIndex === sentence?.index && item.status !== "skipped"
+    && (item.constructionId === id || item.statement.replace(/\s/gu, "") === statement.replace(/\s/gu, "")));
   const parts = sentence && activeConstruction ? constructionParts(sentence, activeConstruction, occurrences, fixedGrammar) : [];
-  const partAt = (start: number, end: number) => parts.find(part => part.words.some(word => word.range.start < end && word.range.end > start));
+  const partAt = (start: number, end: number) => parts.find(part => part.words.some(word => word.range.start < end && word.range.end > start)
+    || (start >= part.words[0].range.start && end <= part.words[part.words.length - 1].range.end && !/\p{L}/u.test(sentence?.text.slice(start, end) ?? "")));
   function sentencePreview() {
     if (!sentence) return null;
     const cuts = [...new Set([0, sentence.text.length, ...occurrences.flatMap(token => [token.range.start, token.range.end]),
@@ -122,7 +126,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
       const result = await generateImportSentenceExplanation(session.language, sessionId, index, controller.signal);
       const current = sessionRef.current;
       if (request !== requestRef.current || current.id !== sessionId || result.sentenceIndex !== index || result.readingAnalysis.sourceText !== source || current.paragraphs.flatMap(p => p.sentences).find(s => s.index === index)?.text !== source) return;
-      onPatch(s => s.id !== sessionId ? s : ({ ...s, paragraphs: s.paragraphs.map(p => ({ ...p, sentences: p.sentences.map(value =>
+      onPatch(s => s.id !== sessionId ? s : reconcileReadingSession({ ...s, paragraphs: s.paragraphs.map(p => ({ ...p, sentences: p.sentences.map(value =>
         value.index === index && value.text === source ? { ...value, readingAnalysis: result.readingAnalysis } : value) })) }), true);
       // New occurrence ids need not be the same as the previous analysis.
       setSelected(current => current?.sentenceIndex === index ? { sentenceIndex: index } : current);
@@ -222,6 +226,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
           </div>
           <button type="button" onClick={close} aria-label={t("importCloseFullText")} className="rounded px-3 py-1 text-gray-400 hover:bg-gray-800">×</button>
         </header>
+        {word && !fixedGrammar.has(word.id) && <div className="mb-3">{renderRegistration?.(readingWordCandidate(sentence, word, session.items))}</div>}
         {relatedConstructions.length > 0 && <div className="mb-3 text-xs">
           <p className="mb-2 text-gray-400">{t("importLinkedConstruction")}</p>
           <div className="flex flex-wrap gap-2">
@@ -231,6 +236,8 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
               {point.statement}
             </button>)}
           </div>
+          {activeConstruction && (() => { const item = grammarCandidate(activeConstruction.id, activeConstruction.statement);
+            return item ? <div className="mt-3">{renderRegistration?.(item)}</div> : null; })()}
           {activeConstruction && <p className="mt-2 text-emerald-300">{t("importLinkedConstructionHint")}</p>}
         </div>}
         {activeConstruction && <div className="mb-3 space-y-2 text-xs" data-testid="import-construction-parts">
@@ -245,7 +252,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
         </div>}
         <p data-testid="import-sentence-preview" className="mb-3 break-words text-base leading-loose text-gray-200">{sentencePreview()}</p>
         {sentence.translation && <p className="mb-4 text-sm text-indigo-200/80">{sentence.translation}</p>}
-        {word && <div className="mb-4 space-y-2 rounded-xl bg-indigo-950/30 p-3 text-sm text-gray-200">
+        {word && !fixedGrammar.has(word.id) && <div className="mb-4 space-y-2 rounded-xl bg-indigo-950/30 p-3 text-sm text-gray-200">
           {word.transliteration && <p className="font-mono text-indigo-300">{word.transliteration}</p>}
           <p><strong>{t("importContextMeaning")}: </strong>{word.contextualMeaning || t("importNoContextMeaning")}</p>
           {word.partOfSpeech && <p className="text-xs text-gray-400">{word.partOfSpeech}</p>}
@@ -258,6 +265,8 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
         {relatedConstructions.map(point => <section key={point.id} className="mb-3 rounded-xl border border-emerald-900/70 p-3 text-sm text-gray-200">
           <p className="mb-1 text-xs text-emerald-400/80">{t("importReaderGrammar")}</p>
           <h4 className="break-words font-semibold text-emerald-300">{point.statement}</h4>
+          {point.id !== activeConstruction?.id && (() => { const item = grammarCandidate(point.id, point.statement);
+            return item ? <div className="mt-2">{renderRegistration?.(item)}</div> : null; })()}
           <p className="mt-1 whitespace-pre-wrap">{point.meaning}</p>
           {point.roleInSentence && <p className="mt-2 text-gray-400">{point.roleInSentence}</p>}
           {sentence && constructionParts(sentence, point, occurrences, fixedGrammar).map(element => <p key={element.key} className={`mt-2 rounded border-l-2 p-2 ${partStyle(element)}`}>

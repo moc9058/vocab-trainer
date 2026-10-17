@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { rebaseReadingAnalysis } from "./import-reading-analysis.js";
 import { termOccurrences } from "./import-analysis.js";
 import type { ImportAnalysisResult, ImportItem, ImportSession } from "./types.js";
 
@@ -38,7 +39,7 @@ export function appendImportPart(session: ImportSession, expected: number, analy
   if (!progress || progress.nextChunk < expected) throw new ImportCheckpointError(409, "Reload the article before continuing analysis.");
   if (progress.nextChunk > expected) return session; // A lost response/concurrent replay already committed.
   const base = session.paragraphs.flatMap(p => p.sentences).reduce((max, s) => Math.max(max, s.index + 1), 0);
-  const paragraphs = analysis.paragraphs.map(p => ({ sentences: p.sentences.map(s => ({ index: s.index + base, text: s.text, ...(s.translation ? { translation: s.translation } : {}) })) }));
+  const paragraphs = analysis.paragraphs.map(p => ({ sentences: p.sentences.map(s => ({ index: s.index + base, text: s.text, ...(s.translation ? { translation: s.translation } : {}), ...(s.readingAnalysis ? { readingAnalysis: rebaseReadingAnalysis(s.readingAnalysis, base) } : {}) })) }));
   const texts = new Map(analysis.paragraphs.flatMap(p => p.sentences).map(s => [s.index, s.text]));
   const additions: ImportItem[] = [];
   const covered = new Map<number, boolean[]>();
@@ -55,6 +56,9 @@ export function appendImportPart(session: ImportSession, expected: number, analy
       for (const start of hits) flags.fill(true, start, start + word.term.length);
       if (!hits.length && ["japanese", "korean"].includes(session.language)) approximate.add(word.sentenceIndex);
     }
+    const fixed = analysis.grammar.some(point => point.sentenceIndex === word.sentenceIndex && point.fixedElements?.some(element => range
+      && element.range.start === range.start && element.range.end === range.end && element.surface === word.surface));
+    if (fixed) continue;
     additions.push({ ...word, id: `wi-${randomUUID()}`, kind: "word", status: "pending", origin: "llm",
       sentenceIndex: word.sentenceIndex + base, order: range?.start ?? hits[0] ?? additions.length,
       ...(word.occurrenceId ? { occurrenceId: word.occurrenceId.replace(/^s\d+-/, `s${word.sentenceIndex + base}-`) } : {}),
@@ -62,6 +66,7 @@ export function appendImportPart(session: ImportSession, expected: number, analy
   }
   for (const point of analysis.grammar) additions.push({ id: `gi-${randomUUID()}`, kind: "grammar", status: "pending", origin: "llm",
     sentenceIndex: point.sentenceIndex + base, order: additions.length, statement: point.statement, description: point.description,
+    ...(point.constructionId ? { constructionId: point.constructionId.replace(/^s(\d+)-/, (_match, index) => `s${Number(index) + base}-`), fixedElements: point.fixedElements } : {}),
     ...(point.excerpt ? { excerpt: point.excerpt } : {}), ...(point.explanationLanguage ? { explanationLanguage: point.explanationLanguage } : {}),
     ...(existingGrammar[point.statement] ? { existingGrammarId: existingGrammar[point.statement] } : {}) });
   // Same coverage backstop as the client: unknown contiguous letters become editable gap rows.

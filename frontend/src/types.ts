@@ -731,6 +731,8 @@ interface ImportItemBase {
 }
 
 export interface ImportWordItem extends ImportItemBase {
+  /** Retained history; this occurrence is represented by a fixed grammar element. */
+  suppressedByGrammar?: boolean;
   occurrenceId?: string;
   surface?: string;
   sourceTerm?: string;

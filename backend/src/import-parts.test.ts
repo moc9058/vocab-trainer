@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { splitImportSource, appendImportPart, subdivideImportPart } from './import-parts.js';
@@ -54,4 +55,18 @@ test('parts within one paragraph are joined while original paragraph breaks surv
   assert.equal(appendImportPart(first, 1, analysis, {}, {}).paragraphs.length, 1);
   first.analysisProgress!.chunks[0] += '\n';
   assert.equal(appendImportPart(first, 1, analysis, {}, {}).paragraphs.length, 2);
+});
+
+test('durable compact batches retain grammar slot links and suppress fixed word candidates after rebasing', () => {
+  const raw = JSON.parse(readFileSync(new URL('./test-fixtures/import-context.json', import.meta.url), 'utf8'));
+  const syntax = normalizeAnalysis(JSON.stringify({ paragraphs: [{ sentences: [raw.paragraphs[0].sentences[0]] }] }), 'chinese').analysis;
+  const initial = appendImportPart(session(), 0, analysis, {}, {});
+  const next = appendImportPart(initial, 1, syntax, {}, {});
+  const reading = next.paragraphs.flatMap(p => p.sentences)[1].readingAnalysis!;
+  assert.ok(reading.constructions[0].elements.some(element => !element.fixed));
+  assert.ok(reading.occurrences.every(word => word.id.startsWith('s1-')));
+  assert.ok(reading.constructions[0].elements.every(element => element.occurrenceIds.every(id => id.startsWith('s1-'))));
+  const added = next.items.filter(item => item.sentenceIndex === 1);
+  assert.deepEqual(added.filter(item => item.kind === 'word').map(item => item.kind === 'word' ? item.term : ''), ['该', '公司', '采取', '行动']);
+  assert.ok(added.some(item => item.kind === 'grammar' && item.constructionId === 's1-c0' && item.fixedElements?.length === 2));
 });

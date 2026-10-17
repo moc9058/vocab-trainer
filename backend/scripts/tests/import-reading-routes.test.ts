@@ -29,7 +29,7 @@ mock.module('../../src/llm.js', { namedExports: {
       for (const paragraph of output.paragraphs) for (const sentence of paragraph.sentences) {
         delete sentence.overview; delete sentence.ambiguityNotes;
         for (const word of sentence.words) for (const key of ['partOfSpeech','role','reasoning','contrast','senseKey']) delete word[key];
-        for (const point of sentence.grammar) { delete point.roleInSentence; delete point.elements; }
+        for (const point of sentence.grammar) { delete point.roleInSentence; if (!options.schema.schema.properties.paragraphs.items.properties.sentences.items.properties.grammar.items.properties.elements) delete point.elements; }
       }
     }
     const value = JSON.stringify(output);
@@ -63,7 +63,7 @@ test('analysis stream, session roundtrip and sentence-only explanation preserve 
   assert.equal(stream.statusCode, 200, stream.body);
   assert.ok(stream.body.includes('event: analysis-result'), stream.body);
   const result = JSON.parse(stream.body.split('event: analysis-result\ndata: ')[1].split('\n')[0]);
-  assert.equal(result.analysis.paragraphs[0].sentences[0].readingAnalysis, undefined);
+  assert.ok(result.analysis.paragraphs[0].sentences[0].readingAnalysis.constructions[0].elements.some((element: any) => !element.fixed));
   assert.equal(capturedSchema.schema.properties.paragraphs.items.properties.sentences.items.properties.overview, undefined);
   // Save/read compatibility still includes detailed analyses generated explicitly.
   const { normalizeAnalysis } = await import('../../src/import-analysis.js');
@@ -189,3 +189,15 @@ test('a timed-out part is subdivided before retry while completed state and orig
   assert.equal(stored!.analysisProgress!.nextChunk, 1);
 });
 after(() => app.close());
+
+test('article summaries and quiz pools exclude grammar-owned word history', async () => {
+  const before = structuredClone(stored);
+  stored!.items.push({ id: 'hidden', kind: 'word', sentenceIndex: 0, order: 0, origin: 'llm', term: '了', status: 'registered', existingWordId: 'hidden-word', suppressedByGrammar: true });
+  const result = await app.inject(base);
+  assert.equal(result.statusCode, 200);
+  const data = result.json();
+  assert.ok(!data.pool.wordIds.includes('hidden-word'));
+  assert.equal(data.sessions[0].totalCount, before!.items.length);
+  assert.equal(data.sessions[0].registeredCount, before!.items.filter(item => item.status === 'registered').length);
+  stored = before;
+});

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { buildImportItems } from '../../src/utils/importSession';
 
 test('full source modal renders paragraphs and persists the pinyin preference', async ({ page }) => {
   await page.addInitScript(() => {
@@ -99,7 +100,7 @@ async function reviewSetup(page: Page, detailed = true) {
   const explanation = paragraph.sentences[0].readingAnalysis;
   if (!detailed) delete (paragraph.sentences[0] as any).readingAnalysis;
   let saved: any = { id: 'article', language: 'chinese', title: 'Context', text: paragraph.sentences[0].text,
-    paragraphs: [paragraph], items: detailed ? [] : [{ id: 'old', kind: 'word', sentenceIndex: 0, order: 0, term: '该', transliteration: 'gāi', meaning: 'その', origin: 'llm', status: 'pending' }],
+    paragraphs: [paragraph], items: detailed ? buildImportItems(analysis as any, {}, {}, 'chinese').filter(item => item.sentenceIndex === 0) : [{ id: 'old', kind: 'word', sentenceIndex: 0, order: 0, term: '该', transliteration: 'gāi', meaning: 'その', origin: 'llm', status: 'pending' }],
     groupBNames: [], focusedSentenceIndex: 0, status: 'in-progress', createdAt: '', updatedAt: '' };
   let writes = 0, generations = 0;
   await page.route(url => url.pathname.startsWith('/api/'), async route => {
@@ -153,7 +154,7 @@ test('legacy articles generate one sentence explanation, persist it, and retain 
   await expect(page.getByRole('dialog')).toContainText('主語');
   await expect.poll(() => state.writes()).toBe(1);
   expect(state.generations()).toBe(1);
-  expect(state.saved().items).toEqual(beforeItems);
+  for (const before of beforeItems) expect(state.saved().items.find((item: any) => item.id === before.id)).toMatchObject(before);
   expect(state.saved().groupBNames).toEqual([]);
   expect(state.saved().paragraphs[0].sentences[0].readingAnalysis.version).toBe(1);
   await page.reload();
@@ -455,6 +456,7 @@ for (const width of [360, 1280]) {
     const state = await reviewSetup(page);
     const sentence = state.saved().paragraphs[0].sentences[0];
     sentence.text = '甲公司与乙学校合作。';
+    state.saved().items = [];
     sentence.translation = '';
     const reading = sentence.readingAnalysis;
     reading.sourceText = sentence.text;
@@ -490,6 +492,40 @@ for (const width of [360, 1280]) {
     await expect(reader.locator('article').getByRole('button', { name: '合作', exact: true })).not.toHaveAttribute('data-construction-part');
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: `/tmp/vocab-grammar-slots-${width}.png` });
-    expect(state.generations()).toBe(0); expect(state.writes()).toBe(0);
+    expect(state.generations()).toBe(0); expect(state.writes()).toBe(1);
   });
 }
+
+test('full text registers words and fixed grammar through their own A/B controls without a duplicate word path', async ({ page }) => {
+  const state = await reviewSetup(page);
+  const saved = state.saved();
+  saved.wordGroupId = 'a'; saved.grammarGroupId = 'g'; saved.groupBNames = ['Article'];
+  saved.items.find((item: any) => item.kind === 'word' && item.term === '公司').existingWordId = 'word-1';
+  saved.items.find((item: any) => item.kind === 'grammar').existingGrammarId = 'grammar-1';
+  const writes: string[] = [];
+  await page.route('**/api/**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/items/batch')) { await route.fulfill({ json: { items: [{ id: 'grammar-1', statement: '该+v+了' }] } }); return; }
+    if (path.endsWith('/check-terms')) { await route.fulfill({ json: { existing: { 公司: 'word-1' } } }); return; }
+    if (path === '/api/grammar/chinese/groups') { await route.fulfill({ json: [{ id: 'gb', name: 'Article', category: 'B', grammarIds: [] }] }); return; }
+    if (path.match(/\/groups\/(a|g|gb)\/(words|grammar)$/) || (route.request().method() === 'PUT' && path.includes('/groups/'))) {
+      writes.push(path); await route.fulfill({ json: {} }); return;
+    }
+    if (path.includes('/smart-add')) throw new Error('Existing items must not be recreated');
+    await route.fallback();
+  });
+  await page.reload();
+  const reader = page.getByTestId('import-full-text-reader');
+  await reader.getByRole('button', { name: '公司', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'A Add', exact: true }).click();
+  await expect.poll(() => writes.some(path => path.includes('/vocab/') && path.includes('/groups/a/'))).toBe(true);
+  await page.keyboard.press('Escape');
+  await reader.getByRole('button', { name: '该', exact: true }).nth(1).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('button', { name: 'A Add', exact: true })).toHaveCount(1);
+  await expect(dialog.getByText('Meaning here:', { exact: false })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'A Add', exact: true }).click();
+  await expect.poll(() => writes.some(path => path.includes('/grammar/') && path.includes('/groups/g/'))).toBe(true);
+  await dialog.getByRole('button', { name: 'B Article', exact: true }).click();
+  await expect.poll(() => writes.some(path => path.includes('/grammar/') && path.includes('/groups/gb/'))).toBe(true);
+});
