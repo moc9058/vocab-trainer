@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import fixture from "./__fixtures__/import-context.json";
 import type { ImportAnalysisResult, ImportItem } from "../types";
 import { buildImportItems, materializeGaps, sentenceCoverage, sentenceItems, splitWordItem, undoDerivation } from "./importSession";
-import { fixedGrammarOccurrenceIds, occurrenceConstructions, readingOccurrences, readingConstructions, validReading } from "./importReadingAnalysis";
+import { constructionParts, fixedGrammarOccurrenceIds, occurrenceConstructions, readingOccurrences, readingConstructions, validReading } from "./importReadingAnalysis";
 
 const analysis = fixture as ImportAnalysisResult;
 const sentence = analysis.paragraphs[0].sentences[0];
@@ -117,4 +117,27 @@ it("links compact fixed elements by occurrence while leaving repeated spelling a
   expect(points[0].ranges).toEqual([{ start: 3, end: 4 }, { start: 8, end: 9 }]);
   const removed = items.map(item => item.kind === "grammar" ? { ...item, status: "skipped" as const } : item);
   expect(readingOccurrences(compact, removed).some(word => word.range.start === 8)).toBe(false);
+});
+
+it("separates A and B from fixed grammar using validated elements rather than the full excerpt", () => {
+  const current = structuredClone(sentence);
+  current.text = "甲公司与乙学校合作。";
+  const surfaces = ["甲", "公司", "与", "乙", "学校", "合作"];
+  let cursor = 0;
+  const words = surfaces.map((surface, index) => {
+    const start = cursor; cursor += surface.length;
+    return { ...current.readingAnalysis!.occurrences[0], id: `o${index}`, range: { start, end: cursor }, surface, constructionIds: [] };
+  });
+  current.readingAnalysis!.sourceText = current.text;
+  current.readingAnalysis!.occurrences = words;
+  const point = { id: "c", statement: "A + 与 + B", ranges: words.slice(0, 5).map(word => word.range), meaning: "", roleInSentence: "",
+    elements: [{ occurrenceIds: ["o0", "o1"], fixed: false, role: "A", explanation: "" }, { occurrenceIds: ["o2"], fixed: true, role: "接続", explanation: "" }, { occurrenceIds: ["o3", "o4"], fixed: false, role: "B", explanation: "" }] };
+  const parts = constructionParts(current, point, words, new Set(["o2"]));
+  expect(parts.map(part => [part.label, part.fixed, part.words.map(word => word.surface).join("")])).toEqual([
+    ["A", false, "甲公司"], ["与", true, "与"], ["B", false, "乙学校"],
+  ]);
+  // A split/edited occurrence cannot inherit an old element boundary.
+  expect(constructionParts(current, point, words.filter(word => word.id !== "o1"), new Set()).map(part => part.label)).not.toContain("A");
+  expect(constructionParts({ ...current, text: "changed" }, point, words, new Set())).toEqual([]);
+  expect(constructionParts(current, { ...point, elements: [], ranges: [words[2].range] }, words, new Set(["o2"])).map(part => part.fixed)).toEqual([true]);
 });

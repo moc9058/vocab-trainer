@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { useI18n } from "../../i18n/context";
 import { generateImportSentenceExplanation } from "../../api/import";
-import { fixedGrammarOccurrenceIds, occurrenceConstructions, readingConstructions, readingOccurrences, validReading } from "../../utils/importReadingAnalysis";
+import { constructionParts, fixedGrammarOccurrenceIds, occurrenceConstructions, readingConstructions, readingOccurrences, validReading } from "../../utils/importReadingAnalysis";
+import type { ConstructionPart } from "../../utils/importReadingAnalysis";
 import type { ImportSession } from "../../types";
 import RubyText from "../RubyText";
 
 const BOUNDARIES_KEY = "importShowTextBoundaries";
+const SLOT_STYLES = [
+  "bg-sky-950/70 text-sky-100 border-sky-400/70",
+  "bg-amber-950/70 text-amber-100 border-amber-400/70",
+  "bg-violet-950/70 text-violet-100 border-violet-400/70",
+];
+function partStyle(part: ConstructionPart) {
+  return part.fixed ? "bg-emerald-900/60 text-emerald-100 border-emerald-400/80" : SLOT_STYLES[part.slotIndex % SLOT_STYLES.length];
+}
 const PINYIN_KEY = "importShowFullTextPinyin";
 interface Props {
   session: ImportSession;
@@ -64,7 +73,8 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
   const relatedConstructions = word ? occurrenceConstructions(word, constructions) : constructions;
   const activeConstruction = relatedConstructions.find(point => point.id === selected?.constructionId)
     ?? (word ? relatedConstructions[0] : undefined);
-  const emphasized = (start: number, end: number) => activeConstruction?.ranges.some(range => range.start < end && range.end > start);
+  const parts = sentence && activeConstruction ? constructionParts(sentence, activeConstruction, occurrences, fixedGrammar) : [];
+  const partAt = (start: number, end: number) => parts.find(part => part.words.some(word => word.range.start < end && word.range.end > start));
   function sentencePreview() {
     if (!sentence) return null;
     const cuts = [...new Set([0, sentence.text.length, ...occurrences.flatMap(token => [token.range.start, token.range.end]),
@@ -72,7 +82,11 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
       .filter(offset => offset >= 0 && offset <= sentence.text.length).sort((a, b) => a - b);
     return cuts.slice(0, -1).map((start, index) => {
       const end = cuts[index + 1];
-      return <span key={start} className={`${emphasized(start, end) ? "rounded bg-emerald-900/60 text-emerald-100" : ""} ${word && word.range.start <= start && word.range.end >= end ? "underline decoration-indigo-300 decoration-2 underline-offset-4" : ""}`}>{sentence.text.slice(start, end)}</span>;
+      const part = partAt(start, end);
+      const begins = part?.words[0].range.start === start;
+      return <span key={start} data-construction-part={part?.label} data-part-kind={part ? part.fixed ? "fixed" : "slot" : undefined}
+        title={part ? `${part.label} · ${part.role || t(part.fixed ? "importFixedPart" : "importVariablePart")}` : undefined}
+        className={`${part ? `rounded border-b-2 ${part.fixed ? "border-dotted" : "border-solid"} ${partStyle(part)}` : ""} ${word && word.range.start <= start && word.range.end >= end ? "underline decoration-indigo-300 decoration-2 underline-offset-4" : ""}`}>{begins && <sup aria-hidden="true" className="mr-0.5 text-[10px] font-semibold">{part.fixed ? t("importFixedPartShort") : part.label}</sup>}{sentence.text.slice(start, end)}</span>;
     });
   }
   const reading = sentence ? validReading(sentence) : undefined;
@@ -144,18 +158,19 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
           const tokens = readingOccurrences(value, session.items);
           const points = readingConstructions(value, session.items);
           const grammarIds = fixedGrammarOccurrenceIds(value, session.items, tokens);
-          const highlight = value.index === selected?.sentenceIndex ? activeConstruction : undefined;
+          const active = value.index === selected?.sentenceIndex;
           const parts: React.ReactNode[] = [];
           let cursor = 0;
           for (const token of tokens) {
             if (token.range.start > cursor) parts.push(value.text.slice(cursor, token.range.start));
-            const emphasized = highlight?.ranges.some(range => range.start < token.range.end && range.end > token.range.start);
+            const part = active ? partAt(token.range.start, token.range.end) : undefined;
             const isGrammar = grammarIds.has(token.id);
             parts.push(<button key={token.id} type="button" aria-label={token.surface}
-              title={`${t(isGrammar ? "importReaderGrammarElement" : "importReaderWord")}: ${token.surface}`}
+              title={`${part ? `${part.label} · ` : ""}${t(isGrammar ? "importReaderGrammarElement" : "importReaderWord")}: ${token.surface}`}
+              data-construction-part={part?.label} data-part-kind={part ? part.fixed ? "fixed" : "slot" : undefined}
               data-reading-kind={isGrammar ? "grammar" : "word"}
               onClick={event => select(event, { sentenceIndex: value.index, occurrenceId: token.id })}
-              className={`mx-px rounded px-0.5 text-left border-b-2 ${showBoundaries ? isGrammar ? "border-dotted border-emerald-400/80" : "border-solid border-indigo-400/40" : "border-transparent"} hover:bg-indigo-900/50 focus-visible:outline-2 focus-visible:outline-indigo-400 ${emphasized ? "bg-emerald-900/60 text-emerald-100" : selected?.sentenceIndex === value.index && selected.occurrenceId === token.id ? "bg-indigo-900/60" : ""}`}>
+              className={`mx-px rounded px-0.5 text-left border-b-2 ${part ? part.fixed ? "border-dotted" : "border-solid" : showBoundaries ? isGrammar ? "border-dotted border-emerald-400/80" : "border-solid border-indigo-400/40" : "border-transparent"} ${part ? "hover:brightness-125" : "hover:bg-indigo-900/50"} focus-visible:outline-2 focus-visible:outline-indigo-400 ${part ? partStyle(part) : selected?.sentenceIndex === value.index && selected.occurrenceId === token.id ? "bg-indigo-900/60" : ""}`}>
               <RubyText text={token.surface} segments={session.language === "chinese" && showPinyin && token.transliteration ? [{ text: token.surface, transliteration: token.transliteration }] : undefined} />
             </button>);
             cursor = token.range.end;
@@ -206,6 +221,17 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
           </div>
           {activeConstruction && <p className="mt-2 text-emerald-300">{t("importLinkedConstructionHint")}</p>}
         </div>}
+        {activeConstruction && <div className="mb-3 space-y-2 text-xs" data-testid="import-construction-parts">
+          <div className="flex flex-wrap gap-2">
+            {parts.map(part => <div key={part.key} className={`min-w-0 max-w-full rounded-lg border px-2 py-1.5 ${partStyle(part)}`}>
+              <span className="font-semibold">{part.label}</span>
+              <span className="ml-2 opacity-80">{t(part.fixed ? "importFixedPart" : "importVariablePart")}</span>
+              <span className="block break-words text-sm">{part.words.map(word => word.surface).join(" ")}</span>
+              {part.role && <span className="block opacity-80">{part.role}</span>}
+            </div>)}
+          </div>
+          {!activeConstruction.elements.length && <p className="text-gray-400">{t("importMissingSlotAnalysis")}</p>}
+        </div>}
         <p data-testid="import-sentence-preview" className="mb-3 break-words text-base leading-loose text-gray-200">{sentencePreview()}</p>
         {sentence.translation && <p className="mb-4 text-sm text-indigo-200/80">{sentence.translation}</p>}
         {word && <div className="mb-4 space-y-2 rounded-xl bg-indigo-950/30 p-3 text-sm text-gray-200">
@@ -223,9 +249,9 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
           <h4 className="break-words font-semibold text-emerald-300">{point.statement}</h4>
           <p className="mt-1 whitespace-pre-wrap">{point.meaning}</p>
           {point.roleInSentence && <p className="mt-2 text-gray-400">{point.roleInSentence}</p>}
-          {point.elements.map((element, index) => <p key={index} className="mt-2 border-l border-gray-700 pl-2">
-            <span className="text-emerald-200">{reading?.occurrences.filter(value => element.occurrenceIds.includes(value.id)).map(value => value.surface).join(" + ")} · {element.role}</span>
-            {session.language === "chinese" && <span className="block font-mono text-xs text-indigo-300">{reading?.occurrences.filter(value => element.occurrenceIds.includes(value.id)).map(value => value.transliteration).filter(Boolean).join(" + ")}</span>}
+          {sentence && constructionParts(sentence, point, occurrences, fixedGrammar).map(element => <p key={element.key} className={`mt-2 rounded border-l-2 p-2 ${partStyle(element)}`}>
+            <span className="font-semibold">{element.label} · {element.words.map(value => value.surface).join(" + ")} · {element.role}</span>
+            {session.language === "chinese" && <span className="block font-mono text-xs text-indigo-300">{element.words.map(value => value.transliteration).filter(Boolean).join(" + ")}</span>}
             <span className="block">{element.explanation}</span>
           </p>)}
         </section>)}

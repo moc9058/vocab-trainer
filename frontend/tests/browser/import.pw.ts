@@ -424,7 +424,7 @@ for (const compact of [false, true]) {
     await expect(gai.nth(0)).not.toHaveClass(/bg-emerald/);
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('button', { name: '该+v+了', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect(dialog.getByTestId('import-sentence-preview').locator('[class*="bg-emerald-900"]')).toHaveCount(compact ? 2 : 4);
+    await expect(dialog.getByTestId('import-sentence-preview').locator('[class*="bg-emerald-900"]')).toHaveCount(2);
     await page.screenshot({ path: `/tmp/vocab-linked-${compact ? 'compact' : 'detailed'}.png` });
     await page.keyboard.press('Escape');
     await expect(gai.nth(1)).not.toHaveClass(/bg-emerald/);
@@ -448,3 +448,38 @@ test('overlapping constructions switch highlights while retaining the touched oc
   await expect(reader.locator('article').getByRole('button', { name: '了', exact: true })).not.toHaveClass(/bg-emerald/);
   await expect(dialog).toContainText('そろそろ〜すべき');
 });
+
+for (const width of [360, 1280]) {
+  test(`construction displays separate A, fixed 与 and B boundaries at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const state = await reviewSetup(page);
+    const sentence = state.saved().paragraphs[0].sentences[0];
+    sentence.text = '甲公司与乙学校合作。';
+    sentence.translation = '';
+    const reading = sentence.readingAnalysis;
+    reading.sourceText = sentence.text;
+    let cursor = 0;
+    reading.occurrences = ['甲', '公司', '与', '乙', '学校', '合作'].map((surface, index) => {
+      const start = cursor; cursor += surface.length;
+      return { ...reading.occurrences[0], id: `o${index}`, surface, lemma: surface, transliteration: '', range: { start, end: cursor }, constructionIds: index < 5 ? ['c'] : [] };
+    });
+    reading.constructions = [{ id: 'c', statement: 'A + 与 + B', meaning: '並列', roleInSentence: '', ranges: reading.occurrences.slice(0, 5).map((word: any) => word.range),
+      elements: [{ occurrenceIds: ['o0', 'o1'], fixed: false, role: 'A', explanation: '' }, { occurrenceIds: ['o2'], fixed: true, role: '接続', explanation: '' }, { occurrenceIds: ['o3', 'o4'], fixed: false, role: 'B', explanation: '' }] }];
+    await page.reload();
+    const reader = page.getByTestId('import-full-text-reader');
+    await reader.getByRole('button', { name: '与', exact: true }).click();
+    const preview = page.getByTestId('import-sentence-preview');
+    await expect(preview.locator('[data-construction-part="A"]')).toHaveCount(2);
+    await expect(preview.locator('[data-construction-part="B"]')).toHaveCount(2);
+    await expect(preview.locator('[data-part-kind="fixed"]')).toHaveCount(1);
+    await expect(preview.locator('[data-part-kind="fixed"]')).toHaveClass(/border-dotted/);
+    await expect(preview.locator('[data-construction-part="A"]').first()).toHaveClass(/bg-sky/);
+    await expect(preview.locator('[data-construction-part="B"]').first()).toHaveClass(/bg-amber/);
+    await expect(page.getByTestId('import-construction-parts')).toContainText('甲 公司');
+    await expect(page.getByTestId('import-construction-parts')).toContainText('乙 学校');
+    await expect(reader.locator('article').getByRole('button', { name: '合作', exact: true })).not.toHaveAttribute('data-construction-part');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `/tmp/vocab-grammar-slots-${width}.png` });
+    expect(state.generations()).toBe(0); expect(state.writes()).toBe(0);
+  });
+}

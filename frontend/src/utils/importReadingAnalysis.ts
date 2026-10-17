@@ -102,3 +102,37 @@ export function occurrenceConstructions(word: ImportOccurrence, points: ImportCo
     || point.elements.some(element => element.occurrenceIds.includes(word.id))
     || point.ranges.some(range => range.start === word.range.start && range.end === word.range.end));
 }
+
+export interface ConstructionPart {
+  key: string;
+  label: string;
+  fixed: boolean;
+  slotIndex: number;
+  role: string;
+  explanation: string;
+  words: ImportOccurrence[];
+}
+
+/** Use verified element links for slot boundaries; never infer A/B from surrounding text. */
+export function constructionParts(sentence: ImportSentence, point: ImportConstruction, words: ImportOccurrence[], fixedIds: Set<string>): ConstructionPart[] {
+  const original = validReading(sentence)?.occurrences ?? [];
+  const elements = point.elements.flatMap((element, index) => {
+    const sources = original.filter(word => element.occurrenceIds.includes(word.id));
+    const linked = words.filter(word => sources.some(source => source.range.start === word.range.start && source.range.end === word.range.end && source.surface === word.surface));
+    if (!linked.length || linked.length !== sources.length || sources.length !== element.occurrenceIds.length) return [];
+    return [{ key: `${point.id}-${index}`, label: "", fixed: element.fixed, slotIndex: 0, role: element.role, explanation: element.explanation, words: linked }];
+  }).sort((a, b) => a.words[0].range.start - b.words[0].range.start);
+  const pattern = point.statement.split(/[+＋]/u).map(part => part.trim());
+  const aligned = pattern.length === elements.length && elements.every((element, index) => element.fixed
+    ? pattern[index].replace(/\s/gu, "") === element.words.map(word => word.surface).join("")
+    : /^[a-z][a-z0-9]*$/iu.test(pattern[index]));
+  let slotIndex = 0;
+  for (const [index, element] of elements.entries()) {
+    element.slotIndex = element.fixed ? -1 : slotIndex++;
+    element.label = aligned ? pattern[index] : element.fixed ? element.words.map(word => word.surface).join("…") : element.role || String(element.slotIndex + 1);
+  }
+  if (elements.length || point.elements.length) return elements;
+  // Compact sessions know fixed units only; content slots require a sentence explanation.
+  return words.filter(word => fixedIds.has(word.id) && point.ranges.some(range => range.start === word.range.start && range.end === word.range.end))
+    .map(word => ({ key: `${point.id}-${word.id}`, label: word.surface, fixed: true, slotIndex: -1, role: "", explanation: "", words: [word] }));
+}
