@@ -464,7 +464,7 @@ for (const width of [360, 1280]) {
       return { ...reading.occurrences[0], id: `o${index}`, surface, lemma: surface, transliteration: '', range: { start, end: cursor }, constructionIds: index < 5 ? ['c'] : [] };
     });
     reading.constructions = [{ id: 'c', statement: 'A + 与 + B', meaning: '並列', roleInSentence: '', ranges: reading.occurrences.slice(0, 5).map((word: any) => word.range),
-      elements: [{ occurrenceIds: ['o0', 'o1'], fixed: false, role: 'A', explanation: '' }, { occurrenceIds: ['o2'], fixed: true, role: '接続', explanation: '' }, { occurrenceIds: ['o3', 'o4'], fixed: false, role: 'B', explanation: '' }] }];
+      elements: [{ occurrenceIds: ['o0', 'o1'], fixed: false, role: '出来事を述べる節A', explanation: '' }, { occurrenceIds: ['o2'], fixed: true, role: '接続', explanation: '' }, { occurrenceIds: ['o3', 'o4'], fixed: false, role: 'B', explanation: '' }] }];
     await page.reload();
     const reader = page.getByTestId('import-full-text-reader');
     await reader.getByRole('button', { name: '与', exact: true }).click();
@@ -475,6 +475,16 @@ for (const width of [360, 1280]) {
     await expect(preview.locator('[data-part-kind="fixed"]')).toHaveClass(/border-dotted/);
     await expect(preview.locator('[data-construction-part="A"]').first()).toHaveClass(/bg-sky/);
     await expect(preview.locator('[data-construction-part="B"]').first()).toHaveClass(/bg-amber/);
+    await expect(preview.locator('sup')).toHaveCount(0);
+    const labeledParts = preview.getByTestId('import-labeled-part');
+    await expect(labeledParts).toHaveCount(3);
+    await expect(labeledParts.first().getByTestId('import-part-label')).toContainText('出来事を述べる節A');
+    for (const part of await labeledParts.all()) {
+      const sourceBox = await part.getByTestId('import-part-source').boundingBox();
+      const labelBox = await part.getByTestId('import-part-label').boundingBox();
+      expect(sourceBox).not.toBeNull(); expect(labelBox).not.toBeNull();
+      expect(labelBox!.y).toBeGreaterThanOrEqual(sourceBox!.y + sourceBox!.height);
+    }
     await expect(page.getByTestId('import-construction-parts')).toContainText('甲 公司');
     await expect(page.getByTestId('import-construction-parts')).toContainText('乙 学校');
     await expect(reader.locator('article').getByRole('button', { name: '合作', exact: true })).not.toHaveAttribute('data-construction-part');

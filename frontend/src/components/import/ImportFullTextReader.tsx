@@ -80,13 +80,25 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
     const cuts = [...new Set([0, sentence.text.length, ...occurrences.flatMap(token => [token.range.start, token.range.end]),
       ...(activeConstruction?.ranges.flatMap(range => [range.start, range.end]) ?? [])])]
       .filter(offset => offset >= 0 && offset <= sentence.text.length).sort((a, b) => a - b);
-    return cuts.slice(0, -1).map((start, index) => {
+    const runs: { start: number; end: number; part?: ConstructionPart; nodes: React.ReactNode[] }[] = [];
+    cuts.slice(0, -1).forEach((start, index) => {
       const end = cuts[index + 1];
       const part = partAt(start, end);
-      const begins = part?.words[0].range.start === start;
-      return <span key={start} data-construction-part={part?.label} data-part-kind={part ? part.fixed ? "fixed" : "slot" : undefined}
-        title={part ? `${part.label} · ${part.role || t(part.fixed ? "importFixedPart" : "importVariablePart")}` : undefined}
-        className={`${part ? `rounded border-b-2 ${part.fixed ? "border-dotted" : "border-solid"} ${partStyle(part)}` : ""} ${word && word.range.start <= start && word.range.end >= end ? "underline decoration-indigo-300 decoration-2 underline-offset-4" : ""}`}>{begins && <sup aria-hidden="true" className="mr-0.5 text-[10px] font-semibold">{part.fixed ? t("importFixedPartShort") : part.label}</sup>}{sentence.text.slice(start, end)}</span>;
+      const node = <span key={start} data-construction-part={part?.label} data-part-kind={part ? part.fixed ? "fixed" : "slot" : undefined}
+        className={`${part ? `rounded border-b-2 ${part.fixed ? "border-dotted" : "border-solid"} ${partStyle(part)}` : ""} ${word && word.range.start <= start && word.range.end >= end ? "underline decoration-indigo-300 decoration-2 underline-offset-4" : ""}`}>{sentence.text.slice(start, end)}</span>;
+      const previous = runs[runs.length - 1];
+      if (previous && previous.part?.key === part?.key) { previous.nodes.push(node); previous.end = end; }
+      else runs.push({ start, end, part, nodes: [node] });
+    });
+    return runs.map(run => {
+      if (!run.part) return <span key={run.start} className="align-top">{run.nodes}</span>;
+      const part = run.part;
+      const label = part.fixed ? t("importFixedPartShort") : part.role && part.role !== part.label ? `${part.label} · ${part.role}` : part.label;
+      return <span key={run.start} className="mr-1 inline-flex max-w-full flex-col items-center align-top" data-testid="import-labeled-part">
+        <span className="min-w-0 break-words" data-testid="import-part-source">{run.nodes}</span>
+        <span title={label} data-testid="import-part-label"
+          className={`mt-1 max-w-48 break-words px-0.5 text-center text-[11px] leading-snug ${part.fixed ? "text-emerald-300" : part.slotIndex % 3 === 0 ? "text-sky-200" : part.slotIndex % 3 === 1 ? "text-amber-200" : "text-violet-200"}`}>{label}</span>
+      </span>;
     });
   }
   const reading = sentence ? validReading(sentence) : undefined;
@@ -224,9 +236,8 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
         {activeConstruction && <div className="mb-3 space-y-2 text-xs" data-testid="import-construction-parts">
           <div className="flex flex-wrap gap-2">
             {parts.map(part => <div key={part.key} className={`min-w-0 max-w-full rounded-lg border px-2 py-1.5 ${partStyle(part)}`}>
-              <span className="font-semibold">{part.label}</span>
-              <span className="ml-2 opacity-80">{t(part.fixed ? "importFixedPart" : "importVariablePart")}</span>
               <span className="block break-words text-sm">{part.words.map(word => word.surface).join(" ")}</span>
+              <span className="mt-1 block font-semibold">{part.label} · {t(part.fixed ? "importFixedPart" : "importVariablePart")}</span>
               {part.role && <span className="block opacity-80">{part.role}</span>}
             </div>)}
           </div>
@@ -250,7 +261,8 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch 
           <p className="mt-1 whitespace-pre-wrap">{point.meaning}</p>
           {point.roleInSentence && <p className="mt-2 text-gray-400">{point.roleInSentence}</p>}
           {sentence && constructionParts(sentence, point, occurrences, fixedGrammar).map(element => <p key={element.key} className={`mt-2 rounded border-l-2 p-2 ${partStyle(element)}`}>
-            <span className="font-semibold">{element.label} · {element.words.map(value => value.surface).join(" + ")} · {element.role}</span>
+            <span className="block">{element.words.map(value => value.surface).join(" + ")}</span>
+            <span className="mt-1 block text-xs font-semibold">{element.label}{element.role && element.role !== element.label ? ` · ${element.role}` : ""}</span>
             {session.language === "chinese" && <span className="block font-mono text-xs text-indigo-300">{element.words.map(value => value.transliteration).filter(Boolean).join(" + ")}</span>}
             <span className="block">{element.explanation}</span>
           </p>)}
