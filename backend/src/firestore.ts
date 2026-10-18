@@ -3534,13 +3534,15 @@ export async function updateImportSession(
 }
 
 export async function deleteImportSession(sessionId: string): Promise<boolean> {
-  return db.runTransaction(async tx => {
+  const deleted = await db.runTransaction(async tx => {
     const ref = importSessions.doc(sessionId), jref = db.collection("import_analysis_jobs").doc(sessionId);
     const [doc, job] = await Promise.all([tx.get(ref), tx.get(jref)]);
     if (!doc.exists) return false;
     if (job.exists) tx.update(jref, { state: "cancelled", generation: (job.data()!.generation ?? 0) + 1, nextWakeAt: Number.MAX_SAFE_INTEGER, cleanupAt: Date.now() + 7 * 86400000 });
     tx.delete(ref); return true;
   });
+  if (deleted) await db.recursiveDelete(importSessions.doc(sessionId));
+  return deleted;
 }
 
 export { db };

@@ -155,7 +155,7 @@ test('bounded analysis checkpoints survive timeout, stale edits, concurrent call
   assert.deepEqual(stored, before);
   const edited = structuredClone(before.items);
   edited[0].status = 'registered'; edited[0].registrations = { A: { status: 'registered', groupIds: ['a'] } };
-  const saved = await app.inject({ method: 'PUT', url: `${base}/article`, payload: { analysisCheckpoint: 1, items: edited } });
+  const saved = await app.inject({ method: 'PUT', url: `${base}/article`, payload: { analysisCheckpoint: 1, contentRevision: before.contentRevision, items: edited } });
   assert.equal(saved.statusCode, 200, saved.body);
   fail = false;
   const resumed = await Promise.all([0, 1].map(() => app.inject({ method: 'POST', url: endpoint, payload: { chunkIndex: 1 } })));

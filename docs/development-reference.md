@@ -443,3 +443,27 @@ All language codes use ISO 639-1: `ja`, `en`, `ko`, `zh`. The export script norm
     shows B only as a compact all-current-items notice. The mid-session editor follows
     the same rule. There is no standalone Group B setup or home-page button. Legacy
     topics/categories/levels fields remain in request types but setup emits empty arrays.
+
+
+## Source analysis revisions (2026-10-18)
+
+See [source revisions](source-revisions.md) for the UI, API, storage and verification
+contract. `import-revisions.ts` owns pure proposal/conversion/apply/undo rules;
+`import-revision-store.ts` persists per-article history and handles independently
+identified revision jobs through the existing OIDC worker and reconciler. Detailed
+reading analyses can carry structured comprehension with verified source evidence.
+Compact initial analysis omits that field.
+
+Import session PUT now validates `contentRevision` and increments it on every save;
+initial analysis appends increment it too. This version is separate from
+`analysisRevision`. Old sessions start at version zero, without bulk migration.
+The client waits for queued registration state to be saved before starting library
+writes. Revision generation locks article edits; proposals and history live in
+subcollections, with split payload documents rather than embedded session history.
+Nonvisible revision candidates retain entity IDs and registration receipts for the
+article quiz pool. Explicit word conversions override fixed-grammar suppression.
+Managed reading analyses never create or rewrite registration candidates implicitly.
+
+Deploy import prompt/schema changes with `./deploy.sh --prompts`. No additional
+queue or scheduler setup is required. The import emulator suite also runs isolated
+revision transaction/worker tests under `demo-import-revisions`.

@@ -14,7 +14,7 @@ function rangeValid(text: string, word: ImportOccurrence) {
 /** Derive a non-overlapping rendering from current edit rows and verified original occurrences. */
 export function readingOccurrences(sentence: ImportSentence, items: ImportItem[]): ImportOccurrence[] {
   const rows = items.filter((item): item is ImportWordItem => item.kind === "word" && item.sentenceIndex === sentence.index);
-  const live = rows.filter(row => row.status !== "skipped");
+  const live = rows.filter(row => row.status !== "skipped" && !row.hiddenByRevision);
   const original = validReading(sentence)?.occurrences.filter(word => rangeValid(sentence.text, word)) ?? [];
   const result: ImportOccurrence[] = [];
   const claimed = new Set<number>();
@@ -53,7 +53,7 @@ export function readingOccurrences(sentence: ImportSentence, items: ImportItem[]
   }
   // Compact imports can retain fixed elements only on grammar rows, without occurrence data.
   for (const item of items) {
-    if (item.kind !== "grammar" || item.sentenceIndex !== sentence.index || item.status === "skipped" || item.edited) continue;
+    if (item.kind !== "grammar" || item.sentenceIndex !== sentence.index || item.status === "skipped" || item.hiddenByRevision || item.edited) continue;
     for (const element of item.fixedElements ?? []) add({
       id: `grammar-${item.id}-${element.range.start}`, range: element.range, surface: element.surface, lemma: element.surface,
       transliteration: element.transliteration, contextualMeaning: element.meaning, explanationLanguage: item.explanationLanguage ?? "ja",
@@ -64,16 +64,16 @@ export function readingOccurrences(sentence: ImportSentence, items: ImportItem[]
 }
 
 export function readingConstructions(sentence: ImportSentence, items: ImportItem[]): ImportConstruction[] {
-  const rows = items.filter(item => item.kind === "grammar" && item.sentenceIndex === sentence.index);
+  const rows = items.filter(item => item.kind === "grammar" && item.sentenceIndex === sentence.index).sort((a, b) => Number(!!a.hiddenByRevision) - Number(!!b.hiddenByRevision));
   const reading = validReading(sentence);
   const detailed = reading?.constructions.filter(point => {
     const row = rows.find(row => row.kind === "grammar" && patternKey(row.statement) === patternKey(point.statement)) ?? rows.find(row => row.kind === "grammar" && row.constructionId === point.id);
-    return !row || (row.status !== "skipped" && row.kind === "grammar" && patternKey(row.statement) === patternKey(point.statement));
+    return !row || !!row.hiddenByRevision && items.some(i => i.kind === "word" && i.convertedFromGrammarId === row.id) || (row.status !== "skipped" && !row.hiddenByRevision && row.kind === "grammar" && patternKey(row.statement) === patternKey(point.statement));
   }).map(point => {
     const row = rows.find(row => row.kind === "grammar" && patternKey(row.statement) === patternKey(point.statement)) ?? rows.find(row => row.kind === "grammar" && row.constructionId === point.id);
-    return row?.kind === "grammar" ? { ...point, meaning: row.description } : point;
+    return row?.kind === "grammar" && !reading?.candidatesManaged ? { ...point, meaning: row.description } : point;
   }) ?? [];
-  return [...detailed, ...rows.flatMap(row => row.kind === "grammar" && row.status !== "skipped"
+  return [...detailed, ...rows.flatMap(row => row.kind === "grammar" && row.status !== "skipped" && (!row.hiddenByRevision || items.some(i => i.kind === "word" && i.convertedFromGrammarId === row.id && !i.hiddenByRevision))
     && !reading?.constructions.some(point => point.id === row.constructionId || point.statement === row.statement) ? [{
     id: row.constructionId ?? row.id, statement: row.statement, meaning: row.description, roleInSentence: "",
     ranges: !row.edited && row.fixedElements?.length ? row.fixedElements.filter(element => sentence.text.slice(element.range.start, element.range.end) === element.surface).map(element => element.range) : row.excerpt ? termOccurrences(sentence.text, row.excerpt).map(start => ({ start, end: start + row.excerpt!.length })) : [], elements: [],
@@ -87,11 +87,11 @@ export function fixedGrammarOccurrenceIds(sentence: ImportSentence, items: Impor
     .filter(element => element.fixed)
     .flatMap(element => reading?.occurrences.filter(word => element.occurrenceIds.includes(word.id)) ?? []));
   // Compact imports retain fixed ranges on the editable grammar rows, without detailed constructions.
-  const compact = items.flatMap(item => item.kind === "grammar" && item.sentenceIndex === sentence.index && item.status !== "skipped" && !item.edited
+  const compact = items.flatMap(item => item.kind === "grammar" && item.sentenceIndex === sentence.index && item.status !== "skipped" && !item.hiddenByRevision && !item.edited
     && !reading?.constructions.some(point => point.id === item.constructionId || point.statement === item.statement)
     ? item.fixedElements ?? [] : []);
   const elements = [...fixed, ...compact];
-  return new Set(occurrences.filter(word => elements.some(element =>
+  return new Set(occurrences.filter(word => !items.some(i => i.kind === "word" && i.convertedFromGrammarId && !i.hiddenByRevision && i.status !== "skipped" && i.sentenceIndex === sentence.index && i.range?.start === word.range.start && i.range.end === word.range.end) && elements.some(element =>
     element.range.start === word.range.start && element.range.end === word.range.end && element.surface === word.surface
     && sentence.text.slice(element.range.start, element.range.end) === element.surface)).map(word => word.id));
 }
@@ -149,6 +149,7 @@ export function reconcileReadingSession(session: ImportSession): ImportSession {
         const { suppressedByGrammar: _old, ...rest } = item; return rest; });
       continue;
     }
+    if (reading.candidatesManaged) continue;
     for (const point of reading.constructions) {
       const existing = items.find(item => item.kind === "grammar" && item.sentenceIndex === sentence.index
         && (item.constructionId === point.id || patternKey(item.statement) === patternKey(point.statement)));
@@ -156,7 +157,7 @@ export function reconcileReadingSession(session: ImportSession): ImportSession {
       const fixedIds = new Set(point.elements.filter(element => element.fixed).flatMap(element => element.occurrenceIds));
       const fixedElements = reading.occurrences.filter(word => fixedIds.has(word.id)).map(word => ({ range: word.range, surface: word.surface, transliteration: word.transliteration, meaning: word.contextualMeaning }));
       if (existing) items = items.map(item => item.id === existing.id ? { ...item, constructionId: point.id, fixedElements } as ImportItem : item);
-      else items.push({ id: `reading-grammar-${sentence.index}-${point.id}`, kind: "grammar", sentenceIndex: sentence.index, order: point.ranges[0]?.start ?? 0,
+      else if (!reading.candidatesManaged) items.push({ id: `reading-grammar-${sentence.index}-${point.id}`, kind: "grammar", sentenceIndex: sentence.index, order: point.ranges[0]?.start ?? 0,
         origin: "llm", status: "pending", statement: point.statement, description: point.meaning, constructionId: point.id, fixedElements,
         explanationLanguage: reading.explanationLanguage });
     }
@@ -176,7 +177,7 @@ export function reconcileReadingSession(session: ImportSession): ImportSession {
 }
 
 export function readingWordCandidate(sentence: ImportSentence, word: ImportOccurrence, items: ImportItem[]): ImportWordItem {
-  const existing = items.find((item): item is ImportWordItem => item.kind === "word" && item.sentenceIndex === sentence.index && item.status !== "skipped"
+  const existing = items.find((item): item is ImportWordItem => item.kind === "word" && item.sentenceIndex === sentence.index && item.status !== "skipped" && !item.hiddenByRevision
     && (item.range ? item.range.start === word.range.start && item.range.end === word.range.end && (item.surface ?? item.term) === word.surface : item.term === word.lemma));
   return existing ?? { id: `reading-word-${sentence.index}-${word.id}`, kind: "word", sentenceIndex: sentence.index, order: word.range.start,
     origin: "llm", status: "pending", term: word.lemma, surface: word.surface, sourceTerm: word.lemma, range: word.range,

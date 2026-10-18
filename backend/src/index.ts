@@ -30,6 +30,7 @@ import expressionRoutes from "./routes/expressions.js";
 import expressionQuizRoutes from "./routes/expression-quiz.js";
 import expressionRecallQuizRoutes from "./routes/expression-recall-quiz.js";
 import metricsRoutes from "./routes/metrics.js";
+import importRevisionRoutes from "./routes/import-revisions.js";
 import importJobRoutes from "./routes/import-jobs.js";
 import { importWorkerRoutes } from "./routes/import-worker.js";
 import importRoutes from "./routes/import.js";
@@ -111,6 +112,7 @@ await fastify.register(expressionRecallQuizRoutes, { prefix: "/api/expression-re
 await fastify.register(metricsRoutes, { prefix: "/api/metrics" });
 await fastify.register(importRoutes, { prefix: "/api/import" });
 await fastify.register(importJobRoutes, { prefix: "/api/import" });
+await fastify.register(importRevisionRoutes, { prefix: "/api/import" });
 await fastify.register(importWorkerRoutes, { prefix: "/internal/import-analysis" });
 await fastify.register(llmConfigRoutes, { prefix: "/api/llm-config" });
 

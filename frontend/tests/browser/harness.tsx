@@ -41,6 +41,8 @@ function ImportReviewHarness() {
   useEffect(() => { void review.load('article'); }, []);
   return review.session ? <ImportReview session={review.session} allWordGroups={[]} allGrammarGroups={[]}
     membershipOverlay={review.membershipOverlay} saveStatus={review.saveStatus} saveError={review.saveError}
+    onCompareSaved={review.compareSaved} onResolveSaved={review.resolveSaved}
+    onPrepareRevision={review.prepareAnalysis} onAcceptRevision={review.acceptAnalysisSession}
     onRetrySave={review.flush} onPatch={review.patch} onSetItems={review.setItems} onPatchItem={review.patchItem}
     onRegister={review.registerItem} onExit={() => {}} /> : <p>Loading</p>;
 }

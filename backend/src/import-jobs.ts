@@ -26,6 +26,7 @@ export function planImportBatches(text: string, language: string, target = 600):
 }
 
 export interface ImportJob extends ImportAnalysisJobSummary {
+  kind?: "revision"; revisionId?: string; applyAttempts?: number;
   version: 2; sessionId: string; language: string; sourceHash: string;
   chunks: string[]; attempts: number; sequence: number; operationKey: string;
   snapshot: { model: string; system: string; schema: Record<string, unknown> };

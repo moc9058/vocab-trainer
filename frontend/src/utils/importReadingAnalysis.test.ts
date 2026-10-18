@@ -166,3 +166,28 @@ it("split and merge change only the edited occurrence when a sentence repeats th
   const merged = mergeWordItems(items, ["action1", "good1"], repeated.text);
   expect(readingOccurrences(repeated, merged).map(word => [word.surface, word.range.start])).toEqual([["行动", 0], ["好", 2], ["行动好", 3]]);
 });
+
+it('conversion keeps construction explanations, prevents fixed-word suppression and never restores the hidden candidate', () => {
+  const items = fresh();
+  const source = items.find(i => i.kind === 'grammar')!;
+  const fixed = sentence.readingAnalysis!.occurrences.find(o => sentence.readingAnalysis!.constructions.some(c => c.elements.some(e => e.fixed && e.occurrenceIds.includes(o.id))))!;
+  const session = { id: 's', language: 'chinese', title: '', text: sentence.text, paragraphs: [{ sentences: [sentence] }], groupBNames: [], focusedSentenceIndex: 0, status: 'in-progress' as const, createdAt: '', updatedAt: '', items: [
+    ...items.map(i => i.id === source.id || i.kind === 'word' && i.range?.start === fixed.range.start && i.range.end === fixed.range.end ? { ...i, hiddenByRevision: 'conversion' } : i),
+    { id: 'conversion-word', kind: 'word' as const, sentenceIndex: 0, order: 0, status: 'pending' as const, origin: 'manual' as const, edited: true,
+      convertedFromGrammarId: source.id, term: fixed.lemma, sourceTerm: fixed.lemma, surface: fixed.surface, range: fixed.range, meaning: '手動の語義' },
+  ] };
+  const next = reconcileReadingSession(session);
+  expect(sentenceItems(next.items, 0).words.some(i => i.id === 'conversion-word')).toBe(true);
+  expect(sentenceItems(next.items, 0).grammar.some(i => i.id === source.id)).toBe(false);
+  expect(readingConstructions(sentence, next.items).length).toBeGreaterThan(0);
+  const rendered = readingOccurrences(sentence, next.items);
+  const converted = rendered.find(o => o.range.start === fixed.range.start && o.range.end === fixed.range.end)!;
+  expect(fixedGrammarOccurrenceIds(sentence, next.items, rendered).has(converted.id)).toBe(false);
+  expect(next.items.length).toBe(session.items.length);
+});
+it('managed sentence explanations never add, remove or suppress editable candidates', () => {
+  const items = fresh();
+  const managed = { ...sentence, readingAnalysis: { ...sentence.readingAnalysis!, candidatesManaged: true } };
+  const next = reconcileReadingSession({ id: 's', language: 'chinese', title: '', text: sentence.text, paragraphs: [{ sentences: [managed] }], groupBNames: [], focusedSentenceIndex: 0, status: 'in-progress', createdAt: '', updatedAt: '', items });
+  expect(next.items).toEqual(items);
+});

@@ -94,3 +94,10 @@ test("Chinese grammar requires pinyin on fixed elements and variable slot words"
   latin.words[3].term = 'take'; latin.words[3].surface = 'take'; latin.words[3].transliteration = '';
   assert.doesNotThrow(() => normalizeAnalysis(JSON.stringify({ paragraphs: [{ sentences: [latin] }] }), "chinese"));
 });
+
+test('whole sentence nuance evidence must be an exact nonempty source excerpt', () => {
+  const raw = { text: '他倒是答应了。', explanationLanguage: 'ja', words: [], grammar: [], overview: '承諾はした', comprehension: { meaning: '承諾はした', skeleton: '彼が承諾した', connection: '不明', nuances: [{ text: '譲歩', evidence: '倒是', certainty: 'inferred' as const }] } };
+  const valid = normalizeReadingSentence(raw, 0, (text, term) => text.includes(term) ? [text.indexOf(term)] : [], s => s);
+  assert.equal(valid.reading.comprehension!.nuances[0].evidence, '倒是');
+  assert.throws(() => normalizeReadingSentence({ ...raw, comprehension: { ...raw.comprehension, nuances: [{ ...raw.comprehension.nuances[0], evidence: '不存在' }] } }, 0, () => [], s => s), /evidence/);
+});

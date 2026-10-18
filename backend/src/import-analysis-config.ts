@@ -3,7 +3,7 @@ export function compactImportSchema(schema: Record<string, unknown>): Record<str
   const compact = structuredClone(schema) as any;
   const sentence = compact.schema?.properties?.paragraphs?.items?.properties?.sentences?.items;
   if (!sentence?.properties?.overview) return schema; // legacy config compatibility
-  for (const field of ["overview", "ambiguityNotes"]) delete sentence.properties[field];
+  for (const field of ["overview", "ambiguityNotes", "comprehension"]) delete sentence.properties[field];
   sentence.required = Object.keys(sentence.properties);
   const word = sentence.properties.words.items;
   for (const field of ["partOfSpeech", "role", "reasoning", "contrast", "senseKey"]) delete word.properties[field];

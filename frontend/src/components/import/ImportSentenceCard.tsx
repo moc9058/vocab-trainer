@@ -63,6 +63,7 @@ interface Props {
   onPatchItem: (id: string, updates: Partial<ImportItem>, immediate?: boolean) => void;
   /** One press writes ONE destination: the Group A lesson group or the Group B set. */
   onRegister: (id: string, target: "A" | "B") => void;
+  onConvertGrammar?: (item: ImportGrammarItem) => void;
   /** Fold the rows away again — pressing the sentence a second time, or the ▲. */
   onCollapse: () => void;
   /** Live from the destination rail — changing it mid-review re-labels every button. */
@@ -87,6 +88,7 @@ export default function ImportSentenceCard({
   onSetItems,
   onPatchItem,
   onRegister,
+  onConvertGrammar,
   onCollapse,
   destination,
   showTranslation,
@@ -452,6 +454,7 @@ export default function ImportSentenceCard({
               onPatch={(updates) => onPatchItem(g.id, updates)}
               onDelete={() => onPatchItem(g.id, { status: "skipped" }, true)}
               onRegister={(target) => onRegister(g.id, target)}
+              onConvert={() => onConvertGrammar?.(g)}
             />
           ))}
           {grammar.length === 0 && (
@@ -794,6 +797,7 @@ function GrammarRow({
   onPatch,
   onDelete,
   onRegister,
+  onConvert,
 }: {
   item: ImportGrammarItem;
   /** Only populated once this statement has been registered in this review —
@@ -803,6 +807,7 @@ function GrammarRow({
   onPatch: (updates: Partial<ImportGrammarItem>) => void;
   onDelete: () => void;
   onRegister: (target: "A" | "B") => void;
+  onConvert: () => void;
 }) {
   const { t } = useI18n();
   const locked = isLocked(item);
@@ -831,6 +836,7 @@ function GrammarRow({
             inLibrary={registered}
             onRegister={onRegister}
           />
+          <button type="button" disabled={item.status === "queued"} onClick={onConvert} className="rounded px-2 py-1 text-xs text-indigo-200 disabled:opacity-40">{t("importTreatAsWord")}</button>
           {!locked && (
             <button
               type="button"

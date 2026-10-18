@@ -70,6 +70,7 @@ export async function startAnalysisJob(language: string, sessionId: string, key:
     const s = sessionData(sdoc); checkSession(s, language);
     const current = readJob(jdoc); if (current) return current;
     if ((s!.analysisRevision ?? 0) !== (revision ?? 0)) throw new ImportCheckpointError(409, 'Reload before starting analysis');
+    if (s!.activeRevisionId) throw new ImportCheckpointError(409, 'A revision is running.');
     if (s!.items.some(i => i.status === 'queued')) throw new ImportCheckpointError(409, 'Wait for pending registrations');
     const { chunks, next } = remainingJobChunks(s!);
     const done = next === chunks.length;
@@ -91,6 +92,7 @@ export async function changeAnalysisJob(language: string, sessionId: string, act
     const opref = jref.collection('operations').doc(sourceHash(key));
     const [sdoc, jdoc, opdoc] = await Promise.all([tx.get(sref), tx.get(jref), tx.get(opref)]);
     const s = sessionData(sdoc); checkSession(s, language);
+    if (s!.activeRevisionId) throw new ImportCheckpointError(409, 'A revision is running.');
     const j = readJob(jdoc); if (!j) throw new ImportCheckpointError(404, 'Analysis job not found');
     if (opdoc.exists) return j;
     const savedResult = action === 'resume' ? await tx.get(jref.collection('results').doc(`${j.nextBatch}`)) : null;
@@ -153,10 +155,10 @@ export async function heartbeatAnalysisJob(worker: ImportJob): Promise<void> {
 }
 
 /** One usage receipt and one existing daily increment per actual attempt, in one transaction. */
-async function saveUsage(job: ImportJob, usage: CompletionUsage | undefined, model: string) {
+export async function saveUsage(job: ImportJob, usage: CompletionUsage | undefined, model: string) {
   if (!usage) return;
   const ref = jobCollection.doc(job.id).collection('attempts').doc(job.lease!.attemptId);
-  const now = stamp(), date = now.slice(0, 10), route = 'import/analyze-part';
+  const now = stamp(), date = now.slice(0, 10), route = job.kind === 'revision' ? 'import/revision' : 'import/analyze-part';
   await db.runTransaction(async tx => {
     const doc = await tx.get(ref); if (doc.data()?.usageUnknown === false) return;
     const values = { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, totalTokens: usage.total_tokens,
@@ -203,6 +205,9 @@ export async function failAnalysisJob(worker: ImportJob, error: unknown): Promis
 }
 
 export async function runAnalysisTask(payload: ImportTaskPayload): Promise<void> {
+  if ((await getAnalysisJob(payload.jobId))?.kind === "revision") {
+    await (await import("./import-revision-store.js")).runRevisionTask(payload); return;
+  }
   const job = await claimAnalysisJob(payload); if (!job) return;
   const timer = setInterval(() => { void heartbeatAnalysisJob(job).catch(() => {}); }, 30_000); timer.unref();
   try {
@@ -253,6 +258,7 @@ export async function reconcileAnalysisJobs(runLocally = false): Promise<number>
   const docs = await jobCollection.where('nextWakeAt', '<=', Date.now()).limit(20).get();
   for (const doc of docs.docs) {
     let j = readJob(doc)!;
+    if (j.kind === "revision") { await (await import("./import-revision-store.js")).reconcileRevisionJob(j, runLocally); continue; }
     if (j.state === 'running') {
       await db.runTransaction(async tx => {
         const ref = doc.ref; const current = readJob(await tx.get(ref));
@@ -282,6 +288,7 @@ export async function reconcileAnalysisJobs(runLocally = false): Promise<number>
   const expired = await jobCollection.where('cleanupAt', '<=', Date.now()).limit(5).get();
   for (const doc of expired.docs) {
     const j = readJob(doc)!;
+    if (j.kind === 'revision') { await (await import('./import-revision-store.js')).cleanupRevisionJob(j); continue; }
     if (j.state === 'cancelled') await db.recursiveDelete(doc.ref);
     else if (j.state === 'completed') {
       let remaining = false;

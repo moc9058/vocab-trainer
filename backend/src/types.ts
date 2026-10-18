@@ -692,6 +692,8 @@ export interface ImportReadingAnalysis {
   sourceText: string;
   explanationLanguage: string;
   overview: string;
+  candidatesManaged?: boolean;
+  comprehension?: { meaning: string; skeleton: string; connection: string; nuances: { text: string; evidence: string; certainty: "explicit" | "inferred" | "uncertain" }[] };
   ambiguityNotes: string[];
   occurrences: ImportOccurrence[];
   constructions: ImportConstruction[];
@@ -786,6 +788,10 @@ export interface ImportRegistrationState {
 }
 
 interface ImportItemBase {
+  hiddenByRevision?: string;
+  revisionId?: string;
+  convertedFromGrammarId?: string;
+
   /** Stable across edits, merges and reloads; assigned client-side. */
   id: string;
   sentenceIndex: number;
@@ -875,6 +881,10 @@ export interface ImportAnalysisJobSummary {
 }
 
 export interface ImportSession {
+  contentRevision?: number;
+  activeRevisionId?: string;
+  latestRevisionId?: string;
+
   analysisJobRef?: { version: 2; jobId: string; generation: number };
   analysisRevision?: number;
   analysisState?: ImportAnalysisState;
@@ -947,3 +957,38 @@ export interface LLMModelConfig {
 /** Where a resolved model came from — surfaced in the settings UI so the user
  *  can tell an explicit choice from an inherited one. */
 export type LLMModelSource = "feature" | "default" | "env";
+
+export interface ImportRevisionTarget { sentenceIndex: number; sourceText: string; sourceTextHash: string }
+export interface ImportConversionInput {
+  itemId: string; start: number; end: number; term: string; meaning: string;
+  transliteration: string; explanationLanguage: string; mode: "replace" | "add";
+}
+export interface ImportRevisionRequest {
+  kind: "regenerate" | "word-assist";
+  sentenceIndices: number[];
+  update: "explanation" | "grammar" | "both";
+  instruction: string;
+  explanationLanguage: string;
+  expectedRevision: number;
+  idempotencyKey: string;
+  conversion?: ImportConversionInput;
+}
+export interface ImportRevisionChange {
+  id: string; sentenceIndex: number; action: "add" | "replace" | "remove";
+  previousId?: string; before?: ImportGrammarItem; after?: ImportGrammarItem;
+}
+export interface ImportRevision {
+  id: string; sessionId: string; kind: "regenerate" | "word-assist" | "conversion" | "restore";
+  state: "queued" | "running" | "proposed" | "applied" | "rejected" | "failed" | "undone";
+  request: ImportRevisionRequest;
+  targets: ImportRevisionTarget[];
+  context: { sentenceIndex: number; text: string }[];
+  changes: ImportRevisionChange[];
+  sentences: ImportSentence[];
+  assistedWord?: { term: string; meaning: string; transliteration: string };
+  before?: { items: ImportItem[]; sentences: ImportSentence[] };
+  after?: { items: ImportItem[]; sentences: ImportSentence[] };
+  appliedRevision?: number;
+  appliedIds?: string[];
+  createdAt: string; updatedAt: string; error?: string;
+}

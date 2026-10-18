@@ -178,3 +178,20 @@ export function resumeImportAnalysisJob(language: string, id: string, idempotenc
 export function pauseImportAnalysisJob(language: string, id: string, idempotencyKey: string): Promise<ImportAnalysisJobSummary> {
   return postJson(jobPath(language, id) + '/pause', { idempotencyKey }, jobSignal());
 }
+
+const revisionPath = (language: string, id: string) => `/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(id)}`;
+export function listImportRevisions(language: string, id: string, signal?: AbortSignal): Promise<{ revisions: import("../types").ImportRevision[] }> {
+  return fetchJson(`${revisionPath(language, id)}/revisions`, jobSignal(signal));
+}
+export function getImportRevision(language: string, id: string, revisionId: string, signal?: AbortSignal): Promise<import("../types").ImportRevision> {
+  return fetchJson(`${revisionPath(language, id)}/revisions/${encodeURIComponent(revisionId)}`, jobSignal(signal));
+}
+export function createImportRevision(language: string, id: string, request: import("../types").ImportRevisionRequest): Promise<import("../types").ImportRevision> {
+  return postJson(`${revisionPath(language, id)}/revisions`, request, jobSignal());
+}
+export function importRevisionAction(language: string, id: string, revisionId: string, action: "apply" | "reject" | "undo" | "restore", expectedRevision: number, changeIds: string[] = [], sentenceIndices: number[] = []): Promise<{ session: ImportSession; revision: import("../types").ImportRevision }> {
+  return postJson(`${revisionPath(language, id)}/revisions/${encodeURIComponent(revisionId)}/${action}`, { expectedRevision, changeIds, sentenceIndices }, jobSignal());
+}
+export function convertImportGrammar(language: string, id: string, conversion: import("../types").ImportConversionInput, expectedRevision: number, idempotencyKey: string): Promise<{ session: ImportSession; revision: import("../types").ImportRevision }> {
+  return postJson(`${revisionPath(language, id)}/candidate-conversions`, { conversion, expectedRevision, idempotencyKey }, jobSignal());
+}

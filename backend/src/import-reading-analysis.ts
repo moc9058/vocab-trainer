@@ -24,6 +24,7 @@ export interface RawReadingSentence {
   translation?: string;
   explanationLanguage?: string;
   overview?: string;
+  comprehension?: ImportReadingAnalysis["comprehension"];
   ambiguityNotes?: string[];
   words?: RawReadingWord[];
   grammar?: RawReadingGrammar[];
@@ -42,6 +43,12 @@ export function normalizeReadingSentence(
     version: 1, sourceText: text, explanationLanguage: language,
     overview: raw.overview ?? "", ambiguityNotes: raw.ambiguityNotes ?? [], occurrences: [], constructions: [],
   };
+  if (raw.comprehension) {
+    const c = raw.comprehension;
+    if (typeof c.meaning !== "string" || !c.meaning.trim() || typeof c.skeleton !== "string" || typeof c.connection !== "string" || !Array.isArray(c.nuances)
+      || c.nuances.some(n => typeof n.text !== "string" || typeof n.evidence !== "string" || !n.evidence.trim() || !text.includes(n.evidence) || !["explicit", "inferred", "uncertain"].includes(n.certainty))) throw new Error("Invalid reading analysis comprehension evidence");
+    reading.comprehension = c;
+  }
   const words: ImportExtractedWord[] = [];
   const byRawIndex = new Map<number, string>();
   const used = new Set<string>();

@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../../i18n/context";
+import ImportSaveComparison from "./ImportSaveComparison";
+import ImportRevisionPanel from "./ImportRevisionPanel";
+import ImportComprehension from "./ImportComprehension";
 import ImportDestinationRail from "./ImportDestinationRail";
 import ImportFullTextReader from "./ImportFullTextReader";
 import ImportSentenceCard, { type ImportDestination, RegisterControls } from "./ImportSentenceCard";
@@ -14,7 +17,7 @@ import {
   sessionCounts,
 } from "../../utils/importSession";
 import { useImportLibraryStatus } from "../../hooks/useImportLibraryStatus";
-import type { GrammarGroup, ImportItem, ImportSession, WordGroup } from "../../types";
+import type { GrammarGroup, ImportGrammarItem, ImportItem, ImportSession, WordGroup } from "../../types";
 import type { SaveStatus } from "../../hooks/useImportSession";
 
 const TRANSLATION_PREF_KEY = "importShowTranslations";
@@ -32,7 +35,11 @@ interface Props {
   membershipOverlay: Map<string, string[]>;
   saveStatus: SaveStatus;
   saveError: string | null;
+  onCompareSaved: () => Promise<{ local: ImportSession; remote: ImportSession }>;
+  onResolveSaved: (remote: ImportSession, reapply: boolean) => void;
   onRetrySave: () => void;
+  onPrepareRevision: () => Promise<ImportSession | null>;
+  onAcceptRevision: (s: ImportSession) => void;
   onPatch: (updater: (s: ImportSession) => ImportSession, immediate?: boolean) => void;
   onSetItems: (updater: (items: ImportItem[]) => ImportItem[], immediate?: boolean) => void;
   onPatchItem: (id: string, updates: Partial<ImportItem>, immediate?: boolean) => void;
@@ -51,6 +58,9 @@ export default function ImportReview({
   saveStatus,
   saveError,
   onRetrySave,
+  onCompareSaved, onResolveSaved,
+  onPrepareRevision,
+  onAcceptRevision,
   onPatch,
   onSetItems,
   onPatchItem,
@@ -58,6 +68,10 @@ export default function ImportReview({
   onExit,
 }: Props) {
   const { t } = useI18n();
+  const [revisionBusy, setRevisionBusy] = useState(false);
+  const [conversion, setConversion] = useState<ImportGrammarItem | null>(null);
+  const [revisionSelection, setRevisionSelection] = useState<number | null>(null);
+  const mutationLocked = revisionBusy || !!session.activeRevisionId;
   const sentences = useMemo(() => flattenSentences(session.paragraphs), [session.paragraphs]);
   const counts = useMemo(() => sessionCounts(session.items), [session.items]);
   /** How many characters each sentence still leaves unaccounted for. Computed once
@@ -262,13 +276,16 @@ export default function ImportReview({
           </div>
         </header>
 
+        <ImportSaveComparison compare={onCompareSaved} resolve={onResolveSaved} disabled={mutationLocked} />
+        <ImportRevisionPanel key={session.id} session={session} prepare={onPrepareRevision} accept={onAcceptRevision} onBusy={setRevisionBusy}
+          conversion={conversion} onOpenConversion={setConversion} onCloseConversion={() => setConversion(null)} selection={revisionSelection} />
         {analysisError && <p role="alert" className="mb-3 rounded-lg border border-red-800 bg-red-950/40 p-3 text-sm text-red-300">{analysisError}</p>}
         {session.analysisProgress && session.analysisProgress.nextChunk < session.analysisProgress.chunks.length && (
           <div className="mb-4 rounded-lg border border-indigo-800 bg-indigo-950/30 p-3 text-sm text-indigo-200">
             <p>{t("importAnalysisPaused")} {session.analysisProgress.nextChunk} / {session.analysisProgress.chunks.length}</p>
             <p className="mt-1 text-xs text-gray-400">{t("importAnalysisCheckpointHint")}</p>
             {onContinueAnalysis && <button type="button" onClick={onContinueAnalysis}
-              disabled={session.items.some(item => item.status === "queued") || saveStatus === "error"}
+              disabled={mutationLocked || session.items.some(item => item.status === "queued") || saveStatus === "error"}
               className="mt-3 rounded-lg bg-indigo-600 px-3 py-2 text-white disabled:opacity-40">{t("importContinueAnalysis")}</button>}
           </div>
         )}
@@ -312,9 +329,11 @@ export default function ImportReview({
         {viewMode === "fullText" ? <>
           <div className="mb-4"><ImportDestinationRail language={session.language} allWordGroups={allWordGroups} allGrammarGroups={allGrammarGroups}
             wordGroupId={session.wordGroupId} grammarGroupId={session.grammarGroupId} groupBNames={session.groupBNames}
-            onChange={patch => onPatch(s => ({ ...s, ...patch }), true)} collapsible /></div>
-          <ImportFullTextReader key={session.id} session={session} onPatch={onPatch}
-          renderRegistration={item => <RegisterControls item={item}
+            onChange={patch => { if (!mutationLocked) onPatch(s => ({ ...s, ...patch }), true); }} collapsible /></div>
+          <ImportFullTextReader key={session.id} session={session} onPatch={mutationLocked ? undefined : onPatch}
+          onReviseSentence={index => { setRevisionSelection(null); queueMicrotask(() => setRevisionSelection(index)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          onConvertGrammar={item => setConversion(item)} revisionLocked={mutationLocked}
+          renderRegistration={item => <RegisterControls blocked={mutationLocked ? t("importRevisionGenerating") : undefined} item={item}
             destination={{ aGroupId: item.kind === "word" ? destination.wordGroupId : destination.grammarGroupId,
               aGroupName: item.kind === "word" ? destination.wordGroupName : destination.grammarGroupName, bNames: destination.groupBNames }}
             groups={(item.kind === "word" ? wordGroupsByTerm.get(item.term) : grammarGroupsById.get(item.existingGrammarId ?? "")) ?? { a: [], b: [], aIds: [] }}
@@ -337,7 +356,7 @@ export default function ImportReview({
               wordGroupId={session.wordGroupId}
               grammarGroupId={session.grammarGroupId}
               groupBNames={session.groupBNames}
-              onChange={(patch) => onPatch((s) => ({ ...s, ...patch }), true)}
+              onChange={(patch) => { if (!mutationLocked) onPatch((s) => ({ ...s, ...patch }), true); }}
               collapsible
             />
             <p className="mt-2 hidden px-1 text-[11px] leading-snug text-gray-600 lg:block">
@@ -367,6 +386,9 @@ export default function ImportReview({
                           }}
                           className="scroll-mt-4 scroll-mb-24 lg:scroll-mb-4"
                         >
+                          <button type="button" disabled={mutationLocked} className="mb-2 rounded border border-indigo-700 px-3 py-2 text-sm text-indigo-200 disabled:opacity-40" onClick={() => { setRevisionSelection(null); queueMicrotask(() => setRevisionSelection(sentence.index)); window.scrollTo({ top: 0, behavior: "smooth" }); }}>{t("importReviseRange")}</button>
+                          <ImportComprehension reading={sentence.readingAnalysis} />
+                          <fieldset disabled={mutationLocked}>
                           <ImportSentenceCard
                             language={session.language}
                             sentence={sentence}
@@ -375,6 +397,7 @@ export default function ImportReview({
                             onSetItems={onSetItems}
                             onPatchItem={onPatchItem}
                             onRegister={onRegister}
+                            onConvertGrammar={setConversion}
                             onCollapse={() => setCollapsed(true)}
                             destination={destination}
                             showTranslation={showTranslations}
@@ -382,6 +405,7 @@ export default function ImportReview({
                             wordGroupsByTerm={wordGroupsByTerm}
                             grammarGroupsById={grammarGroupsById}
                           />
+                          </fieldset>
                           {/* On a phone the same controls live in the sticky bar below. */}
                           <div className="mt-2 hidden items-center gap-3 text-xs lg:flex">
                             <button

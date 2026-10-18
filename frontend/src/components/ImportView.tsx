@@ -65,6 +65,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
 
   const {
     session,
+    compareSaved, resolveSaved,
     prepareAnalysis,
     acceptAnalysisSession,
     saveStatus,
@@ -188,6 +189,9 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
         saveStatus={saveStatus}
         saveError={saveError}
         onRetrySave={retrySave}
+        onCompareSaved={compareSaved} onResolveSaved={resolveSaved}
+        onPrepareRevision={prepareAnalysis}
+        onAcceptRevision={acceptAnalysisSession}
         onPatch={patch}
         onSetItems={setItems}
         onPatchItem={patchItem}

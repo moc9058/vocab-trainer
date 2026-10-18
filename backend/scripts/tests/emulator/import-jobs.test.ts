@@ -65,7 +65,7 @@ test('pause waits for current work, edits survive resumed append, stale saves an
   const ref = db.doc(`import_sessions/${j.id}`); const s = (await ref.get()).data()!;
   const stale = await app.inject({ method: 'PUT', url: `/api/import/chinese/sessions/${j.id}`, payload: { items: [], analysisCheckpoint: 0 } }); assert.equal(stale.statusCode, 409);
   s.items[0].meaning = 'User edited'; s.items[0].status = 'registered'; s.items[0].registrations = { B: { status: 'registered', groupIds: ['keep-b'] } };
-  const edited = await app.inject({ method: 'PUT', url: `/api/import/chinese/sessions/${j.id}`, payload: { items: s.items, analysisCheckpoint: 1, analysisRevision: s.analysisRevision } }); assert.equal(edited.statusCode, 200, edited.body);
+  const edited = await app.inject({ method: 'PUT', url: `/api/import/chinese/sessions/${j.id}`, payload: { items: s.items, contentRevision: s.contentRevision, analysisCheckpoint: 1, analysisRevision: s.analysisRevision } }); assert.equal(edited.statusCode, 200, edited.body);
   const legacy = await app.inject({ method: 'POST', url: `/api/import/chinese/sessions/${j.id}/analyze-next`, payload: { chunkIndex: 1 } }); assert.equal(legacy.statusCode, 409);
   current = await jobs.changeAnalysisJob('chinese', j.id, 'resume', 'resume-key');
   await jobs.runAnalysisTask(payload(current)); current = (await jobs.getAnalysisJob(j.id))!;

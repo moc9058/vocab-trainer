@@ -38,6 +38,7 @@ export function appendImportPart(session: ImportSession, expected: number, analy
   const progress = session.analysisProgress;
   if (!progress || progress.nextChunk < expected) throw new ImportCheckpointError(409, "Reload the article before continuing analysis.");
   if (progress.nextChunk > expected) return session; // A lost response/concurrent replay already committed.
+  if (session.activeRevisionId) throw new ImportCheckpointError(409, "A revision is running.");
   const base = session.paragraphs.flatMap(p => p.sentences).reduce((max, s) => Math.max(max, s.index + 1), 0);
   const paragraphs = analysis.paragraphs.map(p => ({ sentences: p.sentences.map(s => ({ index: s.index + base, text: s.text, ...(s.translation ? { translation: s.translation } : {}), ...(s.readingAnalysis ? { readingAnalysis: rebaseReadingAnalysis(s.readingAnalysis, base) } : {}) })) }));
   const texts = new Map(analysis.paragraphs.flatMap(p => p.sentences).map(s => [s.index, s.text]));
@@ -89,7 +90,7 @@ export function appendImportPart(session: ImportSession, expected: number, analy
     const last = session.paragraphs[session.paragraphs.length - 1];
     joined = [...session.paragraphs.slice(0, -1), { ...last, sentences: [...last.sentences, ...paragraphs[0].sentences] }, ...paragraphs.slice(1)];
   }
-  const next = { ...session, paragraphs: joined, items: [...session.items, ...additions],
+  const next = { ...session, contentRevision: (session.contentRevision ?? 0) + 1, paragraphs: joined, items: [...session.items, ...additions],
     analysisProgress: { ...progress, nextChunk: expected + 1 }, updatedAt: new Date().toISOString() };
   if (Buffer.byteLength(JSON.stringify(next), "utf8") > 900_000) throw new ImportCheckpointError(413, "Article is too large to save. Import the remaining text in a separate article.");
   return next;

@@ -4,6 +4,7 @@ import {
   getImportSession,
   updateImportSession,
 } from "../api/import";
+import { rebaseImportEdits } from "../utils/importEditConflict";
 import { checkTerms, modifyGroupMembers } from "../api/vocab";
 import { getGrammarItemsByIds, modifyGrammarGroupMembers } from "../api/grammar";
 import { reconcileReadingSession } from "../utils/importReadingAnalysis";
@@ -98,6 +99,7 @@ export function useImportSession({
   // The autosave timer and the queue's settle callbacks both fire outside React's
   // render flow, so they read the session through a ref rather than a stale closure.
   const sessionRef = useRef<ImportSession | null>(null);
+  const baseRef = useRef<ImportSession | null>(null);
   const savingRef = useRef(false);
   const pendingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -138,6 +140,7 @@ export function useImportSession({
     try {
       const saved = await updateImportSession(language, current.id, {
         title: current.title,
+        contentRevision: current.contentRevision ?? 0,
         ...(current.analysisJobRef ? { analysisRevision: current.analysisRevision } : {}),
         ...(current.analysisProgress ? { analysisCheckpoint: current.analysisProgress.nextChunk } : {}),
         items: current.items,
@@ -148,10 +151,11 @@ export function useImportSession({
         focusedSentenceIndex: current.focusedSentenceIndex,
         status: current.status,
       });
+      baseRef.current = saved;
       // Only the server-owned stamp is taken back; local state stays authoritative
       // so edits made during the request are not reverted.
       if (sessionRef.current?.id === current.id) {
-        setSession({ ...sessionRef.current, updatedAt: saved.updatedAt });
+        setSession({ ...sessionRef.current, updatedAt: saved.updatedAt, contentRevision: saved.contentRevision });
       }
       setSaveStatus("saved");
       setSaveError(null);
@@ -181,6 +185,16 @@ export function useImportSession({
     void save();
   }, [save]);
 
+  const drainSave = useCallback(async () => {
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    if (savingRef.current || dirtyRef.current) await new Promise<void>(resolve => {
+      saveWaiters.current.push(resolve);
+      if (savingRef.current) pendingRef.current = true;
+      else void save();
+    });
+    if (dirtyRef.current) throw new Error(saveFailure.current ?? "Save pending changes first.");
+  }, [save]);
+
   /** Pause UI edits and drain autosave before handing the session to server-side analysis. */
   const prepareAnalysis = useCallback(async () => {
     if (sessionRef.current?.items.some(item => item.status === "queued")) throw new Error("Wait for pending registrations before continuing analysis.");
@@ -196,6 +210,7 @@ export function useImportSession({
 
   const acceptAnalysisSession = useCallback((next: ImportSession) => {
     if (dirtyRef.current || savingRef.current) throw new Error("Unsaved edits must be saved before loading analysis.");
+    baseRef.current = next;
     setSession(next);
     setSaveStatus("saved"); setSaveError(null);
   }, [setSession]);
@@ -239,6 +254,7 @@ export function useImportSession({
       const created = await createImportSession(language, input, signal);
       signal?.throwIfAborted();
       setMembershipOverlay(new Map());
+      baseRef.current = created;
       setSession(created);
       setSaveStatus("saved");
       return created;
@@ -262,7 +278,8 @@ export function useImportSession({
   const load = useCallback(
     async (sessionId: string): Promise<ImportSession> => {
       const loaded = await getImportSession(language, sessionId);
-      if (loaded.analysisState === "queued" || loaded.analysisState === "running") {
+      baseRef.current = loaded;
+      if (loaded.activeRevisionId || loaded.analysisState === "queued" || loaded.analysisState === "running") {
         setMembershipOverlay(new Map()); setSession(loaded); setSaveStatus("saved"); return loaded;
       }
       const terms = libraryClaimTerms(loaded.items);
@@ -315,7 +332,7 @@ export function useImportSession({
   const patch = useCallback(
     (updater: (s: ImportSession) => ImportSession, immediate = false) => {
       const current = sessionRef.current;
-      if (!current) return;
+      if (!current || current.activeRevisionId) return;
       setSession(reconcileReadingSession(updater(current)));
       if (immediate) flush();
       else scheduleSave();
@@ -486,7 +503,7 @@ export function useImportSession({
       // made the second button dead until the first finished. NOT `isLocked` either,
       // which covers `registered`: a row already in Group A must still accept a Group B
       // press. `isLocked` stays the rule for EDITING the row's text.
-      if (!current || !started || !isLive(started)) return;
+      if (!current || current.activeRevisionId || !started || !isLive(started)) return;
       if (started.registrations?.[target]?.status === "queued") return;
       const key = itemKey(started);
       if (!key) return;
@@ -515,6 +532,10 @@ export function useImportSession({
           ? started.registrations[target]?.groupIds : undefined,
       });
       if (piggyback) return;
+      try { await drainSave(); } catch (error) {
+        applySettle(id, target, { ok: false, duplicate: false, rescuedAsDraft: false, error: error instanceof Error ? error.message : String(error) });
+        return;
+      }
 
       /**
        * Wait for any CREATE already running for this term — from this row's other
@@ -716,6 +737,7 @@ export function useImportSession({
     },
     [
       applySettle,
+      drainSave,
       descriptionLanguage,
       groupBIdsFor,
       language,
@@ -726,8 +748,26 @@ export function useImportSession({
     ]
   );
 
+  const compareSaved = useCallback(async () => {
+    const local = sessionRef.current;
+    if (!local) throw new Error("No article is open.");
+    if (savingRef.current) throw new Error("Wait for the current save.");
+    if (timerRef.current) { clearTimeout(timerRef.current); timerRef.current = null; }
+    return { local, remote: await getImportSession(language, local.id) };
+  }, [language]);
+  const resolveSaved = useCallback((remote: ImportSession, reapply: boolean) => {
+    const local = sessionRef.current;
+    if (!local || savingRef.current) throw new Error("Wait for the current save.");
+    const next = reapply && baseRef.current ? rebaseImportEdits(baseRef.current, local, remote) : remote;
+    baseRef.current = remote;
+    dirtyRef.current = false; pendingRef.current = false; saveFailure.current = null;
+    setSession(next); setSaveError(null); setSaveStatus("saved");
+    if (reapply) { dirtyRef.current = true; flush(); }
+  }, [flush, setSession]);
   return {
     session,
+    compareSaved,
+    resolveSaved,
     prepareAnalysis,
     acceptAnalysisSession,
     saveStatus,

@@ -11,7 +11,7 @@ import type {
 /** Rows the user has removed or that a merge/split consumed are kept as
  *  tombstones, so "live" means everything still on screen. */
 export function isLive(item: ImportItem): boolean {
-  return item.status !== "skipped" && !(item.kind === "word" && item.suppressedByGrammar);
+  return !item.hiddenByRevision && item.status !== "skipped" && !(item.kind === "word" && item.suppressedByGrammar);
 }
 
 /** An item is locked against editing once it has been handed to the queue —

@@ -19,7 +19,6 @@ import {
   saveImportSession,
   getImportSessions,
   getImportSession,
-  updateImportSession,
   mutateImportSession,
   deleteImportSession,
 } from "../firestore.js";
@@ -243,7 +242,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
       const { language, sessionId } = request.params;
       const session = await getImportSession(sessionId);
       if (!session || session.language !== language) return reply.notFound("Import session not found");
-      if (jobActive(session.analysisState)) return reply.conflict("Pause analysis before generating an explanation.");
+      if (session.activeRevisionId || jobActive(session.analysisState)) return reply.conflict("Pause analysis before generating an explanation.");
       const index = Number(request.params.sentenceIndex);
       if (!Number.isInteger(index) || index < 0) return reply.badRequest("Invalid sentence index");
       const sentences = session.paragraphs.flatMap(p => p.sentences);
@@ -322,8 +321,8 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
             id: s.id,
             language: s.language,
             title: s.title,
-            totalCount: (s.items ?? []).filter(i => !(i.kind === "word" && i.suppressedByGrammar)).length,
-            registeredCount: (s.items ?? []).filter((i) => i.status === "registered" && !(i.kind === "word" && i.suppressedByGrammar)).length,
+            totalCount: (s.items ?? []).filter(i => !i.hiddenByRevision && !(i.kind === "word" && i.suppressedByGrammar)).length,
+            registeredCount: (s.items ?? []).filter((i) => i.status === "registered" && !i.hiddenByRevision && !(i.kind === "word" && i.suppressedByGrammar)).length,
             status: s.status,
             ...(s.analysisState ? { analysisState: s.analysisState } : {}),
             createdAt: s.createdAt,
@@ -371,7 +370,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
       if ((body.analyzeInParts || body.analyzeAsJob) && (!body.text.trim() || body.text.length > MAX_TEXT_LENGTH)) return reply.badRequest("Source text must contain 1–8000 characters");
       const now = new Date().toISOString();
       const session = await saveImportSession({
-        language,
+        language, contentRevision: 0,
         ...(body.analyzeAsJob ? { analysisRevision: 0 } : {}),
         title: body.title?.trim() || body.text.slice(0, 40),
         text: body.text,
@@ -411,6 +410,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
         body: {
           type: "object",
           properties: {
+            contentRevision: { type: "integer", minimum: 0 },
             analysisCheckpoint: { type: "integer", minimum: 0 },
             analysisRevision: { type: "integer", minimum: 0 },
             title: { type: "string" },
@@ -430,26 +430,21 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
       const existing = await getImportSession(request.params.sessionId);
       if (!existing || existing.language !== request.params.language) return reply.notFound("Import session not found");
       if (Buffer.byteLength(JSON.stringify({ ...existing, ...request.body }), "utf8") > 900_000) return reply.badRequest("Article is too large. Split it into smaller sections.");
-      if (existing.analysisProgress) {
-        try {
-          return await mutateImportSession(request.params.sessionId, current => {
-            if (!current || current.language !== request.params.language) throw new ImportCheckpointError(404, "Import session not found");
-            if (current.analysisJobRef && (jobActive(current.analysisState) || request.body.analysisRevision !== current.analysisRevision)) throw new ImportCheckpointError(409, "Pause analysis and reload before saving edits.");
-            if ((request.body.text !== undefined && request.body.text !== current.text) || request.body.analysisCheckpoint !== current.analysisProgress?.nextChunk) throw new ImportCheckpointError(409, "Analysis progressed in another window. Reload before saving edits.");
-            const { analysisProgress: _progress, analysisCheckpoint: _checkpoint, analysisJobRef: _job, analysisRevision: _revision, analysisState: _state, ...updates } = request.body;
-            const next = { ...current, ...updates, analysisProgress: current.analysisProgress, updatedAt: new Date().toISOString() };
-            if (Buffer.byteLength(JSON.stringify(next), "utf8") > 900_000) throw new ImportCheckpointError(413, "Article is too large. Split it into smaller sections.");
-            return next;
-          });
-        } catch (err) {
-          if (err instanceof ImportCheckpointError) return reply.code(err.statusCode).send({ message: err.message });
-          throw err;
-        }
+      try {
+        return await mutateImportSession(request.params.sessionId, current => {
+          if (!current || current.language !== request.params.language) throw new ImportCheckpointError(404, "Import session not found");
+          if (current.activeRevisionId || (current.contentRevision ?? 0) !== (request.body.contentRevision ?? 0)) throw new ImportCheckpointError(409, "The article changed. Reload and compare your edits before retrying.");
+          if (current.analysisJobRef && (jobActive(current.analysisState) || request.body.analysisRevision !== current.analysisRevision)) throw new ImportCheckpointError(409, "Pause analysis and reload before saving edits.");
+          if (current.analysisProgress && ((request.body.text !== undefined && request.body.text !== current.text) || request.body.analysisCheckpoint !== current.analysisProgress.nextChunk)) throw new ImportCheckpointError(409, "Analysis progressed in another window. Reload before saving edits.");
+          const { analysisProgress: _progress, analysisCheckpoint: _checkpoint, analysisJobRef: _job, analysisRevision: _revision, analysisState: _state, contentRevision: _content, activeRevisionId: _active, latestRevisionId: _latest, ...updates } = request.body;
+          const next = { ...current, ...updates, contentRevision: (current.contentRevision ?? 0) + 1, updatedAt: new Date().toISOString() };
+          if (Buffer.byteLength(JSON.stringify(next), "utf8") > 900_000) throw new ImportCheckpointError(413, "Article is too large. Split it into smaller sections.");
+          return next;
+        });
+      } catch (err) {
+        if (err instanceof ImportCheckpointError) return reply.code(err.statusCode).send({ message: err.message });
+        throw err;
       }
-      const { analysisProgress: _progress, analysisCheckpoint: _checkpoint, analysisJobRef: _job, analysisRevision: _revision, analysisState: _state, ...updates } = request.body;
-      const updated = await updateImportSession(request.params.sessionId, updates);
-      if (!updated) return reply.notFound("Import session not found");
-      return updated;
     }
   );
 

@@ -29,7 +29,8 @@
                   "grammar",
                   "overview",
                   "explanationLanguage",
-                  "ambiguityNotes"
+                  "ambiguityNotes",
+                  "comprehension"
                 ],
                 "properties": {
                   "text": {
@@ -159,6 +160,55 @@
                     "type": "array",
                     "items": {
                       "type": "string"
+                    }
+                  },
+                  "comprehension": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "meaning",
+                      "skeleton",
+                      "connection",
+                      "nuances"
+                    ],
+                    "properties": {
+                      "meaning": {
+                        "type": "string"
+                      },
+                      "skeleton": {
+                        "type": "string"
+                      },
+                      "connection": {
+                        "type": "string"
+                      },
+                      "nuances": {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "text",
+                            "evidence",
+                            "certainty"
+                          ],
+                          "properties": {
+                            "text": {
+                              "type": "string"
+                            },
+                            "evidence": {
+                              "type": "string"
+                            },
+                            "certainty": {
+                              "type": "string",
+                              "enum": [
+                                "explicit",
+                                "inferred",
+                                "uncertain"
+                              ]
+                            }
+                          }
+                        }
+                      }
                     }
                   }
                 }

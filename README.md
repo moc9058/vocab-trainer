@@ -1544,6 +1544,15 @@ npm run test:import:emulator --prefix backend
 
 The suite uses an isolated `demo-import-jobs` project and never rewrites local seed data.
 
+### Revising source analysis
+
+Source reviews support sentence-range regeneration with correction instructions,
+comparison and selective application, whole-sentence meaning/context/nuance explanations,
+and manual grammar-to-word candidate conversion with optional LLM assistance.
+Registered library entities and Group A/B membership are retained. Revision history,
+undo and saved-version comparison use Firestore with optimistic concurrency checks.
+See [source revision behavior and API](docs/source-revisions.md).
+
 ### Import extraction and retry guarantees
 
 Initial extraction uses one compact LLM call per planned batch, with bounded retries. Sentence explanations are separate, explicit requests. Legacy deterministic cleanup consolidates equivalent

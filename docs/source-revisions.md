@@ -1,0 +1,78 @@
+# 外部ソースの修正と読解支援
+
+実装日: 2026-10-18
+
+## 操作
+
+外部ソースのレビュー画面で「範囲を指定して修正」を開き、開始文・終了文、または段落を選ぶ。修正指示と説明言語を指定し、「文法候補と解説」「解説のみ」「文法候補のみ」のいずれかで修正案を生成する。文の詳細からもその文を対象に開ける。
+
+生成後は、追加・変更・候補から外す操作を新旧比較で選択して採用する。解説は文単位で一式採用する。候補だけの更新では解説を変えず、解説だけの更新では候補を増減させない。参照した周辺文は修正案で確認できる。原文・文境界は保持する。
+
+生成は初回解析と同じCloud Tasks/エミュレーターworkerで実行する。選択した複数文は一文ずつ処理し、生成済み結果を保存する。画面を閉じても処理は継続し、記事を再度開けば状態を取得する。通信障害時は同じ要求を再試行できる。生成中は記事の編集・登録を制限する。生成結果保存前の外部応答喪失については、再課金の完全な防止は保証しない。
+
+## 文全体の意味
+
+新しい詳細解説は「この文が言いたいこと」を先に表示し、展開すると文の骨格、前後とのつながり、ニュアンスと根拠を参照できる。ニュアンスは原文に明示された意味、文脈からの推測、不確かな解釈を区別する。根拠の文字列が原文中に存在しない結果は受理しない。既存記事は従来のoverviewを表示でき、明示的な解説生成または修正で新しい形式を取得する。
+
+「もっと簡単に」「なぜこの意味になるのか」「直訳との違い」「前の文との関係」を修正指示に使える。履歴から以前の指示を再利用できる。説明言語の初期値は日本語で、UI言語とは独立して指定する。
+
+## 文法候補を単語候補へ変更
+
+文モードの文法行、または全文モードの構文詳細で「単語として扱う」を選ぶ。原文中の開始・終了文字を指定し、見出し語、読み、この文での意味、説明言語を編集する。「単語候補に変更」は元文法候補を記事内で非表示にし、「単語候補としても追加」は元文法候補も残す。
+
+手動保存にはLLM呼び出しは不要。「読み・意味を整える」は任意の生成操作で、提案を使うか確認してから候補を保存する。一つの連続した原文範囲を対象とし、同じ表記の別出現は位置で区別する。活用形の原文表記と見出し語は別に保持する。選択位置に既存候補があれば文モードでその候補を編集する。
+
+単語候補は未登録の新しいIDで作成される。元文法の辞書ID・A/B登録結果・学習履歴を単語に移さない。原文と構文の読解用解説は引き続き参照できる。登録済みの文法エンティティとグループ所属は保持され、単語のA/B登録は既存のキューで別途行う。既存単語の登録は従来の再利用フローを使い、辞書定義を自動で変更しない。
+
+## 履歴・取り消し・競合
+
+採用済み履歴は記事ごと直近20操作まで保持する。未採用・失敗の生成ペイロードは生成ジョブの定期清掃で7日後に削除する。ジョブを伴わない復元案は履歴清掃時に7日経過を確認する。記事削除時は履歴も削除する。
+
+「取り消し」は後続の保存・登録前の最新採用操作に対して行える。後続の変更がある場合は409となり、以前の文法・解説から復元案を作って比較できる。復元案は現在の単語候補を削除しない。ライブラリへの登録・所属・進捗を履歴操作で逆更新しない。非表示になった登録済み候補のIDも記事クイズのpoolに残す。
+
+通常保存も含めてcontentRevisionで競合を検証する。古い画面からの保存や提案の適用は409で拒否する。「保存済みの内容と比較」では、画面の内容を残して最新内容を取得し、保存済みの内容を使うか、未保存編集を再適用するか選べる。同じ項目を両方の画面で変更した場合や登録済み候補の意味を変更しようとした場合は再適用せず、両方の内容を表示したままにする。
+
+既存の未保存警告は維持する。記事・指示・履歴の保存先はFirestoreであり、localStorageには表示設定だけを置く。
+
+## APIと保存
+
+共通prefix: `/api/import/:language/sessions/:sessionId`
+
+| API | 用途 |
+| --- | --- |
+| `POST /revisions` | 修正または単語補助生成を202で受理 |
+| `GET /revisions` | 最近の履歴のメタデータ |
+| `GET /revisions/:revisionId` | 状態・提案・履歴の詳細 |
+| `POST /revisions/:revisionId/apply` | 選択した候補差分と文別解説を適用 |
+| `POST /revisions/:revisionId/reject` | 提案を不採用にする |
+| `POST /revisions/:revisionId/undo` | 最新操作を取り消す |
+| `POST /revisions/:revisionId/restore` | 過去の文法・解説から復元案を作る |
+| `POST /candidate-conversions` | LLMなしで文法→単語変更・追加を保存 |
+
+生成要求はkind、sentenceIndices、update、instruction、explanationLanguage、expectedRevision、idempotencyKeyを指定する。kindはregenerateまたはword-assist、updateはexplanation/grammar/both。word-assistにはconversionも指定する。applyはexpectedRevision、changeIds、sentenceIndicesを受け取る。通常PUTにはcontentRevisionを指定する。旧記事の欠落版は0として扱い、最初の変更から版を更新する。旧クライアントは現行版と一致しなければ再読込が必要。
+
+conversionはitemId、start、end、term、meaning、transliteration、explanationLanguage、mode（replace/add）。start/endは文内UTF-16範囲で、endは含まない。手動変換要求にはexpectedRevisionとidempotencyKeyも必要。
+
+`import_sessions/{sessionId}/revisions/{revisionId}` にメタデータ、`payload` サブコレクションに分割した比較・履歴を保存する。生成ジョブは `import_analysis_jobs/revision-{sessionId}-{revisionId}` に独立して保存する。初回解析のcheckpointは流用しない。lease・有限試行・保存済み結果・使用量receipt・定期reconcileは既存基盤を利用する。結果保存後の再試行ではモデルを再呼び出さない。
+
+セッション本体は既存900,000バイト上限を維持する。履歴はセッション本体に埋め込まず、比較用ペイロードは複数文書に分割する。適用後に本体上限を超える場合は旧内容を維持して拒否する。
+
+## 配信・検証
+
+初回の配信はimportの詳細schema・プロンプト変更を含むため `./deploy.sh --prompts` を使う。既存ジョブ用のCloud Tasks/Scheduler構成を利用し、新しいインフラ作成・本番記事の一括再解析・辞書の一括migrationは不要。
+
+```bash
+npm run build --prefix backend
+npm test --prefix backend
+npm run test:import --prefix backend
+npm run test:mixed --prefix backend
+(cd frontend && npx tsc --noEmit)
+npm test --prefix frontend
+npm run build --prefix frontend
+npm run test:browser --prefix frontend
+npm run test:import:emulator --prefix backend
+```
+
+エミュレーターの修正テストは隔離された `demo-import-revisions` プロジェクトを使い、実LLMは呼ばない。ブラウザー回帰はAPIモックを使う。Docker実スタック＋実LLMでは少数の中国語例で解説生成、採用、候補変換、再読込、取り消しを確認した。多言語・長文全般の意味品質を保証する検証ではない。
+
+2026-10-18の検証結果: backend unit 97件、import API/dispatch 9件、mixed quiz 4件、frontend unit 103件、ブラウザー回帰38件、Firestore emulator 12件が成功。backend build、frontend TypeScript、frontend build、`git diff --check`も成功した。360pxの候補変換ダイアログと修正案比較画面を画像で確認した。実LLMの中国語一文では5件の文法差分と根拠付きの全体説明を取得し、採用→単語変換→再取得→取り消しを検証した。確認用記事は削除済み。
