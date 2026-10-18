@@ -227,6 +227,15 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
           <button type="button" onClick={close} aria-label={t("importCloseFullText")} className="rounded px-3 py-1 text-gray-400 hover:bg-gray-800">×</button>
         </header>
         {word && !fixedGrammar.has(word.id) && <div className="mb-3">{renderRegistration?.(readingWordCandidate(sentence, word, session.items))}</div>}
+        {word && !fixedGrammar.has(word.id) && <div className="mb-4 space-y-2 rounded-xl bg-indigo-950/30 p-3 text-sm text-gray-200">
+          {word.transliteration && <p className="font-mono text-indigo-300">{word.transliteration}</p>}
+          <p><strong>{t("importContextMeaning")}: </strong>{word.contextualMeaning || t("importNoContextMeaning")}</p>
+          {word.partOfSpeech && <p className="text-xs text-gray-400">{word.partOfSpeech}</p>}
+          {word.role && <p><strong>{t("importElementRole")}: </strong>{word.role}</p>}
+          {word.reasoning && <p><strong>{t("importInterpretationReason")}: </strong>{word.reasoning}</p>}
+          {word.contrast && <p><strong>{t("importUsageContrast")}: </strong>{word.contrast}</p>}
+          <button type="button" onClick={() => setSelected({ sentenceIndex: sentence.index })} className="text-indigo-300 underline">{t("importSentenceExplanation")}</button>
+        </div>}
         {relatedConstructions.length > 0 && <div className="mb-3 text-xs">
           <p className="mb-2 text-gray-400">{t("importLinkedConstruction")}</p>
           <div className="flex flex-wrap gap-2">
@@ -252,15 +261,6 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
         </div>}
         <p data-testid="import-sentence-preview" className="mb-3 break-words text-base leading-loose text-gray-200">{sentencePreview()}</p>
         {sentence.translation && <p className="mb-4 text-sm text-indigo-200/80">{sentence.translation}</p>}
-        {word && !fixedGrammar.has(word.id) && <div className="mb-4 space-y-2 rounded-xl bg-indigo-950/30 p-3 text-sm text-gray-200">
-          {word.transliteration && <p className="font-mono text-indigo-300">{word.transliteration}</p>}
-          <p><strong>{t("importContextMeaning")}: </strong>{word.contextualMeaning || t("importNoContextMeaning")}</p>
-          {word.partOfSpeech && <p className="text-xs text-gray-400">{word.partOfSpeech}</p>}
-          {word.role && <p><strong>{t("importElementRole")}: </strong>{word.role}</p>}
-          {word.reasoning && <p><strong>{t("importInterpretationReason")}: </strong>{word.reasoning}</p>}
-          {word.contrast && <p><strong>{t("importUsageContrast")}: </strong>{word.contrast}</p>}
-          <button type="button" onClick={() => setSelected({ sentenceIndex: sentence.index })} className="text-indigo-300 underline">{t("importSentenceExplanation")}</button>
-        </div>}
         {!word && reading?.overview && <p className="mb-4 whitespace-pre-wrap text-sm leading-relaxed text-gray-200">{reading.overview}</p>}
         {relatedConstructions.map(point => <section key={point.id} className="mb-3 rounded-xl border border-emerald-900/70 p-3 text-sm text-gray-200">
           <p className="mb-1 text-xs text-emerald-400/80">{t("importReaderGrammar")}</p>
