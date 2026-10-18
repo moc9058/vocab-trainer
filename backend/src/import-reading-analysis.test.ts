@@ -81,3 +81,16 @@ test("noncontiguous fixed elements keep the intervening content words as separat
   assert.deepEqual(grammar[0].fixedElements?.map(word => word.range.start), [0, 2]);
   assert.deepEqual(reading.constructions[0].elements[1].occurrenceIds, ['s0-o1', 's0-o3']);
 });
+
+test("Chinese grammar requires pinyin on fixed elements and variable slot words", () => {
+  for (const index of [2, 3, 5]) {
+    const missing = structuredClone(raw.paragraphs[0].sentences[0]);
+    missing.words[index].transliteration = " ";
+    assert.throws(() => normalizeAnalysis(JSON.stringify({ paragraphs: [{ sentences: [missing] }] }), "chinese"), /IMPORT_GRAMMAR_PINYIN_MISSING/);
+    assert.doesNotThrow(() => normalizeAnalysis(JSON.stringify({ paragraphs: [{ sentences: [missing] }] }), "japanese"));
+  }
+  const latin = structuredClone(raw.paragraphs[0].sentences[0]);
+  latin.text = latin.text.replace('采取', 'take');
+  latin.words[3].term = 'take'; latin.words[3].surface = 'take'; latin.words[3].transliteration = '';
+  assert.doesNotThrow(() => normalizeAnalysis(JSON.stringify({ paragraphs: [{ sentences: [latin] }] }), "chinese"));
+});

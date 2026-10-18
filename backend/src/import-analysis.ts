@@ -1,4 +1,4 @@
-import { normalizeReadingSentence, type RawReadingSentence } from "./import-reading-analysis.js";
+import { assertGrammarPinyin, normalizeReadingSentence, type RawReadingSentence } from "./import-reading-analysis.js";
 import { deduplicateWords } from "./import-dedup.js";
 /**
  * The pure half of `routes/import.ts`: turning the model's raw analysis JSON into
@@ -515,14 +515,13 @@ export function normalizeAnalysis(
     ...g,
     statement: lowercaseGrammarAbbreviations(g.statement),
   }));
-  return {
-    analysis: {
-      paragraphs,
-      words: [...uniqueWords, ...contextualWords],
-      grammar: normalizedGrammar.filter((g, i, all) => all.findIndex(other =>
-        other.sentenceIndex === g.sentenceIndex &&
-        other.statement.trim() === g.statement.trim()) === i),
-    },
-    repair,
+  const analysis: ImportAnalysisResult = {
+    paragraphs,
+    words: [...uniqueWords, ...contextualWords],
+    grammar: normalizedGrammar.filter((g, i, all) => all.findIndex(other =>
+      other.sentenceIndex === g.sentenceIndex &&
+      other.statement.trim() === g.statement.trim()) === i),
   };
+  assertGrammarPinyin(analysis, language);
+  return { analysis, repair };
 }

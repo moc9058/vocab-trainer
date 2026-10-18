@@ -426,6 +426,10 @@ for (const compact of [false, true]) {
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('button', { name: '该+v+了', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(dialog.getByTestId('import-sentence-preview').locator('[class*="bg-emerald-900"]')).toHaveCount(2);
+    await expect(dialog.getByTestId('import-grammar-pinyin')).toContainText('gāi');
+    await expect(dialog.getByTestId('import-grammar-pinyin')).toContainText('le');
+    await expect(dialog.getByTestId('import-sentence-preview').locator('rt').first()).toBeVisible();
+    await expect(dialog.locator('details')).not.toHaveAttribute('open');
     await page.screenshot({ path: `/tmp/vocab-linked-${compact ? 'compact' : 'detailed'}.png` });
     await page.keyboard.press('Escape');
     await expect(gai.nth(1)).not.toHaveClass(/bg-emerald/);
@@ -557,4 +561,21 @@ test('sentence-mode split and merge appear in full text immediately and after a 
   await expect(article.getByRole('button', { name: '行动', exact: true })).toHaveCount(1);
   await expect(article.getByRole('button', { name: '动', exact: true })).toHaveCount(0);
   expect(state.generations()).toBe(0);
+});
+
+test('grammar pinyin stays visible with article pinyin off, including contextual variable slots', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 850 });
+  await reviewSetup(page);
+  const reader = page.getByTestId('import-full-text-reader');
+  await reader.getByRole('button', { name: 'Pinyin: on', exact: true }).click();
+  await expect(reader.locator('article rt')).toHaveCount(0);
+  await reader.getByRole('button', { name: '该', exact: true }).nth(1).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByTestId('import-grammar-pinyin')).toContainText('gāi');
+  await expect(dialog.getByTestId('import-grammar-pinyin')).toContainText('le');
+  await expect(dialog.getByTestId('import-sentence-preview')).toContainText('cǎi');
+  await expect(dialog.getByTestId('import-sentence-preview')).toContainText('xíng');
+  await expect(dialog.locator('details')).not.toHaveAttribute('open');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: '/tmp/vocab-grammar-pinyin.png' });
 });

@@ -1,4 +1,4 @@
-import type { ImportReadingAnalysis, ImportExtractedWord, ImportExtractedGrammar } from "./types.js";
+import type { ImportAnalysisResult, ImportReadingAnalysis, ImportExtractedWord, ImportExtractedGrammar } from "./types.js";
 
 export interface RawReadingWord {
   term: string;
@@ -110,4 +110,22 @@ export function rebaseReadingAnalysis(reading: ImportReadingAnalysis, offset: nu
   const reindex = (id: string) => id.replace(/^s(\d+)-/, (_match, index) => `s${Number(index) + offset}-`);
   return { ...reading, occurrences: reading.occurrences.map(word => ({ ...word, id: reindex(word.id), constructionIds: word.constructionIds.map(reindex) })),
     constructions: reading.constructions.map(point => ({ ...point, id: reindex(point.id), elements: point.elements.map(element => ({ ...element, occurrenceIds: element.occurrenceIds.map(reindex) })) })) };
+}
+
+/** A successful Chinese analysis must never silently lose readings on linked grammar words/slots. */
+export function assertGrammarPinyin(analysis: ImportAnalysisResult, language: string): void {
+  if (language !== "chinese") return;
+  const hasReading = (surface: string, reading?: string) => !/\p{Script=Han}/u.test(surface)
+    || (!!reading?.trim() && /\p{Script=Latin}/u.test(reading) && !/\p{Script=Han}/u.test(reading));
+  for (const sentence of analysis.paragraphs.flatMap(p => p.sentences)) {
+    const reading = sentence.readingAnalysis;
+    if (!reading) continue;
+    const linked = new Set(reading.constructions.flatMap(point => point.elements.flatMap(element => element.occurrenceIds)));
+    if (reading.occurrences.some(word => linked.has(word.id) && !hasReading(word.surface, word.transliteration))) {
+      throw new Error("IMPORT_GRAMMAR_PINYIN_MISSING: Regenerate the sentence analysis with pinyin for every Chinese grammar element and slot.");
+    }
+  }
+  if (analysis.grammar.some(point => point.fixedElements?.some(element => !hasReading(element.surface, element.transliteration)))) {
+    throw new Error("IMPORT_GRAMMAR_PINYIN_MISSING: Fixed Chinese grammar elements require pinyin.");
+  }
 }

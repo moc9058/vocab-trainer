@@ -77,6 +77,8 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
   const grammarCandidate = (id: string, statement: string) => session.items.find(item => item.kind === "grammar" && item.sentenceIndex === sentence?.index && item.status !== "skipped"
     && (item.constructionId === id || item.statement.replace(/\s/gu, "") === statement.replace(/\s/gu, "")));
   const parts = sentence && activeConstruction ? constructionParts(sentence, activeConstruction, occurrences, fixedGrammar) : [];
+  const fixedWords = parts.filter(part => part.fixed).flatMap(part => part.words)
+    .filter((value, index, all) => /\p{Script=Han}/u.test(value.surface) && all.findIndex(other => other.id === value.id) === index);
   const partAt = (start: number, end: number) => parts.find(part => part.words.some(word => word.range.start < end && word.range.end > start)
     || (start >= part.words[0].range.start && end <= part.words[part.words.length - 1].range.end && !/\p{L}/u.test(sentence?.text.slice(start, end) ?? "")));
   function sentencePreview() {
@@ -88,8 +90,9 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
     cuts.slice(0, -1).forEach((start, index) => {
       const end = cuts[index + 1];
       const part = partAt(start, end);
+      const occurrence = occurrences.find(value => value.range.start === start && value.range.end === end);
       const node = <span key={start} data-construction-part={part?.label} data-part-kind={part ? part.fixed ? "fixed" : "slot" : undefined}
-        className={`${part ? `rounded border-b-2 ${part.fixed ? "border-dotted" : "border-solid"} ${partStyle(part)}` : ""} ${word && word.range.start <= start && word.range.end >= end ? "underline decoration-indigo-300 decoration-2 underline-offset-4" : ""}`}>{sentence.text.slice(start, end)}</span>;
+        className={`${part ? `rounded border-b-2 ${part.fixed ? "border-dotted" : "border-solid"} ${partStyle(part)}` : ""} ${word && word.range.start <= start && word.range.end >= end ? "underline decoration-indigo-300 decoration-2 underline-offset-4" : ""}`}><RubyText text={sentence.text.slice(start, end)} segments={session.language === "chinese" && occurrence?.transliteration ? [{ text: occurrence.surface, transliteration: occurrence.transliteration }] : undefined} /></span>;
       const previous = runs[runs.length - 1];
       if (previous && previous.part?.key === part?.key) { previous.nodes.push(node); previous.end = end; }
       else runs.push({ start, end, part, nodes: [node] });
@@ -249,6 +252,11 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
         {activeConstruction && <section className="mb-4 rounded-xl border border-emerald-800/70 bg-emerald-950/20 p-3" data-testid="import-construction-summary">
           <h4 className="sr-only">{activeConstruction.statement}</h4>
           <p className="whitespace-pre-wrap text-base leading-relaxed text-gray-100">{activeConstruction.meaning}</p>
+          {session.language === "chinese" && fixedWords.length > 0 && <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm" data-testid="import-grammar-pinyin">
+            {fixedWords.map(value => <span key={value.id} className="inline-flex flex-wrap items-baseline gap-2 text-emerald-200">
+              <span>{value.surface}</span><span className="font-mono text-indigo-300">{value.transliteration || t("importMissingGrammarPinyin")}</span>
+            </span>)}
+          </div>}
           {(() => { const item = grammarCandidate(activeConstruction.id, activeConstruction.statement);
             return item ? <div className="mt-3">{renderRegistration?.(item)}</div> : null; })()}
         </section>}
@@ -264,7 +272,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
               <span className="block break-words">{part.words.map(value => value.surface).join(" ")}</span>
               <span className="mt-1 block text-xs font-semibold">{part.label} · {t(part.fixed ? "importFixedPart" : "importVariablePart")}</span>
               {part.role && part.role !== part.label && <span className="block text-xs opacity-80">{part.role}</span>}
-              {session.language === "chinese" && <span className="mt-1 block font-mono text-xs text-indigo-300">{part.words.map(value => value.transliteration).filter(Boolean).join(" + ")}</span>}
+              {session.language === "chinese" && <span className="mt-1 block font-mono text-xs text-indigo-300">{part.words.map(value => value.transliteration || (/\p{Script=Han}/u.test(value.surface) ? t("importMissingGrammarPinyin") : value.surface)).join(" + ")}</span>}
               {part.explanation && <p className="mt-1 text-sm">{part.explanation}</p>}
             </div>)}
             {!activeConstruction.elements.length && <p className="text-xs text-gray-400">{t("importMissingSlotAnalysis")}</p>}
