@@ -447,7 +447,8 @@ test('overlapping constructions switch highlights while retaining the touched oc
   await expect(dialog.getByRole('button', { name: '该+v', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(dialog.getByRole('button', { name: '该+v+了', exact: true })).toHaveAttribute('aria-pressed', 'false');
   await expect(reader.locator('article').getByRole('button', { name: '了', exact: true })).not.toHaveClass(/bg-emerald/);
-  await expect(dialog).toContainText('そろそろ〜すべき');
+  await expect(dialog.getByTestId('import-construction-summary')).toContainText('second pattern');
+  await expect(dialog.locator('header h3')).toHaveText('该');
 });
 
 for (const width of [360, 1280]) {
@@ -487,6 +488,10 @@ for (const width of [360, 1280]) {
       expect(sourceBox).not.toBeNull(); expect(labelBox).not.toBeNull();
       expect(labelBox!.y).toBeGreaterThanOrEqual(sourceBox!.y + sourceBox!.height);
     }
+    await expect(page.getByTestId('import-construction-summary')).toContainText('並列');
+    await expect(page.getByRole('dialog').locator('details')).not.toHaveAttribute('open');
+    await page.screenshot({ path: `/tmp/vocab-grammar-simple-${width}.png` });
+    await page.getByRole('dialog').getByText('Structure and roles', { exact: true }).click();
     await expect(page.getByTestId('import-construction-parts')).toContainText('甲 公司');
     await expect(page.getByTestId('import-construction-parts')).toContainText('乙 学校');
     await expect(reader.locator('article').getByRole('button', { name: '合作', exact: true })).not.toHaveAttribute('data-construction-part');
@@ -528,4 +533,28 @@ test('full text registers words and fixed grammar through their own A/B controls
   await expect.poll(() => writes.some(path => path.includes('/grammar/') && path.includes('/groups/g/'))).toBe(true);
   await dialog.getByRole('button', { name: 'B Article', exact: true }).click();
   await expect.poll(() => writes.some(path => path.includes('/grammar/') && path.includes('/groups/gb/'))).toBe(true);
+});
+
+test('sentence-mode split and merge appear in full text immediately and after a reload', async ({ page }) => {
+  const state = await reviewSetup(page);
+  await page.getByRole('button', { name: 'Sentence mode', exact: true }).click();
+  const actionRow = page.locator('li').filter({ has: page.locator('input[value="行动"]') });
+  await actionRow.getByRole('button', { name: 'Split', exact: true }).click();
+  await page.locator('input:focus').fill('行 动');
+  await page.locator('input:focus').press('Enter');
+  await page.getByRole('button', { name: 'Full text', exact: true }).click();
+  const article = page.getByTestId('import-full-text-reader').locator('article');
+  await expect(article.getByRole('button', { name: '行', exact: true })).toHaveCount(1);
+  await expect(article.getByRole('button', { name: '动', exact: true })).toHaveCount(1);
+  await expect(article.getByRole('button', { name: '行动', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Sentence mode', exact: true }).click();
+  await page.locator('li').filter({ has: page.locator('input[value="行"]') }).getByRole('button', { name: 'Merge ↓', exact: true }).click();
+  await page.getByRole('button', { name: 'Full text', exact: true }).click();
+  await expect(article.getByRole('button', { name: '行动', exact: true })).toHaveCount(1);
+  await expect(article.getByRole('button', { name: '行', exact: true })).toHaveCount(0);
+  await expect.poll(() => state.saved().items.some((item: any) => item.origin === 'merge' && item.status === 'pending' && item.term === '行动')).toBe(true);
+  await page.reload();
+  await expect(article.getByRole('button', { name: '行动', exact: true })).toHaveCount(1);
+  await expect(article.getByRole('button', { name: '动', exact: true })).toHaveCount(0);
+  expect(state.generations()).toBe(0);
 });

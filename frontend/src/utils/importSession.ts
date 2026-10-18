@@ -460,7 +460,10 @@ export function mergeWordItems(
   const sourceIds = ordered.map((s) => s.id);
 
   const terms = ordered.map((s) => s.term);
-  const term = sentenceSpanForTerms(sentence, terms);
+  const ranges = ordered.map(source => source.range && source.sourceTerm === source.term
+    && sentence.slice(source.range.start, source.range.end) === source.surface ? source.range : undefined);
+  const range = ranges.every(Boolean) ? { start: Math.min(...ranges.map(value => value!.start)), end: Math.max(...ranges.map(value => value!.end)) } : undefined;
+  const term = range ? sentence.slice(range.start, range.end) : sentenceSpanForTerms(sentence, terms);
   const transliteration = mergeTransliteration(term, terms, ordered.map((s) => s.transliteration));
   const merged: ImportWordItem = {
     id: newItemId("word"),
@@ -471,6 +474,7 @@ export function mergeWordItems(
     origin: "merge",
     sourceIds,
     term,
+    ...(range ? { range, surface: term, sourceTerm: term } : {}),
     // `meaning` is deliberately not carried over: a compound's gloss is not the sum
     // of its parts, and the row's meaning field is there for the user to fill in.
     ...(transliteration ? { transliteration } : {}),
@@ -674,6 +678,15 @@ export function splitWordItem(items: ImportItem[], id: string, parts: string[]):
   if (!source || clean.length < 2) return items;
 
   const readings = splitTransliteration(source.transliteration, clean);
+  let cursor = 0;
+  const offsets = clean.map(term => {
+    const start = source.term.indexOf(term, cursor);
+    if (start < 0 || source.term.slice(cursor, start).trim()) return undefined;
+    cursor = start + term.length;
+    return { start, end: cursor };
+  });
+  const positioned = source.range && source.sourceTerm === source.term && source.surface === source.term
+    && offsets.every(Boolean) && !source.term.slice(cursor).trim();
   const created: ImportWordItem[] = clean.map((term, k) => ({
     id: newItemId("word"),
     kind: "word",
@@ -684,6 +697,7 @@ export function splitWordItem(items: ImportItem[], id: string, parts: string[]):
     origin: "split",
     sourceIds: [source.id],
     term,
+    ...(positioned ? { range: { start: source.range!.start + offsets[k]!.start, end: source.range!.start + offsets[k]!.end }, surface: term, sourceTerm: term } : {}),
     ...(readings[k] ? { transliteration: readings[k] } : {}),
   }));
 

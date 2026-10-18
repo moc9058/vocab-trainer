@@ -237,7 +237,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
           <button type="button" onClick={() => setSelected({ sentenceIndex: sentence.index })} className="text-indigo-300 underline">{t("importSentenceExplanation")}</button>
         </div>}
         {relatedConstructions.length > 0 && <div className="mb-3 text-xs">
-          <p className="mb-2 text-gray-400">{t("importLinkedConstruction")}</p>
+          {relatedConstructions.length > 1 && <p className="mb-2 text-gray-400">{t("importLinkedConstruction")}</p>}
           <div className="flex flex-wrap gap-2">
             {relatedConstructions.map(point => <button key={point.id} type="button" aria-pressed={activeConstruction?.id === point.id}
               onClick={() => setSelected(current => current && ({ ...current, constructionId: point.id }))}
@@ -245,37 +245,31 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
               {point.statement}
             </button>)}
           </div>
-          {activeConstruction && (() => { const item = grammarCandidate(activeConstruction.id, activeConstruction.statement);
+        </div>}
+        {activeConstruction && <section className="mb-4 rounded-xl border border-emerald-800/70 bg-emerald-950/20 p-3" data-testid="import-construction-summary">
+          <h4 className="sr-only">{activeConstruction.statement}</h4>
+          <p className="whitespace-pre-wrap text-base leading-relaxed text-gray-100">{activeConstruction.meaning}</p>
+          {(() => { const item = grammarCandidate(activeConstruction.id, activeConstruction.statement);
             return item ? <div className="mt-3">{renderRegistration?.(item)}</div> : null; })()}
-          {activeConstruction && <p className="mt-2 text-emerald-300">{t("importLinkedConstructionHint")}</p>}
-        </div>}
-        {activeConstruction && <div className="mb-3 space-y-2 text-xs" data-testid="import-construction-parts">
-          <div className="flex flex-wrap gap-2">
-            {parts.map(part => <div key={part.key} className={`min-w-0 max-w-full rounded-lg border px-2 py-1.5 ${partStyle(part)}`}>
-              <span className="block break-words text-sm">{part.words.map(word => word.surface).join(" ")}</span>
-              <span className="mt-1 block font-semibold">{part.label} · {t(part.fixed ? "importFixedPart" : "importVariablePart")}</span>
-              {part.role && <span className="block opacity-80">{part.role}</span>}
-            </div>)}
-          </div>
-          {!activeConstruction.elements.length && <p className="text-gray-400">{t("importMissingSlotAnalysis")}</p>}
-        </div>}
+        </section>}
         <p data-testid="import-sentence-preview" className="mb-3 break-words text-base leading-loose text-gray-200">{sentencePreview()}</p>
         {sentence.translation && <p className="mb-4 text-sm text-indigo-200/80">{sentence.translation}</p>}
         {!word && reading?.overview && <p className="mb-4 whitespace-pre-wrap text-sm leading-relaxed text-gray-200">{reading.overview}</p>}
-        {relatedConstructions.map(point => <section key={point.id} className="mb-3 rounded-xl border border-emerald-900/70 p-3 text-sm text-gray-200">
-          <p className="mb-1 text-xs text-emerald-400/80">{t("importReaderGrammar")}</p>
-          <h4 className="break-words font-semibold text-emerald-300">{point.statement}</h4>
-          {point.id !== activeConstruction?.id && (() => { const item = grammarCandidate(point.id, point.statement);
-            return item ? <div className="mt-2">{renderRegistration?.(item)}</div> : null; })()}
-          <p className="mt-1 whitespace-pre-wrap">{point.meaning}</p>
-          {point.roleInSentence && <p className="mt-2 text-gray-400">{point.roleInSentence}</p>}
-          {sentence && constructionParts(sentence, point, occurrences, fixedGrammar).map(element => <p key={element.key} className={`mt-2 rounded border-l-2 p-2 ${partStyle(element)}`}>
-            <span className="block">{element.words.map(value => value.surface).join(" + ")}</span>
-            <span className="mt-1 block text-xs font-semibold">{element.label}{element.role && element.role !== element.label ? ` · ${element.role}` : ""}</span>
-            {session.language === "chinese" && <span className="block font-mono text-xs text-indigo-300">{element.words.map(value => value.transliteration).filter(Boolean).join(" + ")}</span>}
-            <span className="block">{element.explanation}</span>
-          </p>)}
-        </section>)}
+        {activeConstruction && <details key={`${sentence.index}-${activeConstruction.id}`} className="mb-3 rounded-xl border border-gray-700 text-sm text-gray-200">
+          <summary className="cursor-pointer rounded-xl px-3 py-2 text-gray-300 focus-visible:outline-2 focus-visible:outline-emerald-400">{t("importConstructionDetails")}</summary>
+          <div className="space-y-3 px-3 pb-3" data-testid="import-construction-parts">
+            <p className="text-xs text-gray-400">{t("importLinkedConstructionHint")}</p>
+            {activeConstruction.roleInSentence && <p className="text-sm text-gray-300">{activeConstruction.roleInSentence}</p>}
+            {parts.map(part => <div key={part.key} className={`min-w-0 rounded-lg border px-2 py-2 ${partStyle(part)}`}>
+              <span className="block break-words">{part.words.map(value => value.surface).join(" ")}</span>
+              <span className="mt-1 block text-xs font-semibold">{part.label} · {t(part.fixed ? "importFixedPart" : "importVariablePart")}</span>
+              {part.role && part.role !== part.label && <span className="block text-xs opacity-80">{part.role}</span>}
+              {session.language === "chinese" && <span className="mt-1 block font-mono text-xs text-indigo-300">{part.words.map(value => value.transliteration).filter(Boolean).join(" + ")}</span>}
+              {part.explanation && <p className="mt-1 text-sm">{part.explanation}</p>}
+            </div>)}
+            {!activeConstruction.elements.length && <p className="text-xs text-gray-400">{t("importMissingSlotAnalysis")}</p>}
+          </div>
+        </details>}
         {reading?.ambiguityNotes.map((note, index) => <p key={index} className="mb-2 text-sm text-amber-300">{note}</p>)}
         {!reading && <p className="mb-3 text-sm text-gray-400">{sentence.readingAnalysis ? t("importStaleExplanation") : t("importNoExplanation")}</p>}
         {error && <p role="alert" className="mb-3 break-words text-sm text-red-300">{error}</p>}

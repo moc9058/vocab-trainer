@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import fixture from "./__fixtures__/import-context.json";
 import type { ImportAnalysisResult, ImportItem } from "../types";
-import { buildImportItems, materializeGaps, sentenceCoverage, sentenceItems, splitWordItem, undoDerivation } from "./importSession";
+import { buildImportItems, materializeGaps, sentenceCoverage, sentenceItems, splitWordItem, mergeWordItems, undoDerivation } from "./importSession";
 import { constructionParts, fixedGrammarOccurrenceIds, occurrenceConstructions, readingOccurrences, readingConstructions, reconcileReadingSession, validReading } from "./importReadingAnalysis";
 
 const analysis = fixture as ImportAnalysisResult;
@@ -153,4 +153,16 @@ it("sentence analysis suppresses only fixed occurrences while preserving edited 
   const removed = reconcileReadingSession({ ...next, items: next.items.map(item => item.kind === "grammar" ? { ...item, status: "skipped" as const } : item) });
   expect(removed.items.find(item => item.id === "fixed-old")?.kind === "word" && (removed.items.find(item => item.id === "fixed-old") as any).suppressedByGrammar).toBeUndefined();
   expect(reconcileReadingSession(next)).toBe(next);
+});
+
+it("split and merge change only the edited occurrence when a sentence repeats the same word", () => {
+  const repeated = { index: 0, text: "行动好行动好。" };
+  const items: ImportItem[] = [0, 3].flatMap((start, index) => [
+    { id: `action${index}`, kind: "word" as const, sentenceIndex: 0, order: start, status: "pending" as const, origin: "llm" as const, term: "行动", sourceTerm: "行动", surface: "行动", range: { start, end: start + 2 } },
+    { id: `good${index}`, kind: "word" as const, sentenceIndex: 0, order: start + 2, status: "pending" as const, origin: "llm" as const, term: "好", sourceTerm: "好", surface: "好", range: { start: start + 2, end: start + 3 } },
+  ]);
+  const split = splitWordItem(items, "action1", ["行", "动"]);
+  expect(readingOccurrences(repeated, split).map(word => [word.surface, word.range.start])).toEqual([["行动", 0], ["好", 2], ["行", 3], ["动", 4], ["好", 5]]);
+  const merged = mergeWordItems(items, ["action1", "good1"], repeated.text);
+  expect(readingOccurrences(repeated, merged).map(word => [word.surface, word.range.start])).toEqual([["行动", 0], ["好", 2], ["行动好", 3]]);
 });
