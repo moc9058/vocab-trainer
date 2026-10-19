@@ -36,7 +36,7 @@ import { urlLanguageToIsoCode } from "../settings/defaults";
 import { useWordQueue } from "../hooks/useWordQueue";
 import { useGrammarQueue } from "../hooks/useGrammarQueue";
 import type { QuizSession, GrammarQuizSession, CombinedQuizSession, ImportQuizPool } from "../types";
-import { hasPendingSessionReview, sessionReviewKey } from "../utils/sessionReview";
+import { hasPendingSessionReview } from "../utils/sessionReview";
 import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
 
 /** The two article quizzes: every saved import session's vocabulary and grammar, split by
@@ -53,15 +53,9 @@ function articleQuizPath(language: string, category: ArticleQuizCategory): strin
 }
 
 function needsReview(
-  kind: "word" | "grammar" | "combined",
   session: QuizSession | GrammarQuizSession | CombinedQuizSession
 ): boolean {
-  return hasPendingSessionReview(
-    sessionReviewKey(kind, session.sessionId),
-    session.startedAt,
-    session.questions,
-    session.reviewedQuestionCount
-  );
+  return hasPendingSessionReview(session);
 }
 
 export default function Dashboard() {
@@ -257,7 +251,7 @@ export default function Dashboard() {
     try {
       // Check for existing in-progress session
       const existing = await getCurrentSession(language);
-      if (existing && (existing.status === "in-progress" || needsReview("word", existing))) {
+      if (existing && (existing.status === "in-progress" || needsReview(existing))) {
         setPendingFilters(filters);
         setResumePrompt(existing);
         return;
@@ -397,7 +391,7 @@ export default function Dashboard() {
     try {
       // Check for existing in-progress session
       const existing = await getCurrentGrammarSession(language);
-      if (existing && (existing.status === "in-progress" || needsReview("grammar", existing))) {
+      if (existing && (existing.status === "in-progress" || needsReview(existing))) {
         setActiveGrammarQuiz(existing);
         navigate(`/${language}/grammar-quiz`);
         return;
@@ -445,7 +439,7 @@ export default function Dashboard() {
     try {
       // Check for existing in-progress combined session
       const existing = await getCurrentCombinedSession(language);
-      if (existing && (existing.status === "in-progress" || needsReview("combined", existing))) {
+      if (existing && (existing.status === "in-progress" || needsReview(existing))) {
         setPendingCombinedFilters(filters);
         setCombinedResumePrompt(existing);
         return;
@@ -512,7 +506,7 @@ export default function Dashboard() {
     setStarting(true);
     try {
       const existing = await getCurrentCombinedSession(language, "mixed");
-      if (existing && (existing.status === "in-progress" || needsReview("combined", existing))) {
+      if (existing && (existing.status === "in-progress" || needsReview(existing))) {
         setPendingMixedFilters(filters);
         setMixedResumePrompt(existing);
         return;
@@ -582,7 +576,7 @@ export default function Dashboard() {
       // `/start` overwrites the session under a fixed key, so an in-progress drill has to
       // be offered back rather than silently discarded — same contract as every other quiz.
       const existing = await getCurrentCombinedSession(language, articleQuizVariant(category));
-      if (existing && (existing.status === "in-progress" || needsReview("combined", existing))) {
+      if (existing && (existing.status === "in-progress" || needsReview(existing))) {
         setPendingArticleQuiz({ category, pool });
         setArticleResumePrompt({ category, session: existing });
         return;
@@ -752,7 +746,7 @@ export default function Dashboard() {
                 onClick={handleResumeMixed}
                 className="flex-1 rounded-lg bg-fuchsia-600 px-4 py-3 text-white hover:bg-fuchsia-500 sm:py-2"
               >
-                {t("resumeQuiz")}
+                {t(mixedResumePrompt.reviewState?.status === "active" ? "resumeSessionReview" : "resumeQuiz")}
               </button>
               <button
                 onClick={handleStartNewMixed}
@@ -785,7 +779,7 @@ export default function Dashboard() {
                     : "bg-amber-600 hover:bg-amber-500"
                 }`}
               >
-                {t("resumeQuiz")}
+                {t(articleResumePrompt.session.reviewState?.status === "active" ? "resumeSessionReview" : "resumeQuiz")}
               </button>
               <button
                 onClick={handleStartNewArticleQuiz}
@@ -809,7 +803,7 @@ export default function Dashboard() {
                 onClick={handleResumeCombined}
                 className="flex-1 rounded-lg bg-indigo-600 px-4 py-3 text-white hover:bg-indigo-500 sm:py-2"
               >
-                {t("resumeQuiz")}
+                {t(combinedResumePrompt.reviewState?.status === "active" ? "resumeSessionReview" : "resumeQuiz")}
               </button>
               <button
                 onClick={handleStartNewCombined}
@@ -833,7 +827,7 @@ export default function Dashboard() {
                 onClick={handleResume}
                 className="flex-1 rounded-lg bg-blue-600 px-4 py-3 text-white hover:bg-blue-500 sm:py-2"
               >
-                {t("resumeQuiz")}
+                {t(resumePrompt.reviewState?.status === "active" ? "resumeSessionReview" : "resumeQuiz")}
               </button>
               <button
                 onClick={handleStartNew}

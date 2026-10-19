@@ -1,4 +1,7 @@
-import { finishQuizSitting, normalizeQuizSitting } from "../utils/quizSitting";
+import { combinedQuizBase } from "../api/combined-quiz";
+import { useSessionReview } from "../hooks/useSessionReview";
+import SessionReviewStatus from "./SessionReviewStatus";
+import { normalizeQuizSitting } from "../utils/quizSitting";
 import { applyMixedOperation, orderMixedQuestions, UNGROUPED_A } from "../utils/mixedOperations";
 import { mixedCategoryProgress } from "../utils/mixedProgress";
 import { getOutboxState } from "../utils/answerOutbox";
@@ -24,13 +27,6 @@ import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
 import {
   applyCombinedAnswerLocally,
 } from "../utils/quizLocal";
-import {
-  appendSessionReview,
-  completeSessionReview,
-  loadSessionReview,
-  sessionReviewKey,
-  unreviewedSessionQuestions,
-} from "../utils/sessionReview";
 import { categoryGroups, groupCategory as categoryOf } from "../types";
 import {
   categoryDomainWeights,
@@ -226,16 +222,10 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     () => typeof window !== "undefined" && window.matchMedia("(min-width: 640px)").matches
   );
   // Durable End Session boundary; the variant is already encoded in `sessionId`.
-  const reviewKey = sessionReviewKey("combined", session.sessionId);
-  const [sessionLog, setSessionLog] = useState<CombinedQuizQuestion[]>(() =>
-    loadSessionReview(
-      reviewKey,
-      session.startedAt,
-      unreviewedSessionQuestions(session.questions, session.reviewedQuestionCount)
-    )
-  );
-  const [sessionReviewActive, setSessionReviewActive] = useState(false);
-  const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
+  const review = useSessionReview(currentSession, setCurrentSession, combinedQuizBase(variant));
+  const sessionLog = review.questions;
+  const sessionReviewActive = review.active;
+  const sessionReviewIndex = review.index;
 
   const outbox = useAnswerOutbox();
 
@@ -799,6 +789,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
   /** Local-first — see `utils/quizLocal.ts`. The write is queued, never awaited. */
   function handleGrade(correct: boolean) {
+    if (review.isBlocked()) return;
     if (!question || applyingWeights || gradedIndexRef.current === currentIndex) return;
     gradedIndexRef.current = currentIndex;
     const refId = question.kind === "word" ? question.wordId : question.grammarId;
@@ -835,10 +826,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       ? applyMixedOperation(prev, { kind: question.kind, refId, correct, removeFromGroupB },
           (question.kind === "word" ? aGroupHome?.words : aGroupHome?.grammar)?.get(refId))
       : applyCombinedAnswerLocally(prev, question.kind, refId, correct));
-    const reviewQuestion = { ...orderedQuestions[currentIndex], userCorrect: correct };
-    setSessionLog((prev) =>
-      appendSessionReview(reviewKey, session.startedAt, prev, reviewQuestion)
-    );
     setCurrentIndex((i) => i + 1);
     setShowingAnswer(false);
     resetExpandedAnswers();
@@ -846,7 +833,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   }
 
   function endSession() {
-    if (sessionLog.length === 0) return;
+    if (sessionLog.length === 0 || applyingWeights || review.isBlocked()) return;
     // 🏁 is also "moving on": commit a pending Group B removal on the current card.
     if (question) {
       const refId = question.kind === "word" ? question.wordId : question.grammarId;
@@ -866,14 +853,11 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         }
       }
     }
-    setSessionReviewIndex(0);
-    setSessionReviewActive(true);
+    review.start();
   }
 
   function returnToQuiz() {
-    setSessionLog([]);
-    setSessionReviewActive(false);
-    setSessionReviewIndex(0);
+    review.close();
     const index = currentSession.questions.findIndex(q => q.userCorrect === undefined);
     setCurrentIndex(index < 0 ? currentSession.questions.length : index);
     gradedIndexRef.current = -1;
@@ -881,23 +865,12 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
   }
 
   function nextSessionReview() {
-    const next = sessionReviewIndex + 1;
-    if (next >= sessionLog.length) {
-      completeSessionReview(reviewKey, session.startedAt);
-      setCurrentSession(prev => variant === "mixed"
-        ? orderMixedQuestions(finishQuizSitting(prev)) : finishQuizSitting(prev));
-      outbox.enqueue({
-        domain: "combinedReviewComplete",
-        language: currentSession.language,
-        startedAt: session.startedAt,
-        variant,
-      });
-    }
-    setSessionReviewIndex(next);
+    review.next();
   }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (review.isBlocked()) return;
       // Ignore shortcuts while typing in a form control (e.g. the weights panel).
       const target = event.target as HTMLElement | null;
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
@@ -954,8 +927,9 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, usesGroupBControls, groupBIds, pendingRemoveBIds, removedFromBIds]);
+  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, sessionReviewIndex, review.pending, review.error, usesGroupBControls, groupBIds, pendingRemoveBIds, removedFromBIds]);
 
+  if (review.pending || review.error) return <SessionReviewStatus review={review} />;
 
   if (sessionReviewActive) {
     const reviewSlim = sessionReviewIndex < sessionLog.length ? sessionLog[sessionReviewIndex] : null;
@@ -1009,6 +983,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
 
     return (
       <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+        {prefetch.missing.has(reviewRefId) && <p className="text-gray-400">{t("reviewItemDeleted")}</p>}
         <p className="text-sm text-gray-400">{sessionReviewIndex + 1} / {sessionLog.length}</p>
         <span
           className={`rounded-full px-3 py-1 text-xs font-medium border ${
@@ -1162,6 +1137,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         {sessionLog.length > 0 ? (
           <button
             onClick={endSession}
+            disabled={sessionLog.length === 0 || applyingWeights}
             className="rounded-lg border border-amber-600/70 bg-amber-700/30 px-6 py-2 font-medium text-amber-200 hover:bg-amber-700/50"
           >
             🏁 {t("startSessionReview")}
@@ -1218,6 +1194,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         </p>
         <button
           onClick={endSession}
+          disabled={sessionLog.length === 0 || applyingWeights}
           title={t("endSession")}
           className="rounded-full border border-amber-600/70 bg-amber-700/30 px-4 py-1.5 text-sm font-medium text-amber-200 hover:bg-amber-700/50 whitespace-nowrap"
         >

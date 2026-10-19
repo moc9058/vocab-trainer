@@ -1,3 +1,5 @@
+import { applyReviewOperation } from "../../../backend/src/quiz-review";
+import { applyMixedOperation } from "../../src/utils/mixedOperations";
 import { test, expect, type Page } from '@playwright/test';
 
 function fixture(kind: 'word' | 'grammar' = 'word') {
@@ -12,7 +14,7 @@ function fixture(kind: 'word' | 'grammar' = 'word') {
 }
 async function loadQuiz(page: Page, kind: 'word' | 'grammar' = 'word', continuing = false) {
   const calls: any[] = [];
-  const session = fixture(kind);
+  let session = fixture(kind);
   if (continuing) {
     session.questions.push({ kind: 'word', wordId: 'a', term: '其他', definitions: [] });
     session.wordGroupMembership = { b: ['b'], a: ['a'] } as any;
@@ -26,8 +28,11 @@ async function loadQuiz(page: Page, kind: 'word' | 'grammar' = 'word', continuin
     else if (path === '/api/grammar/chinese/groups') json = [{ id: 'bg', name: 'Article', category: 'B', grammarIds: ['g'] }];
     else if (path === '/api/quiz/hydrate/chinese') json = { questions: [{ wordId: 'a', term: '其他', definitions: [], examples: [] }, { wordId: 'b', term: '总统', definitions: [{ partOfSpeech: 'noun', text: { en: 'president '.repeat(300) } }], examples: [{ sentence: '总统讲话。'.repeat(80), translation: { en: 'The president speaks.' } }] }] };
     else if (path.endsWith('/items/batch')) json = { items: [{ id: 'g', statement: '不但～而且～', descriptions: [{ partOfSpeech: '', text: { en: 'not only but also '.repeat(300) } }], examples: [] }] };
-    else if (path.endsWith('/reviewed')) json = { reviewedQuestionCount: 1 };
-    else if (path === '/api/mixed-quiz/answer') { calls.push(route.request().postDataJSON()); json = { session: fixture(kind) }; }
+    else if (path.endsWith('/review')) {
+      session = applyReviewOperation(session as any, route.request().postDataJSON()) as any;
+      json = { session };
+    }
+    else if (path === '/api/mixed-quiz/answer') { const body = route.request().postDataJSON(); calls.push(body); session = applyMixedOperation(session as any, body, 'outside') as any; json = { session }; }
     else { await route.fulfill({ status: 500, json: { error: `Unexpected API ${path}` } }); return; }
     await route.fulfill({ json });
   });

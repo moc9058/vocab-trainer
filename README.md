@@ -45,6 +45,16 @@ were Wrong. The completion screen offers **Review Session**; after that review, 
 This flow applies to word, grammar, combined/article and expression recall quizzes.
 The expression writing quiz also stops repeating Wrong within its test.
 
+Session reviews save their fixed answer range and current position in Firestore.
+Each **Next** waits for confirmation before advancing; opening the test again, including
+on another device, resumes an active review at the first unfinished card. Review cards
+continue to show their answers. Only finishing the review advances the sitting boundary
+and releases retries. A completed test remains completed. Conflicting updates from another
+tab require reloading the saved review rather than overwriting it. Pending review writes
+use the same queue and close-tab warning as answers; a hard reload can lose unsent writes,
+so recovery uses the last server-confirmed position. Older sessions gain this state lazily;
+their previously unsaved review position cannot be recovered.
+
 ## Local Development & Verification
 
 Verify changes on your local PC before deploying. Local runs use the **Firestore

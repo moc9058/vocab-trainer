@@ -19,7 +19,7 @@
  * read-modify-write the session document, so letting them race would lose whichever wrote first.
  */
 
-import { isRetryableError } from "../api/client";
+import { ApiError, putJson, isRetryableError } from "../api/client";
 import { answerQuestion, markQuizReviewComplete } from "../api/quiz";
 import {
   answerCombinedQuestion,
@@ -34,7 +34,18 @@ import {
   markExpressionRecallReviewComplete,
 } from "../api/expression-recall-quiz";
 
+export interface ReviewOperation {
+  action: "start" | "next";
+  startedAt: string;
+  reviewId: string;
+  operationId: string;
+  revision: number;
+  fromAnsweredCount: number;
+}
+
 export type PendingAnswer =
+  | { domain: "review"; path: string; operation: ReviewOperation;
+      resolve: (result: unknown) => void; reject: (error: unknown) => void }
   | {
       domain: "word";
       sessionId: string;
@@ -132,6 +143,9 @@ function emit(): void {
 
 function send(item: PendingAnswer): Promise<unknown> {
   switch (item.domain) {
+    case "review":
+      if (failed > 0) return Promise.reject(new ApiError(409, "Some earlier answers could not be saved"));
+      return putJson(item.path, item.operation);
     case "word":
       return answerQuestion({
         sessionId: item.sessionId,
@@ -208,7 +222,8 @@ async function drain(): Promise<void> {
   while (queue.length > 0) {
     const item = queue[0];
     try {
-      await send(item);
+      const result = await send(item);
+      if (item.domain === "review") item.resolve(result);
       queue.shift();
       attempt = 0;
       emit();
@@ -226,7 +241,8 @@ async function drain(): Promise<void> {
       // every answer behind it.
       console.error("Dropping unsyncable quiz answer", item, err);
       queue.shift();
-      failed += 1;
+      if (item.domain === "review") item.reject(err);
+      else failed += 1;
       attempt = 0;
       emit();
     }
@@ -276,4 +292,10 @@ export function subscribeToOutbox(listener: (state: OutboxState) => void): () =>
 if (typeof window !== "undefined") {
   // The browser telling us the radio is back is a far better trigger than the next backoff tick.
   window.addEventListener("online", () => flushAnswers());
+}
+
+/** Review requests use the answer queue, and expose their confirmed session to the UI. */
+export function enqueueReviewOperation<S>(path: string, operation: ReviewOperation): Promise<{ session: S }> {
+  return new Promise((resolve, reject) => enqueueAnswer({ domain: "review", path, operation,
+    resolve: result => resolve(result as { session: S }), reject }));
 }

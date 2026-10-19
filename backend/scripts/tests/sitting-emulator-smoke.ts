@@ -13,8 +13,8 @@ await app.register(sensible);
 const { default: wordRoutes } = await import('../../src/routes/quiz.js');
 const { default: grammarRoutes } = await import('../../src/routes/grammar-quiz.js');
 const { default: recallRoutes } = await import('../../src/routes/expression-recall-quiz.js');
-const { default: combinedRoutes, mixedQuizRoutes } = await import('../../src/routes/combined-quiz.js');
-for (const [prefix, plugin] of [['word', wordRoutes], ['grammar', grammarRoutes], ['recall', recallRoutes], ['combined', combinedRoutes], ['mixed', mixedQuizRoutes]] as const) {
+const { default: combinedRoutes, mixedQuizRoutes, importQuizARoutes, importQuizBRoutes } = await import('../../src/routes/combined-quiz.js');
+for (const [prefix, plugin] of [['word', wordRoutes], ['grammar', grammarRoutes], ['recall', recallRoutes], ['combined', combinedRoutes], ['mixed', mixedQuizRoutes], ['importA', importQuizARoutes], ['importB', importQuizBRoutes]] as const) {
   await app.register(plugin, { prefix: `/${prefix}` });
 }
 const base = { language: 'chinese', startedAt: 'smoke', status: 'in-progress', reviewedQuestionCount: 0, score: { correct: 0, total: 2 } };
@@ -23,7 +23,7 @@ const cases = [
   { route: 'word', collection: 'quiz_sessions', id: 'chinese', data: { ...base, wordIds: ['a', 'b'], questions: wordQuestions }, body: (id: string) => ({ sessionId: 'chinese', wordId: id }) },
   { route: 'grammar', collection: 'grammar_quiz_sessions', id: 'chinese', data: { ...base, questions: ['a', 'b'].map(grammarId => ({ grammarId, statement: grammarId })) }, body: (id: string) => ({ language: 'chinese', grammarId: id }) },
   { route: 'recall', collection: 'expression_recall_sessions', id: 'chinese', data: { ...base, direction: 'phrase-to-context', questions: ['a', 'b'].map(expressionId => ({ expressionId, prompt: expressionId })) }, body: (id: string) => ({ language: 'chinese', expressionId: id }) },
-  ...['combined', 'mixed'].map(route => ({ route, collection: 'combined_quiz_sessions', id: route === 'mixed' ? 'chinese__mixed' : 'chinese', data: { ...base, initialTotal: 2, domainWeights: { word: 1, grammar: 1 }, wordGroupMembership: { home: ['a', 'b'] }, questions: wordQuestions.map(q => ({ ...q, kind: 'word' })) }, body: (id: string) => ({ language: 'chinese', kind: 'word', refId: id }) })),
+  ...['combined', 'mixed', 'importA', 'importB'].map(route => ({ route, collection: 'combined_quiz_sessions', id: route === 'combined' ? 'chinese' : `chinese__${route}`, data: { ...base, initialTotal: 2, domainWeights: { word: 1, grammar: 1 }, wordGroupMembership: { home: ['a', 'b'] }, questions: wordQuestions.map(q => ({ ...q, kind: 'word' })) }, body: (id: string) => ({ language: 'chinese', kind: 'word', refId: id }) })),
 ];
 try {
   await db.collection('languages').doc('chinese').set({ language: 'chinese' });
@@ -72,7 +72,52 @@ try {
     saved = (await ref.get()).data()!;
     assert.equal(saved.status, 'completed');
     assert.equal(saved.questions.length, 3);
-    console.log(`${c.route}: persisted Wrong, resume, mid-test review, replay, continuation, completion passed`);
+    // New review protocol: three answered attempts, one pending; the same ID can recur.
+    const sample = c.data.questions[0];
+    await ref.set({ ...c.data, score: { correct: 2, total: 4 }, questions: [
+      { ...sample, userCorrect: false }, { ...sample, userCorrect: true },
+      { ...sample, userCorrect: true }, c.data.questions[1],
+    ] });
+    const reviewUrl = `/${c.route}/session/language/chinese/review`;
+    const startInput = { action: 'start', startedAt: 'smoke', reviewId: `review-${c.route}`,
+      operationId: 'start', revision: 0, fromAnsweredCount: 0 };
+    let response = await app.inject({ method: 'PUT', url: reviewUrl, payload: startInput });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.equal(response.json().session.reviewState.toAnsweredCount, 3);
+    const blockedAnswer = await app.inject({ method: 'POST', url: `/${c.route}/answer`,
+      payload: { ...c.body('b'), correct: true, ...(c.route === 'mixed' ? { startedAt: 'smoke', operationId: 'blocked-grade' } : {}) } });
+    assert.equal(blockedAnswer.statusCode, 409, blockedAnswer.body);
+    const blockedLegacy = await app.inject({ method: 'PUT', url: `/${c.route}/session/language/chinese/reviewed`, payload: { startedAt: 'smoke' } });
+    assert.equal(blockedLegacy.statusCode, 409, blockedLegacy.body);
+    const firstNext = { ...startInput, action: 'next', operationId: 'next-0' };
+    // A duplicate transaction must not advance twice, even under concurrency.
+    const concurrent = await Promise.all([0, 1].map(() => app.inject({ method: 'PUT', url: reviewUrl, payload: firstNext })));
+    for (const r of concurrent) assert.equal(r.statusCode, 200, r.body);
+    const reloaded = await app.inject(`/${c.route}/session/language/chinese`);
+    assert.equal(reloaded.statusCode, 200, reloaded.body);
+    assert.equal(reloaded.json().reviewState.cursor, 1);
+    assert.equal(reloaded.json().reviewedQuestionCount, 0);
+    assert.equal((await ref.get()).data()!.reviewState.cursor, 1);
+    // Explicit read helpers must include the new state too (not only transactional reads).
+    const store = await import('../../src/firestore.js');
+    const mapped = c.route === 'word' ? await store.getQuizSession(c.id)
+      : c.route === 'grammar' ? await store.getGrammarQuizSession(c.id)
+      : c.route === 'recall' ? await store.getExpressionRecallSession(c.id)
+      : await store.getCombinedQuizSession(c.id);
+    assert.equal(mapped!.reviewState!.cursor, 1);
+    for (const revision of [1, 2]) {
+      response = await app.inject({ method: 'PUT', url: reviewUrl,
+        payload: { ...firstNext, revision, operationId: `next-${revision}` } });
+      assert.equal(response.statusCode, 200, response.body);
+    }
+    const finalReplay = await app.inject({ method: 'PUT', url: reviewUrl,
+      payload: { ...firstNext, revision: 2, operationId: 'next-2' } });
+    assert.equal(finalReplay.statusCode, 200, finalReplay.body);
+    assert.equal(finalReplay.json().session.reviewState.status, 'completed');
+    assert.equal(finalReplay.json().session.reviewedQuestionCount, 3);
+    // Latest attempt was Correct, so no retry is released for that item.
+    assert.equal(finalReplay.json().session.questions.length, 4);
+    console.log(`${c.route}: persisted answers, resume, review progress, concurrent replay, mappings and completion passed`);
   }
 } finally {
   await app.close(); await db.terminate();

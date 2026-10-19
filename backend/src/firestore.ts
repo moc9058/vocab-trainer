@@ -1615,6 +1615,7 @@ function docToSession(doc: FirebaseFirestore.DocumentSnapshot): QuizSession {
     completedAt: d.completedAt,
     status: d.status,
     reviewedQuestionCount: d.reviewedQuestionCount,
+    reviewState: d.reviewState,
     score: d.score,
     questions: d.questions,
     questionType: d.questionType,
@@ -2289,6 +2290,7 @@ function docToGrammarQuizSession(doc: FirebaseFirestore.DocumentSnapshot): Gramm
     completedAt: d.completedAt,
     status: d.status,
     reviewedQuestionCount: d.reviewedQuestionCount,
+    reviewState: d.reviewState,
     score: d.score,
     questions: d.questions,
     groupFilter: d.groupFilter,
@@ -2353,6 +2355,7 @@ function docToExpressionRecallSession(
     completedAt: d.completedAt,
     status: d.status,
     reviewedQuestionCount: d.reviewedQuestionCount,
+    reviewState: d.reviewState,
     score: d.score,
     questions: d.questions,
     direction: d.direction,
@@ -2436,6 +2439,7 @@ export async function getCombinedQuizSession(sessionKey: string): Promise<Combin
     completedAt: d.completedAt,
     status: d.status,
     reviewedQuestionCount: d.reviewedQuestionCount,
+    reviewState: d.reviewState,
     score: d.score,
     questions: d.questions,
     domainWeights: d.domainWeights,
@@ -3584,6 +3588,7 @@ export async function commitMixedQuizOperation(
       if (prior.data()!.signature !== signature) throw new MixedOperationError(409, "Operation ID reused for a different answer");
       return session;
     }
+    if (session.reviewState?.status === "active") throw new MixedOperationError(409, "Finish the active review first");
     if (session.status === "completed") throw new MixedOperationError(409, "Session already completed");
     if (!session.questions.some(q => q.userCorrect === undefined && q.kind === input.kind &&
       (q.kind === "word" ? q.wordId : q.grammarId) === input.refId)) {

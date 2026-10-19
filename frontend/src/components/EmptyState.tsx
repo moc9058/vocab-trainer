@@ -6,7 +6,7 @@ import { getCurrentSession } from "../api/quiz";
 import { getCurrentGrammarSession } from "../api/grammar";
 import { getCurrentCombinedSession } from "../api/combined-quiz";
 import type { QuizSession, GrammarQuizSession, CombinedQuizSession } from "../types";
-import { hasPendingSessionReview, sessionReviewKey } from "../utils/sessionReview";
+import { hasPendingSessionReview } from "../utils/sessionReview";
 
 interface Props {
   language: string;
@@ -87,24 +87,18 @@ export default function EmptyState({ language, deferSessionLoad = false, onResum
         );
         if (!cancelled) {
           const resumable = <T extends QuizSession | GrammarQuizSession | CombinedQuizSession>(
-            kind: "word" | "grammar" | "combined",
             session: T | null
           ): T | null =>
             session && (
               session.status === "in-progress" ||
-              hasPendingSessionReview(
-                sessionReviewKey(kind, session.sessionId),
-                session.startedAt,
-                session.questions,
-                session.reviewedQuestionCount
-              )
+              hasPendingSessionReview(session)
             )
               ? session
               : null;
-          setVocabSession(resumable("word", vocabResult as QuizSession | null));
-          setGrammarSession(resumable("grammar", grammarResult as GrammarQuizSession | null));
-          setCombinedSession(resumable("combined", combinedResult as CombinedQuizSession | null));
-          setMixedSession(resumable("combined", mixedResult as CombinedQuizSession | null));
+          setVocabSession(resumable(vocabResult as QuizSession | null));
+          setGrammarSession(resumable(grammarResult as GrammarQuizSession | null));
+          setCombinedSession(resumable(combinedResult as CombinedQuizSession | null));
+          setMixedSession(resumable(mixedResult as CombinedQuizSession | null));
         }
       } catch {
         // ignore
@@ -135,6 +129,7 @@ export default function EmptyState({ language, deferSessionLoad = false, onResum
                   >
                     <p className="font-semibold text-sm text-indigo-300">{t("resumeCombinedQuiz")}</p>
                     <p className="mt-0.5 text-xs text-indigo-400">
+                      {combinedSession.reviewState?.status === "active" && <span className="mr-2">{t("resumeSessionReview")} {(combinedSession.reviewState.cursor + 1)} / {(combinedSession.reviewState.toAnsweredCount - combinedSession.reviewState.fromAnsweredCount)} · </span>}
                       {combinedSession.score.correct} / {combinedSession.initialTotal ?? combinedSession.questions.length} {t("questionsAnswered")}
                     </p>
                   </button>
@@ -155,6 +150,7 @@ export default function EmptyState({ language, deferSessionLoad = false, onResum
                       >
                         <p className="font-semibold text-sm text-fuchsia-300">{t("resumeMixedQuiz")}</p>
                         <p className="mt-0.5 text-xs text-fuchsia-400">
+                          {mixedSession.reviewState?.status === "active" && <span className="mr-2">{t("resumeSessionReview")} {(mixedSession.reviewState.cursor + 1)} / {(mixedSession.reviewState.toAnsweredCount - mixedSession.reviewState.fromAnsweredCount)} · </span>}
                           {mixedSession.score.correct} / {mixedSession.initialTotal ?? mixedSession.questions.length} {t("questionsAnswered")}
                         </p>
                       </button>
@@ -192,6 +188,7 @@ export default function EmptyState({ language, deferSessionLoad = false, onResum
                       >
                         <p className="font-semibold text-sm text-blue-300">{t("resumePreviousQuiz")}</p>
                         <p className="mt-0.5 text-xs text-blue-400">
+                          {vocabSession.reviewState?.status === "active" && <span className="mr-2">{t("resumeSessionReview")} {(vocabSession.reviewState.cursor + 1)} / {(vocabSession.reviewState.toAnsweredCount - vocabSession.reviewState.fromAnsweredCount)} · </span>}
                           {vocabSession.score.correct} / {vocabSession.wordIds?.length ?? vocabSession.questions.length} {t("questionsAnswered")}
                         </p>
                       </button>
@@ -235,6 +232,7 @@ export default function EmptyState({ language, deferSessionLoad = false, onResum
                       >
                         <p className="font-semibold text-sm text-emerald-300">{t("resumePreviousQuiz")}</p>
                         <p className="mt-0.5 text-xs text-emerald-400">
+                          {grammarSession.reviewState?.status === "active" && <span className="mr-2">{t("resumeSessionReview")} {(grammarSession.reviewState.cursor + 1)} / {(grammarSession.reviewState.toAnsweredCount - grammarSession.reviewState.fromAnsweredCount)} · </span>}
                           {grammarSession.score.correct} / {grammarSession.questions.length} {t("questionsAnswered")}
                         </p>
                       </button>

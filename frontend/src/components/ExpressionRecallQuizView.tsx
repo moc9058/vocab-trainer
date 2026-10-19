@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   getCurrentExpressionRecallSession,
   startExpressionRecallQuiz,
@@ -7,7 +8,7 @@ import type { ExpressionQuizDirection, ExpressionRecallSession } from "../types"
 import ExpressionRecallFilterModal from "./ExpressionRecallFilterModal";
 import ExpressionRecallTaking from "./ExpressionRecallTaking";
 import QuizRecoveryState from "./QuizRecoveryState";
-import { hasPendingSessionReview, sessionReviewKey } from "../utils/sessionReview";
+import { hasPendingSessionReview } from "../utils/sessionReview";
 
 interface Props {
   /** ISO code — expressions are stored under ISO codes, unlike words and grammar. */
@@ -18,6 +19,8 @@ interface Props {
 type Phase = "loading" | "setup" | "quiz" | "unreachable";
 
 export default function ExpressionRecallQuizView({ language, onBack }: Props) {
+  const outbox = useAnswerOutbox();
+  const loadedLanguage = useRef<string | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
   const [quiz, setQuiz] = useState<ExpressionRecallSession | null>(null);
   const [starting, setStarting] = useState(false);
@@ -28,19 +31,17 @@ export default function ExpressionRecallQuizView({ language, onBack }: Props) {
   // having: a refresh on /:language/expression-recall lands back in the session
   // instead of dropping to the setup screen.
   useEffect(() => {
+    if (loadedLanguage.current === language) return;
     let cancelled = false;
     setPhase("loading");
+    if (outbox.pending > 0) return;
     getCurrentExpressionRecallSession(language)
       .then((session) => {
         if (cancelled) return;
+        loadedLanguage.current = language;
         if (session && (
           session.status === "in-progress" ||
-          hasPendingSessionReview(
-            sessionReviewKey("expression-recall", session.sessionId),
-            session.startedAt,
-            session.questions,
-            session.reviewedQuestionCount
-          )
+          hasPendingSessionReview(session)
         )) {
           setQuiz(session);
           setPhase("quiz");
@@ -57,7 +58,7 @@ export default function ExpressionRecallQuizView({ language, onBack }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [language, attempt]);
+  }, [language, attempt, outbox.pending]);
 
   const handleStart = useCallback(
     async (filters: {

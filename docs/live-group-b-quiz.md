@@ -87,6 +87,13 @@ bucket are uniform. Correct removes the pending slot; Wrong removes it for the
 rest of the current sitting. Finishing a mid-quiz review releases at most one retry.
 Natural exhaustion completes the test even with Wrong answers; reviewing a completed
 test does not reopen it.
+An active End Session review also persists its fixed answered-attempt range and current
+card in Firestore. Resume reconciles live B membership as usual while preserving that
+review range, cursor and revision. Only the final review step advances the sitting
+boundary and releases retries, atomically with saving review completion. Review progress
+uses the serial answer outbox after grades and B removals; stale tabs must reload rather
+than replace newer progress. Word, grammar, combined/article and expression recall share
+this persistence behavior, with lazy initialization for existing sessions.
 Already-correct weighting still applies when configured; Wrong leaves that bucket.
 Existing zero-weight pending items survive in a randomized tail. The same item cannot be drawn twice within a sitting. Reordering without grading pins the visible card.
 Weight edits wait until the outbox has no pending or unacknowledged failed writes.

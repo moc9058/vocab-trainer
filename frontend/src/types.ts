@@ -1,3 +1,14 @@
+export interface QuizReviewState {
+  reviewId: string;
+  status: "active" | "completed";
+  fromAnsweredCount: number;
+  toAnsweredCount: number;
+  /** Next attempt to display, relative to the fixed answered range. */
+  cursor: number;
+  revision: number;
+  lastOperationId: string;
+}
+
 export type UILanguage = "en";
 
 /** Safely convert a translation that may be a string or object to a displayable string */
@@ -54,6 +65,7 @@ export interface QuizSession {
   status: "in-progress" | "completed";
   /** Number of answered attempts already consumed by an End Session review. */
   reviewedQuestionCount?: number;
+  reviewState?: QuizReviewState;
   score: QuizScore;
   questions: QuizQuestion[];
   questionType?: string;
@@ -295,6 +307,7 @@ export interface GrammarQuizSession {
   status: "in-progress" | "completed";
   /** Number of answered attempts already consumed by an End Session review. */
   reviewedQuestionCount?: number;
+  reviewState?: QuizReviewState;
   score: QuizScore;
   questions: GrammarQuizQuestion[];
   groupFilter?: string[];
@@ -365,6 +378,7 @@ export interface CombinedQuizSession {
   status: "in-progress" | "completed";
   /** Number of answered attempts already consumed by an End Session review. */
   reviewedQuestionCount?: number;
+  reviewState?: QuizReviewState;
   score: QuizScore;
   questions: CombinedQuizQuestion[];
   domainWeights: CombinedDomainWeights;
@@ -549,6 +563,7 @@ export interface ExpressionRecallSession {
   status: "in-progress" | "completed";
   /** Number of answered attempts already consumed by an End Session review. */
   reviewedQuestionCount?: number;
+  reviewState?: QuizReviewState;
   score: QuizScore;
   questions: ExpressionRecallQuestion[];
   direction: ExpressionQuizDirection;

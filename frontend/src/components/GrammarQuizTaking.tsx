@@ -1,4 +1,6 @@
-import { finishQuizSitting, normalizeQuizSitting } from "../utils/quizSitting";
+import { useSessionReview } from "../hooks/useSessionReview";
+import SessionReviewStatus from "./SessionReviewStatus";
+import { normalizeQuizSitting } from "../utils/quizSitting";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
@@ -11,14 +13,7 @@ import { useQuizPrefetch } from "../hooks/useQuizPrefetch";
 import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
 import { getOutboxState } from "../utils/answerOutbox";
 import { applyGrammarAnswerLocally } from "../utils/quizLocal";
-import {
-  appendSessionReview,
-  completeSessionReview,
-  loadSessionReview,
-  sessionReviewKey,
-  unreviewedSessionQuestions,
-} from "../utils/sessionReview";
-import type { GrammarQuizSession, GrammarQuizQuestion } from "../types";
+import type { GrammarQuizSession } from "../types";
 import { isWeightValid, scaleWeightRecord } from "../utils/weightInput";
 
 /** Stable empty array — the grammar quiz has no word questions to prefetch. */
@@ -51,16 +46,10 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
   const [correctDraft, setCorrectDraft] = useState<string>("");
   const [applyingWeights, setApplyingWeights] = useState(false);
   // Durable End Session boundary; see `utils/sessionReview.ts`.
-  const reviewKey = sessionReviewKey("grammar", session.sessionId);
-  const [sessionLog, setSessionLog] = useState<GrammarQuizQuestion[]>(() =>
-    loadSessionReview(
-      reviewKey,
-      session.startedAt,
-      unreviewedSessionQuestions(session.questions, session.reviewedQuestionCount)
-    )
-  );
-  const [sessionReviewActive, setSessionReviewActive] = useState(false);
-  const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
+  const review = useSessionReview(currentSession, setCurrentSession, "/api/grammar-quiz");
+  const sessionLog = review.questions;
+  const sessionReviewActive = review.active;
+  const sessionReviewIndex = review.index;
 
   const outbox = useAnswerOutbox();
 
@@ -155,6 +144,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
 
   /** Local-first — see `utils/quizLocal.ts`. The write is queued, never awaited. */
   function handleGrade(correct: boolean) {
+    if (review.isBlocked()) return;
     if (!question || applyingWeights || gradedIndexRef.current === currentIndex) return;
     gradedIndexRef.current = currentIndex;
 
@@ -166,24 +156,17 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
     });
 
     setCurrentSession((prev) => applyGrammarAnswerLocally(prev, question.grammarId, correct));
-    const reviewQuestion = { ...question, userCorrect: correct };
-    setSessionLog((prev) =>
-      appendSessionReview(reviewKey, session.startedAt, prev, reviewQuestion)
-    );
     setCurrentIndex((i) => i + 1);
     setShowingAnswer(false);
   }
 
   function endSession() {
-    if (sessionLog.length === 0) return;
-    setSessionReviewIndex(0);
-    setSessionReviewActive(true);
+    if (sessionLog.length === 0 || applyingWeights || review.isBlocked()) return;
+    review.start();
   }
 
   function returnToQuiz() {
-    setSessionLog([]);
-    setSessionReviewActive(false);
-    setSessionReviewIndex(0);
+    review.close();
     const index = currentSession.questions.findIndex(q => q.userCorrect === undefined);
     setCurrentIndex(index < 0 ? currentSession.questions.length : index);
     gradedIndexRef.current = -1;
@@ -191,18 +174,10 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
   }
 
   function nextSessionReview() {
-    const next = sessionReviewIndex + 1;
-    if (next >= sessionLog.length) {
-      completeSessionReview(reviewKey, session.startedAt);
-      setCurrentSession(prev => finishQuizSitting(prev));
-      outbox.enqueue({
-        domain: "grammarReviewComplete",
-        language: currentSession.language,
-        startedAt: session.startedAt,
-      });
-    }
-    setSessionReviewIndex(next);
+    review.next();
   }
+
+  if (review.pending || review.error) return <SessionReviewStatus review={review} />;
 
   if (sessionReviewActive) {
     const reviewQuestion = sessionReviewIndex < sessionLog.length ? sessionLog[sessionReviewIndex] : null;
@@ -225,6 +200,9 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
       );
     }
 
+    if (!prefetch.grammar.has(reviewQuestion.grammarId) && !prefetch.missing.has(reviewQuestion.grammarId)) {
+      return <QuizLoadState error={prefetch.error} loaded={prefetch.loaded} total={prefetch.total} onRetry={prefetch.retry} />;
+    }
     const reviewGrammar = prefetch.grammar.get(reviewQuestion.grammarId);
     return (
       <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
@@ -232,7 +210,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
           {sessionReviewIndex + 1} / {sessionLog.length}
         </p>
         <h2 className="max-w-lg text-center text-xl sm:text-3xl font-bold text-gray-100">
-          {reviewQuestion.statement || reviewGrammar?.statement}
+          {prefetch.missing.has(reviewQuestion.grammarId) ? t("reviewItemDeleted") : reviewQuestion.statement || reviewGrammar?.statement}
         </h2>
 
         {reviewGrammar && <GrammarDescriptionsPanel item={reviewGrammar} />}
@@ -292,6 +270,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
         {sessionLog.length > 0 ? (
           <button
             onClick={endSession}
+            disabled={sessionLog.length === 0 || applyingWeights}
             className="rounded-lg border border-amber-600/70 bg-amber-700/30 px-6 py-2 font-medium text-amber-200 hover:bg-amber-700/50"
           >
             🏁 {t("startSessionReview")}
@@ -342,6 +321,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
         </p>
         <button
           onClick={endSession}
+          disabled={sessionLog.length === 0 || applyingWeights}
           title={t("endSession")}
           className="rounded-full border border-amber-600/70 bg-amber-700/30 px-4 py-1.5 text-sm font-medium text-amber-200 hover:bg-amber-700/50 whitespace-nowrap"
         >

@@ -1,3 +1,4 @@
+import { registerQuizReviewRoutes, assertLegacyReviewAllowed } from "../quiz-review.js";
 import { finishQuizSitting } from "../quiz-sitting.js";
 import type { FastifyPluginAsync } from "fastify";
 import {
@@ -32,6 +33,7 @@ import { callLLM, stripMarkdownFences } from "../llm.js";
 import { shuffle, weightedInterleave, isMastered } from "../quiz-utils.js";
 
 const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
+  registerQuizReviewRoutes(fastify, (language, fn) => mutateGrammarQuizSession(language, fn));
   // Start grammar quiz
   fastify.post<{
     Body: {
@@ -177,6 +179,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       const { language, grammarId, correct } = request.body;
       const session = await mutateGrammarQuizSession(language, (current) => {
         if (!current) throw fastify.httpErrors.notFound("No grammar quiz session found");
+        if (current.reviewState?.status === "active") throw fastify.httpErrors.conflict("Finish the active review first");
         if (current.status === "completed") throw fastify.httpErrors.badRequest("Session already completed");
 
         const question = current.questions.find(
@@ -245,7 +248,7 @@ const grammarQuizRoutes: FastifyPluginAsync = async (fastify) => {
       if (session.startedAt !== request.body.startedAt) {
         throw fastify.httpErrors.conflict("The quiz session has been replaced");
       }
-      Object.assign(session, finishQuizSitting(session));
+      if (assertLegacyReviewAllowed(session)) Object.assign(session, finishQuizSitting(session));
       return { reviewedQuestionCount: session.reviewedQuestionCount };
     })
   );

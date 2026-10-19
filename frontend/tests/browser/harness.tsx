@@ -1,3 +1,6 @@
+import ExpressionRecallQuizView from "../../src/components/ExpressionRecallQuizView";
+import ExpressionRecallTaking from "../../src/components/ExpressionRecallTaking";
+import type { CombinedQuizVariant } from "../../src/api/combined-quiz";
 // Development-only entrypoint. The production Vite build includes only index.html.
 import { createRoot } from 'react-dom/client';
 import { useEffect, useState } from 'react';
@@ -72,5 +75,7 @@ createRoot(document.getElementById('root')!).render(<I18nProvider><SettingsProvi
     : mode === 'import-full-text' ? <ImportFullTextHarness />
     : mode === 'word' ? <QuizTaking session={fixture} onComplete={() => {}} onBrowse={() => {}} onStartNew={() => {}} />
     : mode === 'grammar' ? <GrammarQuizTaking session={fixture} onComplete={() => {}} onStartNew={() => {}} />
-    : <CombinedQuizTaking session={fixture} variant="mixed" onComplete={() => {}} onBrowse={() => {}} onStartNew={() => {}} />}
+    : mode === 'recall-view' ? <ExpressionRecallQuizView language="zh" onBack={() => {}} />
+    : mode === 'recall' ? <ExpressionRecallTaking language="zh" session={fixture} onComplete={() => {}} onStartNew={() => {}} />
+    : <CombinedQuizTaking session={fixture} variant={(new URLSearchParams(location.search).get('variant') ?? "mixed") as CombinedQuizVariant} onComplete={() => {}} onBrowse={() => {}} onStartNew={() => {}} />}
 </SettingsProvider></I18nProvider>);

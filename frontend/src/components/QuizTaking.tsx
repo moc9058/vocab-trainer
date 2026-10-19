@@ -1,4 +1,6 @@
-import { finishQuizSitting, normalizeQuizSitting } from "../utils/quizSitting";
+import { useSessionReview } from "../hooks/useSessionReview";
+import SessionReviewStatus from "./SessionReviewStatus";
+import { normalizeQuizSitting } from "../utils/quizSitting";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
@@ -14,13 +16,6 @@ import { useQuizPrefetch } from "../hooks/useQuizPrefetch";
 import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
 import { getOutboxState } from "../utils/answerOutbox";
 import { applyWordAnswerLocally } from "../utils/quizLocal";
-import {
-  appendSessionReview,
-  completeSessionReview,
-  loadSessionReview,
-  sessionReviewKey,
-  unreviewedSessionQuestions,
-} from "../utils/sessionReview";
 import { displayTranslation, type QuizSession, type QuizQuestion } from "../types";
 import { isWeightValid, scaleWeightRecord } from "../utils/weightInput";
 
@@ -79,16 +74,10 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   const [applyingWeights, setApplyingWeights] = useState(false);
   // The End Session review survives remounts/refreshes and is cleared only after the user has
   // gone through it. `startedAt` distinguishes a new quiz that reuses the language doc id.
-  const reviewKey = sessionReviewKey("word", session.sessionId);
-  const [sessionLog, setSessionLog] = useState<QuizQuestion[]>(() =>
-    loadSessionReview(
-      reviewKey,
-      session.startedAt,
-      unreviewedSessionQuestions(session.questions, session.reviewedQuestionCount)
-    )
-  );
-  const [sessionReviewActive, setSessionReviewActive] = useState(false);
-  const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
+  const review = useSessionReview(currentSession, setCurrentSession, "/api/quiz");
+  const sessionLog = review.questions;
+  const sessionReviewActive = review.active;
+  const sessionReviewIndex = review.index;
 
   const outbox = useAnswerOutbox();
 
@@ -238,6 +227,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
    * current card with no way forward.
    */
   function handleGrade(correct: boolean) {
+    if (review.isBlocked()) return;
     // Do not let an answer race the full-session response from a weights update.
     if (!question || applyingWeights || gradedIndexRef.current === currentIndex) return;
     gradedIndexRef.current = currentIndex;
@@ -256,10 +246,6 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     }
 
     setCurrentSession((prev) => applyWordAnswerLocally(prev, question.wordId, correct));
-    const reviewQuestion = { ...orderedQuestions[currentIndex], userCorrect: correct };
-    setSessionLog((prev) =>
-      appendSessionReview(reviewKey, session.startedAt, prev, reviewQuestion)
-    );
     setCurrentIndex((i) => i + 1);
     setShowingAnswer(false);
     resetExpandedAnswers();
@@ -267,15 +253,12 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   }
 
   function endSession() {
-    if (sessionLog.length === 0) return;
-    setSessionReviewIndex(0);
-    setSessionReviewActive(true);
+    if (sessionLog.length === 0 || applyingWeights || review.isBlocked()) return;
+    review.start();
   }
 
   function returnToQuiz() {
-    setSessionLog([]);
-    setSessionReviewActive(false);
-    setSessionReviewIndex(0);
+    review.close();
     const index = currentSession.questions.findIndex(q => q.userCorrect === undefined);
     setCurrentIndex(index < 0 ? currentSession.questions.length : index);
     gradedIndexRef.current = -1;
@@ -283,21 +266,12 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   }
 
   function nextSessionReview() {
-    const next = sessionReviewIndex + 1;
-    if (next >= sessionLog.length) {
-      completeSessionReview(reviewKey, session.startedAt);
-      setCurrentSession(prev => finishQuizSitting(prev));
-      outbox.enqueue({
-        domain: "wordReviewComplete",
-        language: currentSession.language,
-        startedAt: session.startedAt,
-      });
-    }
-    setSessionReviewIndex(next);
+    review.next();
   }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      if (review.isBlocked()) return;
       // Ignore shortcuts while typing in a form control (e.g. the weights panel).
       const target = event.target as HTMLElement | null;
       if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
@@ -343,7 +317,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive]);
+  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, sessionReviewIndex, review.pending, review.error]);
 
   // On mobile the whole page scrolls (see min-h-full container note below), so
   // reset scroll to the top when a new question appears — otherwise the user
@@ -352,6 +326,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     window.scrollTo({ top: 0 });
   }, [currentIndex, sessionReviewIndex]);
 
+  if (review.pending || review.error) return <SessionReviewStatus review={review} />;
 
   if (sessionReviewActive) {
     const reviewSlim = sessionReviewIndex < sessionLog.length ? sessionLog[sessionReviewIndex] : null;
@@ -406,7 +381,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
         </p>
         <RecentWordGroupBadges groupAddedAt={reviewQuestion.groupAddedAt} />
         <h2 className="max-w-full break-words px-2 text-center text-xl sm:text-3xl font-bold text-gray-100">
-          {reviewQuestion.term}
+          {prefetch.missing.has(reviewQuestion.wordId) ? t("reviewItemDeleted") : reviewQuestion.term}
         </h2>
 
         {settings.showKoreanHanja && reviewQuestion.hanjaReadings && reviewQuestion.hanjaReadings.length > 0 && (
@@ -501,6 +476,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
         {sessionLog.length > 0 ? (
           <button
             onClick={endSession}
+            disabled={sessionLog.length === 0 || applyingWeights}
             className="rounded-lg border border-amber-600/70 bg-amber-700/30 px-6 py-2 font-medium text-amber-200 hover:bg-amber-700/50"
           >
             🏁 {t("startSessionReview")}
@@ -557,6 +533,7 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
         </p>
         <button
           onClick={endSession}
+          disabled={sessionLog.length === 0 || applyingWeights}
           title={t("endSession")}
           className="rounded-full border border-amber-600/70 bg-amber-700/30 px-4 py-1.5 text-sm font-medium text-amber-200 hover:bg-amber-700/50 whitespace-nowrap"
         >

@@ -218,6 +218,31 @@ exhaustion (including a final Wrong) displays **Quiz Complete** and **Review Ses
 its review completion offers **Start New**. Finishing review cannot reopen a completed
 test. The same flow covers word, grammar, combined/article and expression recall.
 
+`reviewState` on those session documents stores a review ID, a fixed answered-attempt
+range (`fromAnsweredCount` / `toAnsweredCount`), the next card's `cursor`, a `revision`
+and the last operation ID. Answered attempts retain their relative order through pending
+tail reorders and live B reconciliation, so repeated attempts for one item remain distinct.
+`PUT …/session/language/:language/review` accepts `start` / `next` operations with
+`startedAt`, `reviewId`, `operationId`, `revision` and `fromAnsweredCount`. The shared
+`quiz-review.ts` transition runs in the session's Firestore transaction; final progress
+also calls `finishQuizSitting` in that transaction. Main-test answers are rejected while
+a review is active. Replaying the last operation is idempotent, stale revisions return
+409, and a replaced test cannot be changed by old review writes. The old `/reviewed`
+endpoint cannot skip an active review or advance a subsequent sitting after a new-protocol
+review. Existing sessions without `reviewState` keep the legacy boundary fallback;
+no production rewrite is needed.
+
+The four Taking components share `useSessionReview`, which puts review writes behind
+answers/removals on `answerOutbox` and displays each next card after server confirmation.
+It restores active reviews before the main test, including completed tests awaiting review,
+and shows retry/reload states for save trouble or conflicts. Deleted items can be skipped,
+while hydration transport failures remain retryable. Review answers are always visible,
+so no additional reveal state is needed. Review session state no longer uses localStorage;
+the current quiz's obsolete v2 snapshot is removed on mount. As with answers, unsent queue
+entries do not survive closing the page; the existing unload warning remains in place.
+Expression recall's resume read waits for pending writes only during initial recovery,
+so grading or review progress does not remount its active screen.
+
 Local persistence smoke test (dedicated demo project; refuses production access):
 
 ```bash

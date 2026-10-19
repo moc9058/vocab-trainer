@@ -1,3 +1,4 @@
+import { registerQuizReviewRoutes, assertLegacyReviewAllowed } from "../quiz-review.js";
 import { finishQuizSitting } from "../quiz-sitting.js";
 import { orderMixedQuestions } from "../mixed-operations.js";
 import { initializeMixedScope, reconcileMixedScope } from "../mixed-quiz-scope.js";
@@ -22,7 +23,6 @@ import {
   getGrammarComponentProgress,
   updateGrammarComponentProgress,
   getGrammarProgressForLanguage,
-  getCombinedQuizSession,
   saveCombinedQuizSession,
 } from "../firestore.js";
 import type {
@@ -377,6 +377,9 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
     }
   );
 
+  registerQuizReviewRoutes(fastify, (language, fn) => mutateCombinedQuizSession(opts.sessionKey(language), fn),
+    opts.liveGroupB ? orderMixedQuestions : undefined);
+
   // No hydration endpoint here on purpose: word questions carry the same payload the word
   // quiz serves, so both variants hydrate through the shared `POST /api/quiz/hydrate/:language`,
   // and grammar questions hydrate through `POST /api/grammar/:language/items/batch`.
@@ -445,33 +448,41 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
         }
       }
 
-      const session = await getCombinedQuizSession(opts.sessionKey(language));
-      if (!session) return reply.notFound("No combined quiz session found for this language");
-      if (session.status === "completed") return reply.badRequest("Session already completed");
+      const session = await mutateCombinedQuizSession(opts.sessionKey(language), async session => {
+        if (!session) throw fastify.httpErrors.notFound("No combined quiz session found for this language");
+        if (session.reviewState?.status === "active") throw fastify.httpErrors.conflict("Finish the active review first");
+        if (session.status === "completed") throw fastify.httpErrors.badRequest("Session already completed");
 
-      const question = session.questions.find(
-        (q) =>
-          q.userCorrect === undefined &&
-          (kind === "word"
-            ? q.kind === "word" && q.wordId === refId
-            : q.kind === "grammar" && q.grammarId === refId)
-      );
-      if (!question) return reply.notFound(`Question '${kind}:${refId}' not in this session`);
+        const question = session.questions.find(
+          (q) =>
+            q.userCorrect === undefined &&
+            (kind === "word"
+              ? q.kind === "word" && q.wordId === refId
+              : q.kind === "grammar" && q.grammarId === refId)
+        );
+        if (!question) throw fastify.httpErrors.notFound(`Question '${kind}:${refId}' not in this session`);
 
-      question.userCorrect = correct;
-      if (correct) {
-        session.score.correct++;
-      } else {
-        // A wrong answer means it's no longer "already-correct": drop it from the mastered
-        // bucket so its retry is treated as a normal (unmastered) item for the rest of the session.
-        if (session.correctMembership) {
-          if (kind === "word") {
-            session.correctMembership.wordIds = session.correctMembership.wordIds.filter((id) => id !== refId);
-          } else {
-            session.correctMembership.grammarIds = session.correctMembership.grammarIds.filter((id) => id !== refId);
+        question.userCorrect = correct;
+        if (correct) {
+          session.score.correct++;
+        } else {
+          // A wrong answer means it's no longer "already-correct": drop it from the mastered
+          // bucket so its retry is treated as a normal (unmastered) item for the rest of the session.
+          if (session.correctMembership) {
+            if (kind === "word") {
+              session.correctMembership.wordIds = session.correctMembership.wordIds.filter((id) => id !== refId);
+            } else {
+              session.correctMembership.grammarIds = session.correctMembership.grammarIds.filter((id) => id !== refId);
+            }
           }
         }
-      }
+
+        if (session.questions.every(q => q.userCorrect !== undefined)) {
+          session.status = "completed";
+          session.completedAt = new Date().toISOString();
+        }
+        return session;
+      });
 
       // Update per-domain progress (same bookkeeping as the standalone quizzes).
       if (kind === "word") {
@@ -504,14 +515,6 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
         await Promise.all(flagWordIds.map((id) => flagWord(language, id).catch(() => {})));
       }
 
-      if (opts.liveGroupB) Object.assign(session, orderMixedQuestions(session));
-      const allAnswered = session.questions.every((q) => q.userCorrect !== undefined);
-      if (allAnswered) {
-        session.status = "completed";
-        session.completedAt = new Date().toISOString();
-      }
-
-      await saveCombinedQuizSession(session);
       return { session };
     }
   );
@@ -540,7 +543,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
         if (session.startedAt !== request.body.startedAt) {
           throw fastify.httpErrors.conflict("The quiz session has been replaced");
         }
-        Object.assign(session, finishQuizSitting(session));
+        if (assertLegacyReviewAllowed(session)) Object.assign(session, finishQuizSitting(session));
         if (opts.liveGroupB) Object.assign(session, orderMixedQuestions(session));
 
         return { reviewedQuestionCount: session.reviewedQuestionCount };

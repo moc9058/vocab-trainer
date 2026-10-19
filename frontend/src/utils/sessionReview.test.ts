@@ -1,95 +1,32 @@
 import { describe, expect, it } from "vitest";
-import {
-  appendSessionReview,
-  completeSessionReview,
-  hasPendingSessionReview,
-  loadSessionReview,
-  sessionReviewKey,
-  unreviewedSessionQuestions,
-} from "./sessionReview";
+import { hasPendingSessionReview, sessionReviewQuestions, unreviewedSessionQuestions } from "./sessionReview";
+import type { QuizReviewState } from "../types";
 
-class MemoryStorage {
-  private readonly values = new Map<string, string>();
-  get length() { return this.values.size; }
-  clear() { this.values.clear(); }
-  getItem(key: string) { return this.values.get(key) ?? null; }
-  key(index: number) { return [...this.values.keys()][index] ?? null; }
-  removeItem(key: string) { this.values.delete(key); }
-  setItem(key: string, value: string) { this.values.set(key, value); }
-}
+const reviewState: QuizReviewState = { reviewId: "review", status: "active", cursor: 1,
+  fromAnsweredCount: 1, toAnsweredCount: 3, revision: 1, lastOperationId: "next" };
+const questions = [{ id: "old", userCorrect: true }, { id: "repeat", userCorrect: false },
+  { id: "repeat", userCorrect: true }, { id: "pending" }];
 
-type Question = { id: string; userCorrect?: boolean };
-
-describe("session review persistence", () => {
-  it("recovers only answers after the durable review boundary", () => {
-    const storage = new MemoryStorage() as Storage;
-    const key = sessionReviewKey("word", "chinese");
-    const questions: Question[] = [
-      { id: "1", userCorrect: true },
-      { id: "2" },
-      { id: "3", userCorrect: false },
-    ];
-
-    const unreviewed = unreviewedSessionQuestions(questions, 1);
-    expect(loadSessionReview(key, "start-1", unreviewed, storage)).toEqual([questions[2]]);
-    expect(hasPendingSessionReview(key, "start-1", questions, 1, storage)).toBe(true);
+describe("server-backed session reviews", () => {
+  it("keeps repeated attempts and the fixed range across resume", () => {
+    const session = { questions, reviewedQuestionCount: 1, reviewState };
+    expect(sessionReviewQuestions(session)).toEqual(questions.slice(1, 3));
+    expect(sessionReviewQuestions(session)[reviewState.cursor].userCorrect).toBe(true);
+    expect(hasPendingSessionReview(session)).toBe(true);
   });
-
-  it("does not resurrect historical answers for a legacy session with no boundary", () => {
-    const questions: Question[] = [
-      { id: "old-1", userCorrect: true },
-      { id: "old-2", userCorrect: false },
-    ];
+  it("does not resurrect legacy history without a boundary", () => {
     expect(unreviewedSessionQuestions(questions, undefined)).toEqual([]);
+    expect(hasPendingSessionReview({ questions })).toBe(false);
   });
-
-  it("restores only attempts after a large historical review boundary", () => {
-    const historical: Question[] = Array.from({ length: 494 }, (_, i) => ({
-      id: `old-${i}`,
-      userCorrect: true,
-    }));
-    const questions: Question[] = [
-      ...historical,
-      { id: "new-1", userCorrect: false },
-      { id: "new-2", userCorrect: false },
-      { id: "next" },
-    ];
-
-    expect(unreviewedSessionQuestions(questions, 494).map((q) => q.id)).toEqual([
-      "new-1",
-      "new-2",
-    ]);
+  it("keeps completed tests reachable only until their review is finished", () => {
+    expect(hasPendingSessionReview({ questions, reviewedQuestionCount: 1 })).toBe(true);
+    expect(hasPendingSessionReview({ questions, reviewedQuestionCount: 3,
+      reviewState: { ...reviewState, status: "completed", cursor: 2 } })).toBe(false);
   });
-
-  it("survives reloads and keeps retry attempts as separate entries", () => {
-    const storage = new MemoryStorage() as Storage;
-    const key = sessionReviewKey("grammar", "chinese");
-    const first = appendSessionReview(key, "start-1", [], { id: "g1", userCorrect: false }, storage);
-    appendSessionReview(key, "start-1", first, { id: "g1", userCorrect: true }, storage);
-
-    expect(loadSessionReview<Question>(key, "start-1", [], storage)).toEqual([
-      { id: "g1", userCorrect: false },
-      { id: "g1", userCorrect: true },
-    ]);
-  });
-
-  it("keeps an empty reviewed marker so old server answers do not return", () => {
-    const storage = new MemoryStorage() as Storage;
-    const key = sessionReviewKey("combined", "chinese__mixed");
-    const answered: Question[] = [{ id: "1", userCorrect: true }];
-    loadSessionReview(key, "start-1", answered, storage);
-    completeSessionReview(key, "start-1", storage);
-
-    expect(loadSessionReview(key, "start-1", answered, storage)).toEqual([]);
-    expect(hasPendingSessionReview(key, "start-1", answered, 0, storage)).toBe(false);
-  });
-
-  it("does not carry the prior review boundary into a newly started quiz", () => {
-    const storage = new MemoryStorage() as Storage;
-    const key = sessionReviewKey("word", "chinese");
-    completeSessionReview(key, "start-1", storage);
-    const nextQuestions: Question[] = [{ id: "2", userCorrect: true }];
-
-    expect(loadSessionReview(key, "start-2", nextQuestions, storage)).toEqual(nextQuestions);
+  it("keeps the prior review score separate from new unreviewed attempts", () => {
+    const session = { questions: [...questions, { id: "new", userCorrect: false }], reviewedQuestionCount: 3,
+      reviewState: { ...reviewState, status: "completed" as const, cursor: 2 } };
+    expect(sessionReviewQuestions(session)).toEqual(questions.slice(1, 3));
+    expect(unreviewedSessionQuestions(session.questions, session.reviewedQuestionCount)).toEqual([{ id: "new", userCorrect: false }]);
   });
 });

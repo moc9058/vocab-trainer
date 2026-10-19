@@ -14,7 +14,7 @@ const VARIANT_BASE: Record<CombinedQuizVariant, string> = {
   importB: "/api/import-quiz-b",
 };
 
-function base(variant: CombinedQuizVariant = "combined"): string {
+export function combinedQuizBase(variant: CombinedQuizVariant = "combined"): string {
   return VARIANT_BASE[variant];
 }
 
@@ -25,7 +25,7 @@ export async function getCurrentCombinedSession(
 ): Promise<CombinedQuizSession | null> {
   try {
     return await fetchJson<CombinedQuizSession>(
-      `${base(variant)}/session/language/${encodeURIComponent(language)}`
+      `${combinedQuizBase(variant)}/session/language/${encodeURIComponent(language)}`
     );
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) return null;
@@ -63,7 +63,7 @@ export function startCombinedQuiz(
   },
   variant: CombinedQuizVariant = "combined"
 ): Promise<CombinedQuizSession> {
-  return postJson<CombinedQuizSession>(`${base(variant)}/start`, opts);
+  return postJson<CombinedQuizSession>(`${combinedQuizBase(variant)}/start`, opts);
 }
 
 // No hydration helper here: word questions go through the shared `hydrateQuizQuestions`
@@ -88,7 +88,7 @@ export function updateCombinedQuizWeights(
   variant: CombinedQuizVariant = "combined"
 ): Promise<CombinedQuizSession> {
   return putJson(
-    `${base(variant)}/session/language/${encodeURIComponent(language)}/weights`,
+    `${combinedQuizBase(variant)}/session/language/${encodeURIComponent(language)}/weights`,
     weights
   );
 }
@@ -106,7 +106,7 @@ export function answerCombinedQuestion(
   },
   variant: CombinedQuizVariant = "combined"
 ): Promise<{ session: CombinedQuizSession }> {
-  return postJson<{ session: CombinedQuizSession }>(`${base(variant)}/answer`, opts);
+  return postJson<{ session: CombinedQuizSession }>(`${combinedQuizBase(variant)}/answer`, opts);
 }
 
 export function markCombinedQuizReviewComplete(
@@ -114,11 +114,11 @@ export function markCombinedQuizReviewComplete(
   startedAt: string,
   variant: CombinedQuizVariant = "combined"
 ): Promise<{ reviewedQuestionCount: number }> {
-  return putJson(`${base(variant)}/session/language/${encodeURIComponent(language)}/reviewed`, { startedAt });
+  return putJson(`${combinedQuizBase(variant)}/session/language/${encodeURIComponent(language)}/reviewed`, { startedAt });
 }
 
 export function removeMixedQuestionFromB(opts: {
   language: string; kind: "word" | "grammar"; refId: string; startedAt: string; operationId: string;
 }): Promise<{ session: CombinedQuizSession }> {
-  return postJson(`${base("mixed")}/remove-from-b`, opts);
+  return postJson(`${combinedQuizBase("mixed")}/remove-from-b`, opts);
 }

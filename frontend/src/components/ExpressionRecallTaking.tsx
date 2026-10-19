@@ -1,4 +1,6 @@
-import { finishQuizSitting, normalizeQuizSitting } from "../utils/quizSitting";
+import { useSessionReview } from "../hooks/useSessionReview";
+import SessionReviewStatus from "./SessionReviewStatus";
+import { normalizeQuizSitting } from "../utils/quizSitting";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useI18n } from "../i18n/context";
 import { getExpressionsByIds } from "../api/expressions";
@@ -6,14 +8,7 @@ import QuizLoadState from "./QuizLoadState";
 import QuizSyncBadge from "./QuizSyncBadge";
 import { useAnswerOutbox } from "../hooks/useAnswerOutbox";
 import { applyExpressionRecallAnswerLocally } from "../utils/quizLocal";
-import {
-  appendSessionReview,
-  completeSessionReview,
-  loadSessionReview,
-  sessionReviewKey,
-  unreviewedSessionQuestions,
-} from "../utils/sessionReview";
-import type { Expression, ExpressionRecallQuestion, ExpressionRecallSession } from "../types";
+import type { Expression, ExpressionRecallSession } from "../types";
 
 interface Props {
   /** ISO code — expressions are stored under ISO codes, unlike words and grammar. */
@@ -41,16 +36,10 @@ export default function ExpressionRecallTaking({
   const [originalTotal] = useState(
     session.questions.filter((q) => q.userCorrect === undefined).length || session.questions.length
   );
-  const reviewKey = sessionReviewKey("expression-recall", session.sessionId);
-  const [sessionLog, setSessionLog] = useState<ExpressionRecallQuestion[]>(() =>
-    loadSessionReview(
-      reviewKey,
-      session.startedAt,
-      unreviewedSessionQuestions(session.questions, session.reviewedQuestionCount)
-    )
-  );
-  const [sessionReviewActive, setSessionReviewActive] = useState(false);
-  const [sessionReviewIndex, setSessionReviewIndex] = useState(0);
+  const review = useSessionReview(currentSession, setCurrentSession, "/api/expression-recall-quiz");
+  const sessionLog = review.questions;
+  const sessionReviewActive = review.active;
+  const sessionReviewIndex = review.index;
 
   const outbox = useAnswerOutbox();
 
@@ -121,6 +110,7 @@ export default function ExpressionRecallTaking({
    *  hand the write to the outbox. Awaiting the POST is what used to freeze the
    *  other quizzes on a weak connection. */
   function handleGrade(correct: boolean) {
+    if (review.isBlocked()) return;
     if (!question || gradedIndexRef.current === currentIndex) return;
     gradedIndexRef.current = currentIndex;
     outbox.enqueue({
@@ -132,24 +122,17 @@ export default function ExpressionRecallTaking({
     setCurrentSession((prev) =>
       applyExpressionRecallAnswerLocally(prev, question.expressionId, correct)
     );
-    const reviewQuestion = { ...question, userCorrect: correct };
-    setSessionLog((prev) =>
-      appendSessionReview(reviewKey, session.startedAt, prev, reviewQuestion)
-    );
     setCurrentIndex((i) => i + 1);
     setShowingAnswer(false);
   }
 
   function endSession() {
     if (sessionLog.length === 0) return;
-    setSessionReviewIndex(0);
-    setSessionReviewActive(true);
+    review.start();
   }
 
   function returnToQuiz() {
-    setSessionLog([]);
-    setSessionReviewActive(false);
-    setSessionReviewIndex(0);
+    review.close();
     const index = currentSession.questions.findIndex(q => q.userCorrect === undefined);
     setCurrentIndex(index < 0 ? currentSession.questions.length : index);
     gradedIndexRef.current = -1;
@@ -157,17 +140,7 @@ export default function ExpressionRecallTaking({
   }
 
   function nextSessionReview() {
-    const next = sessionReviewIndex + 1;
-    if (next >= sessionLog.length) {
-      completeSessionReview(reviewKey, session.startedAt);
-      setCurrentSession(prev => finishQuizSitting(prev));
-      outbox.enqueue({
-        domain: "expressionRecallReviewComplete",
-        language: currentSession.language,
-        startedAt: session.startedAt,
-      });
-    }
-    setSessionReviewIndex(next);
+    review.next();
   }
 
   /** The reveal face: whichever side of the card wasn't the prompt. */
@@ -197,6 +170,8 @@ export default function ExpressionRecallTaking({
     );
   }
 
+  if (review.pending || review.error) return <SessionReviewStatus review={review} />;
+
   if (sessionReviewActive) {
     const reviewQuestion =
       sessionReviewIndex < sessionLog.length ? sessionLog[sessionReviewIndex] : null;
@@ -221,6 +196,9 @@ export default function ExpressionRecallTaking({
       );
     }
 
+    if (!payloads.has(reviewQuestion.expressionId) && !missing.has(reviewQuestion.expressionId)) {
+      return <QuizLoadState error={loadError} loaded={payloads.size + missing.size} total={neededIds.length} onRetry={retryLoad} />;
+    }
     return (
       <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
         <p className="text-sm text-gray-400">
@@ -261,6 +239,7 @@ export default function ExpressionRecallTaking({
         {sessionLog.length > 0 ? (
           <button
             onClick={endSession}
+            disabled={sessionLog.length === 0}
             className="rounded-lg border border-amber-600/70 bg-amber-700/30 px-6 py-2 font-medium text-amber-200 hover:bg-amber-700/50"
           >
             🏁 {t("startSessionReview")}
@@ -317,6 +296,7 @@ export default function ExpressionRecallTaking({
         </p>
         <button
           onClick={endSession}
+          disabled={sessionLog.length === 0}
           title={t("endSession")}
           className="whitespace-nowrap rounded-full border border-amber-600/70 bg-amber-700/30 px-4 py-1.5 text-sm font-medium text-amber-200 hover:bg-amber-700/50"
         >
