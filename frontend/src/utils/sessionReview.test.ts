@@ -8,6 +8,13 @@ const questions = [{ id: "old", userCorrect: true }, { id: "repeat", userCorrect
   { id: "repeat", userCorrect: true }, { id: "pending" }];
 
 describe("server-backed session reviews", () => {
+  it("restores shuffled attempts by offset, including repeated IDs and the saved cursor", () => {
+    const session = { questions, reviewedQuestionCount: 1,
+      reviewState: { ...reviewState, questionOrder: [1, 0] } };
+    expect(sessionReviewQuestions(session)).toEqual([questions[2], questions[1]]);
+    expect(sessionReviewQuestions(session)[session.reviewState.cursor]).toEqual(questions[1]);
+    expect(session.questions).toEqual(questions);
+  });
   it("keeps repeated attempts and the fixed range across resume", () => {
     const session = { questions, reviewedQuestionCount: 1, reviewState };
     expect(sessionReviewQuestions(session)).toEqual(questions.slice(1, 3));

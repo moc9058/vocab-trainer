@@ -19,7 +19,9 @@ test("review snapshots attempts, persists progress, and releases retries only at
   const original = fixture();
   const active = applyReviewOperation(original, start);
   assert.deepEqual(active.reviewState, { reviewId: "review-1", status: "active", fromAnsweredCount: 1,
-    toAnsweredCount: 3, cursor: 0, revision: 0, lastOperationId: "start" });
+    toAnsweredCount: 3, cursor: 0, revision: 0, lastOperationId: "start",
+    questionOrder: active.reviewState!.questionOrder });
+  assert.deepEqual([...active.reviewState!.questionOrder!].sort(), [0, 1]);
   const moved = applyReviewOperation(active, next(0));
   assert.equal(moved.reviewState!.cursor, 1);
   assert.equal(moved.reviewedQuestionCount, 1);
@@ -38,6 +40,24 @@ test("review snapshots attempts, persists progress, and releases retries only at
   assert.equal(applyReviewOperation(completed, next(1)).reviewedQuestionCount, 3);
   assert.equal(assertLegacyReviewAllowed(completed), false);
   assert.throws(() => applyReviewOperation(completed, { ...start, reviewId: "old-boundary" }), /boundary/);
+});
+
+test("new reviews shuffle independently without reordering history or reshuffling a replay", t => {
+  const random = t.mock.method(Math, "random", () => 0);
+  const original = fixture();
+  const active = applyReviewOperation(original, start);
+  assert.deepEqual(active.reviewState!.questionOrder, [1, 0]);
+  assert.deepEqual(active.questions, original.questions);
+  const moved = applyReviewOperation(active, next(0));
+  // Even if randomness changes, a saved review and a retried start retain the same order.
+  random.mock.mockImplementation(() => 0.99);
+  assert.deepEqual(applyReviewOperation(moved, start).reviewState!.questionOrder, [1, 0]);
+  const completed = applyReviewOperation(moved, next(1));
+  for (const question of completed.questions) if (question.userCorrect === undefined) question.userCorrect = true;
+  const second = applyReviewOperation(completed, { ...start, reviewId: "review-2",
+    operationId: "start-2", fromAnsweredCount: 3 });
+  assert.deepEqual(second.reviewState!.questionOrder, [0, 1]);
+  assert.deepEqual(second.questions, completed.questions);
 });
 
 test("completed quizzes stay completed and old/replaced reviews cannot mutate sessions", () => {

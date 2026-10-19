@@ -81,9 +81,14 @@ for (const config of cases) {
     const server = await mount(page, config);
     await page.getByRole('button', { name: /End Session/i }).click();
     await expect(page.getByText('1 / 10', { exact: true })).toBeVisible();
+    const order: number[] = [...server.saved.reviewState.questionOrder];
+    expect([...order].sort((a, b) => a - b)).toEqual(Array.from({ length: 10 }, (_, i) => i));
+    const heading = (index: number) => `${config.mode === 'grammar' ? 'Grammar' : config.mode === 'recall' ? 'Phrase' : 'Word'} ${order[index] + 1}`;
+    await expect(page.getByRole('heading', { name: heading(0), exact: true })).toBeVisible();
     for (let i = 1; i <= 4; i++) {
       await page.getByRole('button', { name: 'Next', exact: true }).click();
       await expect(page.getByText(`${i + 1} / 10`, { exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: heading(i), exact: true })).toBeVisible();
     }
     expect(server.saved.reviewedQuestionCount).toBe(0);
     expect(server.saved.score.correct).toBe(9);
@@ -91,6 +96,8 @@ for (const config of cases) {
     await page.evaluate(() => localStorage.clear());
     await page.reload();
     await expect(page.getByText('5 / 10', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: heading(4), exact: true })).toBeVisible();
+    expect(server.saved.reviewState.questionOrder).toEqual(order);
     for (let i = 5; i <= 10; i++) {
       await page.getByRole('button', { name: 'Next', exact: true }).click();
       if (i < 10) await expect(page.getByText(`${i + 1} / 10`, { exact: true })).toBeVisible();

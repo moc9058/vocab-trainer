@@ -84,6 +84,8 @@ try {
     let response = await app.inject({ method: 'PUT', url: reviewUrl, payload: startInput });
     assert.equal(response.statusCode, 200, response.body);
     assert.equal(response.json().session.reviewState.toAnsweredCount, 3);
+    const questionOrder = response.json().session.reviewState.questionOrder;
+    assert.deepEqual([...questionOrder].sort(), [0, 1, 2]);
     const blockedAnswer = await app.inject({ method: 'POST', url: `/${c.route}/answer`,
       payload: { ...c.body('b'), correct: true, ...(c.route === 'mixed' ? { startedAt: 'smoke', operationId: 'blocked-grade' } : {}) } });
     assert.equal(blockedAnswer.statusCode, 409, blockedAnswer.body);
@@ -96,6 +98,7 @@ try {
     const reloaded = await app.inject(`/${c.route}/session/language/chinese`);
     assert.equal(reloaded.statusCode, 200, reloaded.body);
     assert.equal(reloaded.json().reviewState.cursor, 1);
+    assert.deepEqual(reloaded.json().reviewState.questionOrder, questionOrder);
     assert.equal(reloaded.json().reviewedQuestionCount, 0);
     assert.equal((await ref.get()).data()!.reviewState.cursor, 1);
     // Explicit read helpers must include the new state too (not only transactional reads).
@@ -105,6 +108,7 @@ try {
       : c.route === 'recall' ? await store.getExpressionRecallSession(c.id)
       : await store.getCombinedQuizSession(c.id);
     assert.equal(mapped!.reviewState!.cursor, 1);
+    assert.deepEqual(mapped!.reviewState!.questionOrder, questionOrder);
     for (const revision of [1, 2]) {
       response = await app.inject({ method: 'PUT', url: reviewUrl,
         payload: { ...firstNext, revision, operationId: `next-${revision}` } });

@@ -90,8 +90,10 @@ test does not reopen it.
 An active End Session review also persists its fixed answered-attempt range and current
 card in Firestore. Resume reconciles live B membership as usual while preserving that
 review range, cursor and revision. Only the final review step advances the sitting
-boundary and releases retries, atomically with saving review completion. Review progress
-uses the serial answer outbox after grades and B removals; stale tabs must reload rather
+boundary and releases retries, atomically with saving review completion. New reviews
+shuffle their answered attempts once and persist `questionOrder`; resume and live B
+updates retain that order and cursor, with the original order used for older reviews.
+Review progress uses the serial answer outbox after grades and B removals; stale tabs must reload rather
 than replace newer progress. Word, grammar, combined/article and expression recall share
 this persistence behavior, with lazy initialization for existing sessions.
 Already-correct weighting still applies when configured; Wrong leaves that bucket.

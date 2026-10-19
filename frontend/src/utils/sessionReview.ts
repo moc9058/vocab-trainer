@@ -20,8 +20,9 @@ export function unreviewedSessionQuestions<Q extends { userCorrect?: boolean }>(
 export function sessionReviewQuestions<Q extends { userCorrect?: boolean }>(session: ReviewSession<Q>): Q[] {
   const state = session.reviewState;
   if (state) {
-    return session.questions.filter(q => q.userCorrect !== undefined)
+    const questions = session.questions.filter(q => q.userCorrect !== undefined)
       .slice(state.fromAnsweredCount, state.toAnsweredCount);
+    return state.questionOrder ? state.questionOrder.map(index => questions[index]) : questions;
   }
   return unreviewedSessionQuestions(session.questions, session.reviewedQuestionCount);
 }

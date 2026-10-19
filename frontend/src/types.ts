@@ -3,7 +3,9 @@ export interface QuizReviewState {
   status: "active" | "completed";
   fromAnsweredCount: number;
   toAnsweredCount: number;
-  /** Next attempt to display, relative to the fixed answered range. */
+  /** Shuffled offsets into the fixed answered range; absent on legacy reviews. */
+  questionOrder?: number[];
+  /** Next position in questionOrder (or the original range for legacy reviews). */
   cursor: number;
   revision: number;
   lastOperationId: string;

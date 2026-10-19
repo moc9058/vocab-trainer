@@ -46,6 +46,8 @@ This flow applies to word, grammar, combined/article and expression recall quizz
 The expression writing quiz also stops repeating Wrong within its test.
 
 Session reviews save their fixed answer range and current position in Firestore.
+Each newly started review shuffles its questions and saves that order too; resuming
+an unfinished review keeps its order and position. Older active reviews keep their existing order.
 Each **Next** waits for confirmation before advancing; opening the test again, including
 on another device, resumes an active review at the first unfinished card. Review cards
 continue to show their answers. Only finishing the review advances the sitting boundary

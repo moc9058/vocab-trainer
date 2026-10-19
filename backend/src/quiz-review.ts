@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { QuizReviewState } from "./types.js";
 import { finishQuizSitting } from "./quiz-sitting.js";
+import { shuffle } from "./quiz-utils.js";
 
 interface ReviewSession {
   startedAt: string;
@@ -25,7 +26,8 @@ export class QuizReviewError extends Error {
 }
 
 /** Answered attempts retain their relative order through tail reorders and live B updates.
- * The cursor addresses an attempt, not a word ID (the same item may have several attempts).
+ * Each new review persists a shuffled permutation of offsets into that fixed range.
+ * The cursor addresses that order, not a word ID (one item can have several attempts).
  * Only final progress advances the sitting boundary and releases retries. */
 export function applyReviewOperation<S extends ReviewSession>(session: S, input: ReviewOperation): S {
   const conflict = (message: string): never => { throw new QuizReviewError(409, message); };
@@ -41,6 +43,7 @@ export function applyReviewOperation<S extends ReviewSession>(session: S, input:
     return { ...session, reviewState: {
       reviewId: input.reviewId, status: "active", fromAnsweredCount: from,
       toAnsweredCount: answered, cursor: 0, revision: 0, lastOperationId: input.operationId,
+      questionOrder: shuffle(Array.from({ length: answered - from }, (_, index) => index)),
     } };
   }
   if (!state || state.reviewId !== input.reviewId) return conflict("The review has been replaced");

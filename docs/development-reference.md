@@ -222,6 +222,10 @@ test. The same flow covers word, grammar, combined/article and expression recall
 range (`fromAnsweredCount` / `toAnsweredCount`), the next card's `cursor`, a `revision`
 and the last operation ID. Answered attempts retain their relative order through pending
 tail reorders and live B reconciliation, so repeated attempts for one item remain distinct.
+Each new review also saves `questionOrder`, a shuffled permutation of offsets into that
+fixed range. The cursor indexes this saved order; resume and operation retries never
+reshuffle it or alter the underlying answer history. Older reviews without the field
+continue in their original order, preserving their saved cursor without a migration.
 `PUT …/session/language/:language/review` accepts `start` / `next` operations with
 `startedAt`, `reviewId`, `operationId`, `revision` and `fromAnsweredCount`. The shared
 `quiz-review.ts` transition runs in the session's Firestore transaction; final progress
