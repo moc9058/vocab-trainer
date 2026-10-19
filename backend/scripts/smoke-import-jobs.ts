@@ -21,6 +21,38 @@ async function api(path: string, body?: unknown, method = body === undefined ? '
   if (!res.ok) throw new Error(`Smoke API ${method} ${path}: ${res.status}`);
   return res.status === 204 ? null : res.json() as Promise<any>;
 }
+const requireProgress = process.argv.includes('--progress');
+const progressController = new AbortController();
+const progressSignal = AbortSignal.any([progressController.signal, AbortSignal.timeout(650_000)]);
+let progressWork: Promise<void> | undefined, receivedOutput = false, sawCompleted = false, connections = 0;
+async function watchProgress(path: string) {
+  while (!progressSignal.aborted) {
+    const res = await fetch(base + path + '/analysis-job/events', {
+      headers: cookie ? { Cookie: cookie } : {}, signal: progressSignal,
+    });
+    if (!res.ok || !res.headers.get('content-type')?.includes('text/event-stream') || !res.body) throw new Error(`Progress SSE failed: ${res.status}`);
+    connections++;
+    const reader = res.body.getReader(), decoder = new TextDecoder();
+    let buffer = '', previousStage = '';
+    try {
+      while (true) {
+        const { done, value } = await reader.read(); if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let boundary: number;
+        while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+          const frame = buffer.slice(0, boundary); buffer = buffer.slice(boundary + 2);
+          const data = frame.split('\n').find(line => line.startsWith('data: ')); if (!data) continue;
+          const job = JSON.parse(data.slice(6));
+          if (job.progress?.receivedCharacters > 0) receivedOutput = true;
+          const stage = job.progress?.stage ?? job.state;
+          if (stage !== previousStage) { previousStage = stage; console.log(JSON.stringify({ progressStage: stage, receivedCharacters: job.progress?.receivedCharacters ?? 0, completedCharacters: job.completedCharacters ?? 0 })); }
+          if (job.state === 'completed') { sawCompleted = true; return; }
+          if (!['queued', 'running'].includes(job.state)) return;
+        }
+      }
+    } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+  }
+}
 let id: string | undefined;
 try {
   const s = await api('/api/import/chinese/sessions', { title: 'Dedicated durable import deployment smoke', text: source, paragraphs: [], items: [], groupBNames: [], focusedSentenceIndex: 0, status: 'in-progress', analyzeAsJob: true });
@@ -28,6 +60,9 @@ try {
   const start = Date.now(), key = crypto.randomUUID();
   const job = await api(path + '/analysis-job', { idempotencyKey: key, analysisRevision: 0 });
   console.log(JSON.stringify({ acceptedMs: Date.now() - start, id, batches: job.totalBatches, sourceLength: source.length }));
+  if (requireProgress) progressWork = watchProgress(path).catch(err => { if (!progressController.signal.aborted) throw err; });
+  // Attach a rejection handler immediately while ordinary status polling continues.
+  void progressWork?.catch(() => {});
   const repeat = await api(path + '/analysis-job', { idempotencyKey: key, analysisRevision: 0 });
   if (repeat.id !== job.id) throw new Error('Duplicate job created');
   for (let i = 0; i < 120; i++) {
@@ -39,6 +74,11 @@ try {
       if (read.analysisProgress.nextChunk !== read.analysisProgress.chunks.length || read.text !== source || !read.items.length) throw new Error('Incomplete saved result');
       const replay = await api(path + '/analysis-job/resume', { idempotencyKey: crypto.randomUUID() });
       if (replay.state !== 'completed') throw new Error('Resume reopened completed job');
+      if (progressWork) {
+        await progressWork;
+        if (!receivedOutput || !sawCompleted) throw new Error('Missing streamed generation or completion progress');
+        console.log(JSON.stringify({ progressVerified: true, receivedOutput, sawCompleted, connections }));
+      }
       console.log(JSON.stringify({ ok: true, sentences: read.paragraphs.flatMap((p: any) => p.sentences).length, items: read.items.length }));
       break;
     }
@@ -46,5 +86,6 @@ try {
     if (i === 119) throw new Error('Smoke wait expired');
   }
 } finally {
+  progressController.abort(); await progressWork?.catch(() => {});
   if (id) { await api(`/api/import/chinese/sessions/${id}`, undefined, 'DELETE'); console.log('Dedicated smoke source deleted; no library registrations were made.'); }
 }

@@ -170,3 +170,28 @@ test('a dense 8000-character source hitting the document limit retains committed
   assert.ok(after.analysisProgress.chunks.slice(1).join('').length > 0);
   assert.deepEqual(after.groupBNames, before.groupBNames);
 });
+
+test('progress is fenced by attempt, never changes the session revision, and SSE recovers the current snapshot', async () => {
+  const j = await make(); const first = (await jobs.claimAnalysisJob(payload(j)))!;
+  const progress = { ...first.progress!, stage: 'generating' as const, receivedCharacters: 123, lastReceivedAt: new Date().toISOString() };
+  await jobs.saveAnalysisProgress(first, progress);
+  const current = (await jobs.getAnalysisJob(j.id))!;
+  assert.equal(current.progress?.receivedCharacters, 123); assert.equal(current.revision, first.revision);
+  const session = (await db.doc(`import_sessions/${j.id}`).get()).data()!;
+  assert.equal(session.analysisRevision, first.revision);
+  await db.doc(`import_analysis_jobs/${j.id}`).update({ lease: { ...first.lease!, until: 0 } });
+  const second = (await jobs.claimAnalysisJob(payload(current)))!;
+  await jobs.saveAnalysisProgress(first, { ...progress, receivedCharacters: 999 });
+  assert.equal((await jobs.getAnalysisJob(j.id))!.progress!.receivedCharacters, 0);
+  await jobs.saveAnalysisProgress(second, progress);
+  // A terminal snapshot is replayed immediately on each connection through the real route.
+  await jobs.failAnalysisJob(second, Object.assign(new Error('bad configuration'), { status: 401 }));
+  for (let i = 0; i < 2; i++) {
+    const response = await app.inject(`/api/import/chinese/sessions/${j.id}/analysis-job/events`);
+    assert.equal(response.statusCode, 200); assert.match(response.headers['content-type']!, /text\/event-stream/);
+    assert.match(response.body, /"receivedCharacters":123/); assert.match(response.body, /"state":"failed"/);
+    assert.doesNotMatch(response.body, /mock-model|snapshot/);
+  }
+  const wrongLanguage = await app.inject(`/api/import/english/sessions/${j.id}/analysis-job/events`);
+  assert.equal(wrongLanguage.statusCode, 404);
+});

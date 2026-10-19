@@ -7,6 +7,7 @@ import {
   listImportSessions,
 } from "../api/import";
 import { getGrammarSettings } from "../api/grammar";
+import ImportAnalysisProgress from "./import/ImportAnalysisProgress";
 import ImportDestinationRail from "./import/ImportDestinationRail";
 import ImportReview from "./import/ImportReview";
 import ImportSessionList from "./import/ImportSessionList";
@@ -225,6 +226,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
           {monitor.error && <p role="alert" className="mb-3 text-sm text-red-300">{monitor.error}</p>}
           {job && <button type="button" disabled={job.pauseRequested} onClick={() => void monitor.pause()}
             className="mb-4 rounded-lg border border-gray-600 px-3 py-2 text-sm text-gray-300 disabled:opacity-40">{job.pauseRequested ? t("importJobPausing") : t("importJobPause")}</button>}
+          <ImportAnalysisProgress job={job} session={session} />
           {progress && <p className="mb-4 line-clamp-3 whitespace-pre-wrap text-sm text-gray-500">{progress.chunks[job?.nextBatch ?? progress.nextChunk]}</p>}
           <ol className="space-y-2">
             {completed.map((s, i) => (

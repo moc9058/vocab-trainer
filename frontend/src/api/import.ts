@@ -166,6 +166,9 @@ export function analyzeNextImportPart(language: string, sessionId: string, chunk
 
 const jobSignal = (signal?: AbortSignal) => signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000);
 const jobPath = (language: string, id: string) => `/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(id)}/analysis-job`;
+export function openImportAnalysisEvents(language: string, id: string): EventSource {
+  return new EventSource(jobPath(language, id) + '/events', { withCredentials: true });
+}
 export function getImportAnalysisJob(language: string, id: string, signal?: AbortSignal): Promise<ImportAnalysisJobSummary> {
   return fetchJson(jobPath(language, id), jobSignal(signal));
 }

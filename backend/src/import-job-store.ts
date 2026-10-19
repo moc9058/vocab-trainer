@@ -1,3 +1,4 @@
+import { createProgressReporter } from './import-progress.js';
 import { randomUUID } from 'node:crypto';
 import { FieldValue } from '@google-cloud/firestore';
 import { db, getAllGrammarItems, getImportConfig, lookupWordsByTerms } from './firestore.js';
@@ -8,7 +9,7 @@ import { sourceMatchesSentences } from './import-reading-analysis.js';
 import { appendImportPart, ImportCheckpointError } from './import-parts.js';
 import { importJobError, importSentenceTexts, JOB_LEASE_MS, MAX_JOB_ATTEMPTS, jobActive, remainingJobChunks, planImportBatches, sourceHash, type ImportJob } from './import-jobs.js';
 import { enqueueImportJob, jobsConfigured, localJobs } from './import-task-dispatch.js';
-import type { ImportAnalysisResult, ImportSession } from './types.js';
+import type { ImportAnalysisResult, ImportSession, ImportAnalysisProgress } from './types.js';
 import type { CompletionUsage } from 'openai/resources/completions';
 
 export const jobCollection = db.collection('import_analysis_jobs');
@@ -110,7 +111,7 @@ export async function changeAnalysisJob(language: string, sessionId: string, act
         }
       }
       j.state = 'queued'; j.generation++; j.sequence++; j.attempts = 0; j.pauseRequested = false;
-      delete j.lease; delete j.error; j.nextWakeAt = Date.now();
+      delete j.lease; delete j.error; delete j.progress; delete j.retryAt; j.nextWakeAt = Date.now();
     }
     j.revision++; j.updatedAt = stamp();
     tx.set(jref, j); tx.set(opref, { action, createdAt: j.updatedAt }); tx.update(sref, { ...sessionPatch(j), ...(replanned ? { analysisProgress: { ...s!.analysisProgress!, chunks: j.chunks } } : {}) });
@@ -137,6 +138,8 @@ export async function claimAnalysisJob(payload: ImportTaskPayload): Promise<Impo
     }
     const attemptId = randomUUID();
     if (!result.exists) j.attempts++;
+    delete j.retryAt;
+    j.progress = { stage: result.exists ? 'saving' : 'waiting', attempt: j.attempts, startedAt: stamp(), updatedAt: stamp(), receivedCharacters: 0 };
     j.state = 'running'; j.lease = { token: randomUUID(), until: Date.now() + JOB_LEASE_MS, attemptId };
     j.nextWakeAt = j.lease.until; j.revision++; j.updatedAt = stamp();
     tx.set(jref, j); tx.update(sref, sessionPatch(j));
@@ -146,6 +149,13 @@ export async function claimAnalysisJob(payload: ImportTaskPayload): Promise<Impo
 }
 function sameLease(current: ImportJob | null, worker: ImportJob): current is ImportJob {
   return !!current && current.state === 'running' && current.generation === worker.generation && current.nextBatch === worker.nextBatch && current.lease?.token === worker.lease?.token;
+}
+/** Progress is advisory; never increment the session's content revision for a delta. */
+export async function saveAnalysisProgress(worker: ImportJob, progress: ImportAnalysisProgress): Promise<void> {
+  await db.runTransaction(async tx => {
+    const ref = jobCollection.doc(worker.id); const current = readJob(await tx.get(ref));
+    if (sameLease(current, worker)) tx.update(ref, { progress });
+  });
 }
 export async function heartbeatAnalysisJob(worker: ImportJob): Promise<void> {
   await db.runTransaction(async tx => {
@@ -178,6 +188,7 @@ export async function commitAnalysisResult(worker: ImportJob, result: SavedResul
     const [jd, sd] = await Promise.all([tx.get(jref), tx.get(sref)]); const j = readJob(jd), s = sessionData(sd);
     if (!sameLease(j, worker) || !s || s.analysisJobRef?.generation !== j.generation || sourceHash(s.text) !== j.sourceHash || s.analysisProgress?.nextChunk !== j.nextBatch || JSON.stringify(s.analysisProgress.chunks) !== JSON.stringify(j.chunks)) return null;
     const next = appendImportPart(s, j.nextBatch, result.analysis, result.existing, result.existingGrammar);
+    delete j.progress;
     j.nextBatch++; j.attempts = 0; j.sequence++; j.revision++; delete j.lease; delete j.error; j.updatedAt = stamp();
     j.completedSentences = next.paragraphs.flatMap(p => p.sentences).length;
     j.state = j.nextBatch === j.totalBatches ? 'completed' : j.pauseRequested ? 'paused' : 'queued';
@@ -198,6 +209,7 @@ export async function failAnalysisJob(worker: ImportJob, error: unknown): Promis
     if (j.error.code === 'IMPORT_OUTPUT_LIMIT' && importSentenceTexts(j.chunks[j.nextBatch], j.language).length > 1) j.error.retryable = true;
     j.state = j.pauseRequested ? 'paused' : j.error.retryable && j.error.code !== 'IMPORT_OUTPUT_LIMIT' && j.attempts < MAX_JOB_ATTEMPTS ? 'queued' : 'failed';
     j.nextWakeAt = j.state === 'queued' ? Date.now() + j.attempts * 30_000 : Number.MAX_SAFE_INTEGER;
+    if (j.state === 'queued') j.retryAt = new Date(j.nextWakeAt).toISOString(); else delete j.retryAt;
     tx.set(ref, j); if (sd.exists) tx.update(sref, sessionPatch(j));
     tx.set(ref.collection('attempts').doc(worker.lease!.attemptId), { finishedAt: stamp(), state: 'failed', error: j.error }, { merge: true });
     return j;
@@ -210,6 +222,8 @@ export async function runAnalysisTask(payload: ImportTaskPayload): Promise<void>
   }
   const job = await claimAnalysisJob(payload); if (!job) return;
   const timer = setInterval(() => { void heartbeatAnalysisJob(job).catch(() => {}); }, 30_000); timer.unref();
+  const reporter = createProgressReporter(job.progress!, progress => saveAnalysisProgress(job, progress),
+    () => console.warn(JSON.stringify({ message: 'Import progress update failed', jobId: job.id })));
   try {
     const resultRef = jobCollection.doc(job.id).collection('results').doc(`${job.nextBatch}`);
     const saved = await resultRef.get();
@@ -222,10 +236,12 @@ export async function runAnalysisTask(payload: ImportTaskPayload): Promise<void>
         const raw = await callLLM({ system: job.snapshot.system,
           user: JSON.stringify({ target: source, sentenceTexts: importSentenceTexts(source, job.language), before: job.chunks[job.nextBatch - 1]?.slice(-300) ?? '', after: job.chunks[job.nextBatch + 1]?.slice(0, 300) ?? '' }),
           schema: job.snapshot.schema, route: 'import/analyze-part', tier: 'full',
+          onChunk: chunk => reporter.receive(chunk.length),
           worker: { model: job.snapshot.model, onUsage: async (usage, model) => {
             if (usage) receipt = { attemptId: job.lease!.attemptId, usage, model };
             try { await saveUsage(job, usage, model); } catch { /* Persist receipt with result, then retry accounting without repeating the model. */ }
           } } });
+        await reporter.stage('validating');
         analysis = normalizeAnalysis(stripMarkdownFences(raw), job.language).analysis;
         const actual = analysis.paragraphs.flatMap(p => p.sentences).map(s => s.text);
         const expected = importSentenceTexts(source, job.language);
@@ -236,6 +252,7 @@ export async function runAnalysisTask(payload: ImportTaskPayload): Promise<void>
       for (const g of await getAllGrammarItems(job.language)) { const key = lowercaseGrammarAbbreviations(g.statement ?? '').trim(); if (key && !existingGrammar[key]) existingGrammar[key] = g.id; }
       result = { analysis, existing, existingGrammar, ...(receipt ? { usageReceipt: receipt } : {}) };
       if (Buffer.byteLength(JSON.stringify(result)) > 850_000) throw new Error('IMPORT_STORAGE_LIMIT');
+      await reporter.stage('saving');
       // Persist under lease fence: a delayed/obsolete worker cannot replace a valid result.
       await db.runTransaction(async tx => {
         const current = readJob(await tx.get(jobCollection.doc(job.id)));
@@ -244,13 +261,15 @@ export async function runAnalysisTask(payload: ImportTaskPayload): Promise<void>
       });
     }
     if (result.usageReceipt) await saveUsage({ ...job, lease: { ...job.lease!, attemptId: result.usageReceipt.attemptId } }, result.usageReceipt.usage, result.usageReceipt.model);
+    await reporter.stop();
     const next = await commitAnalysisResult(job, result);
     if (next) await dispatchAnalysisJob(next);
   } catch (err) {
+    await reporter.stop();
     const next = await failAnalysisJob(job, err);
     console.error(JSON.stringify({ message: 'Import worker attempt failed', jobId: job.id, attemptId: job.lease!.attemptId, error: importJobError(err) }));
     if (next) await dispatchAnalysisJob(next);
-  } finally { clearInterval(timer); }
+  } finally { clearInterval(timer); await reporter.stop(); }
 }
 
 /** Bounded scan using single-field indexes. Also recovers a task that exhausted queue delivery retries. */

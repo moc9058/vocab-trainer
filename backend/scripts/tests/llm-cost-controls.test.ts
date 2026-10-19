@@ -29,6 +29,7 @@ mock.module("../../src/firestore.js", { namedExports: {
   getImportSessions: async () => [],
   getImportSession: async () => null,
   updateImportSession: async () => {},
+  mutateImportSession: async () => {},
   deleteImportSession: async () => {},
 } });
 const { callLLM } = await import("../../src/llm.js");
@@ -170,4 +171,39 @@ test("article routes negotiate chunks and preserve cached clients", async (t) =>
     assert.match(response.body, chunkMode ? /event: analysis-chunk/ : /event: analysis-delta/);
     assert.doesNotMatch(response.body, chunkMode ? /event: analysis-delta/ : /event: analysis-chunk/);
   }
+});
+
+test('worker streaming uses a single bounded attempt and its durable usage receipt', async () => {
+  let options: any, received = '', receipts = 0;
+  loggedModels.length = 0;
+  complete = async (body, requestOptions) => {
+    assert.equal(body.stream, true); options = requestOptions;
+    return { async *[Symbol.asyncIterator]() {
+      yield { choices: [{ delta: { content: '{' } }] };
+      yield { choices: [{ delta: { content: '}' }, finish_reason: 'stop' }] };
+      yield { choices: [], usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 } };
+    } };
+  };
+  const result = await callLLM({ ...opts, onChunk: delta => { received += delta; },
+    worker: { model: 'test-model', onUsage: async usage => { receipts++; assert.equal(usage?.total_tokens, 3); } } });
+  assert.equal(result, '{}'); assert.equal(received, '{}'); assert.equal(receipts, 1);
+  assert.equal(options.maxRetries, 0); assert.equal(options.timeout, 540_000);
+  await nextTurn(); assert.deepEqual(loggedModels, []);
+});
+test('worker streaming records usage then rejects truncated or interrupted output', async () => {
+  for (const finish of ['length', 'content_filter', null]) {
+    let receipts = 0;
+    complete = async () => ({ async *[Symbol.asyncIterator]() {
+      yield { choices: [{ delta: { content: '{' }, finish_reason: finish }], usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 } };
+    } });
+    await assert.rejects(callLLM({ ...opts, onChunk: () => {}, worker: { model: 'test-model', onUsage: async () => { receipts++; } } }), /IMPORT_OUTPUT_LIMIT/);
+    assert.equal(receipts, 1);
+  }
+});
+test('worker waiting for stream output retains its 540 second budget beyond the interactive idle limit', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  complete = async (_body, { signal }) => ({ async *[Symbol.asyncIterator]() { await untilAborted(signal); } });
+  const work = callLLM({ ...opts, onChunk: () => {}, worker: { model: 'test-model', onUsage: async () => {} } });
+  const rejected = assert.rejects(work, /540s time limit/);
+  await nextTurn(); t.mock.timers.tick(30_000); await nextTurn(); t.mock.timers.tick(510_000); await rejected;
 });

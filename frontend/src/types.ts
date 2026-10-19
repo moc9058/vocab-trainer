@@ -796,10 +796,24 @@ export type ImportItem = ImportWordItem | ImportGrammarItem;
  * what the user edited. `paragraphs` keeps the article structure for the review UI.
  */
 export type ImportAnalysisState = "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
+export interface ImportAnalysisProgress {
+  stage: "waiting" | "generating" | "validating" | "saving";
+  attempt: number;
+  startedAt: string;
+  updatedAt: string;
+  receivedCharacters: number;
+  firstReceivedAt?: string;
+  lastReceivedAt?: string;
+}
 export interface ImportAnalysisJobSummary {
   id: string; generation: number; state: ImportAnalysisState; revision: number;
   nextBatch: number; totalBatches: number; completedSentences: number;
   pauseRequested: boolean; updatedAt: string;
+  progress?: ImportAnalysisProgress;
+  completedCharacters?: number;
+  totalCharacters?: number;
+  attempt?: number;
+  retryAt?: string;
   error?: { code: string; retryable: boolean };
 }
 

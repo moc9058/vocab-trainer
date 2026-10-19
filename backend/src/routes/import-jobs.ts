@@ -1,7 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { getImportSession } from '../firestore.js';
-import { startAnalysisJob, getAnalysisJob, changeAnalysisJob } from '../import-job-store.js';
+import { startAnalysisJob, getAnalysisJob, changeAnalysisJob, jobCollection } from '../import-job-store.js';
 import { jobSummary } from '../import-jobs.js';
+import { createImportJobEventStream } from '../import-job-events.js';
+import type { ImportJob } from '../import-jobs.js';
 import { ImportCheckpointError } from '../import-parts.js';
 
 const importJobRoutes: FastifyPluginAsync = async app => {
@@ -17,6 +19,19 @@ const importJobRoutes: FastifyPluginAsync = async app => {
     const job = await getAnalysisJob(s.id);
     reply.header('Cache-Control', 'no-store');
     return job ? jobSummary(job) : reply.code(404).send({ code: 'IMPORT_JOB_NOT_FOUND', message: 'Analysis job not found' });
+  });
+  app.get<{ Params: Params }>(`${base}/events`, async (request, reply) => {
+    const session = await getImportSession(request.params.sessionId);
+    if (!session || session.language !== request.params.language) return reply.notFound('Import session not found');
+    if (!await getAnalysisJob(session.id)) return reply.code(404).send({ code: 'IMPORT_JOB_NOT_FOUND', message: 'Analysis job not found' });
+    reply.headers({ 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-store', 'X-Accel-Buffering': 'no' });
+    const stream = createImportJobEventStream((next, error) => jobCollection.doc(session.id).onSnapshot(
+      doc => next(doc.exists ? doc.data() as ImportJob : null), error));
+    // A disconnected reader must release its Firestore listener even while no data arrives.
+    const disconnect = () => stream.destroy();
+    reply.raw.once('close', disconnect);
+    stream.once('close', () => reply.raw.off('close', disconnect));
+    return reply.send(stream);
   });
   for (const action of ['start', 'resume', 'pause'] as const) {
     app.post<{ Params: Params; Body: { idempotencyKey: string; analysisRevision?: number } }>(action === 'start' ? base : `${base}/${action}`,

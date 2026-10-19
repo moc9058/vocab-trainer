@@ -35,7 +35,12 @@ export interface ImportJob extends ImportAnalysisJobSummary {
 }
 export function jobSummary(job: ImportJob): ImportAnalysisJobSummary {
   const { id, generation, state, revision, nextBatch, totalBatches, completedSentences, pauseRequested, updatedAt, error } = job;
-  return { id, generation, state, revision, nextBatch, totalBatches, completedSentences, pauseRequested, updatedAt, ...(error ? { error } : {}) };
+  return { id, generation, state, revision, nextBatch, totalBatches, completedSentences, pauseRequested, updatedAt,
+    ...(job.progress ? { progress: job.progress } : {}), attempt: job.attempts,
+    // Completed payloads are eventually cleaned; omit counts then rather than show zero.
+    ...(job.chunks.length ? { completedCharacters: job.chunks.slice(0, nextBatch).join("").length, totalCharacters: job.chunks.join("").length } : {}),
+    ...(state === "queued" && error && job.retryAt ? { retryAt: job.retryAt } : {}),
+    ...(error ? { error } : {}) };
 }
 export const jobActive = (state: string | undefined) => state === "queued" || state === "running";
 export function importJobError(err: unknown): { code: string; retryable: boolean } {

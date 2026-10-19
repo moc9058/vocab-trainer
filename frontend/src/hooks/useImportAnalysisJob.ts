@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getImportAnalysisJob, startImportAnalysisJob, pauseImportAnalysisJob, getImportSession } from '../api/import';
+import { getImportAnalysisJob, startImportAnalysisJob, pauseImportAnalysisJob, getImportSession, openImportAnalysisEvents } from '../api/import';
 import { ApiError, CREDENTIALS } from '../api/client';
 import type { ImportAnalysisJobSummary, ImportSession } from '../types';
 
@@ -19,8 +19,63 @@ export function useImportAnalysisJob(language: string, onSession: (s: ImportSess
     if (!target) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let busy = false, revision = -1, unchanged = 0, finished = false, failures = 0;
+    let busy = false, finished = false, failures = 0;
+    let source: EventSource | null = null, streamHealthy = false, streamRetryAt = 0, lastEventAt = 0;
+    let latest: ImportAnalysisJobSummary | null = null, sessionKey = '';
+    let deliveries = Promise.resolve();
     const started = Date.now();
+    function closeStream() { source?.close(); source = null; streamHealthy = false; }
+    function failed(err: unknown, phase: string) {
+      if (controller.signal.aborted || finished) return;
+      if (err instanceof ApiError && [400, 401, 403, 404, 409, 413].includes(err.status)) {
+        finished = true; closeStream(); setError(err.message); setReconnecting(false);
+      } else {
+        failures++; setReconnecting(true);
+        if (Date.now() - diagnosticsAt.current > 60_000) {
+          diagnosticsAt.current = Date.now();
+          void fetch('/api/import/analysis-diagnostics', { method: 'POST', credentials: CREDENTIALS, headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobId: target!.id, phase, elapsedMs: Date.now() - started, online: navigator.onLine, visibility: document.visibilityState, errorName: err instanceof Error ? err.name.slice(0, 40) : 'Unknown' }) }).catch(() => {});
+        }
+      }
+    }
+    function accept(current: ImportAnalysisJobSummary) {
+      deliveries = deliveries.then(async () => {
+        if (finished || controller.signal.aborted) return;
+        // A GET already in flight may arrive after a newer SSE snapshot.
+        if (latest && (current.generation < latest.generation ||
+          (current.generation === latest.generation && (current.revision < latest.revision ||
+            (current.revision === latest.revision && (current.progress?.updatedAt ?? '') < (latest.progress?.updatedAt ?? '')))))) return;
+        latest = current; setJob(current);
+        const terminal = !['queued', 'running'].includes(current.state);
+        const key = `${current.generation}:${current.nextBatch}:${terminal ? current.revision : 'active'}`;
+        if (sessionKey !== key) {
+          const session = await getImportSession(language, target!.id, AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]));
+          controller.signal.throwIfAborted(); callbacks.current.onSession(session); sessionKey = key;
+        }
+        setReconnecting(false); setError(null); failures = 0;
+        if (terminal) { finished = true; closeStream(); callbacks.current.onSettled(current); }
+      }).catch(err => failed(err, 'session'));
+      return deliveries;
+    }
+    function connect() {
+      if (source || finished || controller.signal.aborted || document.hidden || Date.now() < streamRetryAt || typeof EventSource === 'undefined') return;
+      try {
+        const connection = openImportAnalysisEvents(language, target!.id); source = connection;
+        connection.onopen = () => { if (source === connection) { streamHealthy = true; lastEventAt = Date.now(); } };
+        connection.onmessage = event => {
+          if (source !== connection) return;
+          lastEventAt = Date.now(); streamHealthy = true;
+          try { void accept(JSON.parse(event.data) as ImportAnalysisJobSummary); }
+          catch { closeStream(); streamRetryAt = Date.now() + 30_000; }
+        };
+        connection.onerror = () => {
+          if (source !== connection) return;
+          closeStream(); streamRetryAt = Date.now() + 30_000;
+          // GET handles auth errors and transport diagnostics using the existing API path.
+          void poll();
+        };
+      } catch { closeStream(); streamRetryAt = Date.now() + 30_000; }
+    }
     async function poll() {
       if (busy || finished || controller.signal.aborted) return;
       if (timer) clearTimeout(timer);
@@ -35,38 +90,22 @@ export function useImportAnalysisJob(language: string, onSession: (s: ImportSess
             current = await startImportAnalysisJob(language, target!.id, target!.ensure!.key, target!.ensure!.revision, controller.signal);
           } else throw err;
         }
-        controller.signal.throwIfAborted(); setJob(current);
-        const terminal = !['queued', 'running'].includes(current.state);
-        if (current.revision !== revision || terminal) {
-          phase = 'session';
-          const session = await getImportSession(language, target!.id, AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]));
-          controller.signal.throwIfAborted(); callbacks.current.onSession(session);
-          revision = current.revision; unchanged = 0;
-        } else unchanged++;
-        setReconnecting(false); setError(null); failures = 0;
-        if (terminal) { finished = true; callbacks.current.onSettled(current); }
-      } catch (err) {
-        if (controller.signal.aborted) return;
-        if (err instanceof ApiError && [400, 401, 403, 404, 409, 413].includes(err.status)) {
-          finished = true; setError(err.message); setReconnecting(false);
-        } else {
-          failures++; setReconnecting(true);
-          if (Date.now() - diagnosticsAt.current > 60_000) {
-            diagnosticsAt.current = Date.now();
-            void fetch('/api/import/analysis-diagnostics', { method: 'POST', credentials: CREDENTIALS, headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ jobId: target!.id, phase, elapsedMs: Date.now() - started, online: navigator.onLine, visibility: document.visibilityState, errorName: err instanceof Error ? err.name.slice(0, 40) : 'Unknown' }) }).catch(() => {});
-          }
-        }
-      } finally {
+        await accept(current); connect();
+      } catch (err) { failed(err, phase); }
+      finally {
         busy = false;
         if (!finished && !controller.signal.aborted) timer = setTimeout(() => void poll(),
-          document.hidden || unchanged > 10 ? 10_000 : failures ? Math.min(15_000, 3000 * 2 ** Math.min(failures, 3)) : 3000);
+          failures ? Math.min(15_000, 3000 * 2 ** Math.min(failures, 3)) :
+            document.hidden || (streamHealthy && Date.now() - lastEventAt < 25_000) ? 10_000 : 3000);
       }
     }
-    const wake = () => { if (!document.hidden && navigator.onLine) void poll(); };
+    const wake = () => {
+      if (document.hidden) { closeStream(); return; }
+      if (navigator.onLine) { streamRetryAt = 0; void poll(); }
+    };
     window.addEventListener('online', wake); document.addEventListener('visibilitychange', wake);
     void poll();
-    return () => { controller.abort(); if (timer) clearTimeout(timer); window.removeEventListener('online', wake); document.removeEventListener('visibilitychange', wake); };
+    return () => { controller.abort(); closeStream(); if (timer) clearTimeout(timer); window.removeEventListener('online', wake); document.removeEventListener('visibilitychange', wake); };
   }, [target, language]);
   const pause = useCallback(async () => {
     if (!target) return;

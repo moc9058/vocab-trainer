@@ -235,7 +235,7 @@ test('a failed explanation save keeps the existing warning and can be retried', 
 });
 
 async function durableSetup(page: Page, scenario: 'reconnect' | 'lost' | 'pause' | 'running' | 'complete') {
-  let stored: any = null, job: any = null, starts = 0, llmCalls = 0, broken = false;
+  let stored: any = null, job: any = null, starts = 0, llmCalls = 0, broken = false, sessionReads = 0;
   const saved: any[] = [];
   function part(index: number) {
     stored.paragraphs.push({ sentences: [{ index, text: stored.analysisProgress.chunks[index] }] });
@@ -282,6 +282,7 @@ async function durableSetup(page: Page, scenario: 'reconnect' | 'lost' | 'pause'
       await route.fulfill({ status: 202, json: job }); return;
     }
     if (path === '/api/import/chinese/sessions/parts') {
+      if (method === 'GET') sessionReads++;
       if (method === 'PUT') { saved.push(route.request().postDataJSON()); stored = { ...stored, ...route.request().postDataJSON() }; }
       await route.fulfill({ json: stored }); return;
     }
@@ -292,7 +293,7 @@ async function durableSetup(page: Page, scenario: 'reconnect' | 'lost' | 'pause'
   await page.locator('textarea').fill('你好。第二段。');
   await page.getByRole('button', { name: 'Analyze', exact: true }).click();
   await expect.poll(() => starts).toBe(1);
-  return { stored: () => stored, calls: () => llmCalls, starts: () => starts, complete, saved };
+  return { stored: () => stored, calls: () => llmCalls, starts: () => starts, complete, part, job: () => job, sessionReads: () => sessionReads, saved };
 }
 
 test('transport interruption reconnects to the same durable job and follows later completion', async ({ page }) => {
@@ -578,4 +579,56 @@ test('grammar pinyin stays visible with article pinyin off, including contextual
   await expect(dialog.locator('details')).not.toHaveAttribute('open');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: '/tmp/vocab-grammar-pinyin.png' });
+});
+
+
+test('live SSE progress updates within a part without reloading the article and ignores stale snapshots', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).eventConnections = [];
+    (window as any).EventSource = class {
+      onopen: (() => void) | null = null;
+      onmessage: ((event: { data: string }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      closed = false;
+      constructor(public url: string) {
+        (window as any).eventConnections.push(this);
+        setTimeout(() => this.onopen?.(), 0);
+      }
+      close() { this.closed = true; }
+    };
+  });
+  const state = await durableSetup(page, 'running');
+  await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+  await expect.poll(() => page.evaluate(() => (window as any).eventConnections.length)).toBe(1);
+  const reads = state.sessionReads();
+  const progress = { stage: 'generating', attempt: 1, startedAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    receivedCharacters: 234, firstReceivedAt: new Date().toISOString(), lastReceivedAt: new Date().toISOString() };
+  async function emit(value: any) {
+    await page.evaluate(job => (window as any).eventConnections.at(-1).onmessage({ data: JSON.stringify(job) }), value);
+  }
+  await emit({ ...state.job(), progress });
+  await expect(page.getByText(/Generating readings and meanings/)).toBeVisible();
+  await expect(page.getByText(/Generated output: 234/)).toBeVisible();
+  await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+  expect(state.sessionReads()).toBe(reads);
+  await page.screenshot({ path: test.info().outputPath('import-progress.png'), fullPage: true });
+  await page.setViewportSize({ width: 375, height: 812 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.screenshot({ path: test.info().outputPath('import-progress-mobile.png'), fullPage: true });
+  await emit({ ...state.job(), revision: 0, progress: { ...progress, receivedCharacters: 1 } });
+  await expect(page.getByText(/Generated output: 234/)).toBeVisible();
+  state.job().progress = { ...progress, receivedCharacters: 345, updatedAt: new Date(Date.now() + 1000).toISOString() };
+  await page.evaluate(() => (window as any).eventConnections.at(-1).onerror());
+  await expect(page.getByText(/Generated output: 345/)).toBeVisible();
+  expect(state.sessionReads()).toBe(reads);
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect.poll(() => page.evaluate(() => (window as any).eventConnections.length)).toBe(2);
+  state.part(0);
+  await emit({ ...state.job(), progress: { ...progress, stage: 'waiting', receivedCharacters: 0 } });
+  await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '42');
+  await expect.poll(state.sessionReads).toBe(reads + 1);
+  state.complete(); await emit(state.job());
+  await expect(page.getByRole('button', { name: '第二段', exact: true })).toBeVisible();
+  expect(state.calls()).toBe(1);
+  expect(await page.evaluate(() => (window as any).eventConnections.every((s: any) => s.closed))).toBe(true);
 });

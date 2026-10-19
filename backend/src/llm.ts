@@ -352,20 +352,22 @@ async function callLLMWithSignal(opts: LLMCallOptions, signal: AbortSignal): Pro
         stream: true,
         stream_options: { include_usage: true },
       },
-      { signal: AbortSignal.any([signal, abortController.signal]) }
+      { signal: AbortSignal.any([signal, abortController.signal]), ...(opts.worker ? { timeout: IMPORT_WORKER_BUDGET_MS, maxRetries: 0 } : {}) }
     );
     let full = "";
     let usage: CompletionUsage | undefined;
     let idledOut = false;
+    let finishReason: string | null = null;
     const armIdle = () => setTimeout(() => {
       idledOut = true;
       abortController.abort();
-    }, STREAM_IDLE_MS);
+    }, opts.worker ? IMPORT_WORKER_BUDGET_MS : STREAM_IDLE_MS);
     let idleTimer = armIdle();
     try {
       for await (const chunk of stream) {
         clearTimeout(idleTimer);
         idleTimer = armIdle();
+        if (chunk.choices[0]?.finish_reason) finishReason = chunk.choices[0].finish_reason;
         const delta = chunk.choices[0]?.delta?.content ?? "";
         if (delta) {
           full += delta;
@@ -382,7 +384,9 @@ async function callLLMWithSignal(opts: LLMCallOptions, signal: AbortSignal): Pro
       clearTimeout(idleTimer);
     }
     signal.throwIfAborted();
-    recordUsage(usage, activeModel, "callLLM", route);
+    if (opts.worker) await opts.worker.onUsage(usage, activeModel);
+    else recordUsage(usage, activeModel, "callLLM", route);
+    if (opts.worker && finishReason !== "stop") throw new Error("IMPORT_OUTPUT_LIMIT");
     return full;
   }
 }

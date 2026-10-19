@@ -1501,8 +1501,15 @@ boundaries (currently a 600 UTF-16-character target, not a hard cut). A long sen
 stays intact. Detailed syntax is generated when a sentence is first selected, then
 saved for reuse. Older articles retain their explicit **Explain this sentence** button.
 
-Acceptance returns HTTP 202 without waiting for the LLM. The browser checks a small
-status response and reconnects after network failures. Returning to the list or
+Acceptance returns HTTP 202 without waiting for the LLM. The browser receives
+SSE progress snapshots, with short status polling as a fallback after network failures.
+The progress bar measures **saved original characters**, not generated output length.
+The current part shows response waiting, generation, validation and saving stages,
+attempt count, elapsed time, time since the last model output and generated output
+character count. Automatic retries show a countdown. Unvalidated output never counts
+as saved work. Worker streaming progress is coalesced about every three seconds;
+no model text is written to telemetry. SSE reconnects from the latest durable snapshot
+and closing a connection never stops the worker. Returning to the list or
 closing the page leaves the job running. **Pause after the current part** saves the
 current result before pausing; **Continue analysis** resumes unfinished work.
 Active jobs cannot be edited or registered until paused. Existing edits, registrations
@@ -1555,6 +1562,14 @@ npm run test:import:emulator --prefix backend
 ```
 
 The suite uses an isolated `demo-import-jobs` project and never rewrites local seed data.
+
+With the local Docker stack running, a small real-LLM smoke test also verifies
+streamed generation and completion through nginx. It deletes its dedicated source
+and does not register library items:
+
+```bash
+npx --prefix backend tsx backend/scripts/smoke-import-jobs.ts http://localhost:5173 --progress
+```
 
 ### Revising source analysis
 
