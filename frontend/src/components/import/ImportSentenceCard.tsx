@@ -63,6 +63,7 @@ interface Props {
   onPatchItem: (id: string, updates: Partial<ImportItem>, immediate?: boolean) => void;
   /** One press writes ONE destination: the Group A lesson group or the Group B set. */
   onRegister: (id: string, target: "A" | "B") => void;
+  onAssistWord?: (item: ImportWordItem) => void;
   onConvertGrammar?: (item: ImportGrammarItem) => void;
   /** Fold the rows away again — pressing the sentence a second time, or the ▲. */
   onCollapse: () => void;
@@ -89,6 +90,7 @@ export default function ImportSentenceCard({
   onPatchItem,
   onRegister,
   onConvertGrammar,
+  onAssistWord,
   onCollapse,
   destination,
   showTranslation,
@@ -384,6 +386,7 @@ export default function ImportSentenceCard({
             <WordRow
               key={word.id}
               word={word}
+              onAssist={word.convertedFromGrammarId ? () => onAssistWord?.(word) : undefined}
               byId={byId}
               isChinese={language === "chinese"}
               // Merging with the row below is the whole of the common case — two
@@ -473,6 +476,7 @@ function WordRow({
   byId,
   isChinese,
   onMergeNext,
+  onAssist,
   inGroupA,
   groups,
   mismatch,
@@ -498,6 +502,7 @@ function WordRow({
   /** Merge this row with the one below it. Absent on the last row of a sentence,
    *  and whenever the row below has already been handed to the queue. */
   onMergeNext?: () => void;
+  onAssist?: () => void;
   /** Already in the library (= Group A) — the row is toned green so a word the
    *  user already has stands out from the ones still to be added. */
   inGroupA: boolean;
@@ -583,6 +588,7 @@ function WordRow({
           : "bg-gray-900/50"
       }`}
     >
+      {onAssist && <button type="button" disabled={word.status === 'queued'} onClick={onAssist} className="mb-2 rounded border border-indigo-700 px-2 py-1 text-xs text-indigo-200 disabled:opacity-40">{t('importEditConvertedWord')}</button>}
       <div className="sm:flex sm:items-center sm:gap-2">
         <div className="flex items-start gap-2 sm:min-w-0 sm:flex-1 sm:items-center">
           <input

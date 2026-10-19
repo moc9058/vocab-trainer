@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import fixture from '../../src/utils/__fixtures__/import-context.json';
+import { syncConvertedWordReading } from '../../src/utils/importWordLinks';
 import { buildImportItems } from '../../src/utils/importSession';
 
 async function setup(page: Page, lostAcceptance = false) {
@@ -32,10 +33,12 @@ async function setup(page: Page, lostAcceptance = false) {
     if (path.endsWith('/candidate-conversions')) {
       conversions++; original = structuredClone(session);
       const input = body.conversion, source = session.items.find((i: any) => i.id === input.itemId);
-      if (input.mode === 'replace') source.hiddenByRevision = 'conversion';
+      if (source.kind === 'grammar' && input.mode === 'replace') source.hiddenByRevision = 'conversion';
       const word = { id: 'converted-word', kind: 'word', origin: 'manual', edited: true, status: 'pending', sentenceIndex: source.sentenceIndex, order: input.start, term: input.term, surface: session.paragraphs[0].sentences[0].text.slice(input.start, input.end), sourceTerm: input.term,
         range: { start: input.start, end: input.end }, meaning: input.meaning, transliteration: input.transliteration, explanationLanguage: input.explanationLanguage, convertedFromGrammarId: source.id, revisionId: 'conversion' };
-      session.items.push(word); session.contentRevision++;
+      if (source.kind === 'word') { source.meaning = input.meaning; source.transliteration = input.transliteration; source.explanationLanguage = input.explanationLanguage; } else session.items.push(word);
+      session.paragraphs = session.paragraphs.map((p: any) => ({ ...p, sentences: p.sentences.map((sentence: any) => syncConvertedWordReading(sentence, session.items)) }));
+      session.contentRevision++;
       const r = { id: 'conversion', sessionId: 'article', kind: 'conversion', state: 'applied', request: { instruction: '', sentenceIndices: [0], update: 'grammar' }, targets: [{ sentenceIndex: 0 }], context: [], changes: [], sentences: [], createdAt: '', updatedAt: '' };
       revisions.set(r.id, r); await route.fulfill({ json: { session, revision: r } }); return;
     }
@@ -86,6 +89,10 @@ test('grammar to word works manually at 360px, preserves construction explanatio
   const dialog = page.getByRole('dialog', { name: 'Treat as a word', exact: true });
   await expect(dialog).toBeVisible(); await expect(dialog.getByLabel('Word / dictionary form')).toHaveValue('该');
   await page.screenshot({ path: '/tmp/vocab-revision-conversion-mobile.png' });
+  const reading = dialog.getByLabel('Reading', { exact: true });
+  await reading.fill(''); await reading.pressSequentially('gai3'); await expect(reading).toHaveValue('gǎi');
+  await dialog.getByRole('button', { name: 'à', exact: true }).click(); await expect(reading).toHaveValue('gǎià');
+  await reading.fill('gāi');
   await dialog.getByLabel('Meaning here', { exact: true }).fill('すべき');
   await dialog.getByRole('button', { name: 'Save word candidate', exact: true }).click();
   await expect(dialog).not.toBeVisible(); expect(state.conversions()).toBe(1); expect(state.calls()).toBe(0);
@@ -118,4 +125,35 @@ test('lost revision acceptance can be retried with the same operation key and on
   await expect(page.getByRole('alert')).toBeVisible();
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByTestId('import-revision-proposal')).toContainText('Ready to compare'); expect(state.calls()).toBe(1);
+});
+
+
+test('converted words can generate and save reading and meaning again, with linked grammar synchronized after reload', async ({ page }) => {
+  const state = await setup(page);
+  await page.getByRole('button', { name: 'Sentence mode', exact: true }).click();
+  await page.getByRole('button', { name: 'Treat as a word', exact: true }).first().click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Save word candidate' }).click();
+  const length = state.saved().items.length;
+  await page.getByRole('button', { name: 'Edit reading and meaning', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit reading and meaning' });
+  await expect(dialog.getByLabel('Word / dictionary form')).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Suggest reading and meaning' }).click();
+  await dialog.getByRole('button', { name: 'Use this suggestion' }).click();
+  await expect(dialog.getByLabel('Reading', { exact: true })).toHaveValue('gāi');
+  await dialog.getByRole('button', { name: 'Save word candidate' }).click();
+  await expect(dialog).not.toBeVisible();
+  expect(state.saved().items.length).toBe(length);
+  expect(state.saved().items.find((i: any) => i.id === 'converted-word').meaning).toBe('そろそろ〜すべき');
+  expect(state.saved().paragraphs[0].sentences[0].readingAnalysis.constructions[0].statement).toBe('x + v + 了');
+  await page.reload();
+  await page.getByRole('button', { name: 'Full text', exact: true }).click();
+  const reader = page.getByTestId('import-full-text-reader');
+  await reader.getByRole('button', { name: '该', exact: true }).nth(1).click();
+  const detail = page.getByRole('dialog');
+  await expect(detail).toContainText('そろそろ〜すべき');
+  await expect(detail.getByRole('button', { name: 'x + v + 了', exact: true })).toBeVisible();
+  await expect(detail.getByRole('button', { name: 'Edit reading and meaning', exact: true })).toBeVisible();
+  await detail.getByText('Structure and roles', { exact: true }).click();
+  const part = page.getByTestId('import-construction-parts').locator('div').filter({ has: page.locator('span', { hasText: /^该$/ }) }).first();
+  await expect(part).toContainText('gāi');
 });

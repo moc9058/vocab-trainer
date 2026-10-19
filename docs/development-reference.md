@@ -492,6 +492,12 @@ subcollections, with split payload documents rather than embedded session histor
 Nonvisible revision candidates retain entity IDs and registration receipts for the
 article quiz pool. Explicit word conversions override fixed-grammar suppression.
 Managed reading analyses never create or rewrite registration candidates implicitly.
+Chinese conversion fields use the shared tone input. Optional converted-word assistance
+uses the mini-tier `import/word-assist` feature; converted words can be enriched again
+from either reading mode. Replacement conversions synchronize the selected occurrence
+and turn its fixed construction element into an ordinary-word slot (`x`), including
+legacy display repair. Related changed patterns receive fresh unregistered candidates
+while historical IDs/receipts remain intact; conversion undo also restores sentence reading data.
 
 Deploy import prompt/schema changes with `./deploy.sh --prompts`. No additional
 queue or scheduler setup is required. The import emulator suite also runs isolated

@@ -93,6 +93,13 @@ export const LLM_FEATURES: LLMFeature[] = [
       "Step 2 - produces the actual translation.",
   },
   {
+    key: "import-word-assist",
+    routes: ["import/word-assist"],
+    defaultTier: "mini",
+    label: "Article word reading & meaning",
+    description: "Suggests the reading and contextual meaning of a converted article word.",
+  },
+  {
     key: "import-analyze",
     routes: ["import/analyze-stream", "import/sentence-explanation", "import/analyze-part"],
     defaultTier: "full",

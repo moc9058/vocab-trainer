@@ -20,9 +20,9 @@
 
 文モードの文法行、または全文モードの構文詳細で「単語として扱う」を選ぶ。原文中の開始・終了文字を指定し、見出し語、読み、この文での意味、説明言語を編集する。「単語候補に変更」は元文法候補を記事内で非表示にし、「単語候補としても追加」は元文法候補も残す。
 
-手動保存にはLLM呼び出しは不要。「読み・意味を整える」は任意の生成操作で、提案を使うか確認してから候補を保存する。一つの連続した原文範囲を対象とし、同じ表記の別出現は位置で区別する。活用形の原文表記と見出し語は別に保持する。選択位置に既存候補があれば文モードでその候補を編集する。
+手動保存にはLLM呼び出しは不要。中国語の読み欄は数字による声調入力（`ren4 he2` → `rèn hé`）と声調記号パレットに対応する。「意味・拼音を自動生成」はmini層の小さいモデルを使う任意の生成操作で、提案を使うか確認してから候補を保存する。LLM設定の機能名は `Article word reading & meaning`（`import/word-assist`）。一つの連続した原文範囲を対象とし、同じ表記の別出現は位置で区別する。活用形の原文表記と見出し語は別に保持する。選択位置に既存候補があれば文モードでその候補を編集する。
 
-単語候補は未登録の新しいIDで作成される。元文法の辞書ID・A/B登録結果・学習履歴を単語に移さない。原文と構文の読解用解説は引き続き参照できる。登録済みの文法エンティティとグループ所属は保持され、単語のA/B登録は既存のキューで別途行う。既存単語の登録は従来の再利用フローを使い、辞書定義を自動で変更しない。
+単語候補は未登録の新しいIDで作成される。元文法の辞書ID・A/B登録結果・学習履歴を単語に移さない。原文と構文の読解用解説は引き続き参照できる。「単語候補に変更」では、関連構文内の該当する固定要素を一般単語の可変枠 `x` に変更する（例: `与 + n + 再无 + 任何 + n` → `与 + n + 再无 + x + n`）。同じ表記の別出現は変更しない。「単語候補としても追加」は元の文法分類を保持する。関連する別の文法候補のパターンも変わる場合は、元のID・登録結果を履歴に残し、新しい未登録候補を作る。変換済み単語の「意味・読みを編集・生成」は文モードの単語行と全文モードの単語詳細から開ける。保存は同じ単語候補を更新し、関連構文の読み・意味にも反映する。旧バージョンで変換済みの記事も表示時に固定要素を補正し、次の明示的な保存で読解データを同期する。登録済みの文法エンティティとグループ所属は保持され、単語のA/B登録は既存のキューで別途行う。既存単語の登録は従来の再利用フローを使い、辞書定義を自動で変更しない。
 
 ## 履歴・取り消し・競合
 
@@ -47,11 +47,11 @@
 | `POST /revisions/:revisionId/reject` | 提案を不採用にする |
 | `POST /revisions/:revisionId/undo` | 最新操作を取り消す |
 | `POST /revisions/:revisionId/restore` | 過去の文法・解説から復元案を作る |
-| `POST /candidate-conversions` | LLMなしで文法→単語変更・追加を保存 |
+| `POST /candidate-conversions` | LLMなしで文法→単語変更・追加、変換済み単語の意味・読みの更新と構文連動を保存 |
 
 生成要求はkind、sentenceIndices、update、instruction、explanationLanguage、expectedRevision、idempotencyKeyを指定する。kindはregenerateまたはword-assist、updateはexplanation/grammar/both。word-assistにはconversionも指定する。applyはexpectedRevision、changeIds、sentenceIndicesを受け取る。通常PUTにはcontentRevisionを指定する。旧記事の欠落版は0として扱い、最初の変更から版を更新する。旧クライアントは現行版と一致しなければ再読込が必要。
 
-conversionはitemId、start、end、term、meaning、transliteration、explanationLanguage、mode（replace/add）。start/endは文内UTF-16範囲で、endは含まない。手動変換要求にはexpectedRevisionとidempotencyKeyも必要。
+conversionはitemId、start、end、term、meaning、transliteration、explanationLanguage、mode（replace/add）。start/endは文内UTF-16範囲で、endは含まない。手動変換要求にはexpectedRevisionとidempotencyKeyも必要。変換済み単語を更新する時はitemIdにその単語候補IDを渡す。この操作では見出し語と原文範囲は固定し、辞書ID・A/B登録結果を保持する。
 
 `import_sessions/{sessionId}/revisions/{revisionId}` にメタデータ、`payload` サブコレクションに分割した比較・履歴を保存する。生成ジョブは `import_analysis_jobs/revision-{sessionId}-{revisionId}` に独立して保存する。初回解析のcheckpointは流用しない。lease・有限試行・保存済み結果・使用量receipt・定期reconcileは既存基盤を利用する。結果保存後の再試行ではモデルを再呼び出さない。
 
@@ -76,3 +76,6 @@ npm run test:import:emulator --prefix backend
 エミュレーターの修正テストは隔離された `demo-import-revisions` プロジェクトを使い、実LLMは呼ばない。ブラウザー回帰はAPIモックを使う。Docker実スタック＋実LLMでは少数の中国語例で解説生成、採用、候補変換、再読込、取り消しを確認した。多言語・長文全般の意味品質を保証する検証ではない。
 
 2026-10-18の検証結果: backend unit 97件、import API/dispatch 9件、mixed quiz 4件、frontend unit 103件、ブラウザー回帰38件、Firestore emulator 12件が成功。backend build、frontend TypeScript、frontend build、`git diff --check`も成功した。360pxの候補変換ダイアログと修正案比較画面を画像で確認した。実LLMの中国語一文では5件の文法差分と根拠付きの全体説明を取得し、採用→単語変換→再取得→取り消しを検証した。確認用記事は削除済み。
+
+
+2026-10-19の単語変換改善では、backend unit 110件、import API/dispatch 9件、frontend unit 104件、ブラウザー回帰51件、Firestore emulator 14件が成功した。backend build・frontend TypeScript/buildと `git diff --check` も成功。Docker＋エミュレーター＋実LLMで「任何」のmini生成、構文の `x` 化、変換済み単語の更新、再取得、取り消しを確認した。確認用のローカル記事は削除済み。本番記事の一括再解析・migrationと設定アップロードは不要。

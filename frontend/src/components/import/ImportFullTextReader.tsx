@@ -3,7 +3,7 @@ import { useI18n } from "../../i18n/context";
 import { generateImportSentenceExplanation } from "../../api/import";
 import { constructionParts, fixedGrammarOccurrenceIds, occurrenceConstructions, readingWordCandidate, reconcileReadingSession, readingConstructions, readingOccurrences, validReading } from "../../utils/importReadingAnalysis";
 import type { ConstructionPart } from "../../utils/importReadingAnalysis";
-import type { ImportGrammarItem, ImportItem, ImportSession } from "../../types";
+import type { ImportGrammarItem, ImportItem, ImportWordItem, ImportSession } from "../../types";
 import ImportComprehension from "./ImportComprehension";
 import RubyText from "../RubyText";
 
@@ -20,6 +20,7 @@ const PINYIN_KEY = "importShowFullTextPinyin";
 interface Props {
   session: ImportSession;
   onReviseSentence?: (index: number) => void;
+  onAssistWord?: (item: ImportWordItem) => void;
   onConvertGrammar?: (item: ImportGrammarItem) => void;
   revisionLocked?: boolean;
   renderRegistration?: (item: ImportItem) => React.ReactNode;
@@ -27,7 +28,7 @@ interface Props {
   onPatch?: (updater: (session: ImportSession) => ImportSession, immediate?: boolean) => void;
 }
 
-export default function ImportFullTextReader({ session, onEditSentence, onPatch, renderRegistration, onReviseSentence, onConvertGrammar, revisionLocked }: Props) {
+export default function ImportFullTextReader({ session, onEditSentence, onPatch, renderRegistration, onReviseSentence, onConvertGrammar, onAssistWord, revisionLocked }: Props) {
   const { t } = useI18n();
   const [showPinyin, setShowPinyin] = useState(() => localStorage.getItem(PINYIN_KEY) !== "0");
   const [showBoundaries, setShowBoundaries] = useState(() => localStorage.getItem(BOUNDARIES_KEY) !== "0");
@@ -242,6 +243,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
           {word.role && <p><strong>{t("importElementRole")}: </strong>{word.role}</p>}
           {word.reasoning && <p><strong>{t("importInterpretationReason")}: </strong>{word.reasoning}</p>}
           {word.contrast && <p><strong>{t("importUsageContrast")}: </strong>{word.contrast}</p>}
+          {(() => { const candidate = readingWordCandidate(sentence, word, session.items); return candidate.convertedFromGrammarId && <button type="button" disabled={revisionLocked || candidate.status === 'queued'} onClick={() => { onAssistWord?.(candidate); close(); }} className="rounded border border-indigo-700 px-3 py-2 text-indigo-200 disabled:opacity-40">{t('importEditConvertedWord')}</button>; })()}
           <button type="button" onClick={() => setSelected({ sentenceIndex: sentence.index })} className="text-indigo-300 underline">{t("importSentenceExplanation")}</button>
         </div>}
         {relatedConstructions.length > 0 && <div className="mb-3 text-xs">

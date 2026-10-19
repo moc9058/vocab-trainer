@@ -191,3 +191,28 @@ it('managed sentence explanations never add, remove or suppress editable candida
   const next = reconcileReadingSession({ id: 's', language: 'chinese', title: '', text: sentence.text, paragraphs: [{ sentences: [managed] }], groupBNames: [], focusedSentenceIndex: 0, status: 'in-progress', createdAt: '', updatedAt: '', items });
   expect(next.items).toEqual(items);
 });
+
+it('legacy conversions update fixed parts and the pattern while current word meaning and reading reach the linked part', () => {
+  const items = fresh(); const source = items.find(i => i.kind === 'grammar')!;
+  source.hiddenByRevision = 'converted';
+  items.push({ id: 'converted', kind: 'word', term: '该', surface: '该', sourceTerm: '该', range: { start: 3, end: 4 }, sentenceIndex: 0, order: 3, status: 'pending', origin: 'manual', edited: true, convertedFromGrammarId: source.id, meaning: '変更した意味', transliteration: 'gǎi' });
+  const point = readingConstructions(sentence, items)[0];
+  expect(point.statement).not.toContain('该');
+  const occurrences = readingOccurrences(sentence, items);
+  const fixed = fixedGrammarOccurrenceIds(sentence, items, occurrences);
+  const parts = constructionParts(sentence, point, occurrences, fixed);
+  const part = parts.find(p => p.words.some(w => w.range.start === 3))!;
+  expect(part.fixed).toBe(false);
+  expect(part.explanation).toBe('変更した意味');
+  expect(part.words[0].contextualMeaning).toBe('変更した意味');
+  expect(part.words[0].transliteration).toBe('gǎi');
+  expect(occurrences.find(o => o.range.start === 0)?.contextualMeaning).toBe('その');
+});
+it('compact legacy conversions also remove the lexical word from the fixed pattern', () => {
+  const legacy = { index: 0, text: '与他再无任何关系。' };
+  const items: ImportItem[] = [
+    { id: 'g', kind: 'grammar', sentenceIndex: 0, order: 0, status: 'pending', origin: 'llm', hiddenByRevision: 'r', statement: '与 + n + 再无 + 任何 + n', description: '', fixedElements: [{ surface: '与', range: { start: 0, end: 1 }, meaning: '' }, { surface: '再无', range: { start: 2, end: 4 }, meaning: '' }, { surface: '任何', range: { start: 4, end: 6 }, meaning: '' }] },
+    { id: 'w', kind: 'word', sentenceIndex: 0, order: 4, status: 'pending', origin: 'manual', term: '任何', sourceTerm: '任何', surface: '任何', range: { start: 4, end: 6 }, convertedFromGrammarId: 'g' },
+  ];
+  expect(readingConstructions(legacy, items)[0].statement).toBe('与 + n + 再无 + x + n');
+});

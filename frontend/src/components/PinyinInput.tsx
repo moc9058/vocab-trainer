@@ -49,6 +49,7 @@ function applyToneToTail(text: string, tone: number): string | null {
 }
 
 interface Props {
+  "aria-label"?: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
@@ -64,6 +65,7 @@ interface Props {
 
 export default function PinyinInput({
   value,
+  "aria-label": ariaLabel,
   onChange,
   placeholder,
   className,
@@ -107,6 +109,7 @@ export default function PinyinInput({
     <div className={`${floatingPanel ? "relative " : ""}${wrapperClassName ?? ""}`}>
       <input
         ref={inputRef}
+        aria-label={ariaLabel}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}

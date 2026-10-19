@@ -17,7 +17,7 @@ import {
   sessionCounts,
 } from "../../utils/importSession";
 import { useImportLibraryStatus } from "../../hooks/useImportLibraryStatus";
-import type { GrammarGroup, ImportGrammarItem, ImportItem, ImportSession, WordGroup } from "../../types";
+import type { GrammarGroup, ImportGrammarItem, ImportItem, ImportSession, ImportWordItem, WordGroup } from "../../types";
 import type { SaveStatus } from "../../hooks/useImportSession";
 
 const TRANSLATION_PREF_KEY = "importShowTranslations";
@@ -69,7 +69,7 @@ export default function ImportReview({
 }: Props) {
   const { t } = useI18n();
   const [revisionBusy, setRevisionBusy] = useState(false);
-  const [conversion, setConversion] = useState<ImportGrammarItem | null>(null);
+  const [conversion, setConversion] = useState<ImportGrammarItem | ImportWordItem | null>(null);
   const [revisionSelection, setRevisionSelection] = useState<number | null>(null);
   const mutationLocked = revisionBusy || !!session.activeRevisionId;
   const sentences = useMemo(() => flattenSentences(session.paragraphs), [session.paragraphs]);
@@ -332,7 +332,7 @@ export default function ImportReview({
             onChange={patch => { if (!mutationLocked) onPatch(s => ({ ...s, ...patch }), true); }} collapsible /></div>
           <ImportFullTextReader key={session.id} session={session} onPatch={mutationLocked ? undefined : onPatch}
           onReviseSentence={index => { setRevisionSelection(null); queueMicrotask(() => setRevisionSelection(index)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
-          onConvertGrammar={item => setConversion(item)} revisionLocked={mutationLocked}
+          onAssistWord={setConversion} onConvertGrammar={item => setConversion(item)} revisionLocked={mutationLocked}
           renderRegistration={item => <RegisterControls blocked={mutationLocked ? t("importRevisionGenerating") : undefined} item={item}
             destination={{ aGroupId: item.kind === "word" ? destination.wordGroupId : destination.grammarGroupId,
               aGroupName: item.kind === "word" ? destination.wordGroupName : destination.grammarGroupName, bNames: destination.groupBNames }}
@@ -397,7 +397,7 @@ export default function ImportReview({
                             onSetItems={onSetItems}
                             onPatchItem={onPatchItem}
                             onRegister={onRegister}
-                            onConvertGrammar={setConversion}
+                            onAssistWord={setConversion} onConvertGrammar={setConversion}
                             onCollapse={() => setCollapsed(true)}
                             destination={destination}
                             showTranslation={showTranslations}

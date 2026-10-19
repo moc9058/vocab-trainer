@@ -5,11 +5,14 @@ import Fastify from 'fastify';
 import sensible from '@fastify/sensible';
 if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error('Requires emulator');
 process.env.FIRESTORE_PROJECT = 'demo-import-revisions'; process.env.FIRESTORE_DATABASE_ID = '(default)';
+const modelSelections: { tier: string; route: string }[] = [];
+const llmCalls: any[] = [];
 let calls = 0, fail = false, gate: Promise<void> | undefined;
 mock.module('../../../src/llm.js', { namedExports: {
-  resolveModel: async () => 'mock-model', stripMarkdownFences: (v: string) => v,
+  resolveModel: async (tier: string, route: string) => { modelSelections.push({ tier, route }); return 'mock-model'; }, stripMarkdownFences: (v: string) => v,
+  toneMarkNumberedPinyin: (v: string) => v,
   callLLM: async (o: any) => {
-    calls++; await gate; if (fail) throw new Error('timeout');
+    llmCalls.push(o); calls++; await gate; if (fail) throw new Error('timeout');
     await o.worker.onUsage({ prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 }, 'mock-model');
     if (o.schema.name === 'import_word_assist') return JSON.stringify({ term: '倒是', meaning: '確かに', transliteration: 'dào shì' });
     const { target } = JSON.parse(o.user);
@@ -92,4 +95,26 @@ test('multiple sentences are generated in separate durable parts and keep articl
   assert.equal(result.session.items[0].hiddenByRevision, undefined);
   assert.equal(result.session.paragraphs[0].sentences[0].readingAnalysis, undefined);
   assert.ok(result.session.paragraphs[0].sentences[1].readingAnalysis!.comprehension);
+});
+
+test('word assistance freezes and calls the small model, enriches an existing converted word, and undo restores reading data', async () => {
+  const s = await make();
+  const input = { itemId: 'g', start: 1, end: 3, term: '倒是', meaning: '', transliteration: '', explanationLanguage: 'ja', mode: 'replace' as const };
+  const converted = await store.convertWord('chinese', s.id, input, 0, 'assist-conversion');
+  const word = converted.session.items.at(-1)!;
+  const assistance = await store.startRevision('chinese', s.id, { ...request('assist', 1), kind: 'word-assist', conversion: { ...input, itemId: word.id } });
+  assert.deepEqual(modelSelections.at(-1), { tier: 'mini', route: 'import/word-assist' });
+  await run(s.id, assistance.id);
+  assert.equal(llmCalls.at(-1).tier, 'mini'); assert.equal(llmCalls.at(-1).route, 'import/word-assist');
+  const usage = await db.collection('token_usage').where('route', '==', 'import/word-assist').get();
+  assert.ok(usage.docs.some(d => d.id.startsWith(`import-revision-${s.id}-${assistance.id}-`)));
+  const proposal = await store.getRevision('chinese', s.id, assistance.id);
+  assert.deepEqual(proposal.assistedWord, { term: '倒是', meaning: '確かに', transliteration: 'dào shì' });
+  const saved = await store.convertWord('chinese', s.id, { ...input, ...proposal.assistedWord!, itemId: word.id }, 1, 'save-assist');
+  assert.equal(saved.session.items.length, converted.session.items.length);
+  assert.equal(saved.session.items.at(-1)!.kind === 'word' && saved.session.items.at(-1)!.meaning, '確かに');
+  const fetched = await store.getRevision('chinese', s.id, saved.revision.id);
+  assert.deepEqual(fetched.after!.sentences, saved.session.paragraphs[0].sentences.filter(s => s.index === 0));
+  const restored = await store.actOnRevision('chinese', s.id, saved.revision.id, 'undo', 2);
+  assert.equal(restored.session.items.at(-1)!.kind === 'word' && restored.session.items.at(-1)!.meaning, '');
 });

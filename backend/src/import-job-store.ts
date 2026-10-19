@@ -168,7 +168,10 @@ export async function heartbeatAnalysisJob(worker: ImportJob): Promise<void> {
 export async function saveUsage(job: ImportJob, usage: CompletionUsage | undefined, model: string) {
   if (!usage) return;
   const ref = jobCollection.doc(job.id).collection('attempts').doc(job.lease!.attemptId);
-  const now = stamp(), date = now.slice(0, 10), route = job.kind === 'revision' ? 'import/revision' : 'import/analyze-part';
+  const now = stamp(), date = now.slice(0, 10);
+  const route = job.kind === 'revision'
+    ? job.snapshot.schema.name === 'import_word_assist' ? 'import/word-assist' : 'import/revision'
+    : 'import/analyze-part';
   await db.runTransaction(async tx => {
     const doc = await tx.get(ref); if (doc.data()?.usageUnknown === false) return;
     const values = { promptTokens: usage.prompt_tokens, completionTokens: usage.completion_tokens, totalTokens: usage.total_tokens,

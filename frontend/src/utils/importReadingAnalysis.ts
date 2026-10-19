@@ -1,4 +1,5 @@
 import type { ImportConstruction, ImportItem, ImportOccurrence, ImportSentence, ImportSession, ImportWordItem } from "../types";
+import { convertedConstruction } from "./importWordLinks";
 import { termOccurrences } from "./importSession";
 
 export function validReading(sentence: ImportSentence) {
@@ -77,7 +78,7 @@ export function readingConstructions(sentence: ImportSentence, items: ImportItem
     && !reading?.constructions.some(point => point.id === row.constructionId || point.statement === row.statement) ? [{
     id: row.constructionId ?? row.id, statement: row.statement, meaning: row.description, roleInSentence: "",
     ranges: !row.edited && row.fixedElements?.length ? row.fixedElements.filter(element => sentence.text.slice(element.range.start, element.range.end) === element.surface).map(element => element.range) : row.excerpt ? termOccurrences(sentence.text, row.excerpt).map(start => ({ start, end: start + row.excerpt!.length })) : [], elements: [],
-  }] : [])];
+  }] : [])].map(point => convertedConstruction(sentence, items, point, reading?.occurrences.length ? reading.occurrences : readingOccurrences(sentence, items)));
 }
 
 /** Only fixed grammar elements get a grammar marker; variable content slots remain words. */
