@@ -477,6 +477,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
           }
         }
 
+        if (opts.liveGroupB) Object.assign(session, orderMixedQuestions(session));
         if (session.questions.every(q => q.userCorrect !== undefined)) {
           session.status = "completed";
           session.completedAt = new Date().toISOString();
