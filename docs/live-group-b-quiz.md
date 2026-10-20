@@ -153,5 +153,8 @@ For Windows PowerShell:
 .\deploy.ps1 vocab-trainer-490014 asia-northeast1
 ```
 
-No config-upload flag or separate database migration is required. This change was
-prepared locally; production deployment must be performed from the home PC.
+The live B quiz change requires no config-upload flag or separate database migration.
+Run deployment from an environment with working Docker, gcloud and Google Cloud
+authentication. Later source prompt/schema changes have their own upload requirements;
+see [source revisions](source-revisions.md). This command is deployment guidance,
+not a record that a particular revision has been deployed.

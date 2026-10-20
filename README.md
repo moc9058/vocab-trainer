@@ -8,6 +8,11 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 - [CLAUDE.md](CLAUDE.md): Claude Code entry point to the shared instructions.
 - [Development reference](docs/development-reference.md): detailed architecture and operations.
 - [Live Group B quiz](docs/live-group-b-quiz.md): current A+B behavior and session migration.
+- [Source revisions](docs/source-revisions.md): correction proposals, grammar-to-word conversion and reading assistance.
+- [Cloud Run cost controls](docs/cloud-run-cost-controls.md): deployment settings and durable import infrastructure.
+- [Source implementation record](docs/external-source-implementation-audit.md): dated implementation and verification evidence.
+- [Recent documentation audit](docs/recent-updates-documentation-audit.md): coverage of the October 5–19 updates and corrected discrepancies.
+- [Meaning-unit explanation plan](plan/source-meaning-units-design.md): design only; this feature is not implemented.
 
 ## Group A and Group B
 
@@ -848,9 +853,11 @@ combined, mixed and article quizzes share this endpoint; there is no positional 
 }
 ```
 
-If `correct` is `false`, the word is re-queued and all remaining questions,
-including retries, are uniformly shuffled. This repeats until the user answers
-correctly.
+If `correct` is `false`, the answer is recorded without adding an immediate retry.
+Finishing a mid-test **End session** review admits one retry for the next sitting,
+alongside unanswered questions using the session's configured ordering. Answering
+every pending question completes the test even if the last answer was Wrong.
+Answers return `409` while a session review is active.
 
 **Response:** `{ session, wordProgress }` — updated session state and word progress.
 
@@ -861,6 +868,25 @@ When all questions are answered the session status changes to `"completed"`.
 Returns the in-progress or completed quiz session for the given language, or `404` if none exists.
 
 **Response:** `QuizSession` object.
+
+#### `PUT /api/quiz/session/language/:language/review` — Start or advance a saved session review
+
+**Body:** `{ "action": "start", "startedAt": "<session.startedAt>", "reviewId": "<UUID>", "operationId": "<UUID>", "revision": 0, "fromAnsweredCount": 0 }`.
+
+`start` fixes the unreviewed answered-attempt range and saves a shuffled review order.
+Use the session's `reviewedQuestionCount` for `fromAnsweredCount`; a legacy session
+without that boundary treats existing answers as already reviewed. `next` uses the
+saved review ID, current revision and range start, with a new operation ID for each
+card. The response is `{ session }`, including `reviewState` with the range, saved
+`questionOrder`, next-card `cursor` and revision. Replaying the last operation is
+idempotent; a stale revision or replaced session returns `409`. The final card
+advances the sitting boundary and releases retries only for an unfinished test.
+
+The same relative route is available under `/api/grammar-quiz`, `/api/combined-quiz`,
+`/api/mixed-quiz`, `/api/import-quiz-a`, `/api/import-quiz-b` and
+`/api/expression-recall-quiz`. The legacy `PUT …/reviewed` route cannot skip an
+active review or advance later sittings after the saved-review protocol is used.
+See [Quiz sessions and review](#quiz-sessions-and-review) for resume and unsent-write behavior.
 
 ---
 
@@ -1309,7 +1335,7 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | **Dashboard**           | Main layout at `/:language/*`. Each view has its own URL sub-path (`/browse`, `/quiz`, `/flagged`, `/grammar`, `/grammar-quiz`, `/translation`, `/speaking-writing`) so page refresh stays on the current view. Header shows "Back" button on sub-paths (returns to `/:language`) and "← Languages" on the language home. Quiz and grammar-quiz sub-paths auto-recover the active session on mount and redirect home if none exists. Includes settings gear, dynamic UI language toggle. |
 | **SettingsModal**       | Settings modal with sections for (1) drag-and-drop language display order reordering via @dnd-kit, (2) active UI language checkboxes, (3) displayed definition / example translation language checkboxes (display-only — generation always covers all four), (4) smart-add defaults (`defaultAddWordLanguage`, `defaultDefinitionLanguage`), (5) speaking/writing defaults (`defaultCorrectionMode`, `defaultSpeakingUseCase`, `defaultWritingUseCase`), (6) translation defaults (`defaultTranslationSourceLanguage`, `defaultTranslationTargetLanguages`), and (7) a `showKoreanHanja` checkbox — visible only when the active language is Chinese — that toggles the 🀄 Korean hanja section in word cards, quiz answers, and flagged-review answers. Persisted to localStorage. |
-| **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows all definitions, transliteration, and example sentences with RubyText annotations. When `showKoreanHanja` is enabled and the word has `hanjaReadings`, a 🀄 Korean Hanja section is shown above the definitions. Wrong answers are deferred until the next sitting after End session and review. Questions are lazy-loaded in batches of 50 with automatic prefetching at the halfway point. Supports resuming from where the user left off. |
+| **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows all definitions, transliteration, and example sentences with RubyText annotations. When `showKoreanHanja` is enabled and the word has `hanjaReadings`, a 🀄 Korean Hanja section is shown above the definitions. Wrong answers are deferred until the next sitting after End session and review. Question payloads are prefetched by ID: 24 words in the first request, then background chunks of 150. Each card waits for its own payload. Supports resuming from where the user left off. |
 | **WordList**            | Paginated word browsing with search, topic/category/level/group filters, progress badges, and expandable word details with pinyin displayed via RubyText. Accepts `refreshSignal` (silently re-fetches on change — also re-runs `refreshExistingTerms` on the expanded word so queued segment chips flip to ✓), `onQueue` (enables queue mode in its embedded SmartAddWordModal; segment chip "+" clicks also route through this queue, serializing them instead of firing concurrent HTTP requests), and `pendingTerms` (Set from `useWordQueue`; chips whose term is in-flight show amber "⋯" and are disabled). Expanded details show the first 3 definitions and first 3 examples by default; a "show more / show less" toggle appears when there are additional entries. Segment buttons show amber "⋯" while the activation check is in-flight or the term is queued, green "✓" when already in the DB, and blue "+" when addable; the flag checkbox below each addable segment is hidden while the activation check is running or the term is queued; on expand, any segments found in `word_index` without a `seg.id` are patched locally and persisted via `sync-segment-links`. When clicking a segment "+" button fails (e.g. LLM error), a red error toast appears bottom-right for 3 seconds with the actual backend error message. When `onJumpToWord` fires from an embedded `SmartAddWordModal`, the list filters/expands to the target word and opens it in `WordFormModal` edit mode (passing `onQueue`/`pendingTerms`/`refreshSignal` through). |
 | **SmartAddWordModal**   | Modal to add a word with LLM auto-filling missing fields. Only `term` is required; the LLM generates transliteration, definitions, examples (with translations), and — for Chinese — pinyin segments per example. The LLM **always** generates definitions and example translations in all four supported languages regardless of settings; the settings only control which subset is **displayed** (`displayDefinitionLanguages`, `displayExampleTranslationLanguages`) and which language each form field is **pre-filled** with (`defaultAddWordLanguage` for the outer Language radio, `defaultDefinitionLanguage` for the first definition row). Note that the modal exposes two independent language fields — the outer "word language" (sent as the `:language` route parameter, backend full-name format) and per-row "definition language" (ISO code, used as the key in `definitions[].text`) — easy to confuse. Duplicate detection: shows "⚠ Already in DB" if the term is already in Firestore; shows "⏳ Already queued" (amber) and disables the submit button if the term is in `pendingTerms` (queued but not yet written). For Chinese, uses inline debounced `checkTerms` + `smartAddWord` to show WorldList-style `rounded-full` pill buttons with an amber flag checkbox below each addable segment on space-split example sentences; when `onQueue` is provided, segment chip additions route through the queue (amber "⋯" queued state, `checkTerms` re-runs on `refreshSignal`). When the `onQueue` prop is provided the modal enters **queue mode**: clicking Save enqueues the word instantly (no blocking LLM wait), flashes "✓ Queued", then resets the form so the user can add the next term immediately. Also accepts optional `pendingTerms?: Set<string>` and `refreshSignal?: number` to enable the queued-duplicate detection and chip re-checks. |
 | **FlaggedReview**       | Review interface for flagged words. Allows browsing and unflagging words marked for review. When `showKoreanHanja` is enabled and the word has `hanjaReadings`, a 🀄 Korean Hanja section is shown above the definitions in the revealed answer. |
@@ -1323,10 +1349,10 @@ React 19 single-page application for taking vocabulary and grammar quizzes. Buil
 | **GrammarQuizTaking**   | Grammar quiz flashcard UI — displays an example-sentence translation (multi-language translations filtered by the grammar definition-language display setting), reveals the answer, and allows self-grading (correct/incorrect). |
 | **GrammarFormModal**    | Modal for adding or editing grammar items with statement (required), descriptions, related words, and examples. New description rows default to the server-persisted grammar default definition language (`GET /api/grammar/settings`, cached across mounts). |
 | **StudyQuizModal**      | Unified quiz setup modal with word / grammar / combined tabs. The combined tab (`CombinedQuizFilterModal`) has word-vs-grammar domain-weight inputs plus per-group weights on both sides; a domain weight of 0 excludes that domain. |
-| **CombinedQuizTaking**  | Combined quiz UI — renders each question by `kind`, reusing the word quiz's paged hydration and the grammar quiz's item-detail cache. |
+| **CombinedQuizTaking**  | Combined quiz UI — renders each question by `kind`, using shared ID-based prefetch caches for words and grammar. Saved session reviews retain their shuffled order and confirmed position. |
 | **TranslationView**    | Translation/analysis UI. Input text plus an optional context/situation field (register, politeness, word-sense hints), select the source language (target = active study language), get schema-based sentence decomposition with per-component analysis. Passage translations render live while the response streams; regenerating unchanged text replays the cached decomposition so step 1 is skipped. Reading column (furigana/pinyin) shown only when source text contains CJK characters. Per-language regenerate buttons during streaming for stuck translations. History persisted to Firestore (including the context used) with previous/next navigation. |
 | **SpeakingWritingView** | Text correction UI. Select correction language (EN/JA/KO/ZH), choose speaking or writing mode with use-case context (professional/casual/presentation/interview or academic/social/email/creative), submit text for SSE streaming LLM correction. Displays per-sentence corrections with severity badges (error/improvement/style), and overall feedback. Previous/next navigation between corrections within a session. Sessions persisted to Firestore for resume. |
-| **Home Page (EmptyState)** | Home screen sections driven by `sectionOrder` in `settings/defaults.ts` (Vocabulary, Translation, Speaking & Writing, Grammar, Word & Grammar combined quiz). Checks for in-progress word/grammar/combined quiz sessions, translation history, and speaking/writing sessions; the combined quiz buttons are hidden for languages without grammar (English). |
+| **Home Page (EmptyState)** | Home sections follow `sectionOrder` in `settings/defaults.ts`. Group A setup is available for every study language; the mixed A+B home entry is currently Chinese-only. Resume buttons recover unfinished tests and active saved reviews. Expression quizzes are available for non-Chinese study languages. |
 
 ### API Integration
 
@@ -1484,16 +1510,28 @@ touches production. See [Local Development & Verification](#local-development--v
 
 New and resumed source reviews open in **Full text** mode. Tap a word for its
 contextual reading and meaning; tap the sentence background or its ↗ button for
-sentence structure, constructions and their elements. **Sentence mode** retains
-inline editing and the existing Group A/B registration controls. Chinese pinyin
-visibility remains a display preference.
+sentence structure, constructions and their elements. Both reading modes expose
+Group A/B registration controls; **Sentence mode** also provides inline editing.
+An unselected B destination leaves its button disabled with a destination hint.
+Chinese article pinyin visibility remains a display preference; construction details
+always show available Chinese readings and flag missing legacy readings.
+
+The default-on boundary display distinguishes word underlines from dotted fixed
+grammar underlines. Selecting a word highlights linked construction elements;
+related-pattern buttons switch the construction. Variable slots use separate colors
+and labels below their source phrases. Word details show meaning and usage before
+related grammar, with the full structure and roles available in an expandable section.
 
 New analysis distinguishes each occurrence, including different uses of the same
 spelling in one sentence. Verified fixed function elements may be omitted from
 separate registration rows when their grammar explanation covers them; content
 words inside construction slots remain candidates. Existing articles remain readable.
-**Explain this sentence / Update explanation** generates only the selected sentence's
-details and saves them without replacing candidate rows or group assignments.
+**Explain this sentence / Update explanation** returns only the selected sentence's
+details; the browser incorporates them and saves through the existing autosave flow.
+For unmanaged analyses, that incorporation can add construction candidates, refresh
+fixed-element links and hide separate unedited word candidates covered by fixed grammar.
+Analyses marked `candidatesManaged` by revision/conversion operations skip that candidate
+reconciliation. Dictionary entities and group assignments are not rewritten.
 
 Initial analysis uses compact contextual readings/glosses in a durable server job.
 Short sources are sent together; longer sources are grouped at complete sentence
@@ -1582,7 +1620,10 @@ See [source revision behavior and API](docs/source-revisions.md).
 
 ### Import extraction and retry guarantees
 
-Initial extraction uses one compact LLM call per planned batch, with bounded retries. Sentence explanations are separate, explicit requests. Legacy deterministic cleanup consolidates equivalent
+Initial extraction uses one compact LLM call per planned batch, with bounded retries.
+Sentence explanations are separate calls: selecting a compact-analysis sentence can
+request its missing details automatically; older articles use the explicit explanation
+button, and updates can be requested manually. Legacy deterministic cleanup consolidates equivalent
 word rows within each sentence and removes short fragments occurring only inside
 longer extracted words (e.g. 翼 inside 左翼). Independent occurrences, distinct readings
 or senses, and uncertain inflections remain. The client applies the same cleanup on
