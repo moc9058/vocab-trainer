@@ -1,3 +1,4 @@
+import { apiFetch } from "./transport";
 import { postJson, fetchJson, deleteRequest, CREDENTIALS, notifyIfUnauthorized } from "./client";
 import type { SpeakingWritingSession } from "../types";
 
@@ -29,7 +30,7 @@ export async function submitCorrectionStream(
   callbacks: CorrectionStreamCallbacks,
   signal?: AbortSignal
 ): Promise<void> {
-  const res = await fetch("/api/speaking-writing/correct-stream", {
+  const res = await apiFetch("/api/speaking-writing/correct-stream", {
     method: "POST",
     credentials: CREDENTIALS,
     headers: { "Content-Type": "application/json" },

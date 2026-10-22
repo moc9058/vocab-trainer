@@ -106,6 +106,7 @@ export interface OutboxState {
   failed: number;
   /** True while a flush attempt is in flight or a backoff timer is armed. */
   syncing: boolean;
+  authBlocked: boolean;
 }
 
 const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000];
@@ -113,6 +114,7 @@ const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000];
 const queue: PendingAnswer[] = [];
 let failed = 0;
 let syncing = false;
+let authBlocked = false;
 let attempt = 0;
 let timer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<(state: OutboxState) => void>();
@@ -122,7 +124,7 @@ const listeners = new Set<(state: OutboxState) => void>();
  * built object each call would make React see a change on every render and loop forever. A new
  * object is minted only when a field actually differs.
  */
-let snapshotCache: OutboxState = { pending: 0, failed: 0, syncing: false };
+let snapshotCache: OutboxState = { pending: 0, failed: 0, syncing: false, authBlocked: false };
 
 function refreshSnapshot(): void {
   const pending = queue.length;
@@ -130,9 +132,9 @@ function refreshSnapshot(): void {
   if (
     snapshotCache.pending !== pending ||
     snapshotCache.failed !== failed ||
-    snapshotCache.syncing !== isSyncing
+    snapshotCache.syncing !== isSyncing || snapshotCache.authBlocked !== authBlocked
   ) {
-    snapshotCache = { pending, failed, syncing: isSyncing };
+    snapshotCache = { pending, failed, syncing: isSyncing, authBlocked };
   }
 }
 
@@ -215,7 +217,7 @@ function scheduleRetry(): void {
 }
 
 async function drain(): Promise<void> {
-  if (syncing) return;
+  if (syncing || authBlocked) return;
   syncing = true;
   emit();
 
@@ -228,6 +230,9 @@ async function drain(): Promise<void> {
       attempt = 0;
       emit();
     } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        authBlocked = true; syncing = false; emit(); return;
+      }
       if (isRetryableError(err)) {
         // Offline / server trouble: keep the item at the head and come back to it. Waiting is
         // the whole point — the user may well finish the quiz before the connection returns.
@@ -236,8 +241,8 @@ async function drain(): Promise<void> {
         emit();
         return;
       }
-      // A 4xx that isn't worth retrying: the server refused THIS answer (a 401 has already
-      // been announced centrally by the API client). Drop it so one bad write can't wedge
+      // A permanent refusal affects THIS answer. Authentication failures above keep the queue.
+      // Drop permanent failures so one bad write cannot wedge
       // every answer behind it.
       console.error("Dropping unsyncable quiz answer", item, err);
       queue.shift();
@@ -298,4 +303,23 @@ if (typeof window !== "undefined") {
 export function enqueueReviewOperation<S>(path: string, operation: ReviewOperation): Promise<{ session: S }> {
   return new Promise((resolve, reject) => enqueueAnswer({ domain: "review", path, operation,
     resolve: result => resolve(result as { session: S }), reject }));
+}
+
+/** Only a confirmed /me success may release an authentication pause. */
+export function resumeAnswers(): void { authBlocked = false; flushAnswers(); emit(); }
+export function discardAnswers(): void {
+  // Called only after explicit logout confirmation. Do not discard an in-flight head.
+  if (syncing) throw new Error("Wait for the current answer to finish before signing out");
+  if (timer !== null) { clearTimeout(timer); timer = null; }
+  for (const item of queue) if (item.domain === "review") item.reject(new ApiError(401, "Signed out"));
+  queue.length = 0; failed = 0; authBlocked = false; emit();
+}
+export type FlushResult = "synced" | "auth" | "failed" | "pending";
+export function waitForAnswers(timeoutMs = 15_000): Promise<FlushResult> {
+  return new Promise(resolve => {
+    const result = (s: OutboxState): FlushResult | null => s.authBlocked ? "auth" : s.failed ? "failed" : s.pending === 0 ? "synced" : null;
+    const initial = result(getOutboxState()); if (initial) { resolve(initial); return; }
+    const timer = setTimeout(() => { unsubscribe(); resolve("pending"); }, timeoutMs);
+    const unsubscribe = subscribeToOutbox(state => { const done = result(state); if (done) { clearTimeout(timer); unsubscribe(); resolve(done); } });
+  });
 }

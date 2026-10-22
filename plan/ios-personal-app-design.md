@@ -2,9 +2,9 @@
 
 作成日: 2026-10-22 / 更新日: 2026-10-22 / 再調査対象: `0623247`（master）
 
-**状態: 設計のみ。iOSプロジェクト・以下の新API・npm scriptsは未実装。**
-今回の依頼は、提示された実装プロンプトを実行するための計画ファイルの作成。
-以下のチェックリストは将来の実装作業であり、実装・テスト済みを意味しない。
+**状態: 実装・検証へ進行。** 実装済みの構成・実行手順は [iOSガイド](../docs/ios-personal-app.md)、検証結果と本人操作待ちは [検証記録](../docs/ios-verification.md) を参照。
+以下は元の設計として保持する。実装時のGoogleポリシー再確認により、5節のWeb client broker案は採用せず、iOS専用OAuth client + ASWebAuthenticationSession + native PKCEへ変更した。`/mobile/start`は認証URLと一回限りのtransaction IDを返し、`/mobile/exchange`でGoogle codeとverifierを交換する。Google callbackはWeb backendを経由せずOS認証セッションが捕捉する。
+元の「未実装」「予定」は計画作成時点の記述であり、現状はリンク先を正とする。
 
 ## 1. 到達点と対象外
 

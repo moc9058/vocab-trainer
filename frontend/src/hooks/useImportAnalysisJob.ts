@@ -1,3 +1,5 @@
+import { apiFetch } from "../api/transport";
+import type { EventConnection } from "../api/sse";
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getImportAnalysisJob, startImportAnalysisJob, pauseImportAnalysisJob, getImportSession, openImportAnalysisEvents } from '../api/import';
 import { ApiError, CREDENTIALS } from '../api/client';
@@ -20,7 +22,7 @@ export function useImportAnalysisJob(language: string, onSession: (s: ImportSess
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     let busy = false, finished = false, failures = 0;
-    let source: EventSource | null = null, streamHealthy = false, streamRetryAt = 0, lastEventAt = 0;
+    let source: EventConnection | null = null, streamHealthy = false, streamRetryAt = 0, lastEventAt = 0;
     let latest: ImportAnalysisJobSummary | null = null, sessionKey = '';
     let deliveries = Promise.resolve();
     const started = Date.now();
@@ -33,7 +35,7 @@ export function useImportAnalysisJob(language: string, onSession: (s: ImportSess
         failures++; setReconnecting(true);
         if (Date.now() - diagnosticsAt.current > 60_000) {
           diagnosticsAt.current = Date.now();
-          void fetch('/api/import/analysis-diagnostics', { method: 'POST', credentials: CREDENTIALS, headers: { 'Content-Type': 'application/json' },
+          void apiFetch('/api/import/analysis-diagnostics', { method: 'POST', credentials: CREDENTIALS, headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ jobId: target!.id, phase, elapsedMs: Date.now() - started, online: navigator.onLine, visibility: document.visibilityState, errorName: err instanceof Error ? err.name.slice(0, 40) : 'Unknown' }) }).catch(() => {});
         }
       }

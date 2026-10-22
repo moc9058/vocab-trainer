@@ -183,6 +183,15 @@ node backend/scripts/check-import-jobs.mjs "${PROJECT_ID}" "${REGION}"
 # Deploy backend to Cloud Run
 echo "==> Deploying backend to Cloud Run..."
 IMPORT_MIGRATE_AFTER="$(( $(date +%s) * 1000 + 210000 ))"
+BACKEND_ENV_VARS="FIRESTORE_DATABASE_ID=vocab-database,IMPORT_JOB_MIGRATE_AFTER=${IMPORT_MIGRATE_AFTER}"
+# Public iOS OAuth client ID only; omitting it preserves the existing Cloud Run setting.
+if [ -n "${MOBILE_GOOGLE_CLIENT_ID:-}" ]; then
+  if [[ ! "$MOBILE_GOOGLE_CLIENT_ID" =~ ^[A-Za-z0-9-]+\.apps\.googleusercontent\.com$ ]]; then
+    echo "Invalid MOBILE_GOOGLE_CLIENT_ID" >&2
+    exit 1
+  fi
+  BACKEND_ENV_VARS="${BACKEND_ENV_VARS},MOBILE_GOOGLE_CLIENT_ID=${MOBILE_GOOGLE_CLIENT_ID}"
+fi
 gcloud run deploy vocab-trainer-backend \
   --project="${PROJECT_ID}" \
   --region="${REGION}" \
@@ -200,7 +209,7 @@ gcloud run deploy vocab-trainer-backend \
   --cpu-throttling \
   --cpu-boost \
   --timeout=660 \
-  --update-env-vars="FIRESTORE_DATABASE_ID=vocab-database,IMPORT_JOB_MIGRATE_AFTER=${IMPORT_MIGRATE_AFTER}"
+  --update-env-vars="${BACKEND_ENV_VARS}"
 
 # Get backend URL
 BACKEND_URL=$(gcloud run services describe vocab-trainer-backend \

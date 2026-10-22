@@ -190,6 +190,11 @@ Invoke-Checked "import job deployment prerequisites"
 # Deploy backend to Cloud Run
 Write-Host "==> Deploying backend to Cloud Run..."
 $ImportMigrateAfter = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() + 210000
+$BackendEnvVars = "FIRESTORE_DATABASE_ID=vocab-database,IMPORT_JOB_MIGRATE_AFTER=$ImportMigrateAfter"
+if ($env:MOBILE_GOOGLE_CLIENT_ID) {
+  if ($env:MOBILE_GOOGLE_CLIENT_ID -notmatch '^[A-Za-z0-9-]+\.apps\.googleusercontent\.com$') { throw "Invalid MOBILE_GOOGLE_CLIENT_ID" }
+  $BackendEnvVars += ",MOBILE_GOOGLE_CLIENT_ID=$($env:MOBILE_GOOGLE_CLIENT_ID)"
+}
 gcloud run deploy vocab-trainer-backend `
   --project="$ProjectId" `
   --region="$Region" `
@@ -207,7 +212,7 @@ gcloud run deploy vocab-trainer-backend `
   --cpu-throttling `
   --cpu-boost `
   --timeout=660 `
-  --update-env-vars="FIRESTORE_DATABASE_ID=vocab-database,IMPORT_JOB_MIGRATE_AFTER=$ImportMigrateAfter"
+  --update-env-vars="$BackendEnvVars"
 Invoke-Checked "gcloud run deploy vocab-trainer-backend"
 
 # Get backend URL

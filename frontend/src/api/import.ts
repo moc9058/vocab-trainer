@@ -1,3 +1,6 @@
+import { isNative } from "../platform/native";
+import { fetchEventConnection, type EventConnection } from "./sse";
+import { apiFetch } from "./transport";
 import { deleteRequest, fetchJson, postJson, putJson, CREDENTIALS, notifyIfUnauthorized } from "./client";
 import type {
   ImportAnalysisJobSummary,
@@ -77,7 +80,7 @@ export async function analyzeImportStream(
   callbacks: AnalyzeImportCallbacks,
   signal?: AbortSignal
 ): Promise<void> {
-  const res = await fetch(`/api/import/${encodeURIComponent(language)}/analyze-stream`, {
+  const res = await apiFetch(`/api/import/${encodeURIComponent(language)}/analyze-stream`, {
     method: "POST",
     credentials: CREDENTIALS,
     headers: { "Content-Type": "application/json" },
@@ -166,8 +169,9 @@ export function analyzeNextImportPart(language: string, sessionId: string, chunk
 
 const jobSignal = (signal?: AbortSignal) => signal ? AbortSignal.any([signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000);
 const jobPath = (language: string, id: string) => `/api/import/${encodeURIComponent(language)}/sessions/${encodeURIComponent(id)}/analysis-job`;
-export function openImportAnalysisEvents(language: string, id: string): EventSource {
-  return new EventSource(jobPath(language, id) + '/events', { withCredentials: true });
+export function openImportAnalysisEvents(language: string, id: string): EventConnection {
+  const path = jobPath(language, id) + '/events';
+  return isNative() ? fetchEventConnection(path) : new EventSource(path, { withCredentials: true });
 }
 export function getImportAnalysisJob(language: string, id: string, signal?: AbortSignal): Promise<ImportAnalysisJobSummary> {
   return fetchJson(jobPath(language, id), jobSignal(signal));

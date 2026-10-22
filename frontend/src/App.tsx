@@ -1,11 +1,13 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import LanguageSelectPage from "./components/LanguageSelectPage";
 import Dashboard from "./components/Dashboard";
 import LoginPage from "./components/LoginPage";
 import { useAuth } from "./auth/context";
 
 export default function App() {
-  const { status } = useAuth();
+  const { status, resumeEpoch } = useAuth();
+  const location = useLocation();
+  const quizRoute = /\/(quiz|grammar-quiz|combined-quiz|mixed-quiz|import-quiz-[ab]|expression-recall|expression-quiz)(\/|$)/.test(location.pathname);
 
   if (status === "loading") {
     return (
@@ -15,12 +17,12 @@ export default function App() {
     );
   }
 
-  if (status === "anon") {
+  if ((status === "anon" || status === "unavailable")) {
     return <LoginPage />;
   }
 
   return (
-    <Routes>
+    <Routes key={quizRoute ? resumeEpoch : 0}>
       <Route path="/" element={<LanguageSelectPage />} />
       <Route path="/:language/*" element={<Dashboard />} />
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -27,9 +27,9 @@ function GoogleMark() {
 
 export default function LoginPage() {
   const { t } = useI18n();
-  const { login } = useAuth();
+  const { login, retry, status, error: authError } = useAuth();
   const [searchParams] = useSearchParams();
-  const error = searchParams.get("auth_error");
+  const error = authError || searchParams.get("auth_error");
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-900 p-6">
@@ -43,16 +43,19 @@ export default function LoginPage() {
         >
           {error === "forbidden"
             ? (t("authForbidden") ?? "This Google account is not authorized to use this app.")
+            : error === "network" ? t("authUnavailable")
+            : error === "account" ? t("authAccountMismatch")
+            : error === "logout" ? t("logoutUnconfirmed")
             : (t("authError") ?? "Sign-in failed. Please try again.")}
         </div>
       )}
 
       <button
-        onClick={login}
+        onClick={status === "unavailable" ? retry : login}
         className="flex w-full max-w-sm items-center justify-center gap-3 rounded-xl border border-gray-600 bg-gray-800 px-6 py-3.5 text-sm font-medium text-gray-100 hover:border-blue-500 hover:bg-gray-700 transition-colors"
       >
         <GoogleMark />
-        {t("signInWithGoogle") ?? "Sign in with Google"}
+        {status === "unavailable" ? t("retry") : t("signInWithGoogle")}
       </button>
     </div>
   );

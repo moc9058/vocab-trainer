@@ -3,3 +3,21 @@
 body {
   @apply bg-gray-900 text-gray-100;
 }
+
+/* The native viewport includes the notch and home indicator. Apply insets once,
+   to the root; fixed overlays get the same bounds rather than double padding. */
+.native-ios { height: 100%; background: #111827; }
+.native-ios body { margin: 0; height: 100%; overflow: hidden; }
+.native-ios #root {
+  height: 100dvh; width: 100%; box-sizing: border-box; overflow-y: auto; overflow-x: hidden;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  -webkit-overflow-scrolling: touch;
+}
+.native-ios .min-h-screen { min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+.native-ios .h-screen { height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
+.native-ios .fixed.inset-0 {
+  top: env(safe-area-inset-top); bottom: env(safe-area-inset-bottom);
+  left: env(safe-area-inset-left); right: env(safe-area-inset-right);
+}
+.native-ios input, .native-ios textarea, .native-ios select { font-size: max(16px, 1em); }
+.native-sync-status { position: sticky; top: 0; z-index: 100; }

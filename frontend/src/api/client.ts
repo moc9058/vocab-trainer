@@ -1,9 +1,5 @@
-/**
- * Every request carries cookies so the backend's session cookie is sent.
- * The SPA is same-origin with /api (vite proxy in dev, nginx in prod), so this is
- * belt-and-braces today — but it is what keeps the app working if the API is ever
- * served from a different origin.
- */
+import { apiFetch } from "./transport";
+/** Web Cookie default; apiFetch centrally substitutes Keychain Bearer/omit on iOS. */
 const CREDENTIALS: RequestCredentials = "include";
 
 /**
@@ -58,13 +54,13 @@ async function errorFromResponse(res: Response): Promise<Error> {
 export { CREDENTIALS, notifyIfUnauthorized };
 
 export async function fetchJson<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(path, { credentials: CREDENTIALS, signal });
+  const res = await apiFetch(path, { credentials: CREDENTIALS, signal });
   if (!res.ok) throw await errorFromResponse(res);
   return res.json() as Promise<T>;
 }
 
 export async function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
-  const res = await fetch(path, {
+  const res = await apiFetch(path, {
     method: "POST",
     credentials: CREDENTIALS,
     headers: { "Content-Type": "application/json" },
@@ -76,7 +72,7 @@ export async function postJson<T>(path: string, body: unknown, signal?: AbortSig
 }
 
 export async function putJson<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
+  const res = await apiFetch(path, {
     method: "PUT",
     credentials: CREDENTIALS,
     headers: { "Content-Type": "application/json" },
@@ -87,13 +83,13 @@ export async function putJson<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function deleteRequest(path: string): Promise<void> {
-  const res = await fetch(path, { method: "DELETE", credentials: CREDENTIALS });
+  const res = await apiFetch(path, { method: "DELETE", credentials: CREDENTIALS });
   if (!res.ok) throw await errorFromResponse(res);
 }
 
 /** DELETE that returns a parsed body (most DELETE endpoints return nothing — use `deleteRequest`). */
 export async function deleteJson<T>(path: string): Promise<T> {
-  const res = await fetch(path, { method: "DELETE", credentials: CREDENTIALS });
+  const res = await apiFetch(path, { method: "DELETE", credentials: CREDENTIALS });
   if (!res.ok) throw await errorFromResponse(res);
   return res.json() as Promise<T>;
 }

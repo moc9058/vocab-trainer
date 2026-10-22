@@ -20,6 +20,11 @@ export function openSSE(request: FastifyRequest, reply: FastifyReply): SSEChanne
   // Disable socket timeout for long-running SSE streams
   request.raw.socket.setTimeout(0);
 
+  // Fastify CORS/auth headers live on reply until send(). Raw SSE must copy them.
+  reply.hijack();
+  for (const [name, value] of Object.entries(reply.getHeaders())) {
+    if (value !== undefined) reply.raw.setHeader(name, value);
+  }
   reply.raw.writeHead(200, {
     "Content-Type": "text/event-stream",
     "Cache-Control": "no-cache",

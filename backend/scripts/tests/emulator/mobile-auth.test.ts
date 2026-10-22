@@ -1,0 +1,25 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { Firestore } from '@google-cloud/firestore';
+import { FirestoreMobileAuthStore } from '../../../src/mobile-auth.js';
+const host = process.env.FIRESTORE_EMULATOR_HOST;
+if (!host || !/^(localhost|127\.0\.0\.1):\d+$/.test(host)) throw new Error('Local emulator is required');
+const db = new Firestore({ projectId: 'demo-vocab-ios', databaseId: '(default)' });
+const a = new FirestoreMobileAuthStore(db), b = new FirestoreMobileAuthStore(db);
+test('Firestore OAuth exchange is atomic across instances; token storage is hashed and expiry is enforced', async () => {
+  const id = `emulator-${Date.now()}`, verifier = 'test-verifier';
+  await a.start(id, { challenge: createHash('sha256').update(verifier).digest('base64url'), state: 'test', expiresAt: Date.now() + 60_000 });
+  assert.equal(await b.consume(id, 'wrong'), null);
+  const results = await Promise.all([a.consume(id, verifier), b.consume(id, verifier)]);
+  assert.equal(results.filter(Boolean).length, 1);
+  const token = `not-a-real-token-${Date.now()}`;
+  await a.save(token, { user: { email: 'owner@example.test' }, expiresAt: Date.now() + 60_000 });
+  assert.equal((await b.read(token))?.user.email, 'owner@example.test');
+  assert.equal((await db.collection('mobile_auth_sessions').doc(token).get()).exists, false);
+  await b.revoke(token); assert.equal(await a.read(token), null);
+  await a.save(token, { user: { email: 'owner@example.test' }, expiresAt: Date.now() - 1 });
+  assert.equal(await b.read(token), null); await a.revoke(token);
+  assert.deepEqual(await Promise.all(Array.from({ length: 21 }, () => a.limit(id))).then(r => r.sort()), [false, ...Array(20).fill(true)]);
+  await db.terminate();
+});

@@ -16,7 +16,9 @@
     "migrate": "tsx scripts/migrate-to-firestore.ts",
     "export": "tsx scripts/export-from-firestore.ts",
     "test:import": "node --experimental-test-module-mocks --import tsx --test scripts/tests/import-*.test.ts",
-    "test:import:emulator": "node scripts/run-import-job-emulator-tests.mjs"
+    "test:import:emulator": "node scripts/run-import-job-emulator-tests.mjs",
+    "test:mobile:emulator": "node --import tsx --test scripts/tests/emulator/mobile-auth.test.ts",
+    "ios:smoke": "node --experimental-test-module-mocks --import tsx scripts/ios-smoke-server.ts"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",

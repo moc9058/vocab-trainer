@@ -1,5 +1,13 @@
 const translations = {
   en: {
+    syncLogoutWait: "An answer is still being sent. Wait and try signing out again.",
+    authUnavailable: "Cannot reach the server. Check your connection and retry.",
+    authAccountMismatch: "Sign in with the same account to sync pending answers.",
+    logoutUnconfirmed: "Signed out on this device. Server session revocation could not be confirmed.",
+    discardPendingLogout: "Some answers have not synced. Discard them and sign out? Cancel to wait for sync.",
+    syncNeedsLogin: "Sign in again to sync. Keep this app open.",
+    nativeSyncWarning: "Keep the app open until sync completes. Force quitting can lose pending answers.",
+
     importCompareSaved: "Compare saved version",
     importPendingVersion: "Content in this window",
     importSavedVersion: "Latest saved content",
@@ -598,6 +606,14 @@ const translations = {
     grade: "How did you do?",
   },
   ja: {
+    syncLogoutWait: "回答を送信中です。少し待ってから再度ログアウトしてください。",
+    authUnavailable: "サーバーに接続できません。接続を確認して再試行してください。",
+    authAccountMismatch: "未送信の回答を同期するには、同じアカウントでログインしてください。",
+    logoutUnconfirmed: "この端末からログアウトしました。サーバーのセッション失効は未確認です。",
+    discardPendingLogout: "未送信の回答があります。破棄してログアウトしますか？同期を待つ場合はキャンセルしてください。",
+    syncNeedsLogin: "同期には再ログインが必要です。アプリを終了しないでください。",
+    nativeSyncWarning: "同期完了までアプリを開いてください。強制終了すると未送信の回答が失われる場合があります。",
+
     importCompareSaved: "保存済みの内容と比較",
     importPendingVersion: "この画面の内容",
     importSavedVersion: "最新の保存内容",
@@ -1193,6 +1209,14 @@ const translations = {
     grade: "できましたか？",
   },
   ko: {
+    syncLogoutWait: "답변을 전송 중입니다. 잠시 기다린 후 다시 로그아웃하세요.",
+    authUnavailable: "서버에 연결할 수 없습니다. 연결을 확인하고 다시 시도하세요.",
+    authAccountMismatch: "대기 중인 답변을 동기화하려면 같은 계정으로 로그인하세요.",
+    logoutUnconfirmed: "이 기기에서 로그아웃했습니다. 서버 세션 해제는 확인되지 않았습니다.",
+    discardPendingLogout: "동기화되지 않은 답변이 있습니다. 삭제하고 로그아웃할까요? 기다리려면 취소하세요.",
+    syncNeedsLogin: "동기화하려면 다시 로그인하세요. 앱을 종료하지 마세요.",
+    nativeSyncWarning: "동기화가 완료될 때까지 앱을 열어 두세요. 강제 종료 시 대기 중인 답변이 손실될 수 있습니다.",
+
     importCompareSaved: "저장된 내용과 비교",
     importPendingVersion: "이 화면의 내용",
     importSavedVersion: "최근 저장 내용",

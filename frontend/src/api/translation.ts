@@ -1,3 +1,4 @@
+import { apiFetch } from "./transport";
 import { postJson, fetchJson, deleteRequest, CREDENTIALS, notifyIfUnauthorized } from "./client";
 import type { TranslationEntry, TranslationResult } from "../types";
 
@@ -41,7 +42,7 @@ export async function translateStream(
   signal?: AbortSignal,
   options?: TranslateStreamOptions
 ): Promise<void> {
-  const res = await fetch("/api/translation/translate-stream", {
+  const res = await apiFetch("/api/translation/translate-stream", {
     method: "POST",
     credentials: CREDENTIALS,
     headers: { "Content-Type": "application/json" },

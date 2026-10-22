@@ -33,3 +33,17 @@ test/
 # Browser regression artifacts
 frontend/test-results/
 frontend/playwright-report/
+
+# iOS generated and personal files
+frontend/dist-ios/
+frontend/ios/App/App/public/
+frontend/ios/App/App/capacitor.config.json
+frontend/ios/App/App/config.xml
+**/DerivedData/
+**/xcuserdata/
+*.xcuserstate
+*.mobileprovision
+*.p12
+*.xcarchive
+frontend/ios/Personal.xcconfig
+!.env.ios.example

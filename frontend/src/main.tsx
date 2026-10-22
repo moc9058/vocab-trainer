@@ -1,3 +1,5 @@
+import NativeSyncStatus from "./components/NativeSyncStatus";
+import { isNative } from "./platform/native";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -7,6 +9,8 @@ import { AuthProvider } from "./auth/context";
 import App from "./App";
 import "./index.css";
 
+if (isNative()) document.documentElement.classList.add("native-ios");
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
@@ -14,6 +18,7 @@ createRoot(document.getElementById("root")!).render(
         {/* AuthProvider sits inside I18nProvider so the login screen can translate itself. */}
         <I18nProvider>
           <AuthProvider>
+            <NativeSyncStatus />
             <App />
           </AuthProvider>
         </I18nProvider>

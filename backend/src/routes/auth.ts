@@ -1,3 +1,4 @@
+import { authenticatedUser } from "../mobile-auth.js";
 import type { FastifyPluginAsync, FastifyRequest } from "fastify";
 import { createHash } from "node:crypto";
 import {
@@ -5,7 +6,6 @@ import {
   isSecureUri,
   isEmailAllowed,
   signSession,
-  verifySession,
   signTransaction,
   verifyTransaction,
   SESSION_COOKIE,
@@ -92,11 +92,12 @@ function appRootFor(redirectUri: string): string {
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
 
-  fastify.get("/me", async (request) => {
+  fastify.get("/me", async (request, reply) => {
+    reply.header("Cache-Control", "no-store");
     const cfg = getAuthConfig();
     if (!cfg) return { authEnabled: false, authenticated: true, user: null };
 
-    const user = verifySession(request.cookies[SESSION_COOKIE], cfg.sessionSecret);
+    const user = await authenticatedUser(request);
     if (!user || !isEmailAllowed(user.email)) {
       return { authEnabled: true, authenticated: false, user: null };
     }

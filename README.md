@@ -13,7 +13,9 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 - [Source implementation record](docs/external-source-implementation-audit.md): dated implementation and verification evidence.
 - [Recent documentation audit](docs/recent-updates-documentation-audit.md): coverage of the October 5–19 updates and corrected discrepancies.
 - [Meaning-unit explanation plan](plan/source-meaning-units-design.md): design only; this feature is not implemented.
-- [Personal iOS app plan](plan/ios-personal-app-design.md): implementation plan only; the iOS project is not yet implemented.
+- [Personal iOS app](docs/ios-personal-app.md): Xcode project, Google login setup, free signing and updates.
+- [iOS verification](docs/ios-verification.md): checks performed and device checks still pending.
+- [Original iOS plan](plan/ios-personal-app-design.md): design rationale and implementation scope.
 
 ## Group A and Group B
 

@@ -7,10 +7,9 @@ import {
   loadAuthConfig,
   getAuthConfig,
   isEmailAllowed,
-  verifySession,
-  SESSION_COOKIE,
 } from "./auth-config.js";
 import authRoutes from "./routes/auth.js";
+import { authenticatedUser, mobileAuthRoutes } from "./mobile-auth.js";
 import languagesRoutes from "./routes/languages.js";
 import vocabRoutes from "./routes/vocab.js";
 import quizRoutes from "./routes/quiz.js";
@@ -37,7 +36,8 @@ import importRoutes from "./routes/import.js";
 import llmConfigRoutes from "./routes/llm-config.js";
 
 const fastify = Fastify({
-  logger: { level: "info" },
+  logger: { level: "info", redact: ["req.headers.authorization", "req.headers.cookie", "res.headers.set-cookie"],
+    serializers: { req: (req) => ({ method: req.method, url: req.url?.split("?")[0], remoteAddress: req.ip }) } },
   // Cloud Run already records requests. Keep application/error logs on stdout.
   disableRequestLogging: true,
 });
@@ -53,6 +53,7 @@ await loadAuthConfig();
 // so this allowlist costs nothing and closes the "any website can call the API
 // cross-origin" hole left by the previous bare `register(cors)`.
 const DEFAULT_ALLOWED_ORIGINS = [
+  "capacitor://localhost",
   "http://localhost:5173",
   "http://localhost:3000",
   "https://vocab-trainer-frontend-olncevthqa-an.a.run.app",
@@ -68,6 +69,8 @@ await fastify.register(cors, {
   // server-to-server) — those are gated by the auth hook, not by CORS.
   origin: (origin, cb) => cb(null, !origin || allowedOrigins.has(origin)),
   credentials: true,
+  methods: ["GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
 });
 // Registered before the auth hook so request.cookies is populated by the time it runs.
 await fastify.register(cookie);
@@ -83,7 +86,7 @@ fastify.addHook("onRequest", async (request, reply) => {
   const path = request.url.split("?")[0];
   if (PUBLIC_PATH_PREFIXES.some((p) => path.startsWith(p))) return;
 
-  const user = verifySession(request.cookies[SESSION_COOKIE], cfg.sessionSecret);
+  const user = await authenticatedUser(request);
   // The allowlist is re-checked on every request, not just at sign-in, so removing
   // an address from config/auth revokes existing sessions immediately.
   if (!user || !isEmailAllowed(user.email)) {
@@ -92,6 +95,7 @@ fastify.addHook("onRequest", async (request, reply) => {
 });
 
 await fastify.register(authRoutes, { prefix: "/api/auth" });
+await fastify.register(mobileAuthRoutes, { prefix: "/api/auth/mobile" });
 await fastify.register(languagesRoutes, { prefix: "/api/languages" });
 await fastify.register(vocabRoutes, { prefix: "/api/vocab" });
 await fastify.register(quizRoutes, { prefix: "/api/quiz" });

@@ -1,3 +1,4 @@
+import { apiFetch } from "./transport";
 import { fetchJson, postJson, putJson, deleteRequest, deleteJson, CREDENTIALS, notifyIfUnauthorized } from "./client";
 import type {
   Word,
@@ -82,7 +83,7 @@ export async function lookupWord(
   language: string,
   term: string,
 ): Promise<{ term: string; id: string; level: string; transliteration: string } | null> {
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/vocab/${encodeURIComponent(language)}/lookup?term=${encodeURIComponent(term)}`,
     { credentials: CREDENTIALS },
   );
