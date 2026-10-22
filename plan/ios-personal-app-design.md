@@ -1,6 +1,6 @@
 # 個人用iPhoneアプリ：詳細計画・設計
 
-作成日: 2026-10-22 / 調査対象: `235f329`（master）
+作成日: 2026-10-22 / 更新日: 2026-10-22 / 再調査対象: `0623247`（master）
 
 **状態: 設計のみ。iOSプロジェクト・以下の新API・npm scriptsは未実装。**
 今回の依頼は、提示された実装プロンプトを実行するための計画ファイルの作成。
@@ -38,7 +38,7 @@
 - Node: `v25.8.1`。再現性のため実装時の検証はコンテナーと同じNode 24へ揃える。
 - `xcode-select -p`: `/Library/Developer/CommandLineTools`。標準の `xcodebuild` / `xcrun simctl` は利用不可。
 - `/Applications/Xcode.app` は存在。`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -version` は **Xcode 27.0 / 27A266a**。
-- 同じ `DEVELOPER_DIR` での `xcrun simctl list runtimes` は規約未同意のメッセージを返す。ランタイム導入状況は未確認。規約同意を代行していない。
+- 再調査では同じ `DEVELOPER_DIR` での `xcrun simctl list runtimes` が成功し、ランタイム一覧は空だった。以前の規約未同意エラーは再現しない。シミュレーター実行にはランタイムの導入が必要。規約同意を代行していない。
 - Docker CLIとDocker.appは存在するが `docker info` はdaemon接続失敗。gcloud CLIは存在。Google Cloudログイン有効性は未確認。
 - Apple Account、Personal Team、署名証明書、iPhone接続・OSバージョンは未確認。
 
@@ -133,6 +133,14 @@ mobile endpointsは現状のpublic auth prefix配下になるため、各endpoin
 
 ## 6. API・ストリーミング
 
+### 6.1 認証状態の契約
+
+現行 `/api/auth/me` は未ログインでもHTTP 200と `authenticated: false` を返す。HTTP成功だけでログイン成功と判定しない。現行 `auth/context.tsx` は通信失敗時に画面を通す実装なので、iOSでは `checking / authenticated / anonymous / unavailable` を区別し、通信失敗を認証無効・ログイン成功と扱わない。`unavailable` は再試行を表示し、既存の未送信キューを消さない。Webにも共通化する場合は認証OFFのローカル開発と既存Cookieログインを回帰検証する。
+
+再認証中に別の許可アカウントが選ばれた場合は、保留操作を自動送信する前に元の主体との一致を確認する。今は共有データでも、意図しないアカウントでの再送を避ける。明示ログアウトは未送信件数を表示し、同期完了を待つか、未送信分の破棄を本人が選択する動線を設ける。再認証とログアウトで同じキュー消去処理を使わない。
+
+### 6.2 通信経路
+
 `transport.ts`でURLと認証を統一する。Webは相対URL + Cookie、iOSは固定HTTPS API origin + Authorization、`credentials: omit`。Bearerは許可API origin以外に送らず、任意絶対URLや他originへのredirectを拒否する。
 
 CORSは既存Web originsを保持して正確な `capacitor://localhost` を追加。Authorization/Content-Typeと必要method、認証なしOPTIONS preflightをテストする。`ALLOWED_ORIGINS`が環境で上書きされるため、コード既定値変更だけで本番反映済みと判断しない。ワイルドカードや `null` origin許可は使わない。
@@ -179,6 +187,18 @@ SSE parserは分割UTF-8、CRLF、複数data行、コメント、event/id、途�
 
 本人操作でP1/P2が止まっても、認証ロジック、transport、モックテスト、文書作成は進める。実装を開始した回は計画提示だけで終了せず、実施可能な作業を完了する。
 
+### 9.1 実装単位と依存関係
+
+以下をレビュー可能な変更単位とする。番号は実施順であり、途中の未完成版を本番へ自動配備する指示ではない。
+
+1. **環境分離と最小シェル**: `frontend/package.json` / lockfile、Vite、Capacitor、iOS project、ignore設定。Web buildとiOS buildの出力を分離し、Release接続先検査を追加する。
+2. **server認証**: `auth-config.ts` / `routes/auth.ts` / `index.ts`と新規mobile store/routes。Cookie認証を維持し、コード交換・Bearer・失効・CORSをmockとemulatorで確認する。
+3. **native認証と共通通信**: Swift bridge、Keychain、`auth/context.tsx`、新規transport、直接fetchの呼出箇所。2の契約に接続し、Webでnative pluginを呼ばないことを検証する。
+4. **ストリームと復帰**: `api/import.ts`等の購読抽象化、lifecycle、`answerOutbox.ts` / `useAnswerOutbox.ts`、同期表示。認証停止中にflush待機が永久に画面を塞がないよう、完了・認証待ち・通信待ち・恒久失敗を呼出元へ返す。
+5. **端末操作と文書**: safe area、入力、スクロール、英日韓の表示、READMEへのリンク、開発リファレンス、実機手順。全体検証の結果を記録してから配備する。
+
+P0では `git status --short` とbranch、P1では生成されたproject/schemeと固定依存版、P2では認証契約、P5では実行結果を記録する。Apple操作待ちでも1〜5の実行可能な部分を進め、実機検証待ちを実装完了と混同しない。
+
 ## 10. 検証計画と受け入れ基準
 
 開発・自動テストはemulator/mockだけ。認証fixtureはダミーの許可メールと鍵。`.env`の本番キーを使わずLLMはmock。local.shは初回production seed読取を行い得るため挙動を確認し、既存の安全なsnapshotまたは合成fixtureを使う。`seed:load`はemulatorのみを対象にする。`FIRESTORE_EMULATOR_HOST`を`.env`へ永続化しない。
@@ -193,6 +213,23 @@ npm run build --prefix frontend
 ```
 
 新しいmobile-auth route testsは専用scriptを追加し実行する（`backend/src/*.test.ts`だけではscripts配下を実行できない）。import監視を変更した場合は `npm run test:import --prefix backend` と関連frontend hookテストも実行する。Docker利用可能なら既存構成のemulator smokeを実施する。
+
+emulator起動時にはホスト設定だけでなく、テスト対象のproject/databaseと到達先を検査する。合成fixtureに必要な `config/vocabulary` 等を用意し、認証ONのケースではダミー設定とGoogle token endpointのmockを使用する。実Googleログインを検証するためにテストの接続先を本番DBへ切り替えない。mockではOAuthのOS画面や実Googleの許可は証明できないので、その結果は本人の受け入れ試験と分ける。
+
+### 10.1 具体的な端末受け入れシナリオ
+
+| ID | 手順 | 観測する結果 |
+| --- | --- | --- |
+| IOS-01 | 同梱Releaseビルドを起動し、サーバーのUIだけを更新する | アプリUIは同梱版のまま。APIには指定HTTPS originで接続 |
+| IOS-02 | ログイン開始→OS画面でキャンセル→再開始→成功→アプリ再起動 | キャンセル後再試行可能。WebView内Google画面なし。Keychainから認証復元 |
+| IOS-03 | mockで認証失効→回答送信401→再認証 | 未送信数と操作IDを維持し、直列再送。新規sessionを勝手に作らない |
+| IOS-04 | emulatorで複数回答→ホーム画面へ移動→復帰 | 認証確認、flush、その後session再取得。既存review境界・スコアを保持 |
+| IOS-05 | 通信断で回答→未送信警告を確認→強制終了→起動 | server確定分だけ復元。未送信分が復元できたと表示しない |
+| IOS-06 | 翻訳・作文のmock streamを途中停止、import job監視を中断・再開 | 逐次表示と途中状態を確認。課金処理POSTを自動再発行しない |
+| IOS-07 | emulatorの同一item/sessionをWebとiOSで交互に表示・更新 | 同じIDと履歴を参照。競合時は既存規則で再読込。コピーDBなし |
+| IOS-08 | 小型画面でIME入力・長文モーダル・画面回転・画面ロック | 入力や確定ボタンが隠れず、スクロール可能。復帰で二重購読なし |
+
+IOS-02の実Google認証と実機署名、IOS-08の実機キーボードは、シミュレーターやmockで代替完了としない。
 
 | 分類 | 必須ケースと合格条件 |
 | --- | --- |
