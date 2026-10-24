@@ -12,8 +12,9 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 - [Cloud Run cost controls](docs/cloud-run-cost-controls.md): deployment settings and durable import infrastructure.
 - [Source implementation record](docs/external-source-implementation-audit.md): dated implementation and verification evidence.
 - [Recent documentation audit](docs/recent-updates-documentation-audit.md): coverage of the October 5–19 updates and corrected discrepancies.
-- [Meaning-unit explanation plan](plan/source-meaning-units-design.md): design only; this feature is not implemented.
-- [iPhone screen reading/import plan](plan/ios-screen-reading-import-design.md): design only; screenshot OCR, in-app text controls and source registration for Xiaohongshu/Caixin.
+- [Meaning-unit explanation design](plan/source-meaning-units-design.md): source ranges, schema and compatibility decisions.
+- [iPhone screen reading](docs/screen-reading-import.md): screenshot/text intake, on-device OCR, meaningful parts and A/B registration.
+- [Screen reading implementation plan](plan/ios-screen-reading-import-design.md): design decisions and remaining device verification.
 - [Personal iOS app](docs/ios-personal-app.md): Xcode project, Google login setup, free signing and updates.
 - [iOS verification](docs/ios-verification.md): checks performed and device checks still pending.
 - [Original iOS plan](plan/ios-personal-app-design.md): design rationale and implementation scope.
@@ -1511,6 +1512,17 @@ Both app Dockerfiles use **Node 24 Alpine** with multi-stage builds to keep imag
 touches production. See [Local Development & Verification](#local-development--verification) for the workflow.
 
 ### Source reader and contextual explanations
+
+The iPhone app can receive screenshots or selected text through Shortcuts. In
+Chinese → External sources → Read from a screen, choose a passage, correct the
+recognized text and start the existing source analysis. Text buttons appear on the
+captured still image inside Vocab Trainer. See the [screen reading guide](docs/screen-reading-import.md)
+for Control Center setup, supported OS versions and device checks still required.
+
+Sentence explanations now include meaningful clauses/phrases before word and grammar
+details. Tapping a unit's word or pattern opens its existing detail and registration
+controls. Older explanations remain readable; explicitly update them to add meaningful
+parts. Original text, library registrations and group membership are retained.
 
 New and resumed source reviews open in **Full text** mode. Tap a word for its
 contextual reading and meaning; tap the sentence background or its ↗ button for

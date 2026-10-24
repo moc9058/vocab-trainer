@@ -77,3 +77,41 @@ production資産ならリクエスト開始前に停止する。試験後は `np
 - Appleログイン・規約同意・iPhone接続・Developer Mode・実機でのRunは本人操作。
 - オフライン永続化や強制終了後の未送信復元は対象外。既存のメモリーキュー制約を画面と文書に明記。
 - commit / push / Cloud Run配備 / iPhoneへのinstallはそれぞれ独立した結果として最終報告する。
+
+## 画面からの取り込み・意味単位の追加検証（2026-10-24）
+
+実装の利用手順は[画面から読み解くガイド](screen-reading-import.md)を参照。
+以下の学習データはすべて合成fixture・隔離emulatorで確認し、本番の辞書・記事・履歴は書き換えていない。
+
+| 検証 | 結果 |
+| --- | --- |
+| backend build / unit | 成功、117件 |
+| import route / dispatch | 成功、9件 |
+| mixed quiz | 成功、4件 |
+| import Firestore emulator | 成功、16件。新規取り込みの並列作成、同一要求の再送、編集後の再送、削除後410、origin検証を含む |
+| mobile auth emulator | 成功、1件 |
+| frontend TypeScript / unit | 成功、113件 |
+| Web build / iOS sync | 成功 |
+| Playwright | 成功、54件。360pxのコメント選択・OCR訂正・明示結合、意味単位から単語／跨る構文の選択、候補保持、compact解説の自動生成と再利用を含む |
+| Docker Node 24 / nginx / emulator | 両imageのbuild成功。隔離した `demo-vocab-ios-smoke` でHTML、言語一覧、取り込みの201/200再送/削除を確認 |
+| iOS Simulator build-for-testing | 成功。App Intents metadataの抽出を含む |
+| 新規XCUITest | 合成画像の受信、Vision OCR、画像上の文章選択、原文確認、ソース作成、mock解析、意味単位表示、backgroundからの復帰を確認 |
+
+追加したXCUITestは `testCaptureOCRAndTextConfirmation`。DEBUGかつlocal assets確認済みの
+`--vocab-local-smoke --vocab-capture-smoke` でのみ合成画像を受信箱へ入れる。
+専用サーバーはimportもmock化し、同じ隔離emulatorのジョブを処理する。実LLMを使った意味品質の確認ではない。
+
+Simulatorの試験途中で、システムプロセス `AppIntentsLiveEntityService` の
+`XPCPeerRequirement.hasEntitlement` / `__XPC_API_MISUSE__` によるクラッシュが発生した。
+アプリ内のOCR→解析→表示の追加テストは通ったが、その時の全体suiteはシステム障害を含む失敗として記録した。
+また、試験の再実行時に残った合成クイズが開始確認を要求したため、既存試験を「Start New」にも対応させた。
+これらを本人の端末でのIntent実行成功や無料署名の確認として扱わない。
+
+実機のControl Center撮影、小红书・财新の実画面と共有入力、Personal Teamでの新Intent実行、
+ロック・回転・写真選択の実機挙動、実LLMの説明品質は未確認。
+画面取得には手動スクリーンショット→画像選択の代替経路を残している。
+
+最終確認では、production assetsへ戻したうえで、署名なしのiOS Release / arm64実機向けbuildも成功した。
+最後の4件のXCUITestでは操作上のassertion失敗はなかったが、最初の試験中のシステムサービス停止1件により
+suite全体は失敗判定となった。結果bundleは `/tmp/vocab-capture-verified.xcresult`。
+DEBUGの試験入力マーカー以外の端末データは清掃対象にせず、試験専用Dockerコンテナーを終了した。

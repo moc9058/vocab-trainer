@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
 import WordList from "./WordList";
 import GrammarList from "./GrammarList";
@@ -59,6 +59,7 @@ export default function BrowseView({
 }: Props) {
   const { t } = useI18n();
   const [tab, setTab] = useState<BrowseTab>(initialTab);
+  useEffect(() => setTab(initialTab), [initialTab]);
 
   function selectTab(next: BrowseTab) {
     if (next === tab) return;

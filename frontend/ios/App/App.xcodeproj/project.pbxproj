@@ -18,6 +18,10 @@
 		9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9582B6822FE993A50072D4E8 /* SceneDelegate.swift */; };
         B10020261022000000000001 = {isa = PBXBuildFile; fileRef = B10020261022000000000002; };
         C10020261022000000000001 = {isa = PBXBuildFile; fileRef = C10020261022000000000002; };
+        D10020261024000000000001 = {isa = PBXBuildFile; fileRef = D20020261024000000000001; };
+        D10020261024000000000002 = {isa = PBXBuildFile; fileRef = D20020261024000000000002; };
+        D10020261024000000000003 = {isa = PBXBuildFile; fileRef = D20020261024000000000003; };
+        E10020261024000000000001 = {isa = PBXBuildFile; fileRef = E10020261024000000000002; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -35,6 +39,10 @@
         B10020261022000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUITests/NativeSmokeTests.swift; sourceTree = SOURCE_ROOT; };
         B10020261022000000000003 = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = AppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
         C10020261022000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeAuth.swift; sourceTree = "<group>"; };
+        D20020261024000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureInbox.swift; sourceTree = "<group>"; };
+        D20020261024000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureIntents.swift; sourceTree = "<group>"; };
+        D20020261024000000000003 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeCapture.swift; sourceTree = "<group>"; };
+        E10020261024000000000002 = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,6 +84,10 @@
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
                 C10020261022000000000002,
+                E10020261024000000000002,
+                D20020261024000000000003,
+                D20020261024000000000002,
+                D20020261024000000000001,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -169,6 +181,7 @@
 				504EC30F1FED79650016851F /* Assets.xcassets in Resources */,
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
+                E10020261024000000000001,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -197,6 +210,9 @@
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
                 C10020261022000000000001,
+                D10020261024000000000003,
+                D10020261024000000000002,
+                D10020261024000000000001,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

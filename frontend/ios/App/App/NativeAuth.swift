@@ -22,6 +22,7 @@ class VocabBridgeViewController: CAPBridgeViewController {
     }
     override func capacitorDidLoad() {
         bridge?.registerPluginInstance(NativeAuthPlugin())
+        bridge?.registerPluginInstance(NativeCapturePlugin())
     }
 }
 

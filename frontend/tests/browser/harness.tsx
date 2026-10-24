@@ -1,3 +1,7 @@
+import CaptureWorkspace from '../../src/components/capture/CaptureWorkspace';
+import ImportFullTextReader from '../../src/components/import/ImportFullTextReader';
+import type { LocalCapture, NativeCapturePlugin } from '../../src/platform/capture';
+import { BrowserRouter } from 'react-router-dom';
 import ExpressionRecallQuizView from "../../src/components/ExpressionRecallQuizView";
 import ExpressionRecallTaking from "../../src/components/ExpressionRecallTaking";
 import type { CombinedQuizVariant } from "../../src/api/combined-quiz";
@@ -31,6 +35,19 @@ function ImportHarness() {
     <pre data-testid="items">{JSON.stringify(review.session?.items ?? [])}</pre>
     <pre data-testid="results">{JSON.stringify(words.recentResults)}</pre>
   </main>;
+}
+
+function CaptureHarness() {
+  const [selection, setSelection] = useState<unknown>(null);
+  const sample: LocalCapture = { id: 'capture', inputKind: 'image', method: 'shared-image', receivedAt: new Date().toISOString(), acknowledged: false, operations: {},
+    imageUrl: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="360" height="600"><rect width="360" height="600" fill="#111827"/><text x="20" y="100" fill="white">虽然很忙，但我还是来了。</text><text x="20" y="300" fill="white">确实如此。</text></svg>'),
+    blocks: [{ id: 'post', text: '虽然很忙，但我还是来了。', rects: [{ left: .05, top: .1, width: .8, height: .12 }], confidence: .95 }, { id: 'comment', text: '确实如此。', rects: [{ left: .05, top: .45, width: .6, height: .12 }], confidence: .6 }] };
+  const source = { load: async () => sample, recognize: async () => sample, acknowledge: async () => {}, pickImage: async () => ({ cancelled: true }), discard: async () => {} } as unknown as NativeCapturePlugin;
+  return <><CaptureWorkspace captureId="capture" source={source} onConfirm={setSelection} onResume={() => {}} onClose={() => {}} /><pre className="whitespace-pre-wrap break-all" data-testid="capture-selection">{JSON.stringify(selection)}</pre></>;
+}
+function MeaningHarness() {
+  const [value, setValue] = useState(fixture as ImportSession);
+  return <><ImportFullTextReader session={value} onPatch={update => setValue(update)} renderRegistration={item => <button>{'Register ' + (item.kind === 'word' ? item.term : item.statement)}</button>} /><pre className="whitespace-pre-wrap break-all" data-testid="meaning-session">{JSON.stringify(value)}</pre></>;
 }
 
 function ImportViewHarness() {
@@ -68,8 +85,8 @@ const fixture = (window as any).fixture ?? (mode === 'import-full-text' ? {
   ],
   groupBNames: [], focusedSentenceIndex: 0, status: 'in-progress', createdAt: '', updatedAt: '',
 } : undefined);
-createRoot(document.getElementById('root')!).render(<I18nProvider><SettingsProvider>
-  {mode === 'import-view' ? <ImportViewHarness />
+createRoot(document.getElementById('root')!).render(<BrowserRouter><I18nProvider><SettingsProvider>
+  {mode === 'capture' ? <CaptureHarness /> : mode === 'meaning' ? <MeaningHarness /> : mode === 'import-view' ? <ImportViewHarness />
     : mode === 'import-review' ? <ImportReviewHarness />
     : mode === 'import' ? <ImportHarness />
     : mode === 'import-full-text' ? <ImportFullTextHarness />
@@ -78,4 +95,4 @@ createRoot(document.getElementById('root')!).render(<I18nProvider><SettingsProvi
     : mode === 'recall-view' ? <ExpressionRecallQuizView language="zh" onBack={() => {}} />
     : mode === 'recall' ? <ExpressionRecallTaking language="zh" session={fixture} onComplete={() => {}} onStartNew={() => {}} />
     : <CombinedQuizTaking session={fixture} variant={(new URLSearchParams(location.search).get('variant') ?? "mixed") as CombinedQuizVariant} onComplete={() => {}} onBrowse={() => {}} onStartNew={() => {}} />}
-</SettingsProvider></I18nProvider>);
+</SettingsProvider></I18nProvider></BrowserRouter>);

@@ -1,3 +1,6 @@
+import { detailedImportSchema, EXPLANATION_INSTRUCTIONS } from '../import-explanation-config.js';
+import { validateMeaningUnits } from '../import-meaning-units.js';
+import { parseSourceOrigin, ingestionDigest } from '../import-ingestions.js';
 import { jobsConfigured, localJobs } from "../import-task-dispatch.js";
 import { planImportBatches, jobActive } from "../import-jobs.js";
 import { splitImportSource, appendImportPart, subdivideImportPart, ImportCheckpointError } from "../import-parts.js";
@@ -17,6 +20,7 @@ import {
   getAllGrammarItems,
   lookupWordsByTerms,
   saveImportSession,
+  createImportIngestion,
   getImportSessions,
   getImportSession,
   mutateImportSession,
@@ -43,6 +47,18 @@ function buildAnalyzeSystemPrompt(basePrompt: string, statements: string[]): str
     `Write the \`statement\` field in the same notation as these entries already in the user's database:\n\n` +
     statements.map((s) => `- ${lowercaseGrammarAbbreviations(s)}`).join("\n")
   );
+}
+
+function validateSavedReadings(paragraphs: ImportSession['paragraphs'] | undefined) {
+  for (const paragraph of paragraphs ?? []) {
+    if (!paragraph || !Array.isArray(paragraph.sentences)) throw new ImportCheckpointError(400, 'Invalid source paragraphs.');
+    for (const sentence of paragraph.sentences) {
+      if (!sentence || typeof sentence.text !== 'string') throw new ImportCheckpointError(400, 'Invalid source sentence.');
+      const reading = sentence.readingAnalysis;
+      if (reading?.comprehension?.meaningUnits !== undefined && (reading.sourceText !== sentence.text || !validateMeaningUnits(sentence.text, reading.comprehension.meaningUnits)
+        || Buffer.byteLength(JSON.stringify(reading), 'utf8') > 150_000)) throw new ImportCheckpointError(400, 'Invalid or oversized meaning units.');
+    }
+  }
 }
 
 const importRoutes: FastifyPluginAsync = async (fastify) => {
@@ -254,9 +270,9 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
         const prompt = config.analyzePrompts?.[language];
         if (!prompt) return reply.badRequest("No import prompt configured for language");
         const raw = await callLLM({
-          system: prompt + IMPORT_ELEMENT_INSTRUCTIONS + "\nAnalyze ONLY target as exactly one sentence. before/after are context, never output them. Preserve target verbatim, even if it contains sentence punctuation.",
+          system: prompt + IMPORT_ELEMENT_INSTRUCTIONS + EXPLANATION_INSTRUCTIONS + "\nAnalyze ONLY target as exactly one sentence. before/after are context, never output them. Preserve target verbatim, even if it contains sentence punctuation.",
           user: JSON.stringify({ target: sentence.text, before: sentences[at - 1]?.text ?? "", after: sentences[at + 1]?.text ?? "" }),
-          schema: config.analyzeSchema, tier: "full", route: "import/sentence-explanation",
+          schema: detailedImportSchema(config.analyzeSchema), tier: "full", route: "import/sentence-explanation",
         });
         const { analysis } = normalizeAnalysis(stripMarkdownFences(raw), language);
         const result = analysis.paragraphs.flatMap(p => p.sentences);
@@ -264,6 +280,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
           return reply.badGateway("The explanation did not match the source. Check the import prompt configuration and retry.");
         }
         const readingAnalysis = result[0].readingAnalysis;
+        if (!readingAnalysis.comprehension?.meaningUnits) return reply.badGateway("Missing meaning units in the explanation. Please retry.");
         // The one-sentence model response is normalized at position 0; retain the article namespace.
         const reindex = (id: string) => id.replace(/^s0-/, `s${index}-`);
         readingAnalysis.occurrences = readingAnalysis.occurrences.map(word => ({ ...word,
@@ -321,6 +338,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
             id: s.id,
             language: s.language,
             title: s.title,
+            ...(s.sourceOrigin ? { sourceOrigin: s.sourceOrigin } : {}),
             totalCount: (s.items ?? []).filter(i => !i.hiddenByRevision && !(i.kind === "word" && i.suppressedByGrammar)).length,
             registeredCount: (s.items ?? []).filter((i) => i.status === "registered" && !i.hiddenByRevision && !(i.kind === "word" && i.suppressedByGrammar)).length,
             status: s.status,
@@ -336,7 +354,7 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post<{
     Params: { language: string };
-    Body: Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean; analyzeAsJob?: boolean };
+    Body: Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean; analyzeAsJob?: boolean; ingestionId?: string };
   }>(
     "/:language/sessions",
     {
@@ -347,6 +365,8 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
           properties: {
             analyzeInParts: { type: "boolean" },
             analyzeAsJob: { type: "boolean" },
+            ingestionId: { type: "string", pattern: "^[0-9a-fA-F-]{36}$" },
+            sourceOrigin: { type: "object" },
             title: { type: "string" },
             text: { type: "string" },
             paragraphs: { type: "array" },
@@ -369,23 +389,37 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
       if (Buffer.byteLength(JSON.stringify(body), "utf8") > 900_000) return reply.badRequest("Article is too large. Split it into smaller sections.");
       if ((body.analyzeInParts || body.analyzeAsJob) && (!body.text.trim() || body.text.length > MAX_TEXT_LENGTH)) return reply.badRequest("Source text must contain 1–8000 characters");
       const now = new Date().toISOString();
-      const session = await saveImportSession({
-        language, contentRevision: 0,
-        ...(body.analyzeAsJob ? { analysisRevision: 0 } : {}),
-        title: body.title?.trim() || body.text.slice(0, 40),
-        text: body.text,
-        paragraphs: (body.analyzeInParts || body.analyzeAsJob) ? [] : body.paragraphs ?? [],
-        items: (body.analyzeInParts || body.analyzeAsJob) ? [] : body.items ?? [],
-        ...(body.analyzeInParts || body.analyzeAsJob ? { analysisProgress: { version: 1 as const, chunks: body.analyzeAsJob ? planImportBatches(body.text, language) : splitImportSource(body.text), nextChunk: 0 } } : {}),
-        wordGroupId: body.wordGroupId,
-        grammarGroupId: body.grammarGroupId,
-        groupBNames: body.groupBNames ?? [],
-        focusedSentenceIndex: body.focusedSentenceIndex ?? 0,
-        status: body.status ?? "in-progress",
-        createdAt: now,
-        updatedAt: now,
-      });
-      return reply.status(201).send(session);
+      try {
+        const sourceOrigin = parseSourceOrigin(body.sourceOrigin);
+        if (sourceOrigin && (!body.analyzeAsJob || body.items.length || body.paragraphs.length)) return reply.badRequest('Screen sources must start with confirmed text and empty analysis.');
+        validateSavedReadings(body.paragraphs);
+        const data: Omit<ImportSession, 'id'> = {
+          language, contentRevision: 0,
+          ...(body.analyzeAsJob ? { analysisRevision: 0 } : {}),
+          title: body.title?.trim() || body.text.slice(0, 40),
+          text: body.text,
+          paragraphs: (body.analyzeInParts || body.analyzeAsJob) ? [] : body.paragraphs ?? [],
+          items: (body.analyzeInParts || body.analyzeAsJob) ? [] : body.items ?? [],
+          ...(body.analyzeInParts || body.analyzeAsJob ? { analysisProgress: { version: 1 as const, chunks: body.analyzeAsJob ? planImportBatches(body.text, language) : splitImportSource(body.text), nextChunk: 0 } } : {}),
+          wordGroupId: body.wordGroupId,
+          grammarGroupId: body.grammarGroupId,
+          groupBNames: body.groupBNames ?? [],
+          focusedSentenceIndex: body.focusedSentenceIndex ?? 0,
+          status: body.status ?? "in-progress",
+          createdAt: now,
+          updatedAt: now,
+          ...(sourceOrigin ? { sourceOrigin } : {}),
+        };
+        if (body.ingestionId) {
+          const { ingestionId, ...request } = body;
+          const result = await createImportIngestion(data, ingestionId, ingestionDigest(request));
+          return reply.status(result.created ? 201 : 200).send(result.session);
+        }
+        return reply.status(201).send(await saveImportSession(data));
+      } catch (err) {
+        if (err instanceof ImportCheckpointError) return reply.code(err.statusCode).send({ message: err.message });
+        throw err;
+      }
     }
   );
 
@@ -431,6 +465,8 @@ const importRoutes: FastifyPluginAsync = async (fastify) => {
       if (!existing || existing.language !== request.params.language) return reply.notFound("Import session not found");
       if (Buffer.byteLength(JSON.stringify({ ...existing, ...request.body }), "utf8") > 900_000) return reply.badRequest("Article is too large. Split it into smaller sections.");
       try {
+        if ('sourceOrigin' in request.body) return reply.badRequest('Source details cannot be overwritten.');
+        validateSavedReadings(request.body.paragraphs);
         return await mutateImportSession(request.params.sessionId, current => {
           if (!current || current.language !== request.params.language) throw new ImportCheckpointError(404, "Import session not found");
           if (current.activeRevisionId || (current.contentRevision ?? 0) !== (request.body.contentRevision ?? 0)) throw new ImportCheckpointError(409, "The article changed. Reload and compare your edits before retrying.");

@@ -1,3 +1,4 @@
+import { normalizeMeaningUnits } from './import-meaning-units.js';
 import type { ImportAnalysisResult, ImportReadingAnalysis, ImportExtractedWord, ImportExtractedGrammar } from "./types.js";
 
 export interface RawReadingWord {
@@ -24,7 +25,7 @@ export interface RawReadingSentence {
   translation?: string;
   explanationLanguage?: string;
   overview?: string;
-  comprehension?: ImportReadingAnalysis["comprehension"];
+  comprehension?: Omit<NonNullable<ImportReadingAnalysis["comprehension"]>, "meaningUnits"> & { meaningUnits?: unknown };
   ambiguityNotes?: string[];
   words?: RawReadingWord[];
   grammar?: RawReadingGrammar[];
@@ -47,7 +48,8 @@ export function normalizeReadingSentence(
     const c = raw.comprehension;
     if (typeof c.meaning !== "string" || !c.meaning.trim() || typeof c.skeleton !== "string" || typeof c.connection !== "string" || !Array.isArray(c.nuances)
       || c.nuances.some(n => typeof n.text !== "string" || typeof n.evidence !== "string" || !n.evidence.trim() || !text.includes(n.evidence) || !["explicit", "inferred", "uncertain"].includes(n.certainty))) throw new Error("Invalid reading analysis comprehension evidence");
-    reading.comprehension = c;
+    const { meaningUnits, ...rest } = c;
+    reading.comprehension = { ...rest, ...(meaningUnits !== undefined ? { meaningUnits: normalizeMeaningUnits(text, meaningUnits) } : {}) };
   }
   const words: ImportExtractedWord[] = [];
   const byRawIndex = new Map<number, string>();

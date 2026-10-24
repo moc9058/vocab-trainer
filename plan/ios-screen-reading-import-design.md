@@ -2,7 +2,9 @@
 
 作成日: 2026-10-24
 
-状態: **設計のみ・未実装**。チェックリストは今後の実装・検証作業。実機のOS、Shortcutsの撮影結果、小红书・财新の共有内容は今回未検証。
+状態: **初版のコードを実装。本人のiPhoneでの検証は未完了**。使い方は[画面から読み解くガイド](../docs/screen-reading-import.md)、実施した検証は[iOS検証記録](../docs/ios-verification.md)を参照。
+
+以下は採用した設計と段階別の確認事項。Simulatorと合成画像で確認できる範囲、本人の端末と実際の小红书・财新で確認すべき範囲を区別する。後段候補は初版に含めない。
 
 ## 1. 目的と実現範囲
 
@@ -204,13 +206,13 @@ flowchart TD
 
 ### 6.1 native受信とReactの引き渡し
 
-新規プラグイン案 `NativeCapture`:
+新規プラグイン `NativeCapture`:
 
-- `listPendingCaptures()`：未処理の入力メタデータを読む。
-- `loadCapture(captureId)`：本体sandbox内の検証済み入力を読む。任意のファイルパスは受け付けない。
-- `recognizeCapture(captureId)`：OCRを開始し、行・候補・正規化矩形を返す。
-- `acknowledgeCapture(captureId)`：取り込み画面の受領を記録する。DB保存成功と混同しない。
-- `discardCapture(captureId)`：入力と生成したローカル一時データを消す。
+- `list()`：未処理の入力メタデータを読む。
+- `load({ id })`：本体sandbox内の検証済み入力を読む。任意のファイルパスは受け付けない。
+- `recognize({ id })`：OCRを開始し、行・候補・正規化矩形を返す。
+- `acknowledge({ id })`：取り込み画面の受領を記録する。DB保存成功と混同しない。
+- `discard({ id })`：入力と生成したローカル一時データを消す。
 - `captureReceived` event：warm start向けの通知。通知喪失に備え、cold start・復帰時に必ず一覧を読む。
 
 型付きメタデータをbridgeで渡し、画像はアプリ管理下のローカルresource URLで表示する。Base64を繰り返しJSONへ載せたり、任意URLやファイルパスをWeb側から読み出せるプラグインにしたりしない。
@@ -232,7 +234,7 @@ flowchart TD
 
 ### 6.3 取得データと保存データを分ける
 
-以下は提案型であり、現行コードに存在しない。
+以下は保存契約の概要。実装の詳細型はbackend/frontendのtypes.tsとnativeのCaptureInbox.swiftを参照。
 
 ```ts
 // native内の一時データ。Firestoreには送らない。
@@ -280,7 +282,7 @@ originは取得時の固定メタデータとして作成APIで受理し、通�
 5. 初回201、再送200。同時送信も一つのsessionIdとなる。receiptはあるが記事が削除済みなら410で、再作成しない。
 6. その後の解析開始・復旧は既存 `analysis-job` APIへ接続する。作成成功後にアプリが終了しても外部ソース一覧から再開できる。
 
-receipt保持は7日を初期方針とする。クライアントは24時間を超えた未確定操作を自動再送せず、保存済みソースの確認を案内する。TTL削除後まで永続的な重複防止を保証しない。TTL設定または既存reconcileでの期限清掃のどちらを使うかM3で確定し、設定がなくても学習データを消さない。receiptの必要性は、通信切断時のソース重複を避けるためであり、新しい解析ジョブ基盤は追加しない。
+receipt保持は7日を初期方針とする。クライアントは24時間を超えた未確定操作を自動再送せず、保存済みソースの確認を案内する。TTL削除後まで永続的な重複防止を保証しない。期限清掃は既存のreconcileで1回100件まで清掃する方式に確定した。TTL設定は不要で、清掃は学習データを対象にしない。receiptの必要性は、通信切断時のソース重複を避けるためであり、新しい解析ジョブ基盤は追加しない。
 
 同じ文章の別の意図的取り込みは別IDにする。文章hashだけで別コメントや別日の学習を勝手に統合しない。再送で解説言語など処理条件が変わる場合も、同一要求として扱う範囲をschema・digestのテストで固定する。
 
@@ -370,7 +372,7 @@ Group AはBを含むライブラリ、Bは閲覧素材との文脈上の所属�
 
 ## 11. 変更対象と実装単位
 
-「新規」は実装時に作成する予定の名前。既存意味単位計画の変更一覧は重複実装せず、一つの共通基盤にまとめる。
+「新規」は本機能で追加したもの。共通の意味単位基盤と登録キューを利用する。
 
 | 対象 | 作業 |
 | --- | --- |
@@ -380,7 +382,7 @@ Group AはBを含むライブラリ、Bは閲覧素材との文脈上の所属�
 | frontend/ios/App/App/NativeAuth.swift / SceneDelegate.swift | 共通bridgeのプラグイン登録・復帰連携。認証処理は維持 |
 | frontend/ios/App/App.xcodeproj/project.pbxproj、Info.plist等 | 新規ソース、必要な用途説明、OS availability。不要なcapabilityは追加しない |
 | frontend/src/platform/capture.ts（新規） | 型付きnative adapter、Webでは非対応として扱う |
-| frontend/src/hooks/useCaptureInbox.ts（新規） | React準備後の受信・復帰・重複イベント排除 |
+| frontend/src/hooks/useCaptureInbox.ts（新規） | React準備後の受信・復帰・入力一覧の更新 |
 | frontend/src/components/capture/*（新規） | 画像＋ボタン、OCR修正、ブロック一覧、解説シート、設定案内 |
 | frontend/src/components/Dashboard.tsx / ImportView.tsx | 取り込み入口、既存セッションとの接続、通常外部ソースへの遷移 |
 | frontend/src/components/import/ImportFullTextReader.tsx等 | 共通文詳細表示を抽出。別の解説・登録実装を作らない |
@@ -527,6 +529,8 @@ Node 24、必要な依存関係、Playwright、起動したFirestore emulatorを
 - 意味のまとまりを生成してから単語・文法抽出を開始する処理順序。既存ジョブのphase設計変更が必要。
 - Share Extension内での簡易表示。署名、認証共有、実行制限、受け渡しを別途設計する。
 
-## 15. 今回の計画追加そのものの検証
+## 15. 実装後の記録
 
-今回はこの計画とドキュメント導線を追加するだけで、App Intent、OCR、UI、API、Firestoreへの実装変更は行わない。参照先、既存型・API・scripts、公開資料と実機未検証の区別、他計画との整合、`git diff --check` を確認する。アプリテストや本人のSNS画面での動作検証を今回実行したとは扱わない。
+本計画に沿って、native受信箱、画像選択、Vision OCR、確認画面、既存ImportSessionへの接続、取り込みreceipt、意味単位の生成と表示を追加した。UIは英語・日本語・韓国語に対応し、日本語の利用ガイドも整理した。
+
+本人の端末でしか確認できないM0項目を、コード実装やSimulatorの成功で完了扱いにしない。チェックリストは実機確認を含む段階の最終完了条件として残す。実施済みのテストと制約は[iOS検証記録](../docs/ios-verification.md)を正とする。

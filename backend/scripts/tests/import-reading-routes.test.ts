@@ -32,6 +32,12 @@ mock.module('../../src/llm.js', { namedExports: {
         for (const point of sentence.grammar) { delete point.roleInSentence; if (!options.schema.schema.properties.paragraphs.items.properties.sentences.items.properties.grammar.items.properties.elements) delete point.elements; }
       }
     }
+    if (options.schema?.schema?.properties?.paragraphs?.items?.properties?.sentences?.items?.properties?.comprehension?.properties?.meaningUnits) {
+      for (const p of output.paragraphs) for (const sentence of p.sentences) sentence.comprehension = {
+        meaning: 'meaning', skeleton: '', connection: '', nuances: [], ...sentence.comprehension,
+        meaningUnits: { units: [{ text: sentence.text, meaning: 'meaning', role: 'statement' }], flow: 'A single statement.' },
+      };
+    }
     const value = JSON.stringify(output);
     options.onChunk?.(value);
     return value;
@@ -42,6 +48,7 @@ mock.module('../../src/firestore.js', { namedExports: {
   getImportConfig: async () => ({ analyzeSchema: schema, analyzePrompts: { chinese: 'test prompt' } }),
   getAllGrammarItems: async () => [],
   lookupWordsByTerms: async () => [],
+  createImportIngestion: async () => { throw new Error("Unexpected capture request in legacy route test"); },
   saveImportSession: async (session: ImportSession) => { stored = structuredClone({ ...session, id: 'article' }); return stored; },
   getImportSession: async () => stored ? structuredClone(stored) : null,
   getImportSessions: async () => stored ? [structuredClone(stored)] : [],

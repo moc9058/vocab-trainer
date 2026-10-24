@@ -148,3 +148,14 @@ TTL未設定でも認証は期限で失効するがmetadataが残る。設定は
 ## 検証記録
 
 実装時の結果と本人確認待ちは [iOS検証記録](ios-verification.md) を参照。
+
+## 画面・選択テキストからの取り込み（2026-10-24）
+
+画像選択、Shortcutsの `Read an image` / `Read selected text`、端末内OCRと文章選択を追加した。
+[画面から読み解くガイド](screen-reading-import.md)に設定手順、対応OS、データ保持と実機確認事項をまとめている。
+App IntentsはiOS 16以降。Control Centerの推奨入口はiOS 18以降。アプリ全体の最低iOS 15は維持する。
+Share/Widget Extension、App Groups、共有Keychainは追加していない。
+
+一時受信箱は入力受け渡しのための端末内ファイルで、既存の学習sessionや回答をローカル永続化するものではない。
+画像・未確定OCR・再送要求は最長24時間利用でき、期限後の次回操作で削除する。ログアウト時にも破棄を確認する。
+保存済みの外部ソース・辞書項目は従来どおりFirestoreを正とする。

@@ -277,6 +277,8 @@ export async function runAnalysisTask(payload: ImportTaskPayload): Promise<void>
 
 /** Bounded scan using single-field indexes. Also recovers a task that exhausted queue delivery retries. */
 export async function reconcileAnalysisJobs(runLocally = false): Promise<number> {
+  const receipts = await db.collection('import_ingestion_receipts').where('expiresAt', '<=', Date.now()).limit(100).get();
+  if (!receipts.empty) { const batch = db.batch(); receipts.docs.forEach(doc => batch.delete(doc.ref)); await batch.commit(); }
   const docs = await jobCollection.where('nextWakeAt', '<=', Date.now()).limit(20).get();
   for (const doc of docs.docs) {
     let j = readJob(doc)!;

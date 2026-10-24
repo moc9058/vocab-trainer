@@ -13,7 +13,7 @@ import type {
 
 // ----- Import sessions (paused, resumable article reviews) -----
 
-type NewImportSession = Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean; analyzeAsJob?: boolean };
+type NewImportSession = Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean; analyzeAsJob?: boolean; ingestionId?: string };
 
 /** The list carries the article quizzes' `pool` alongside the summaries: the handler
  *  already reads every session document in full, so deriving it there costs nothing,

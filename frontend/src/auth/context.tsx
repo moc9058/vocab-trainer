@@ -1,3 +1,4 @@
+import { NativeCapture } from '../platform/capture';
 import { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { apiFetch, apiOrigin } from '../api/transport';
@@ -72,10 +73,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => { loginBusy.current = false; });
   }, [refresh]);
   const logout = useCallback(async () => {
+    if (isNative()) {
+      const inputs = (await NativeCapture.list()).captures;
+      if (inputs.length && !window.confirm(t('captureLogoutConfirm'))) return;
+    }
     if (getOutboxState().pending && !window.confirm(t('discardPendingLogout'))) return;
     if (getOutboxState().pending) {
       try { discardAnswers(); } catch { window.alert(t('syncLogoutWait')); return; }
     }
+    if (isNative()) await NativeCapture.discardAll();
     let confirmed = false;
     try { confirmed = (await apiFetch(isNative() ? '/api/auth/mobile/logout' : '/api/auth/logout', { method: 'POST', signal: AbortSignal.timeout(15_000) })).ok; }
     catch { /* Local logout is still possible; the UI reports unconfirmed server revocation. */ }

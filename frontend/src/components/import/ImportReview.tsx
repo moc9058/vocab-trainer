@@ -24,6 +24,8 @@ const TRANSLATION_PREF_KEY = "importShowTranslations";
 
 interface Props {
   session: ImportSession;
+  sourceView?: React.ReactNode;
+  openSentence?: { index: number; sequence: number };
   analysisError?: string | null;
   onContinueAnalysis?: () => void;
   /** From the shared `useImportGroups` read — both the destination selects and the
@@ -50,6 +52,7 @@ interface Props {
 
 export default function ImportReview({
   session,
+  sourceView, openSentence,
   analysisError,
   onContinueAnalysis,
   allWordGroups,
@@ -232,7 +235,7 @@ export default function ImportReview({
         <header className="mb-4 flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <h2 className="truncate text-base font-bold text-gray-100 sm:text-lg">
-              {t("importReview")}
+              {session.sourceOrigin?.sourceLabel ? `${session.sourceOrigin.sourceLabel} · ${t("importReview")}` : t("importReview")}
             </h2>
             <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
               <span className="font-mono text-[11px] text-gray-500">
@@ -330,7 +333,7 @@ export default function ImportReview({
           <div className="mb-4"><ImportDestinationRail language={session.language} allWordGroups={allWordGroups} allGrammarGroups={allGrammarGroups}
             wordGroupId={session.wordGroupId} grammarGroupId={session.grammarGroupId} groupBNames={session.groupBNames}
             onChange={patch => { if (!mutationLocked) onPatch(s => ({ ...s, ...patch }), true); }} collapsible /></div>
-          <ImportFullTextReader key={session.id} session={session} onPatch={mutationLocked ? undefined : onPatch}
+          <ImportFullTextReader key={session.id} session={session} sourceView={sourceView} openSentence={openSentence} onPatch={mutationLocked ? undefined : onPatch}
           onReviseSentence={index => { setRevisionSelection(null); queueMicrotask(() => setRevisionSelection(index)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
           onAssistWord={setConversion} onConvertGrammar={item => setConversion(item)} revisionLocked={mutationLocked}
           renderRegistration={item => <RegisterControls blocked={mutationLocked ? t("importRevisionGenerating") : undefined} item={item}

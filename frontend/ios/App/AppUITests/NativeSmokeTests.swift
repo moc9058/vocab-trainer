@@ -1,5 +1,32 @@
 import XCTest
 final class NativeSmokeTests: XCTestCase {
+    func testCaptureOCRAndTextConfirmation() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["--vocab-local-smoke", "--vocab-capture-smoke"]
+        app.launch()
+        let title = app.staticTexts["Read from a screen"]
+        XCTAssertTrue(title.waitForExistence(timeout: 30), "Synthetic input must survive delivery before the WebView is ready")
+        let block = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@ OR label == %@", "Choose passage 1:", "1 ↗")).firstMatch
+        XCTAssertTrue(block.waitForExistence(timeout: 30), "Vision must recognize text and return aligned image buttons")
+        block.tap()
+        app.swipeUp()
+        let text = app.textViews.firstMatch
+        XCTAssertTrue(text.waitForExistence(timeout: 10))
+        XCTAssertTrue((text.value as? String)?.contains("虽然很忙") == true)
+        let picture = XCTAttachment(screenshot: app.screenshot()); picture.name = "On-device OCR and confirmation"; picture.lifetime = .keepAlways; add(picture)
+        let confirm = app.buttons["Use this passage"]
+        for _ in 0..<4 { if confirm.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(confirm.exists); confirm.tap()
+        let analyze = app.buttons["Analyze"]
+        for _ in 0..<4 { if analyze.isHittable { break }; app.swipeUp() }
+        XCTAssertTrue(analyze.waitForExistence(timeout: 10)); analyze.tap()
+        let parts = app.staticTexts["Meaningful parts"]
+        XCTAssertTrue(parts.waitForExistence(timeout: 30), "Synthetic API job and detailed explanation must be saved and displayed")
+        let detail = XCTAttachment(screenshot: app.screenshot()); detail.name = "Native source meaning units"; detail.lifetime = .keepAlways; add(detail)
+        XCUIDevice.shared.press(.home); app.activate()
+        XCTAssertTrue(parts.waitForExistence(timeout: 20))
+    }
+
     func testBundledAppLoadsEmulatorAndResumes() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--vocab-local-smoke"]
@@ -20,6 +47,8 @@ final class NativeSmokeTests: XCTestCase {
         app.buttons["Word Quiz"].tap()
         let start = app.buttons["Start Word Quiz"]
         XCTAssertTrue(start.waitForExistence(timeout: 10)); start.tap()
+        let startNew = app.buttons["Start New"]
+        if startNew.waitForExistence(timeout: 3) { startNew.tap() }
         let reveal = app.buttons["Show Answer"]
         XCTAssertTrue(reveal.waitForExistence(timeout: 15)); reveal.tap()
         let correct = app.buttons["Correct"]
@@ -35,6 +64,8 @@ final class NativeSmokeTests: XCTestCase {
         app.swipeUp()
         let start = app.buttons["Start Translation"]
         XCTAssertTrue(start.waitForExistence(timeout: 10)); start.tap()
+        let startNew = app.buttons["Start New"]
+        if startNew.waitForExistence(timeout: 3) { startNew.tap() }
         let input = app.textViews.firstMatch
         XCTAssertTrue(input.waitForExistence(timeout: 10)); input.tap(); input.typeText("Hello world.")
         app.swipeUp()

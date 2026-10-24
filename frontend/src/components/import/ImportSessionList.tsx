@@ -7,6 +7,7 @@ interface Props {
   onResume: (sessionId: string) => void;
   onDelete: (sessionId: string) => void;
   onNew: () => void;
+  onCapture?: () => void;
   /** How many items each article quiz would ask — the pools span EVERY listed article,
    *  not the row they sit under, which is why they live in the header. */
   quizCounts: { a: number; b: number };
@@ -22,6 +23,7 @@ export default function ImportSessionList({
   onResume,
   onDelete,
   onNew,
+  onCapture,
   quizCounts,
   onQuiz,
 }: Props) {
@@ -61,6 +63,8 @@ export default function ImportSessionList({
             ＋ {t("importNewSession")}
           </button>
 
+          {onCapture && <button type="button" onClick={onCapture} className="mt-3 min-h-11 w-full rounded-xl border border-indigo-700 px-4 py-2.5 text-sm text-indigo-200 sm:ml-3 sm:w-auto">{t('captureTitle')}</button>}
+
           {/* Review, not intake — so it is separated from "new import" by a rule. The pool
               spans every article below, which is why one pair of buttons sits here rather
               than a pair on each row. */}
@@ -95,6 +99,7 @@ export default function ImportSessionList({
                     actions drop to a second line rather than crushing it. */}
                 <button onClick={() => onResume(s.id)} className="block w-full text-left">
                   <p className="truncate text-sm text-gray-100">{s.title}</p>
+                  {s.sourceOrigin?.sourceLabel && <p className="mt-1 text-xs text-indigo-300">{s.sourceOrigin.sourceLabel}</p>}
                   <p className="mt-0.5 text-[11px] text-gray-500">
                     {new Date(s.updatedAt).toLocaleString()}
                     {s.analysisState && <span className="ml-2 text-indigo-300">{t(({ queued: "importJobQueued", running: "importJobRunning", paused: "importJobPaused", failed: "importJobFailed", completed: "importJobCompleted", cancelled: "importJobCancelled" } as const)[s.analysisState])}</span>}

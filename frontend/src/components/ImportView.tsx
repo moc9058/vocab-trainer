@@ -1,7 +1,14 @@
+import { useSearchParams } from 'react-router-dom';
+import { isNative } from '../platform/native';
+import { NativeCapture, pendingCaptureRequest, type CaptureRequest, type LocalCapture } from '../platform/capture';
+import { useCaptureInbox } from '../hooks/useCaptureInbox';
+import CaptureWorkspace, { type CaptureSelection } from './capture/CaptureWorkspace';
+import CaptureImage from './capture/CaptureImage';
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "../i18n/context";
 import {
   startImportAnalysisJob,
+  getImportSession,
   resumeImportAnalysisJob,
   deleteImportSession,
   listImportSessions,
@@ -30,7 +37,7 @@ interface Props {
   onArticleQuiz?: (category: "A" | "B", pool: ImportQuizPool) => void;
 }
 
-type Phase = "sessions" | "input" | "analyzing" | "review";
+type Phase = "sessions" | "input" | "analyzing" | "review" | "capture";
 
 const MAX_TEXT = 8000;
 /** Stable identity so the pool memo doesn't re-run on every render before the fetch lands. */
@@ -41,6 +48,16 @@ const LONG_TEXT_WARNING = 1500;
 /** Phase router for the article importer; all session state lives in `useImportSession`. */
 export default function ImportView({ language, onQueue, onGrammarQueue, onArticleQuiz }: Props) {
   const { t } = useI18n();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const captureId = searchParams.get('capture') ?? undefined;
+  const { captures, error: inboxError, refresh: refreshCaptures } = useCaptureInbox();
+  const [captureSelection, setCaptureSelection] = useState<CaptureSelection | null>(null);
+  const [captureImage, setCaptureImage] = useState<LocalCapture | null>(null);
+  const [openSentence, setOpenSentence] = useState<{ index: number; sequence: number }>();
+  const launchRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (isNative() && captureId && launchRef.current !== captureId) { launchRef.current = captureId; setPhase('capture'); }
+  }, [captureId]);
   const [phase, setPhase] = useState<Phase>("sessions");
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +76,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
   }>({ groupBNames: [] });
 
   const abortRef = useRef<AbortController | null>(null);
+  const captureResuming = useRef(false);
 
   // One read of the group collections for the whole screen — the destination
   // selects and the membership chips are two views of the same documents.
@@ -93,6 +111,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
       : job.error?.code === "IMPORT_CONFIG_ERROR" ? "importJobConfigError"
       : (job.error?.code === "IMPORT_OUTPUT_LIMIT" && !job.error.retryable) || job.error?.code === "IMPORT_INVALID_OUTPUT" ? "importJobOutputError" : "importAnalysisRetryHint") : null);
     setPhase("review");
+    setOpenSentence({ index: 0, sequence: Date.now() });
   });
 
   const refreshSessions = useCallback(() => {
@@ -136,7 +155,21 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
     let current = existing;
     const key = crypto.randomUUID();
     try {
-      current = existing ? await prepareAnalysis() ?? existing : await create({
+      if (existing) current = await prepareAnalysis() ?? existing;
+      else if (captureSelection) {
+        const capture = await NativeCapture.load({ id: captureSelection.capture.id });
+        const prior = capture.operations[captureSelection.blockId];
+        const input: CaptureRequest = prior ? pendingCaptureRequest(prior) : {
+          title: text.slice(0, 40), text, paragraphs: [], items: [], analyzeAsJob: true,
+          ingestionId: crypto.randomUUID(), sourceOrigin: captureSelection.origin,
+          ...draftDestination, focusedSentenceIndex: 0, status: 'in-progress',
+        };
+        const request = JSON.stringify(input);
+        if (!prior) await NativeCapture.recordOperation({ id: capture.id, blockId: captureSelection.blockId, request });
+        current = await create(input, controller.signal);
+        await NativeCapture.recordOperation({ id: capture.id, blockId: captureSelection.blockId, request, sessionId: current.id });
+        setCaptureImage({ ...capture, blocks: capture.blocks?.filter(b => captureSelection.blockIds.includes(b.id)) });
+      } else current = await create({
         title: text.trim().slice(0, 40), text: text.trim(), paragraphs: [], items: [], analyzeAsJob: true,
         ...draftDestination, focusedSentenceIndex: 0, status: "in-progress",
       }, controller.signal);
@@ -175,15 +208,49 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
   function exitToList() {
     monitor.stop(); close();
     setText("");
+    setCaptureSelection(null); setCaptureImage(null); setSearchParams({}, { replace: true });
     setPhase("sessions");
     refreshSessions();
   }
+
+  async function resumeCapture(capture: LocalCapture, blockId: string) {
+    if (captureResuming.current) return;
+    captureResuming.current = true;
+    setError(null);
+    try {
+      const operation = capture.operations[blockId];
+      if (!operation) return;
+      const input = pendingCaptureRequest(operation);
+      const saved = operation.sessionId ? await getImportSession(language, operation.sessionId) : await create(input);
+      if (!operation.sessionId) await NativeCapture.recordOperation({ id: capture.id, blockId, request: operation.request, sessionId: saved.id });
+      setCaptureImage({ ...capture, blocks: capture.blocks?.filter(b => blockId.split(':')[0].split('_').includes(b.id)) });
+      await handleResume(saved.id);
+      setOpenSentence({ index: saved.paragraphs[0]?.sentences[0]?.index ?? 0, sequence: Date.now() });
+      // Creation may have succeeded immediately before the app was terminated.
+      if (!saved.analysisJobRef && saved.analysisProgress && saved.analysisProgress.nextChunk < saved.analysisProgress.chunks.length) {
+        await startImportAnalysisJob(language, saved.id, crypto.randomUUID(), saved.analysisRevision ?? 0);
+        monitor.watch(saved.id); setPhase('analyzing');
+      }
+    } catch (err) { setError(err instanceof Error ? err.message : String(err)); }
+    finally { captureResuming.current = false; }
+  }
+
+  if (phase === 'capture' && isNative()) return <>
+    {error && <p role="alert" className="p-3 text-red-300">{error}</p>}
+    {!captureId && <div className="mx-auto max-w-4xl space-y-2 px-3 pt-4">{inboxError && <p role="alert">{t('captureLoadError')}</p>}{captures.map(c => <button type="button" key={c.id} onClick={() => setSearchParams({ capture: c.id }, { replace: true })} className="mr-2 min-h-11 rounded-lg border border-gray-700 px-3 text-sm text-indigo-200">{new Date(c.receivedAt).toLocaleString()}</button>)}</div>}
+    <CaptureWorkspace captureId={captureId} onConfirm={selection => { setCaptureSelection(selection); setCaptureImage(selection.capture); setText(selection.text); setPhase('input'); }} onResume={(c, id) => void resumeCapture(c, id)} onClose={() => { setPhase('sessions'); setSearchParams({}, { replace: true }); void refreshCaptures(); }} />
+  </>;
 
   // ===== REVIEW =====
   if (phase === "review" && session) {
     return (
       <ImportReview
         session={session}
+        openSentence={captureImage ? openSentence : undefined}
+        sourceView={captureImage ? <div className="space-y-3"><CaptureImage capture={captureImage} onChoose={id => {
+          if (captureImage.operations[id]?.sessionId === session.id || !captureImage.operations[id]) setOpenSentence({ index: session.paragraphs[0]?.sentences[0]?.index ?? 0, sequence: Date.now() });
+          else void resumeCapture(captureImage, id);
+        }} /><button type="button" className="min-h-11 rounded-lg border border-indigo-700 px-4 text-indigo-200" onClick={() => { setPhase('capture'); void refreshCaptures(); }}>{t('captureOtherText')}</button><ol className="space-y-2">{session.paragraphs.flatMap(p => p.sentences).map(sentence => <li key={sentence.index}><button type="button" onClick={() => setOpenSentence({ index: sentence.index, sequence: Date.now() })} className="min-h-11 w-full whitespace-pre-wrap break-words rounded-lg border border-gray-700 p-3 text-left text-gray-200">{sentence.index + 1}. {sentence.text} ↗</button></li>)}</ol></div> : undefined}
         allWordGroups={groups.wordGroups}
         allGrammarGroups={groups.grammarGroups}
         membershipOverlay={membershipOverlay}
@@ -254,7 +321,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
               <p className="mt-1 text-xs text-gray-400 sm:text-sm">{t("importDescription")}</p>
             </div>
             <button
-              onClick={() => setPhase("sessions")}
+              onClick={() => setPhase(captureSelection ? "capture" : "sessions")}
               className="shrink-0 rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-200 sm:text-sm"
             >
               {t("cancel")}
@@ -274,7 +341,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                maxLength={MAX_TEXT}
+                maxLength={captureSelection ? undefined : MAX_TEXT}
                 rows={16}
                 placeholder={t("importPastePlaceholder")}
                 className="h-48 w-full resize-y rounded-2xl border border-gray-700 bg-gray-800/60 px-3 py-3 text-base leading-relaxed text-gray-100 placeholder-gray-600 focus:border-indigo-500 focus:outline-none sm:h-auto sm:px-4 sm:text-[15px]"
@@ -294,6 +361,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
             </div>
 
             <div className="space-y-3">
+              {captureSelection && <p className="text-sm leading-relaxed text-gray-400">{t("captureSendHint")}</p>}
               <ImportDestinationRail
                 language={language}
                 allWordGroups={groups.wordGroups}
@@ -306,7 +374,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
               />
               <button
                 onClick={() => void handleAnalyze()}
-                disabled={!text.trim()}
+                disabled={!text.trim() || text.length > MAX_TEXT}
                 className="w-full rounded-xl bg-indigo-600 px-5 py-3 font-medium text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t("importAnalyze")}
@@ -329,9 +397,10 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
       <ImportSessionList
         sessions={sessions}
         loading={listLoading}
-        onResume={handleResume}
+        onResume={id => { setCaptureImage(null); void handleResume(id); }}
         onDelete={handleDelete}
-        onNew={() => { setError(null); setPhase("input"); }}
+        onNew={() => { setCaptureSelection(null); setCaptureImage(null); setText(''); setError(null); setPhase("input"); }}
+        onCapture={isNative() && language === 'chinese' ? () => { setError(null); setPhase('capture'); void refreshCaptures(); } : undefined}
         quizCounts={{ a: poolSize(articlePools.a), b: poolSize(articlePools.b) }}
         onQuiz={
           onArticleQuiz &&

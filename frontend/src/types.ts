@@ -609,13 +609,29 @@ export interface ImportConstruction {
   elements: { occurrenceIds: string[]; role: string; explanation: string; fixed: boolean }[];
 }
 
+export interface ImportMeaningUnits {
+  version: 1;
+  units: { text: string; range: ImportTextRange; meaning: string; role: string }[];
+  flow: string;
+}
+
+export interface ImportSourceOrigin {
+  version: 1;
+  method: 'screenshot-shortcut' | 'shared-image' | 'image-picker' | 'shared-text' | 'paste';
+  sourceLabel?: string;
+  sourceUrl?: string;
+  capturedAt?: string;
+  sourceKind: 'post' | 'comment' | 'article' | 'unknown';
+  textConfirmed: true;
+}
+
 export interface ImportReadingAnalysis {
   version: 1;
   sourceText: string;
   explanationLanguage: string;
   overview: string;
   candidatesManaged?: boolean;
-  comprehension?: { meaning: string; skeleton: string; connection: string; nuances: { text: string; evidence: string; certainty: "explicit" | "inferred" | "uncertain" }[] };
+  comprehension?: { meaningUnits?: ImportMeaningUnits; meaning: string; skeleton: string; connection: string; nuances: { text: string; evidence: string; certainty: "explicit" | "inferred" | "uncertain" }[] };
   ambiguityNotes: string[];
   occurrences: ImportOccurrence[];
   constructions: ImportConstruction[];
@@ -818,6 +834,7 @@ export interface ImportAnalysisJobSummary {
 }
 
 export interface ImportSession {
+  sourceOrigin?: ImportSourceOrigin;
   contentRevision?: number;
   activeRevisionId?: string;
   latestRevisionId?: string;
@@ -857,6 +874,7 @@ export interface ImportQuizPool {
 }
 
 export interface ImportSessionSummary {
+  sourceOrigin?: ImportSourceOrigin;
   analysisState?: ImportAnalysisState;
   id: string;
   language: string;

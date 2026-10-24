@@ -35,7 +35,7 @@ export type SaveStatus = "idle" | "saving" | "saved" | "error";
 /** Free-text edits settle at this cadence; everything consequential flushes at once. */
 const AUTOSAVE_DEBOUNCE_MS = 1200;
 
-type NewSessionInput = Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean; analyzeAsJob?: boolean };
+type NewSessionInput = Omit<ImportSession, "id" | "language" | "createdAt" | "updatedAt"> & { analyzeInParts?: boolean; analyzeAsJob?: boolean; ingestionId?: string };
 
 interface Options {
   /** Backend full-name language, e.g. "chinese". */

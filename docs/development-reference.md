@@ -513,3 +513,36 @@ revision transaction/worker tests under `demo-import-revisions`.
 `MOBILE_GOOGLE_CLIENT_ID=... ./deploy.sh` (or the PowerShell environment equivalent) updates only that public setting along with the normal deploy environment. Omission preserves the deployed setting. No `--auth` upload or learning-data migration is required. Mobile sign-in returns 503 until configured; existing Web authentication continues.
 
 `ios:smoke` under backend is an explicit Node 24 / emulator-only fixture server with LLM mocks and synthetic data in `demo-vocab-ios-smoke`. AppUITests require matching local assets and refuse production assets before starting requests. See [verification record](ios-verification.md) for evidence and remaining owner operations.
+
+
+## Screen reading and meaningful parts (2026-10-24)
+
+See [screen reading](screen-reading-import.md) for the user workflow and device
+verification boundary. `CaptureIntents.swift`, `CaptureInbox.swift` and
+`NativeCapture.swift` receive images/text in the main app, protect a temporary inbox
+and run Vision OCR locally. `CaptureWorkspace` confirms a passage before forwarding
+it to the existing import pipeline. No extension, shared credential container or
+cloud image store is required.
+
+`sourceOrigin` is optional, validated creation metadata on import sessions and their
+summaries. It is retained across old-client saves and cannot be overwritten through
+PUT. Capture creates send a UUID `ingestionId`; a transaction creates the source and
+an `import_ingestion_receipts` document together. Same ID and request return the
+same source (200 replay / 201 new); changed inputs return 409 and a deleted source
+returns 410. The existing reconciler deletes up to 100 seven-day-expired receipts
+per pass. No TTL configuration or bulk data migration is needed. The native inbox
+refuses automatic retries after 24 hours; receipt deduplication is not permanent.
+
+`import-explanation-config.ts` defines the runtime detailed schema for normal
+sentence explanations and newly frozen revision jobs. Meaning units reconstruct
+source text exactly, use server-calculated UTF-16 ranges, respect grapheme boundaries
+and have 24-unit / 80KB limits. Legacy explanations and frozen schemas remain valid.
+Initial compact analysis excludes comprehension. Detailed generation stays within
+the existing 150KB sentence and 900KB session limits. Adding units to a detailed
+explanation protects existing candidates and receipts; initial syntax enrichment
+of compact readings retains its existing reconciliation behavior.
+
+The React unit-to-word/construction projection uses verified occurrence ranges,
+not spelling or stored unit-to-candidate IDs. Registration uses existing queues and
+membership recovery. Deploy with `./deploy.sh`; runtime schema changes need no
+prompt upload. Native changes require `ios:sync` and a separate Xcode install.

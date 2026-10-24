@@ -16,7 +16,7 @@ mock.module('../../../src/llm.js', { namedExports: {
     await o.worker.onUsage({ prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 }, 'mock-model');
     if (o.schema.name === 'import_word_assist') return JSON.stringify({ term: '倒是', meaning: '確かに', transliteration: 'dào shì' });
     const { target } = JSON.parse(o.user);
-    return JSON.stringify({ paragraphs: [{ sentences: [{ text: target, overview: '文全体の意味', comprehension: { meaning: '承諾はした。', skeleton: '彼が承諾した', connection: '文脈は不十分', nuances: [{ text: '譲歩', evidence: '倒是', certainty: 'inferred' }] }, explanationLanguage: 'ja', ambiguityNotes: [],
+    return JSON.stringify({ paragraphs: [{ sentences: [{ text: target, overview: '文全体の意味', comprehension: { meaningUnits: { units: [{ text: target, meaning: '承諾した', role: '結論' }], flow: '一つの内容。' }, meaning: '承諾はした。', skeleton: '彼が承諾した', connection: '文脈は不十分', nuances: [{ text: '譲歩', evidence: '倒是', certainty: 'inferred' }] }, explanationLanguage: 'ja', ambiguityNotes: [],
       words: [{ term: '倒是', surface: '倒是', occurrence: 0, transliteration: 'dào shì', meaning: '確かに' }], grammar: [{ statement: '倒是', description: '確かに〜だが', elements: [{ wordIndices: [0], role: '固定表現', explanation: '', fixed: true }] }] }] }] });
   }
 } });

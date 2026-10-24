@@ -19,6 +19,8 @@ function partStyle(part: ConstructionPart) {
 const PINYIN_KEY = "importShowFullTextPinyin";
 interface Props {
   session: ImportSession;
+  sourceView?: React.ReactNode;
+  openSentence?: { index: number; sequence: number };
   onReviseSentence?: (index: number) => void;
   onAssistWord?: (item: ImportWordItem) => void;
   onConvertGrammar?: (item: ImportGrammarItem) => void;
@@ -28,7 +30,7 @@ interface Props {
   onPatch?: (updater: (session: ImportSession) => ImportSession, immediate?: boolean) => void;
 }
 
-export default function ImportFullTextReader({ session, onEditSentence, onPatch, renderRegistration, onReviseSentence, onConvertGrammar, onAssistWord, revisionLocked }: Props) {
+export default function ImportFullTextReader({ session, sourceView, openSentence, onEditSentence, onPatch, renderRegistration, onReviseSentence, onConvertGrammar, onAssistWord, revisionLocked }: Props) {
   const { t } = useI18n();
   const [showPinyin, setShowPinyin] = useState(() => localStorage.getItem(PINYIN_KEY) !== "0");
   const [showBoundaries, setShowBoundaries] = useState(() => localStorage.getItem(BOUNDARIES_KEY) !== "0");
@@ -47,6 +49,10 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
     setSelected(null); setError(null); setBusy(false); requestRef.current++;
   }, [session.id]);
   useEffect(() => () => { requestRef.current++; requestController.current?.abort(); }, []);
+
+  useEffect(() => {
+    if (openSentence && session.paragraphs.some(p => p.sentences.some(s => s.index === openSentence.index))) setSelected({ sentenceIndex: openSentence.index });
+  }, [session.id, openSentence?.sequence]);
 
   function close() {
     setSelected(null); setError(null);
@@ -128,14 +134,20 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
     const request = ++requestRef.current;
     const sessionId = session.id;
     const source = sentence.text;
+    const baseline = sentence.readingAnalysis;
     const index = sentence.index;
     setBusy(true); setError(null);
     try {
       const result = await generateImportSentenceExplanation(session.language, sessionId, index, controller.signal);
       const current = sessionRef.current;
-      if (request !== requestRef.current || current.id !== sessionId || result.sentenceIndex !== index || result.readingAnalysis.sourceText !== source || current.paragraphs.flatMap(p => p.sentences).find(s => s.index === index)?.text !== source) return;
-      onPatch(s => s.id !== sessionId ? s : reconcileReadingSession({ ...s, paragraphs: s.paragraphs.map(p => ({ ...p, sentences: p.sentences.map(value =>
-        value.index === index && value.text === source ? { ...value, readingAnalysis: { ...result.readingAnalysis, ...(value.readingAnalysis?.candidatesManaged ? { candidatesManaged: true } : {}) } } : value) })) }), true);
+      if (request !== requestRef.current || current.id !== sessionId || result.sentenceIndex !== index || result.readingAnalysis.sourceText !== source || current.paragraphs.flatMap(p => p.sentences).find(s => s.index === index)?.text !== source || current.paragraphs.flatMap(p => p.sentences).find(s => s.index === index)?.readingAnalysis !== baseline) return;
+      const protectCandidates = !!(baseline?.comprehension || baseline?.overview || baseline?.candidatesManaged);
+      onPatch(s => {
+        if (s.id !== sessionId) return s;
+        const next = { ...s, paragraphs: s.paragraphs.map(p => ({ ...p, sentences: p.sentences.map(value =>
+          value.index === index && value.text === source ? { ...value, readingAnalysis: { ...result.readingAnalysis, ...(protectCandidates ? { candidatesManaged: true } : {}) } } : value) })) };
+        return protectCandidates ? next : reconcileReadingSession(next);
+      }, true);
       // New occurrence ids need not be the same as the previous analysis.
       setSelected(current => current?.sentenceIndex === index ? { sentenceIndex: index } : current);
     } catch (err) {
@@ -145,7 +157,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
 
   // New compact imports load syntax on the first explicit sentence selection; old articles keep the manual button.
   useEffect(() => {
-    if (!sentence || selected?.occurrenceId || !session.analysisProgress || reading || !onPatch || busy) return;
+    if (!sentence || selected?.occurrenceId || !session.analysisProgress || (reading && !(session.sourceOrigin && !reading.overview && !reading.comprehension)) || !onPatch || busy) return;
     const key = `${session.id}:${sentence.index}:${sentence.text}`;
     if (autoRequested.current.has(key)) return;
     autoRequested.current.add(key);
@@ -173,7 +185,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
       className="mb-5 rounded-lg border border-gray-700 px-3 py-2 text-xs text-indigo-200">
       {showPinyin ? t("importHideFullTextPinyin") : t("importShowFullTextPinyin")}
     </button>}
-    <article className="space-y-6 break-words text-[17px] leading-[2.3] text-gray-100 sm:text-lg"
+    {sourceView ?? <article className="space-y-6 break-words text-[17px] leading-[2.3] text-gray-100 sm:text-lg"
       onPointerDown={event => { gestureRef.current = { x: event.clientX, y: event.clientY }; movedRef.current = false; }}
       onPointerMove={event => { if (gestureRef.current && Math.hypot(event.clientX - gestureRef.current.x, event.clientY - gestureRef.current.y) > 8) movedRef.current = true; }}
       onPointerUp={() => { gestureRef.current = null; }}>
@@ -214,7 +226,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
           </span>;
         })}
       </p>)}
-    </article>
+    </article>}
     {session.analysisProgress && session.analysisProgress.nextChunk < session.analysisProgress.chunks.length && <section className="mt-6 text-gray-400">
       <h4 className="mb-2 text-xs">{t("importPendingSource")}</h4>
       <p className="whitespace-pre-wrap break-words text-[17px] leading-relaxed">{session.analysisProgress.chunks.slice(session.analysisProgress.nextChunk).join("")}</p>
@@ -234,7 +246,7 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
           </div>
           <button type="button" onClick={close} aria-label={t("importCloseFullText")} className="rounded px-3 py-1 text-gray-400 hover:bg-gray-800">×</button>
         </header>
-        {!word && <><ImportComprehension reading={reading} /><button type="button" disabled={revisionLocked || busy} className="mb-3 rounded border border-indigo-700 px-3 py-2 text-sm text-indigo-200 disabled:opacity-40" onClick={() => { onReviseSentence?.(sentence.index); close(); }}>{t("importReviseRange")}</button></>}
+        {!word && <><ImportComprehension reading={reading} sentence={sentence} items={session.items} onWord={id => setSelected({ sentenceIndex: sentence.index, occurrenceId: id })} onConstruction={id => setSelected({ sentenceIndex: sentence.index, constructionId: id })} /><button type="button" disabled={revisionLocked || busy} className="mb-3 rounded border border-indigo-700 px-3 py-2 text-sm text-indigo-200 disabled:opacity-40" onClick={() => { onReviseSentence?.(sentence.index); close(); }}>{t("importReviseRange")}</button></>}
         {word && !fixedGrammar.has(word.id) && <div className="mb-3">{renderRegistration?.(readingWordCandidate(sentence, word, session.items))}</div>}
         {word && !fixedGrammar.has(word.id) && <div className="mb-4 space-y-2 rounded-xl bg-indigo-950/30 p-3 text-sm text-gray-200">
           {word.transliteration && <p className="font-mono text-indigo-300">{word.transliteration}</p>}
@@ -288,8 +300,9 @@ export default function ImportFullTextReader({ session, onEditSentence, onPatch,
         {reading?.ambiguityNotes.map((note, index) => <p key={index} className="mb-2 text-sm text-amber-300">{note}</p>)}
         {!reading && <p className="mb-3 text-sm text-gray-400">{sentence.readingAnalysis ? t("importStaleExplanation") : t("importNoExplanation")}</p>}
         {error && <p role="alert" className="mb-3 break-words text-sm text-red-300">{error}</p>}
+        {reading && !reading.comprehension?.meaningUnits && <p className="text-xs text-gray-400">{t("importAddMeaningUnitsHint")}</p>}
         <footer className="mt-4 flex flex-wrap gap-2 text-xs">
-          {onPatch && <button type="button" onClick={() => void generate()} disabled={busy} className="rounded-lg border border-indigo-700 px-3 py-2 text-indigo-200 disabled:opacity-50">{busy ? t("importGeneratingExplanation") : reading ? t("importRegenerateExplanation") : t("importGenerateExplanation")}</button>}
+          {onPatch && <button type="button" onClick={() => void generate()} disabled={busy} className="rounded-lg border border-indigo-700 px-3 py-2 text-indigo-200 disabled:opacity-50">{busy ? t("importGeneratingExplanation") : reading && !reading.comprehension?.meaningUnits ? t("importAddMeaningUnits") : reading ? t("importRegenerateExplanation") : t("importGenerateExplanation")}</button>}
           {onEditSentence && <button type="button" onClick={() => { close(); onEditSentence(sentence.index); }} className="rounded-lg border border-gray-700 px-3 py-2 text-gray-300">{t("importEditSentence")}</button>}
         </footer>
       </aside>

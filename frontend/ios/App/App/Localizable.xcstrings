@@ -1,0 +1,138 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Read an image": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read an image"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画像を読み解く"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이미지 읽기"
+          }
+        }
+      }
+    },
+    "Read selected text": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read selected text"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択した文章を読み解く"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 글 읽기"
+          }
+        }
+      }
+    },
+    "Image": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画像"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이미지"
+          }
+        }
+      }
+    },
+    "Text": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文章"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "글"
+          }
+        }
+      }
+    },
+    "Open an image in Vocab Trainer to select Chinese text and study it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open an image in Vocab Trainer to select Chinese text and study it."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vocab Trainerで画像を開き、学習する中国語の文章を選びます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vocab Trainer에서 이미지를 열고 학습할 중국어 글을 선택합니다."
+          }
+        }
+      }
+    },
+    "Open shared Chinese text in Vocab Trainer. Review the text before analysis.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open shared Chinese text in Vocab Trainer. Review the text before analysis."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共有した中国語の文章をVocab Trainerで開き、解析前に原文を確認します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "공유한 중국어 글을 Vocab Trainer에서 열고 분석 전에 원문을 확인합니다."
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

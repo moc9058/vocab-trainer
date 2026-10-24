@@ -1,9 +1,11 @@
+import { validateMeaningUnits } from './importMeaningUnits';
 import type { ImportConstruction, ImportItem, ImportOccurrence, ImportSentence, ImportSession, ImportWordItem } from "../types";
 import { convertedConstruction } from "./importWordLinks";
 import { termOccurrences } from "./importSession";
 
 export function validReading(sentence: ImportSentence) {
   return sentence.readingAnalysis?.version === 1 && sentence.readingAnalysis.sourceText === sentence.text
+    && (sentence.readingAnalysis.comprehension?.meaningUnits === undefined || validateMeaningUnits(sentence.text, sentence.readingAnalysis.comprehension.meaningUnits))
     ? sentence.readingAnalysis : undefined;
 }
 

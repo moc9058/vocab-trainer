@@ -1,3 +1,5 @@
+import { ingestionKey } from './import-ingestions.js';
+import { ImportCheckpointError } from './import-parts.js';
 import { normalizeQuizSitting } from "./quiz-sitting.js";
 import { applyMixedOperation, type MixedOperation } from "./mixed-operations.js";
 import { initializeMixedScope } from "./mixed-quiz-scope.js";
@@ -3498,6 +3500,24 @@ export async function normalizeWordGroupMembership(
 // paused at once, so this follows the translation_history pattern, not the
 // singleton-per-language quiz/speaking session pattern.
 const importSessions = db.collection("import_sessions");
+
+export async function createImportIngestion(session: Omit<ImportSession, 'id'>, ingestionId: string, digest: string): Promise<{ session: ImportSession; created: boolean }> {
+  const receiptRef = db.collection('import_ingestion_receipts').doc(ingestionKey(session.language, ingestionId));
+  const newRef = importSessions.doc();
+  return db.runTransaction(async tx => {
+    const receipt = await tx.get(receiptRef);
+    if (receipt.exists) {
+      const data = receipt.data()!;
+      if (data.digest !== digest) throw new ImportCheckpointError(409, 'This ingestion ID was already used with different inputs.');
+      const saved = await tx.get(importSessions.doc(data.sessionId));
+      if (!saved.exists) throw new ImportCheckpointError(410, 'This source was deleted. Start a new import explicitly.');
+      return { session: { id: saved.id, ...saved.data() } as ImportSession, created: false };
+    }
+    tx.set(newRef, session);
+    tx.set(receiptRef, { sessionId: newRef.id, digest, expiresAt: Date.now() + 7 * 86400000 });
+    return { session: { id: newRef.id, ...session }, created: true };
+  });
+}
 
 export async function saveImportSession(
   session: Omit<ImportSession, "id">

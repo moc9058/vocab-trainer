@@ -1,3 +1,4 @@
+import CaptureLaunchNotice from './components/capture/CaptureLaunchNotice';
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import LanguageSelectPage from "./components/LanguageSelectPage";
 import Dashboard from "./components/Dashboard";
@@ -22,10 +23,13 @@ export default function App() {
   }
 
   return (
+    <>
+    <CaptureLaunchNotice />
     <Routes key={quizRoute ? resumeEpoch : 0}>
       <Route path="/" element={<LanguageSelectPage />} />
       <Route path="/:language/*" element={<Dashboard />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }
