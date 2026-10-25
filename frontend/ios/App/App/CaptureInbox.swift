@@ -19,6 +19,24 @@ struct CaptureOperation: Codable {
     let createdAt: Date
     var sessionId: String?
 }
+struct CaptureDraft: Codable {
+    var text: String
+    var selected: [String]
+    var sourceLabel: String
+    var sourceKind: String
+    var sourceUrl: String
+    var blockId: String?
+    var wordGroupId: String?
+    var grammarGroupId: String?
+    var groupBNames: [String]
+    var descriptionLanguage: String
+}
+struct ReadingLaunch: Codable {
+    let id: String
+    let receivedAt: Date
+    var sourceUrl: String?
+    var acknowledged = false
+}
 struct LocalCapture: Codable {
     let id: String
     let receivedAt: Date
@@ -30,15 +48,18 @@ struct LocalCapture: Codable {
     var blocks: [CaptureBlock]?
     var operations: [String: CaptureOperation] = [:]
     var acknowledged = false
+    var draft: CaptureDraft?
 }
 enum CaptureFailure: LocalizedError {
-    case invalid, full, expired, locked
+    case invalid, full, expired, locked, tooLong, chineseUnavailable
     var errorDescription: String? {
         switch self {
-        case .invalid: return "CAPTURE_INVALID"
-        case .full: return "CAPTURE_FULL"
-        case .expired: return "CAPTURE_EXPIRED"
-        case .locked: return "CAPTURE_LOCKED"
+        case .invalid: return NSLocalizedString("CAPTURE_INVALID", comment: "")
+        case .full: return NSLocalizedString("CAPTURE_FULL", comment: "")
+        case .expired: return NSLocalizedString("CAPTURE_EXPIRED", comment: "")
+        case .locked: return NSLocalizedString("CAPTURE_LOCKED", comment: "")
+        case .tooLong: return NSLocalizedString("CAPTURE_TOO_LONG", comment: "")
+        case .chineseUnavailable: return NSLocalizedString("CAPTURE_CHINESE_UNAVAILABLE", comment: "")
         }
     }
 }
@@ -70,6 +91,7 @@ actor CaptureInbox {
         let urls = try files.contentsOfDirectory(at: root(), includingPropertiesForKeys: nil)
         var result: [LocalCapture] = []
         for url in urls {
+            if files.fileExists(atPath: url.appendingPathComponent("launch.json").path) { continue }
             let metadata = url.appendingPathComponent("capture.json")
             // A process can die after reserving a folder but before writing metadata.
             guard files.fileExists(atPath: metadata.path) else { try files.removeItem(at: url); continue }
@@ -100,19 +122,20 @@ actor CaptureInbox {
     private func reserve(bytes: Int) throws -> URL {
         let captures = try list()
         let size = try diskUsage()
-        guard captures.count < 10, size + bytes < 100 * 1024 * 1024 else { throw CaptureFailure.full }
+        guard captures.count + (try launches()).count < 10, size + bytes < 100 * 1024 * 1024 else { throw CaptureFailure.full }
         let url = try folder(UUID().uuidString)
         try files.createDirectory(at: url, withIntermediateDirectories: true, attributes: [.protectionKey: FileProtectionType.complete])
         return url
     }
     func receiveText(_ text: String, method: String = "shared-text") throws -> LocalCapture {
-        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf16.count <= 8000 else { throw CaptureFailure.invalid }
+        guard ["shared-text", "paste"].contains(method), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw CaptureFailure.invalid }
+        guard text.utf16.count <= 8000 else { throw CaptureFailure.tooLong }
         let url = try reserve(bytes: text.utf8.count)
         let capture = LocalCapture(id: url.lastPathComponent, receivedAt: Date(), inputKind: "text", method: method, text: text)
         do { try write(capture); return capture } catch { try? files.removeItem(at: url); throw error }
     }
     func receiveImage(_ data: Data, method: String) throws -> LocalCapture {
-        guard data.count <= 20 * 1024 * 1024,
+        guard ["shared-image", "screenshot-shortcut", "image-picker"].contains(method), data.count <= 20 * 1024 * 1024,
               let source = CGImageSourceCreateWithData(data as CFData, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let width = properties[kCGImagePropertyPixelWidth] as? Int, let height = properties[kCGImagePropertyPixelHeight] as? Int,
@@ -131,6 +154,11 @@ actor CaptureInbox {
         } catch { try? files.removeItem(at: url); throw error }
     }
     #if DEBUG
+    func resumeSmokeDraft() throws {
+        guard var capture = try list().first(where: { $0.draft?.text == "A draft to restore." }) else { throw CaptureFailure.invalid }
+        capture.acknowledged = false
+        try write(capture)
+    }
     func receiveSmokeImage(_ data: Data) throws {
         for capture in try list() where files.fileExists(atPath: try folder(capture.id).appendingPathComponent("smoke.marker").path) { try discard(capture.id) }
         let capture = try receiveImage(data, method: "shared-image")
@@ -152,5 +180,47 @@ actor CaptureInbox {
         try write(capture)
     }
     func discard(_ id: String) throws { try files.removeItem(at: folder(id)) }
-    func discardAll() throws { for capture in try list() { try discard(capture.id) } }
+    func saveDraft(_ id: String, draft: CaptureDraft) throws {
+        guard draft.text.utf16.count <= 100_000, draft.selected.count <= 1000,
+              draft.sourceLabel.utf16.count <= 100, draft.sourceUrl.utf16.count <= 2048,
+              ["post", "comment", "article", "unknown"].contains(draft.sourceKind),
+              ["en", "ja", "ko", "zh"].contains(draft.descriptionLanguage),
+              draft.groupBNames.count <= 100 else { throw CaptureFailure.invalid }
+        var capture = try load(id)
+        // A frozen operation owns its request; drafts never modify that request.
+        capture.draft = draft
+        try write(capture)
+    }
+    func launches() throws -> [ReadingLaunch] {
+        var result: [ReadingLaunch] = []
+        for url in try files.contentsOfDirectory(at: root(), includingPropertiesForKeys: nil) {
+            let metadata = url.appendingPathComponent("launch.json")
+            guard files.fileExists(atPath: metadata.path) else { continue }
+            let launch = try JSONDecoder().decode(ReadingLaunch.self, from: Data(contentsOf: metadata))
+            if Date().timeIntervalSince(launch.receivedAt) >= lifetime { try files.removeItem(at: url) }
+            else { result.append(launch) }
+        }
+        return result.sorted { $0.receivedAt > $1.receivedAt }
+    }
+    func requestInput(sourceUrl: String? = nil) throws -> ReadingLaunch {
+        if let sourceUrl {
+            guard sourceUrl.utf16.count <= 2048, let url = URL(string: sourceUrl),
+                  url.scheme == "https", url.host != nil, url.user == nil, url.password == nil else { throw CaptureFailure.invalid }
+        }
+        let url = try reserve(bytes: 4096)
+        let launch = ReadingLaunch(id: url.lastPathComponent, receivedAt: Date(), sourceUrl: sourceUrl)
+        do {
+            try JSONEncoder().encode(launch).write(to: url.appendingPathComponent("launch.json"), options: [.atomic, .completeFileProtection])
+            return launch
+        } catch { try? files.removeItem(at: url); throw error }
+    }
+    func acknowledgeLaunch(_ id: String) throws {
+        guard var launch = try launches().first(where: { $0.id == id }) else { throw CaptureFailure.expired }
+        launch.acknowledged = true
+        try JSONEncoder().encode(launch).write(to: folder(id).appendingPathComponent("launch.json"), options: [.atomic, .completeFileProtection])
+    }
+    func discardAll() throws {
+        for capture in try list() { try discard(capture.id) }
+        for launch in try launches() { try discard(launch.id) }
+    }
 }

@@ -74,8 +74,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
   const logout = useCallback(async () => {
     if (isNative()) {
-      const inputs = (await NativeCapture.list()).captures;
-      if (inputs.length && !window.confirm(t('captureLogoutConfirm'))) return;
+      const inbox = await NativeCapture.list();
+      if ((inbox.captures.length || inbox.launches?.length) && !window.confirm(t('captureLogoutConfirm'))) return;
     }
     if (getOutboxState().pending && !window.confirm(t('discardPendingLogout'))) return;
     if (getOutboxState().pending) {

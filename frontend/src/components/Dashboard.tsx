@@ -1,3 +1,4 @@
+import { useCaptureNavigationBlocker } from '../hooks/useCaptureNavigation';
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useI18n } from "../i18n/context";
@@ -113,6 +114,7 @@ export default function Dashboard() {
   // Smart Add Word / Grammar state
   const [showSmartAdd, setShowSmartAdd] = useState(false);
   const [grammarFormLanguage, setGrammarFormLanguage] = useState<string | null>(null);
+  useCaptureNavigationBlocker(queueLength + activeCount + grammarQueueLength + grammarActiveCount > 0 || showSmartAdd || !!grammarFormLanguage || showSettingsModal || starting);
   // Translation / Speaking-Writing mode derived from URL location state
   const locationState = location.state as { mode?: string; subMode?: string } | null;
   const locationMode = locationState?.mode as "new" | "resume" | undefined;

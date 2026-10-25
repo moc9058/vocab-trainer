@@ -5,13 +5,21 @@ export interface CaptureRect { left: number; top: number; width: number; height:
 export interface CaptureBlock { id: string; text: string; rects: CaptureRect[]; confidence: number }
 export type CaptureRequest = Omit<ImportSession, 'id' | 'language' | 'createdAt' | 'updatedAt'> & { analyzeAsJob: true; ingestionId: string };
 export interface CaptureOperation { request: string; createdAt: string; sessionId?: string }
+export interface CaptureDraft {
+  text: string; selected: string[]; sourceLabel: string; sourceKind: ImportSourceOrigin['sourceKind']; sourceUrl: string;
+  blockId?: string; wordGroupId?: string; grammarGroupId?: string; groupBNames: string[]; descriptionLanguage: string;
+}
+export interface ReadingLaunch { id: string; receivedAt: string; sourceUrl?: string; acknowledged: boolean }
 export interface LocalCapture {
   id: string; receivedAt: string; inputKind: 'text' | 'image'; method: ImportSourceOrigin['method'];
   text?: string; width?: number; height?: number; imageUrl?: string;
-  blocks?: CaptureBlock[]; operations: Record<string, CaptureOperation>; acknowledged: boolean;
+  draft?: CaptureDraft; blocks?: CaptureBlock[]; operations: Record<string, CaptureOperation>; acknowledged: boolean;
 }
 export interface NativeCapturePlugin {
-  list(): Promise<{ captures: LocalCapture[] }>;
+  list(): Promise<{ captures: LocalCapture[]; launches: ReadingLaunch[] }>;
+  receiveText(input: { text: string }): Promise<LocalCapture>;
+  saveDraft(input: { id: string; draft: CaptureDraft }): Promise<void>;
+  acknowledgeLaunch(input: { id: string }): Promise<void>;
   load(input: { id: string }): Promise<LocalCapture>;
   recognize(input: { id: string }): Promise<LocalCapture>;
   pickImage(): Promise<{ id?: string; cancelled?: boolean }>;

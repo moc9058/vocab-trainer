@@ -546,3 +546,30 @@ The React unit-to-word/construction projection uses verified occurrence ranges,
 not spelling or stored unit-to-candidate IDs. Registration uses existing queues and
 membership recovery. Deploy with `./deploy.sh`; runtime schema changes need no
 prompt upload. Native changes require `ios:sync` and a separate Xcode install.
+
+
+## Control Center reading intake (2026-10-25)
+
+See [shortcut setup](shortcuts/README.md) for the two user-configured workflows.
+Screen capture happens in the system shortcut before `ReadScreenImageIntent` opens
+the app; the intent does not capture another app itself. Existing Image/Text
+parameters remain required and retain their defaults. Optional AppEnum parameters
+identify screenshot/shared images and shared/copied text using existing
+`sourceOrigin.method` values. `OpenReadingInputIntent` opens a paste/help screen
+without manufacturing an empty source. Link-only text is routed to the same screen;
+URLs are never fetched for article text.
+
+`CaptureInbox` persists separate `launch.json` requests and optional capture drafts
+under the same protected, backup-excluded inbox. Both count toward the ten-input
+limit and expire after 24 hours. Draft writes are serialized in the React workspace,
+with a 300ms debounce and an unmount flush; a newly pasted passage creates one local
+text capture. Frozen operation requests remain immutable and are restored before
+retries. URL-only/empty/over-limit input cannot start analysis. Chinese OCR support
+is checked before recognition, preserving traditional and simplified source text.
+
+The confirmation workspace now includes the shared destination rail and starts the
+existing durable import directly. Navigation notices wait for pending answers,
+registration queues, modal edits and source saves; other active screens require an
+explicit leave confirmation. New inputs never replace the active passage. Native
+changes still require a separate Xcode install, followed by shortcut configuration.
+No backend schema/config upload or production migration is needed.

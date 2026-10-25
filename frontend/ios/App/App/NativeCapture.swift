@@ -9,6 +9,9 @@ public class NativeCapturePlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewContr
     public let jsName = "NativeCapture"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "list", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "receiveText", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "saveDraft", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "acknowledgeLaunch", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "load", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "recognize", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "pickImage", returnType: CAPPluginReturnPromise),
@@ -31,6 +34,7 @@ public class NativeCapturePlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewContr
                     let style: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 44), .foregroundColor: UIColor.black]
                     ("虽然很忙，但我还是来了。" as NSString).draw(at: CGPoint(x: 40, y: 200), withAttributes: style)
                     ("这个办法确实不错。" as NSString).draw(at: CGPoint(x: 40, y: 700), withAttributes: style)
+                    ("臺灣的經濟與发展。" as NSString).draw(at: CGPoint(x: 40, y: 1000), withAttributes: style)
                 }
                 if let data = image.pngData() {
                     try? await CaptureInbox.shared.receiveSmokeImage(data)
@@ -38,27 +42,39 @@ public class NativeCapturePlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewContr
                 }
             }
         }
+        if ProcessInfo.processInfo.arguments.contains("--vocab-local-smoke") && ProcessInfo.processInfo.arguments.contains("--vocab-reading-input-smoke") {
+            Task { @MainActor in
+                _ = try? await CaptureInbox.shared.requestInput(sourceUrl: "https://example.com/article")
+                self.notifyListeners("captureReceived", data: [:])
+            }
+        }
+        if ProcessInfo.processInfo.arguments.contains("--vocab-local-smoke") && ProcessInfo.processInfo.arguments.contains("--vocab-reading-resume-smoke") {
+            Task { @MainActor in
+                try? await CaptureInbox.shared.resumeSmokeDraft()
+                self.notifyListeners("captureReceived", data: [:])
+            }
+        }
         #endif
     }
     deinit { if let observer { NotificationCenter.default.removeObserver(observer) } }
-    private func json(_ capture: LocalCapture) throws -> [String: Any] {
+    private func json<T: Encodable>(_ capture: T) throws -> [String: Any] {
         let encoder = JSONEncoder(); encoder.dateEncodingStrategy = .iso8601
         return try JSONSerialization.jsonObject(with: encoder.encode(capture)) as! [String: Any]
     }
     private func run(_ call: CAPPluginCall, work: @escaping () async throws -> [String: Any]) {
         Task { @MainActor in
-            guard UIApplication.shared.isProtectedDataAvailable else { call.reject("CAPTURE_LOCKED"); return }
-            do { call.resolve(try await work()) } catch { call.reject(error.localizedDescription) }
+            guard UIApplication.shared.isProtectedDataAvailable else { call.reject(CaptureFailure.locked.localizedDescription, "CAPTURE_LOCKED"); return }
+            do { call.resolve(try await work()) } catch { call.reject(error.localizedDescription, String(describing: error)) }
         }
     }
     @objc func list(_ call: CAPPluginCall) {
         run(call) { [self] in
             let summaries = try await CaptureInbox.shared.list().map { capture -> [String: Any] in
                 var value = try json(capture)
-                value.removeValue(forKey: "text"); value.removeValue(forKey: "blocks"); value["operations"] = [:] as [String: Any]
+                value.removeValue(forKey: "text"); value.removeValue(forKey: "blocks"); value.removeValue(forKey: "draft"); value["operations"] = [:] as [String: Any]
                 return value
             }
-            return ["captures": summaries]
+            return ["captures": summaries, "launches": try await CaptureInbox.shared.launches().map { try json($0) }]
         }
     }
     @objc func load(_ call: CAPPluginCall) {
@@ -72,6 +88,24 @@ public class NativeCapturePlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewContr
             }
             return result
         }
+    }
+    @objc func receiveText(_ call: CAPPluginCall) {
+        run(call) { [self] in
+            let capture = try await CaptureInbox.shared.receiveText(call.getString("text") ?? "", method: "paste")
+            notifyListeners("captureReceived", data: [:])
+            return try json(capture)
+        }
+    }
+    @objc func saveDraft(_ call: CAPPluginCall) {
+        run(call) {
+            guard let object = call.getObject("draft") else { throw CaptureFailure.invalid }
+            let draft = try JSONDecoder().decode(CaptureDraft.self, from: JSONSerialization.data(withJSONObject: object))
+            try await CaptureInbox.shared.saveDraft(call.getString("id") ?? "", draft: draft)
+            return [:]
+        }
+    }
+    @objc func acknowledgeLaunch(_ call: CAPPluginCall) {
+        run(call) { try await CaptureInbox.shared.acknowledgeLaunch(call.getString("id") ?? ""); return [:] }
     }
     @objc func acknowledge(_ call: CAPPluginCall) { run(call) { try await CaptureInbox.shared.acknowledge(call.getString("id") ?? ""); return [:] } }
     @objc func discard(_ call: CAPPluginCall) { run(call) { try await CaptureInbox.shared.discard(call.getString("id") ?? ""); return [:] } }
@@ -92,7 +126,9 @@ public class NativeCapturePlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewContr
                 let request = VNRecognizeTextRequest()
                 request.recognitionLevel = .accurate
                 let supported = try request.supportedRecognitionLanguages()
-                request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"].filter { supported.contains($0) }
+                let chinese = ["zh-Hans", "zh-Hant"].filter { supported.contains($0) }
+                guard !chinese.isEmpty else { throw CaptureFailure.chineseUnavailable }
+                request.recognitionLanguages = chinese + ["en-US"].filter { supported.contains($0) }
                 try VNImageRequestHandler(url: url).perform([request])
                 let lines = (request.results ?? []).compactMap { observation -> CaptureBlock? in
                     guard let candidate = observation.topCandidates(1).first, !candidate.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
@@ -138,7 +174,7 @@ public class NativeCapturePlugin: CAPPlugin, CAPBridgedPlugin, PHPickerViewContr
                     notifyListeners("captureReceived", data: [:])
                     return ["id": capture.id]
                 }
-            } catch { call.reject(error.localizedDescription) }
+            } catch { call.reject(error.localizedDescription, String(describing: error)) }
         }
     }
 }

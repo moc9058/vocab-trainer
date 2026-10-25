@@ -17,6 +17,11 @@ export default defineConfig(({ mode }) => {
       generateBundle(this: { emitFile: (file: object) => void }) { this.emitFile({ type: 'asset', fileName: 'ios-build.json', source: JSON.stringify({ mode, apiOrigin: origin }) }); }
     }] : [])],
     build: { outDir: ios ? 'dist-ios' : 'dist' },
-    server: { proxy: { '/api': 'http://localhost:3000' } },
+    server: {
+      proxy: { '/api': 'http://localhost:3000' },
+      // Native builds and Playwright artifacts are not Web source edits. Watching
+      // their generated files can reload a quiz or source analysis mid-operation.
+      watch: { ignored: ['**/ios/**', '**/dist-ios/**', '**/test-results/**'] },
+    },
   };
 });

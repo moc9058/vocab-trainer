@@ -115,3 +115,41 @@ Simulatorの試験途中で、システムプロセス `AppIntentsLiveEntityServ
 最後の4件のXCUITestでは操作上のassertion失敗はなかったが、最初の試験中のシステムサービス停止1件により
 suite全体は失敗判定となった。結果bundleは `/tmp/vocab-capture-verified.xcresult`。
 DEBUGの試験入力マーカー以外の端末データは清掃対象にせず、試験専用Dockerコンテナーを終了した。
+
+
+## Control Center受信導線の更新（2026-10-25）
+
+対象: 入力元を区別する互換App Intent、入力なし／URLのみの起動要求、
+原文・出典・登録先の端末内下書き、確認画面から直接解析、再送要求の凍結、
+受信時の作業保護。学習データの試験は既存の隔離emulatorとmockを使用。
+本番データの移行・書き換えは行っていない。
+
+| 検証 | 結果 |
+| --- | --- |
+| Node 24 backend build / unit / import / mixed | 成功。unit 117、import 9、mixed 4件 |
+| import emulator | 16件成功。実LLMなし |
+| frontend TypeScript / unit / Web build / local iOS sync | 成功。unit 117件 |
+| Playwright全体 | 61件成功（1 worker）。直接解析・作成応答喪失時の同一要求再送・下書き・範囲切替・容量失敗後の再試行・URLのみの抑止を含む |
+| Docker frontend→backend→隔離Firestore | Web / auth / source一覧でHTTP 200。`demo-vocab-ios-smoke`の合成データのみ |
+| iOS Debug Simulator build | 成功。Xcode 27 / iOS 27 Simulator |
+| XCUITest: 画像→OCR→原文確認→直接解析→意味単位 | 合成画像で操作・保存を確認。全体suiteでは下記OSサービス障害を検出 |
+| XCUITest: 入力なし→貼り付け→終了→下書き再表示 | 個別再実行で成功 |
+| 繁体字・簡体字OCR | 合成画像の認識結果は `虽然很忙，但我还是来了。` / `这个办法确实不错。` / `臺灣的經濟與发展。`。混在表記が保持された。最後の行は低confidence表示あり |
+| 本人のiPhoneの接続 | iPhone 16 Plus / iOS 26.6.2 / Developer Mode有効を確認 |
+| 小红书・财新→Control Center撮影／選択範囲取得 | 未確認。共有／コピー／撮影の実入力比較、撮影タイミング、各10回の確認は本人の端末で必要 |
+
+最初の全体XCUITestは、`AppIntentsLiveEntityService`のクラッシュを検出して失敗した。
+個別再実行でも最初のテストに同じOSプロセス障害が報告された。
+画像のOCR・解析処理そのものと、貼り付け下書きの終了・復元は動作したが、
+これを全体suite成功として扱わない。繁体字UI検証ではHTMLの押下状態付きボタンが
+XCUITest上でSwitchとして扱われ、Button限定のselectorが失敗したため、
+accessibility labelの照合へ修正した。修正後の最終OCR再実行では繁体字照合・解析・意味単位・復帰のアプリassertionは通り、テストコマンドはOSサービスクラッシュ1件だけで失敗した。
+
+Webとnativeの同時ビルド中には開発サーバーの再読み込みを伴う試験失敗も発生した。
+Viteはnative生成物・dist-ios・test-resultsをwatch対象から除外した。
+最終Web suiteは1 workerで全61件が通過した。試験ログとxcresultは`/tmp/vocab-reading-*`にあり、Gitには含めない。
+
+ショートカットの設定は[構成手順](shortcuts/README.md)を参照。
+「画像を読み解く」は撮影アクションの出力をImageへ指定する。
+「選択した文章を読み解く」は受信入力を優先し、届かない場合のClipboard取得は明示操作にする。
+任意アプリの選択範囲の自動取得を保証しない。画像・本文の確認前に解析／辞書登録しない。

@@ -15,7 +15,7 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 - [Meaning-unit explanation design](plan/source-meaning-units-design.md): source ranges, schema and compatibility decisions.
 - [iPhone screen reading](docs/screen-reading-import.md): screenshot/text intake, on-device OCR, meaningful parts and A/B registration.
 - [Screen reading implementation plan](plan/ios-screen-reading-import-design.md): design decisions and remaining device verification.
-- [Control Center reading improvement plan](plan/ios-control-center-reading-plan.md): planned automatic screenshot intake, selected-text entry points, OS constraints and implementation acceptance checks.
+- [Control Center shortcut setup](docs/shortcuts/README.md): automatic screenshot intake, shared/copied text, missing-input handling and device setup.
 - [Personal iOS app](docs/ios-personal-app.md): Xcode project, Google login setup, free signing and updates.
 - [iOS verification](docs/ios-verification.md): checks performed and device checks still pending.
 - [Original iOS plan](plan/ios-personal-app-design.md): design rationale and implementation scope.

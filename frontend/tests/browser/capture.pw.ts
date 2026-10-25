@@ -8,7 +8,7 @@ test('captured comments can be selected separately, corrected, and combined expl
   await expect(text).toHaveValue('确实如此。');
   await text.fill('确实如此！');
   await page.getByLabel('Type of passage', { exact: true }).selectOption('comment');
-  await page.getByRole('button', { name: 'Use this passage' }).click();
+  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
   let result = JSON.parse(await page.getByTestId('capture-selection').innerText());
   expect(result.text).toBe('确实如此！'); expect(result.blockId).toBe('comment'); expect(result.origin.sourceKind).toBe('comment');
   await page.getByRole('checkbox').first().check();
@@ -64,4 +64,127 @@ test('a captured compact reading automatically loads meaningful parts once when 
   await page.getByRole('button', { name: 'Sentence explanation 1', exact: true }).click();
   await expect(page.getByTestId('import-meaning-units')).toBeVisible();
   expect(calls).toBe(1);
+});
+
+test('a new input resets metadata and restores its own local draft', async ({ page }) => {
+  await page.goto('/tests/browser/harness.html?mode=capture');
+  await page.getByRole('button', { name: /^Choose passage 1/ }).click();
+  await page.getByRole('textbox', { name: 'Source name (optional)' }).fill('My source');
+  await page.getByRole('textbox', { name: 'Check and edit the original text' }).fill('修正した原文。');
+  await expect(page.getByTestId('capture-draft')).toContainText('修正した原文。');
+  await page.getByRole('button', { name: 'Switch capture' }).click();
+  await expect(page.getByRole('textbox', { name: 'Source name (optional)' })).toHaveValue('');
+  await expect(page.getByRole('textbox', { name: 'Check and edit the original text' })).toHaveValue('臺灣的經濟與发展。');
+  await page.getByRole('button', { name: 'Original capture' }).click();
+  await expect(page.getByRole('textbox', { name: 'Source name (optional)' })).toHaveValue('My source');
+  await expect(page.getByRole('textbox', { name: 'Check and edit the original text' })).toHaveValue('修正した原文。');
+});
+
+test('missing input accepts an explicit paste and creates only one local capture while typing', async ({ page }) => {
+  await page.addInitScript(() => { (window as any).captureEmpty = true; });
+  await page.goto('/tests/browser/harness.html?mode=capture');
+  await expect(page.getByText('No passage has been received.', { exact: false }).first()).toBeVisible();
+  const text = page.getByRole('textbox', { name: 'Check and edit the original text' });
+  await text.fill('https://example.com/article');
+  await expect(page.getByRole('button', { name: 'Analyze', exact: true })).toBeDisabled();
+  await expect(page.getByText('Only a link was received.', { exact: false })).toBeVisible();
+  await text.fill('這段文章');
+  await expect(page.getByTestId('capture-draft')).toContainText('這段文章');
+  await text.fill('這段文章包含简体字😊。');
+  await expect(page.getByTestId('capture-draft')).toContainText('這段文章包含简体字😊。');
+  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await expect(page.getByTestId('capture-selection')).toContainText('這段文章包含简体字😊。');
+  const result = JSON.parse(await page.getByTestId('capture-selection').innerText());
+  expect(result.origin.method).toBe('paste');
+  expect(result.origin.sourceLabel).toBeUndefined();
+  expect(await page.evaluate(() => (window as any).captureCreates)).toBe(1);
+});
+
+test('local draft failure prevents analysis and allows retry without losing the text', async ({ page }) => {
+  await page.addInitScript(() => { (window as any).captureText = true; (window as any).captureFailSave = true; });
+  await page.goto('/tests/browser/harness.html?mode=capture');
+  await expect(page.getByText('The local draft could not be saved.', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await expect(page.getByTestId('capture-selection')).toHaveText('null');
+  await page.evaluate(() => { (window as any).captureFailSave = false; });
+  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await expect(page.getByTestId('capture-selection')).toContainText('臺灣的經濟與发展。');
+});
+
+test('a frozen request restores source metadata and provides an explicit new-source action', async ({ page }) => {
+  await page.addInitScript(() => {
+    (window as any).captureText = true;
+    const request = { text: '確認した文章。', sourceOrigin: { sourceLabel: 'Known source', sourceKind: 'article', sourceUrl: 'https://example.com' }, groupBNames: ['B'] };
+    (window as any).captureFixture = { operations: { text: { request: JSON.stringify(request), createdAt: new Date().toISOString() } } };
+  });
+  await page.goto('/tests/browser/harness.html?mode=capture');
+  const text = page.getByRole('textbox', { name: 'Check and edit the original text' });
+  await expect(text).toHaveValue('確認した文章。');
+  await expect(text).toBeDisabled();
+  await expect(page.getByRole('textbox', { name: 'Source name (optional)' })).toHaveValue('Known source');
+  await page.getByRole('button', { name: 'Create another source from this passage' }).click();
+  await expect(text).toBeEnabled();
+  await text.fill('別の文章。');
+  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await expect(page.getByTestId('capture-selection')).toContainText('別の文章。');
+  expect(JSON.parse(await page.getByTestId('capture-selection').innerText()).blockId).toMatch(/^text:/);
+});
+
+test('capture confirmation directly starts analysis and a lost creation response reuses the same request', async ({ page }) => {
+  let stored: any;
+  const requests: any[] = [];
+  await page.route(url => url.pathname.startsWith('/api/'), async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/sessions') && route.request().method() === 'POST') {
+      const body = route.request().postDataJSON(); requests.push(body);
+      stored ??= { ...body, id: 'captured-source', language: 'chinese', createdAt: '', updatedAt: '', analysisProgress: { version: 1, chunks: [body.text], nextChunk: 0 } };
+      if (requests.length === 1) { await route.abort('connectionreset'); return; }
+      await route.fulfill({ status: 200, json: stored }); return;
+    }
+    if (path.endsWith('/sessions/captured-source')) { await route.fulfill({ json: stored }); return; }
+    if (path.endsWith('/analysis-job')) {
+      if (route.request().method() === 'POST') {
+        stored.analysisJobRef = { version: 2, jobId: stored.id, generation: 1 };
+        stored.analysisState = 'running';
+      }
+      await route.fulfill({ json: { id: stored.id, state: 'running', generation: 1, revision: 1, nextBatch: 0, totalBatches: 1, completedSentences: 0, pauseRequested: false, updatedAt: '' } }); return;
+    }
+    if (path.endsWith('/sessions')) { await route.fulfill({ json: { sessions: [], pool: { wordIds: [], grammarIds: [] } } }); return; }
+    await route.fulfill({ json: [] });
+  });
+  await page.goto('/tests/browser/harness.html?mode=capture-import&capture=capture-import');
+  await expect(page.getByRole('textbox', { name: 'Check and edit the original text' })).toHaveValue('雖然很忙，但我还是来了。');
+  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Open or retry this source' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Check and edit the original text' })).toBeDisabled();
+  await page.getByRole('button', { name: 'Open or retry this source' }).click();
+  await expect(page.getByRole('button', { name: 'Pause after the current part' })).toBeVisible();
+  expect(requests).toHaveLength(2);
+  expect(requests[1]).toEqual(requests[0]);
+  expect(requests[0]).toMatchObject({ analyzeAsJob: true, text: '雖然很忙，但我还是来了。', sourceOrigin: { method: 'shared-text', textConfirmed: true } });
+});
+
+test('a failed local text receipt can be retried after capacity is available', async ({ page }) => {
+  await page.addInitScript(() => { (window as any).captureEmpty = true; (window as any).captureFailReceive = true; });
+  await page.goto('/tests/browser/harness.html?mode=capture');
+  await page.getByRole('textbox', { name: 'Check and edit the original text' }).fill('保存する原文。');
+  await expect(page.getByText('The local draft could not be saved.', { exact: false })).toBeVisible();
+  await page.evaluate(() => { (window as any).captureFailReceive = false; });
+  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await expect(page.getByTestId('capture-selection')).toContainText('保存する原文。');
+});
+
+test('a captured image can switch to an explicitly pasted passage without reusing its metadata', async ({ page }) => {
+  await page.goto('/tests/browser/harness.html?mode=capture');
+  await page.getByRole('button', { name: /^Choose passage 1/ }).click();
+  await page.getByRole('textbox', { name: 'Source name (optional)' }).fill('Image source');
+  await page.getByText('Other input methods', { exact: true }).click();
+  await page.getByRole('button', { name: 'Paste another passage' }).click();
+  const text = page.getByRole('textbox', { name: 'Check and edit the original text' });
+  await expect(text).toHaveValue('');
+  await expect(page.getByRole('textbox', { name: 'Source name (optional)' })).toHaveValue('');
+  await text.fill('另一段原文。');
+  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await expect(page.getByTestId('capture-selection')).toContainText('另一段原文。');
+  expect(JSON.parse(await page.getByTestId('capture-selection').innerText()).origin.method).toBe('paste');
 });
