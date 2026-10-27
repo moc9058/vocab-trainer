@@ -1,5 +1,8 @@
 const translations = {
   en: {
+    studyLanguagePaused: "Temporarily unavailable",
+    englishVersionPaused: "The English version is temporarily unavailable",
+    englishVersionPausedHint: "The English version is paused for feature updates. Your saved learning data is preserved. You can continue using the Chinese version.",
     captureEnterText: "Paste another passage",
     captureFull: "The temporary inbox is full. Discard unused inputs and retry.",
     captureExpired: "This local input has expired. Capture the passage again, or open a saved source from External sources.",
@@ -671,6 +674,9 @@ const translations = {
     grade: "How did you do?",
   },
   ja: {
+    studyLanguagePaused: "一時停止中",
+    englishVersionPaused: "英語版は機能改修のため一時停止中です",
+    englishVersionPausedHint: "保存済みの学習データは保持されています。中国語版は引き続きご利用いただけます。",
     captureEnterText: "別の文章を貼り付ける",
     captureFull: "一時受信箱がいっぱいです。不要な入力を破棄して再試行してください。",
     captureExpired: "この入力の保存期限が切れました。文章を再取得するか、保存済みのソースを外部ソース一覧から開いてください。",
@@ -1339,6 +1345,9 @@ const translations = {
     grade: "できましたか？",
   },
   ko: {
+    studyLanguagePaused: "일시 중지 중",
+    englishVersionPaused: "영어 버전은 기능 개편을 위해 일시 중지되었습니다",
+    englishVersionPausedHint: "저장된 학습 데이터는 보존됩니다. 중국어 버전은 계속 이용하실 수 있습니다.",
     captureEnterText: "다른 글 붙여넣기",
     captureFull: "임시 수신함이 가득 찼습니다. 불필요한 입력을 삭제하고 다시 시도하세요.",
     captureExpired: "이 입력의 저장 기한이 지났습니다. 글을 다시 가져오거나 외부 소스 목록에서 저장된 소스를 여세요.",

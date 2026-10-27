@@ -387,6 +387,7 @@ docker compose -p vocab-sitting-smoke down
 All language codes use ISO 639-1: `ja`, `en`, `ko`, `zh`. The export script normalizes legacy keys (e.g., `"Japanese"` → `"ja"`, `"kr"` → `"ko"`) on export.
 
 ### Frontend (`frontend/src/`)
+- **Study-language availability**: `utils/studyLanguageAvailability.ts` holds the temporary UI entry policy (English paused). Both language selectors disable the English option; `components/StudyLanguageRoute.tsx` guards every English child route, including `en` and case variants, before mounting Dashboard or running session recovery. Reopen English by removing the policy entry. English UI/definitions/translation settings are independent and stay available in Chinese study. English data, APIs, background jobs and the serial answer outbox are preserved; no migration or config upload is needed. The pause notice exposes Web sync status/retry/failure acknowledgment; the existing app-level native sync component retains its subscription and unload warning on every platform. Older clients/open tabs remain usable until they load the new frontend; native clients need an updated bundled build.
 - **Settings**: `settings/context.tsx` — persisted to `localStorage("appSettings")`.
   - `defaultAddWordLanguage` — backend full-name format (`"english"`, `"chinese"`) — **different from** `defaultDefinitionLanguage` (ISO code)
   - `showKoreanHanja` — only shown in Settings when active language is Chinese

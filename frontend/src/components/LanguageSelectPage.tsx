@@ -6,6 +6,7 @@ import { useAuth } from "../auth/context";
 import { fetchJson } from "../api/client";
 import MetricsView from "./MetricsView";
 import LLMModelsView from "./LLMModelsView";
+import { isStudyLanguagePaused } from "../utils/studyLanguageAvailability";
 
 interface LanguageInfo {
   filename: string;
@@ -32,6 +33,7 @@ export default function LanguageSelectPage() {
   }, []);
 
   function handleSelect(filename: string) {
+    if (isStudyLanguagePaused(filename)) return;
     const key = filename.replace(/\.json$/, "");
     navigate(`/${key}`);
   }
@@ -67,11 +69,13 @@ export default function LanguageSelectPage() {
           {languages.map((lang) => (
             <button
               key={lang.filename}
+              disabled={isStudyLanguagePaused(lang.filename)}
               onClick={() => handleSelect(lang.filename)}
-              className="w-56 rounded-xl border border-gray-700 bg-gray-800 px-6 py-8 text-center hover:border-blue-500 hover:bg-gray-700 transition-colors"
+              className="w-56 rounded-xl border border-gray-700 bg-gray-800 px-6 py-8 text-center enabled:hover:border-blue-500 enabled:hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
             >
               <p className="text-xl font-semibold text-gray-100">{lang.language}</p>
               <p className="mt-1 text-sm text-gray-400">{lang.wordCount} {t("words")}</p>
+              {isStudyLanguagePaused(lang.filename) && <p className="mt-2 text-sm text-amber-200">{t("studyLanguagePaused")}</p>}
             </button>
           ))}
         </div>

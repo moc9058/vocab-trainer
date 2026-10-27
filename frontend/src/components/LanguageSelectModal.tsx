@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { fetchJson } from "../api/client";
+import { isStudyLanguagePaused } from "../utils/studyLanguageAvailability";
 
 interface LanguageInfo {
   filename: string;
@@ -50,10 +51,11 @@ export default function LanguageSelectModal({ onSelect, onClose }: Props) {
             {languages.map((lang) => (
               <li key={lang.filename}>
                 <button
-                  onClick={() =>
-                    onSelect(lang.filename.replace(/\.json$/, ""))
-                  }
-                  className="w-full rounded-lg border border-gray-700 px-4 py-3 text-left hover:border-blue-500 hover:bg-gray-700"
+                  disabled={isStudyLanguagePaused(lang.filename)}
+                  onClick={() => {
+                    if (!isStudyLanguagePaused(lang.filename)) onSelect(lang.filename.replace(/\.json$/, ""));
+                  }}
+                  className="w-full rounded-lg border border-gray-700 px-4 py-3 text-left enabled:hover:border-blue-500 enabled:hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span className="font-medium text-gray-100">
                     {lang.language}
@@ -61,6 +63,7 @@ export default function LanguageSelectModal({ onSelect, onClose }: Props) {
                   <span className="ml-2 text-xs text-gray-400">
                     {lang.wordCount} {t("words")}
                   </span>
+                  {isStudyLanguagePaused(lang.filename) && <span className="ml-2 text-sm text-amber-200">{t("studyLanguagePaused")}</span>}
                 </button>
               </li>
             ))}

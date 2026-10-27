@@ -1,3 +1,4 @@
+import LanguageSelectModal from "../../src/components/LanguageSelectModal";
 import CaptureWorkspace from '../../src/components/capture/CaptureWorkspace';
 import ImportFullTextReader from '../../src/components/import/ImportFullTextReader';
 import type { LocalCapture, NativeCapturePlugin } from '../../src/platform/capture';
@@ -119,7 +120,7 @@ const fixture = (window as any).fixture ?? (mode === 'import-full-text' ? {
   groupBNames: [], focusedSentenceIndex: 0, status: 'in-progress', createdAt: '', updatedAt: '',
 } : undefined);
 createRoot(document.getElementById('root')!).render(<BrowserRouter><I18nProvider><SettingsProvider>
-  {mode === 'capture-import' ? <CaptureImportHarness /> : mode === 'capture' ? <CaptureHarness /> : mode === 'meaning' ? <MeaningHarness /> : mode === 'import-view' ? <ImportViewHarness />
+  {mode === 'language-select' ? <LanguageSelectModal onSelect={language => { document.title = language; }} onClose={() => {}} /> : mode === 'capture-import' ? <CaptureImportHarness /> : mode === 'capture' ? <CaptureHarness /> : mode === 'meaning' ? <MeaningHarness /> : mode === 'import-view' ? <ImportViewHarness />
     : mode === 'import-review' ? <ImportReviewHarness />
     : mode === 'import' ? <ImportHarness />
     : mode === 'import-full-text' ? <ImportFullTextHarness />
