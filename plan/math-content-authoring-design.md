@@ -6,6 +6,8 @@
 
 親計画: [数学カテゴリー実装計画](math-category-implementation-plan.md)
 
+実行用: [PDF解析prompt](../prompt/math-pdf-to-learning-units.md)、[M4向けローカルOCRガイド](../prompt/math-ocr-local-guide.md)、[出典付き解説prompt](../prompt/math-solution-with-sources.md)。2026-10-28追記でローカル解析、原著の全階層、LaTeX出力の要件を具体化した。
+
 ## 1. 採用する形式
 
 **「1つの学習テーマ = 1学習ユニット」を編集単位にする。定義・定理・Lemmaは、その中で必要に応じて参照する知識要素として保持する。**
@@ -63,6 +65,8 @@ flowchart TD
 
 PDFが出典であり、Markdownが編集する教材原本、Firestoreが実行時の公開版である。この三つを同じ意味の「原本」と呼ばない。PDFを毎問LLMに読み直させる必要はない。
 
+原著の `source outline` と学習用の `curriculum` も別に持つ。学習用にユニットをまとめ直しても、原著のVolume/Part/Chapter等を消さず、解答で使用した定理の元の場所を全階層で説明できるようにする。
+
 ## 3. 科目・階層・物理ファイルの関係
 
 ### 3.1 推奨: 科目フォルダーの中に論理ツリーを持つ
@@ -86,6 +90,8 @@ textbook/
     subject.yaml                 # 科目ID、表示名、採用source、profile
     curriculum.yaml              # 出題範囲の論理ツリー
     sources.yaml                 # PDFの登録情報・内容hash・版・ページ対応
+    source-outlines/
+      <source-revision-id>.yaml   # 原著の全階層。curriculumとは独立
     <現在のPDFのままでもよい>       # 移動やsources/への整理は必須にしない
     units/
       unit-<stable-id>.md         # 1学習テーマ。タイトル変更でもIDを維持
@@ -150,6 +156,7 @@ nodes:
 本文と分離した意味情報をfront matterに持つ。人間に全項目を手書きさせず、AI抽出後にvalidatorが検査・正規化する。
 
 - `unitId / title / contentLanguage / status / sourceRevisionIds`。
+- 各knowledge itemの `sourceOccurrenceIds`。定理番号・名称・原著の全階層・ページへ解決できる参照。
 - `blocks[]`: 安定block ID、種類、本文anchor、provenance ID。
 - `knowledgeItems[]`: 概念ID、種類、statement/condition block、capabilities、依存、provideable。
 - `knowledgeRefs[]`: 他ユニットで定義済みの概念IDへの参照。概念定義をコピーしない。
@@ -301,14 +308,18 @@ $y$ で割った後に「全ての解」と断定し、$y=0$ を調べない。
 
 PDF由来教材の作成を主要な利用経路に含める。初版は**ローカルのCLI/AI作業 + 共通のreview package**を提供する。Web上に大容量PDFアップロード画面やPDF保管サービスを新設することは必須にしない。
 
-二つの入口を同じ正規化contractに接続する:
+二つの入口を同じ正規化contractに接続する。**PDF解析/OCRの実行場所はローカルPCに固定する**:
 
-- **外部AI入口**: ユーザーが使うAIにPDFを読ませ、指定のJSON/Markdown packageを出力させる。provider/modelを固定しない。受け取ったpackageも未検証データとして扱う。
-- **組込みCLI入口**: PDFのページをローカルで準備し、選択した画像対応adapter/モデルへ範囲を指定して抽出を依頼する。中断・再開・usageとcheckpointを保存する。
+- **作業エージェント入口**: [PDF解析prompt](../prompt/math-pdf-to-learning-units.md) でローカルOCRを実行し、指定のJSON/Markdown packageを作る。別エージェントのpackageも未検証データとして扱う。外部OCRへのアップロード経路ではない。
+- **組込みCLI入口**: ローカルのPDF/image adapterとモデルを呼ぶ。中断・再開・usageとcheckpointを保存する。local推論で使えるbackendの範囲を実際に確認する。
 
-テキスト抽出だけで読めないスキャン・式・図はページ画像経路へ回す。rendererやOCRの用意がない環境では外部AI入口へ案内できるが、テキストだけで数式を推測して成功扱いにしない。対応するadapterや外部AIの実際の入力上限・課金・保存方針は実装/実行時に確認し、ここで固定値や製品対応を断定しない。
+OCRは `local-only`。意味抽出・教材化は `SEMANTIC_POLICY: local-only` を既定とし、ユーザーが明示した場合だけ `agent-analysis` で作業エージェントの推論を使える。リモート型エージェントによる意味解析まで完全ローカルだと説明しない。完全local policyではエージェントへのtool出力にもPDF画像やOCR全文を流さず、ローカルモデルへ処理を渡す。
 
-この計画改訂ではPDFの読取、外部送信、ファイル生成は実施しない。実装時の自動テストは自作の小さいPDF fixtureとmockを使う。
+テキスト抽出だけで読めないスキャン・式・図はページ画像経路へ回す。必要なlocal OCR/意味モデルがない環境では、準備済み部分のdraftと不足を保存する。テキストだけで数式を推測したり、リモートOCRへ自動fallbackしたりしない。
+
+第一候補はMinerU 4.xのStandard/Advancedを小範囲で比較する方式。比較候補のDocling、M4のメモリ条件、現在のCLI、公式資料は [OCRガイド](../prompt/math-ocr-local-guide.md) に集約する。実機の性能・このPDFでの精度は未測定であり、最良モデルと断定しない。
+
+この計画改訂ではPDFの読取、外部送信、教材ファイルの生成は実施しない。計画・実行promptのみ作成する。実装時の自動テストは自作の小さいPDF fixtureとmockを使う。
 
 ### 6.2 Pipeline
 
@@ -372,8 +383,13 @@ interface SourceSpan {
   pdfPageStart: number; // 1-based。toolの0-based indexとはadapterで変換
   pdfPageEnd: number;
   printedPageLabel?: string; // "xii", "123", "A-4"等。算術変換しない
-  sectionLabel?: string;
+  sourcePath: { sourceNodeId: string; kind: string;
+    printedLabel?: string; title: string }[]; // 原著の全階層・任意深さ
+  itemKind?: string;
   printedItemLabel?: string; // "Theorem 2"等。canonical IDとは別
+  itemTitle?: string;
+  equationLabels?: string[];
+  hierarchyStatus: 'verified' | 'unresolved' | 'not-applicable';
   bbox?: [number, number, number, number]; // 回転補正後ページ、左上原点、0..1の矩形
 }
 ```
@@ -381,6 +397,10 @@ interface SourceSpan {
 source revisionはPDF bytesのhashで固定する。PDF差替えやスキャン版への変更で座標が同じだと仮定しない。bboxは読取根拠がある場合のみ保存し、取れないときはページ範囲でよい。架空の座標を作らせない。
 
 ソースmapはblock単位で持ち、一つのblockに主張が複数ある場合はclaim単位のspanも持てる。最低でも数学的主張とそのConditionsの出典を追えることを必須とする。
+
+原著の階層はsource revisionごとの `source-outline` で管理し、順序付き `sourcePath` を解決する。科目・書名・版に加え、実在するVolume/Part/Chapter/Section/Subsection等を全て保存する。Partのない本にPartを追加せず、同じTheorem番号が別Chapterにある場合は別occurrenceとする。上位見出し未確認のclaimは `SOURCE_HIERARCHY_UNRESOLVED` として引用付き解説用のready対象から外す。
+
+`not-applicable` は書籍に由来しない著者の説明・基礎profile等だけに使う。書籍の階層を調べていない代わりに使わない。学習用curriculumを変更してもsourcePathは変えない。親計画9.7のcitation registryへこの情報を供給する。
 
 ### 7.2 原文とAI補足を区別する
 
@@ -436,6 +456,7 @@ review packageは次を一覧で示す:
 守ること:
 1. 指定したsourceとページ範囲を根拠にする。記憶で欠けた式を埋めない。
 2. PDFページ番号と印刷ページ番号を区別する。
+   原著のVolume/Part/Chapter/Section等の全階層と、定理の番号・名称も保存する。
 3. 条件・符号・添字・定義域・例外を、短くするために削除しない。
 4. 読めない内容はunresolvedへ記録する。
 5. 原文の内容、原文からの導出、学習上の提案を区別する。
@@ -476,7 +497,12 @@ math_unit_revisions/{revisionId}
   conceptIds, problemFamilies, proofCoverage, provenanceHash
 
 math_source_documents/{sourceRevisionId}
-  sourceId, fileHash, edition, title, pageCount, pageMapHash
+  sourceId, fileHash, edition, title, pageCount, pageMapHash, sourceOutlineHash
+  outline_chunks/{chunkId}
+    bounded flat nodes: sourceNodeId, parentId, kind, printedLabel, title
+  occurrences/{occurrenceId}
+    conceptId, sourcePathIds, itemKind, printedItemLabel, itemTitle,
+    page span, blockIds, hierarchyStatus
 
 math_provenance_revisions/{hash}
   sourceArtifactHash, bounded block/claim evidence and review metadata
@@ -520,16 +546,16 @@ math_provenance_revisions/{hash}
 npm run math:extract --prefix backend -- --root ../textbook \
   --subject engineering-math --source-id book-main --plan-only
 
-# 外部AI用の指示・schema・対象範囲情報を出力。PDF外部送信はしない
+# ローカル作業エージェント用の指示・schema・対象範囲情報を出力
 npm run math:extract --prefix backend -- --root ../textbook \
   --subject engineering-math --source-id book-main --export-request
 
 # 指定adapterを使う抽出。初期は狭い範囲を指定
 npm run math:extract --prefix backend -- --root ../textbook \
   --subject engineering-math --source-id book-main --pages 20-30 \
-  --adapter configured --output data/math-authoring/run-example
+  --adapter local --semantic-policy local-only --output data/math-authoring/run-example
 
-# 外部AIの回答もこの入口で検証し、同じreview packageにする
+# ローカル作業エージェントの回答もこの入口で検証する
 npm run math:extract:import --prefix backend -- --root ../textbook \
   --package data/math-authoring/incoming/package.json
 
@@ -541,7 +567,7 @@ npm run math:author-accept --prefix backend -- --run data/math-authoring/run-exa
   --units unit-example --expected-review-hash HASH
 ```
 
-実行時はsource登録の不足、未設定adapter、OCR/renderer不足を説明する。最初の2コマンドの結果を確認する前に、全冊を外部モデルへ送信し始めない。`--pages` は1-based PDFページであり、印刷ページではない。ページ指定省略で全冊実行せず、planを出すか明示範囲を求める。
+実行時はsource登録の不足、未設定local adapter、OCR/renderer不足を説明する。全冊を未指定で処理せず、外部OCRへ送信しない。`--pages` は1-based PDFページであり、印刷ページではない。ページ指定省略ではplanを出すか明示範囲を求める。
 
 `source-id` が未登録の場合、明示した `--pdf` のローカルファイルでsource候補を作成できる。既存ファイルの探索だけで別版を自動選択しない。元PDFの場所を変える必要はない。
 
@@ -584,6 +610,8 @@ npm run math:author-accept --prefix backend -- --run data/math-authoring/run-exa
 
 初版は外部AIの出力でも教材を作れることを必須とする。組込みadapterは未設定でも数学アプリを起動できる。WebのPDF upload、全冊の無人自動公開、手書き答案OCRは初版の必須条件ではない。
 
+ここで「外部AIの出力」はアプリ外の作業エージェントが作ったpackageという意味であり、外部OCRサービスへの送信を要求するものではない。実行環境未設定の段階でも [主prompt](../prompt/math-pdf-to-learning-units.md) と [OCRガイド](../prompt/math-ocr-local-guide.md) を使ってローカル成果物を作れるようにする。
+
 ### 10.5 ファイルとparserの規則
 
 - YAMLは安全なparserを使い、重複キー・未定義field・許容外の型を拒否する。外部packageにも同じ検証を適用する。
@@ -602,6 +630,8 @@ npm run math:author-accept --prefix backend -- --run data/math-authoring/run-exa
 | 2段組で式が別の段落へ混ざる | 原ページ照合で検出しunresolved |
 | 積分の上下限・負号・添字が不鮮明 | モデルの推測で補わずblockする |
 | printed pageとPDF indexがずれる | SourceSpanが実ページを指す |
+| Volume/Part/Chapter/Section/Subsectionがある | 省略せず保存し、解説の使用定理へ解決できる |
+| 定理番号が別Chapterで重複 | source occurrenceと全階層で一意に引用 |
 | 定理の条件を落とした短い要約 | validator/verificationで拒否 |
 | 原文にない直感・例をAIが追加 | derived/pedagogicalとして出典由来と分離 |
 | 前のChapterにあるだけの概念 | 必須prerequisiteに自動追加しない |
@@ -616,6 +646,8 @@ npm run math:author-accept --prefix backend -- --run data/math-authoring/run-exa
 | 原ページに未処理/未読領域がある | coverage-ledgerに残し、抽出完了率を偽らない |
 | 図にしかない条件があり図対応不可 | 影響するobjectiveをblocked |
 | PDF/image adapter未設定 | 外部package入口は使用可能、既存語学も起動可能 |
+| local OCR失敗、外部LLM-aided設定が存在 | remoteへ切替せず、設定を使用しない。未処理を明示 |
+| 数式が画像だけ、またはKaTeX成功だが符号が誤り | 数式MD化/意味照合の失敗として検出 |
 
 unit/schema/compilerの純粋テスト、CLI mockテスト、自作PDFのページ照合、Firestore emulatorの公開・再開テストを追加する。実際のPDF抽出をしていない設計段階で、OCR精度や教材内容の正しさを検証済みと報告しない。
 

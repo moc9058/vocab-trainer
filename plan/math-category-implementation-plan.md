@@ -4,6 +4,8 @@
 
 改訂日: 2026-10-28（日本時間）。教材の物理形式を未確定とし、PDFから学習ユニットを作る方式へ改訂。
 
+追加要件: ローカルPDF/OCR作業用プロンプト、全階層・使用定理を先に示す解説、LaTeXの保存・描画・原文照合を含む。[プロンプト入口](../prompt/README.md)
+
 状態: **設計・未実装**。このファイルは、別の実装エージェントが作業を開始できる仕様書である。
 
 対象リポジトリ: Vocab Trainer（React 19 / Vite 6 / Fastify 5 / TypeScript / Firestore / Cloud Run）
@@ -18,6 +20,8 @@
 - 高難度では複数の概念を組み合わせてよい。
 - Chapter間の前提関係、範囲外の概念、暗黙の基礎知識を制御する。
 - ローカル教材、DB、LLM入力の役割を明確にする。
+- 解答は使用した定理・定義等と書籍内の全階層を提示したうえで解説し、数式はLaTeXで見やすく表示する。
+- PDF解析/OCRはローカルPCで行う。Mac mini M4向けの実行候補と、解析エージェントへ渡すpromptを用意する。
 - **現時点で教材のPart / Chapter / Sectionフォルダーや教材内容を補完しない。**
 
 この計画の作成作業ではアプリを実装しない。後続の実装でも、テスト用の架空教材は `backend/src/test-fixtures/math/` 等に置き、実教材の `textbook/` に作らない。PDFからの抽出・ページ照合・階層提案は教材作成機能として設計するが、この計画作成中に実PDFを処理しない。詳しくは [教材作成設計](math-content-authoring-design.md) を読む。
@@ -262,7 +266,7 @@ PDFは出典、確認済みMarkdown/YAMLは教材の編集原本、Firestore cat
 
 AIには最初に主張・条件・式・例を出典に忠実に抽出させ、その後に核心と学習目標へ再構成させる。短縮時にも仮定・定義域・例外を失わない。原文にある内容とAIによる補足を区別し、曖昧な式や未解決参照は推測で埋めない。
 
-外部AIからのpackage取込と、組込みのPDF/画像抽出adapterを同じcontractへ接続する。抽出結果はdraft→照合→review→acceptを経て編集原本へ取り込む。公開は第8節の別操作で行う。数学アプリへ大容量PDF uploadやクラウドPDF保管を作ることは初版の必須条件ではない。
+アプリ外の作業エージェントからのpackage取込と、組込みのローカルPDF/画像抽出adapterを同じcontractへ接続する。OCRはlocal-onlyとし、意味解析のlocal-only/agent-analysisを区別する。外部OCRへの自動fallbackは行わない。抽出結果はdraft→照合→review→acceptを経て編集原本へ取り込む。公開は第8節の別操作で行う。数学アプリへ大容量PDF uploadやクラウドPDF保管を作ることは初版の必須条件ではない。
 
 ### 6.3 階層を先に固定しない
 
@@ -332,7 +336,12 @@ math_unit_revisions/{revisionId}
   conceptIds[], problemFamilies, proofCoverage, provenanceHash
 
 math_source_documents/{sourceRevisionId}
-  sourceId, fileHash, edition, title, pageCount, pageMapHash
+  sourceId, fileHash, edition, title, pageCount, pageMapHash, sourceOutlineHash
+  outline_chunks/{chunkId}
+    bounded flat nodes: sourceNodeId, parentId, kind, printedLabel, title
+  occurrences/{occurrenceId}
+    conceptId, sourcePathIds, itemKind, printedItemLabel, itemTitle,
+    page span, blockIds, hierarchyStatus
 
 math_provenance_revisions/{hash}
   bounded evidence records, review metadata; larger records use chunks
@@ -349,7 +358,8 @@ math_tests/{testId}
   questions/{questionId}
     ordinal, public prompt, target refs, difficulty, contentHash, validationStatus
   solutions/{questionId}
-    answer, steps, rubric, concept usage refs, validation evidence
+    answer, steps, rubric, concept usage refs, resolved citation snapshot,
+    sourceOutlineHash, validation evidence
   attempts/{attemptId}
     questionId, sittingId, submittedAnswer, assessmentState,
     feedback, gradeVersion, score, assistanceUsed, submittedAt
@@ -530,8 +540,13 @@ interface GeneratedMathQuestion {
   foundationUsed: CapabilityRef[];
   givens: { capability: CapabilityRef; promptBlockId: string }[];
   solution: {
-    finalAnswer: string;
-    steps: { id: string; text: string; uses: CapabilityRef[]; sourceRefs: SourceRef[] }[];
+    usedKnowledge: { conceptId: string; revisionId: string; citationIds: string[];
+      role: 'target' | 'prerequisite' | 'foundation' | 'given' }[];
+    strategyMarkdown: string;
+    steps: { id: string; citationIds: string[]; uses: CapabilityRef[];
+      applicabilityMarkdown: string; explanationMarkdown: string }[];
+    finalAnswerMarkdown: string;
+    checksMarkdown: string;
   };
   rubric: {
     criterionId: string; objectiveId: string; points: number;
@@ -572,6 +587,50 @@ validatorは同じモデルでも独立呼出しにする。異なるモデル�
 指定N問が揃うまでテストは `generating`。一部失敗した場合は `generation_failed` とし、採用済み件数・失敗理由を表示する。`retry-generation` または明示的な `accept-partial` でのみ進める。0問では部分開始不可。
 
 範囲外・誤答・条件不足の報告ボタンを設ける。報告だけでは過去点数を自動削除しない。ユーザーが「この問題を無効にする」を確定すると、操作履歴を残して有効な得点分母から除き、進捗evidenceも無効化する。原答案は残す。再計算はversion付きで実行し、完了テストを再開しない。
+
+### 9.7 使用定理・全階層・説明を結ぶ必須contract
+
+**解答を表示するときは、使用知識の一覧を先に示し、その後の各ステップも「根拠 → 適用条件 → 式と説明」の順にする。** 末尾の参考文献一覧だけで済ませない。実行用の指示は [出典付き数学解説prompt](../prompt/math-solution-with-sources.md) に置く。
+
+サーバーが作るcitation registryは以下を持つ。モデルはこのregistryのIDだけを参照し、章番号・定理名・ページを自由生成しない。
+
+```ts
+interface ResolvedMathCitation {
+  citationId: string;
+  conceptId: string;
+  conceptRevisionId: string;
+  sourceOccurrenceId: string;
+  origin: 'source' | 'derived' | 'pedagogical' | 'author';
+  subjectTitle: string;
+  bookTitle?: string;
+  edition?: string;
+  sourceRevisionId?: string;
+  sourcePath: { sourceNodeId: string; kind: string;
+    printedLabel?: string; title: string }[];
+  itemKind: string;
+  printedItemLabel?: string;
+  itemTitle: string;
+  pdfPageStart?: number;
+  pdfPageEnd?: number;
+  printedPageLabel?: string;
+  blockIds: string[];
+  hierarchyStatus: 'verified' | 'unresolved' | 'not-applicable';
+  supportingCitationIds: string[];
+}
+```
+
+- `sourcePath` は任意深さの順序付き配列。Volume / Part / Chapter / Section / Subsection等、存在する階層を全て保持し、2〜3段に固定しない。
+- 原著の階層と学習用curriculumの階層を分離する。ユーザーが教材を再分類しても、元のTheoremがどの章にあるかを失わない。
+- 同じ「Theorem 1」が複数章・別の版にある場合、source revision + occurrence + full pathで区別する。
+- source occurrenceのIDとoutlineは抽出・承認時に確定し、再抽出でも既存IDとの対応を保持する。階層はflat nodeとpath配列で保存し、Firestoreのnested map深さに原著の深さを依存させない。
+- 本に番号がなければ「番号なしの定理/定義」と表示し、番号を付けない。原著階層が未解決のclaimは使用定理としてreadyにしない。
+- 基礎profile・独自例・導出はその名前と版を示し、必要なら支持するsource citationを別に示す。架空のChapter/Theoremにしない。
+- registryは採用時にサーバーが解決・検証し、question solutionと一緒に固定保存する。教材改名・移動・再公開後のreviewでも元の全階層を表示する。
+- `usedKnowledge` と各stepのcitation/usesの和集合を検査する。未知ID、違うconceptへの引用、条件に反する引用、使っていない定理の水増しを拒否する。
+- 採点のfeedbackで新しく数学的根拠を説明するときも、同じregistryへの参照を使う。採点LLMに別のTheorem番号を作らせない。
+- 情報は既存reveal制御の後に返す。公開question DTOや採点待ちの通常GETへsolution/citation一覧を漏らさない。
+
+表示例の構造は「科目 / 書名・版 / Part / Chapter / Section → Theorem番号・名称（印刷ページ / PDFページ）」。これは固定の5段という意味ではない。実在する全階層を表示し、存在しない段を作らない。
 
 ## 10. 非同期ジョブ・Cloud Run
 
@@ -748,6 +807,7 @@ params/body/queryにFastify schemaを付け、`additionalProperties: false`、�
 - `LanguageSelectPage` は役割を `StudyCategorySelectPage` に整理してよいが、既存import・system画面を保つ。
 - 語学カードと同じ階層に「数学」。表示文字列は翻訳キー化する。
 - `/math` は科目一覧、`/math/subjects/:subjectId` は教材ツリーと範囲設定、`/math/tests/:testId` は出題・結果・reviewとする。
+- `/math/catalogs/:catalogId/concepts/:conceptId` は出典から開く固定版の概念ビュー。公開中の最新版に勝手に差し替えない。
 - `/math/*` を `/:language/*` と独立登録する。未知の数学URLは数学のnot-foundを表示する。
 - `App.tsx` のresumeEpoch対象に数学テストルートを加える。単に既存quizの正規表現を期待しない。
 - 数学コンポーネントはtestId/subjectIdでkeyを設定し、別テストの答案・キャッシュを持ち越さない。
@@ -779,6 +839,9 @@ params/body/queryにFastify schemaを付け、`additionalProperties: false`、�
 - 確定点、未確定件数、無効問題、ヒント利用、自己採点の区別。
 - Objective別の評価根拠と、誤りのあるstep。
 - 使った対象概念・前提・基礎の区別、catalog revisionと教材の出典リンク。
+- 解説の前に使用知識一覧を表示し、全階層・定理等の番号/名称・書籍の版・ページを示す。続く各stepも根拠、適用条件、数式と説明の順に表示する。
+- breadcrumbは複数行に折り返し、モバイルでも全階層を確認できるようにする。Chapterだけに省略した表示を唯一の表示にしない。
+- 引用を押すと固定版のStatement/Conditionsを開く。ローカルPDFしかない場合は書誌・ページを示し、閲覧不能なPDF URLを作らない。
 - 問題報告、自己採点修正、復習、新テスト作成。
 - 学習者に意味のないjob ID、Firestoreパス、hashは通常UIに出さない。障害詳細にrequest ID程度を置く。
 
@@ -789,6 +852,9 @@ params/body/queryにFastify schemaを付け、`additionalProperties: false`、�
 - raw HTMLを有効にしない。任意iframe、script、外部画像の自動読込を許可しない。
 - KaTeXは `trust: false`、`maxExpand` と `maxSize` の有限上限を設定する。macro状態を問題間で共有しない。[KaTeX公式オプション](https://katex.org/docs/options)
 - 問題・模範解答・教材・ユーザー答案を同じrendererで処理する。
+- MDではインライン `$...$`、独立式は空行付き `$$...$$` を正とする。長い導出は `aligned`、行列は `pmatrix/bmatrix`、場合分けは `cases` 等で見やすくする。
+- 学習画面はLaTeXソースをコードブロックで示す代わりに数式として描画する。引用breadcrumbと定理名は数式環境の外に置く。
+- OCRの式画像だけでLaTeX化完了としない。保存・JSON escape・描画・原ページ照合を別々に検証する。
 - 長い式を横スクロール可能にし、スマートフォンでレイアウトを破壊しない。
 - 数式エラーは該当式だけfallback表示し、ページ全体を落とさない。公開前検証でも検出する。
 - LaTeX文字列をそのまま `dangerouslySetInnerHTML` に渡さない。
@@ -810,6 +876,7 @@ params/body/queryにFastify schemaを付け、`additionalProperties: false`、�
 | `backend/src/math-planner.ts` | difficulty、coverage、組合せ、seed、重複対策 |
 | `backend/src/math-store.ts` | catalog、preview、tests、attempts、receipts、学習状態のI/O |
 | `backend/src/math-generation.ts` | context pack、生成、独立検証、採用ゲート |
+| `backend/src/math-citations.ts` / `frontend/src/math/MathCitation.tsx` | source全階層の解決、snapshot、stepとの対応、折り返し表示と固定版リンク |
 | `backend/src/math-grading.ts` | rubric採点、決定的チェック、自己採点修正 |
 | `backend/src/math-operations.ts` | test/sitting/attemptの純粋な状態遷移 |
 | `backend/src/math-jobs.ts` / `math-job-store.ts` / `math-task-dispatch.ts` | 永続ジョブ、lease、checkpoint、dispatch、reconcile |
@@ -906,6 +973,11 @@ Phase 0〜4を初版の完成範囲とする。途中段階を最終完成とし
 | 部分点・ヒント・自己採点修正 | 根拠とgradeSourceを保存、重複集計しない |
 | 本文・scope・答案のサイズ上限 | 413/対応エラー。切り詰めない |
 | Markdownのコード内に見出しやfront matter風文字列 | 誤分割しない |
+| Volume→Part→Chapter→Section→Subsectionの定理を使用 | 全階層と番号を解説より先に表示し、stepの根拠も一致 |
+| Partなしの本、番号なしの定理、別章に同番号の定理 | 実在する階層だけ表示し、occurrenceで区別。捏造しない |
+| 抽出後にcurriculum再編やChapter名修正 | 開始済みtestの引用は固定snapshotのまま |
+| OCRの数式が画像fallback、LaTeXの符号/添字/区間が違う | 未完了/誤りとして検出。構文成功だけでは採用しない |
+| raw JSON→MD→KaTeXでbackslashが変化 | round-tripで検出し、単一の正しいLaTeXへ直す |
 
 ### 16.2 Firestore / Fastify injection / worker
 
@@ -988,6 +1060,8 @@ npm run test:browser --prefix frontend -- --grep math
 - [ ] コード実装中に実教材のPart/Chapter/本文を生成していない。別途指定された抽出作業では階層を提案できるが、未確認で公開していない。
 - [ ] 学習ユニットの文脈を保ち、対象目標と参照知識を混ぜていない。
 - [ ] PDF出典・条件・例外・AI補足・未解決事項・review hashが追跡できる。
+- [ ] 解説前と各stepに使用根拠を表示し、原著の全階層・定理等の番号/名称を固定版から解決した。
+- [ ] LaTeXを読みやすく描画し、OCRで式画像しかない箇所や意味の変わる誤読を未解決として扱う。
 - [ ] ツリーと前提グラフ、評価と利用許可、自己申告と成績を分離した。
 - [ ] 難易度が上がっても出題範囲を勝手に広げない。
 - [ ] 基礎知識は版付きで明示し、前提不足を隠さない。
