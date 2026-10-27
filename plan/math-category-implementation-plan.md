@@ -2,6 +2,8 @@
 
 作成日: 2026-10-27（日本時間）
 
+改訂日: 2026-10-28（日本時間）。教材の物理形式を未確定とし、PDFから学習ユニットを作る方式へ改訂。
+
 状態: **設計・未実装**。このファイルは、別の実装エージェントが作業を開始できる仕様書である。
 
 対象リポジトリ: Vocab Trainer（React 19 / Vite 6 / Fastify 5 / TypeScript / Firestore / Cloud Run）
@@ -11,18 +13,18 @@
 ### 1.1 ユーザーの要求
 
 - 現在の語学カテゴリーに並べて「数学」を追加する。
-- `textbook` 直下のサブフォルダーを科目とし、その下の任意の深さのフォルダーツリーに沿って出題範囲を選ぶ。
-- 将来、葉に配置されるMarkdown教材のDefinition / Theorem / Lemma等を基に、難易度別の問題を解く。
+- `textbook` 直下のサブフォルダーを科目とする。科目内の物理配置は未確定とし、任意深さの論理ツリーで出題範囲を選ぶ。既存/将来の物理フォルダー構造も取り込める。
+- PDFからAIが核心を抽出し、定義・定理の列挙より学習に適した形式で保存して、難易度別の問題を解く。
 - 高難度では複数の概念を組み合わせてよい。
 - Chapter間の前提関係、範囲外の概念、暗黙の基礎知識を制御する。
 - ローカル教材、DB、LLM入力の役割を明確にする。
 - **現時点で教材のPart / Chapter / Sectionフォルダーや教材内容を補完しない。**
 
-この計画の作成作業ではアプリを実装しない。後続の実装でも、テスト用の架空教材は `backend/src/test-fixtures/math/` 等に置き、実教材の `textbook/` に作らない。PDFの自動分割・OCR・章構成推定も対象外とする。
+この計画の作成作業ではアプリを実装しない。後続の実装でも、テスト用の架空教材は `backend/src/test-fixtures/math/` 等に置き、実教材の `textbook/` に作らない。PDFからの抽出・ページ照合・階層提案は教材作成機能として設計するが、この計画作成中に実PDFを処理しない。詳しくは [教材作成設計](math-content-authoring-design.md) を読む。
 
 ### 1.2 設計上の結論
 
-**教材の階層と、概念の依存関係を別々に管理する。出題範囲は「評価対象」「利用可能な前提」「問題文で提供する知識」の三層に分ける。**
+**PDFから「学習ユニット」を作り、内部の概念・能力を構造化する。教材の論理階層と概念の依存関係を別々に管理し、出題範囲は「評価対象」「利用可能な前提」「問題文で提供する知識」の三層に分ける。**
 
 たとえばChapter 6を選んだ場合、Chapter 6の概念を評価対象とし、必要なChapter 1〜5の概念だけを前提として明示する。基礎積分なども、確認済みの基礎プロファイルに含まれるものだけを使う。Chapter 7の手法を黙って使う問題は採用しない。
 
@@ -50,7 +52,7 @@
 | `backend/src/firestore.ts:listLanguages` は単語数付きの語学一覧を返す | `languages/math` や架空の `math.json` を作らない |
 | `backend/src/index.ts` に認証フックとルート登録が集中 | `/api/math` は同じ認証を通す。内部workerの例外は完全一致のURLに限定する |
 | 現在の認証は許可メールによる共有データセットへのアクセス制限 | 数学も初版は同じ単一共有学習者モデル。ユーザー別DBがあると仮定しない |
-| `llm.ts:callLLM` にモデル解決、JSON schema、usage記録、タイムアウトがある | 数学専用のLLMクライアントやAPI鍵管理を新設せず、この層を使う |
+| `llm.ts:callLLM` にモデル解決、JSON schema、usage記録、タイムアウトがある | 問題生成・採点はこの層を使う。PDF/image抽出は入力型の拡張またはauthoring adapterが必要で、既存の文字列引数へPDFをそのまま渡さない |
 | `llm-features.ts` が機能別モデル選択を管理 | `math/generate`、`math/validate`、`math/grade` を独立登録する |
 | 記事解析にはCloud Tasks、OIDC worker、lease、reconcile、ローカルworkerがある | 同じ永続ジョブの原則を使う。ただし `ImportJob` に数学を偽装しない |
 | `llm-budget.ts` は内部import workerだけ特別な時間枠を持つ | 数学worker追加時は明示的に時間枠を追加し、既存の180秒制限を見落とさない |
@@ -70,7 +72,8 @@
 | 用語 | 定義 |
 | --- | --- |
 | Subject（科目） | `textbook` 直下のフォルダー。例: Engineering Math |
-| CurriculumNode（教材ノード） | 科目・Part・Chapter・Section・Markdown教材ファイル等の表示ツリーの要素 |
+| CurriculumNode（教材ノード） | 科目・Part・Chapter・Section等の論理表示ツリー。物理フォルダーとの対応は任意 |
+| LearningUnit（学習ユニット） | 核心・知識要素・手法・例外・評価目標・出典を持つ編集単位 |
 | Concept（概念） | Definition / Theorem / Lemma / Proposition / Corollary / Method / Identity / Notation等の意味単位 |
 | Objective（評価目標） | 「概念を説明する」「適用する」「証明する」等、概念と能力を結び付けた評価単位 |
 | Prerequisite（前提） | 特定のObjectiveに取り組むために必要な別概念の能力 |
@@ -80,7 +83,7 @@
 | Test（テスト） | 固定された問題群・範囲・採点規則を持つ学習単位 |
 | Sitting（学習回） | 連続して取り組み、中断・終了するまでの範囲。テスト全体とは別 |
 
-概念と教材を1対1に決め打ちしない。初期推奨は「1 Markdown = 1 Concept」だが、複数のDefinition / Lemmaを含む1ファイルも、安定したIDと見出しanchorで分解できる形式にする。
+推奨は「1学習テーマ = 1ユニットMarkdown」。Conceptはその内部の細かい意味単位として取り出し、別ユニットからも参照できる。Objectiveは具体的な行動を表し、評価するconcept/capabilityを明示する。
 
 ## 4. 出題範囲と前提知識の仕様
 
@@ -88,12 +91,12 @@
 
 サーバーで次を決定する。クライアントやLLMから受け取った許可集合をそのまま採用しない。
 
-- `T`: 選択ノード配下の有効な評価目標。今回の得点・進捗の対象。
+- `T`: 選択ノード配下のunitに属する有効な評価目標。今回の得点・進捗の対象。unitに登場するだけの知識は含めない。
 - `P`: Tまたは選んだ問題設計に必要な、依存グラフから求めた前提概念・能力。
 - `B`: ユーザーが使用を確認した基礎プロファイルの概念・能力。
 - `G`: その問題文中で、結果や公式を明示的に与える概念・能力。
 
-利用可能な知識 `K = concepts(T) ∪ accepted(P) ∪ B ∪ G` とする。ただし単に概念IDが含まれるだけでは不十分で、`recognize / apply / prove` の能力も確認する。`apply` には定理を利用する権限があるが、証明を既知とみなす権限はない。
+利用可能な知識 `K = assessedCapabilities(T) ∪ accepted(P) ∪ B ∪ G` とする。ただし単に概念IDが含まれるだけでは不十分で、`recognize / apply / prove` の能力も確認する。`apply` には定理を利用する権限があるが、証明を既知とみなす権限はない。
 
 問題の必須条件:
 
@@ -175,9 +178,9 @@ Gとして定理の結果を渡す場合、証明のためだけの依存は展�
 resolveScope(request, activeCatalog):
   validate subject, selectedNodeIds, exclusions, difficulty, mode
   load immutable catalog version
-  expand selected nodes to descendant concepts; deduplicate IDs
+  expand selected nodes to descendant units and assessed objectives; deduplicate IDs
   T := selected, published, assessable objectives
-  resolve capability-specific prerequisites and deterministic OR branches
+  resolve capability-specific + objective-specific prerequisites and deterministic OR branches
   B := explicitly accepted profile versions and their validated closures
   classify missing requirements into:
       permitted prerequisites / eligible givens / blocking requirements
@@ -237,110 +240,49 @@ createTest(previewId, expectedHash, acceptance, operationId):
 
 空の章、未公開教材、前提不足、Level 5を構成できない小さな範囲等を区別して返す。対応は「目標を減らす」「前提を確認する」「難易度を変更する」「範囲を広げて再確認する」。自動でChapterを追加したり、問題数不足を隠したりしない。
 
-## 6. ローカルMarkdownの契約
+## 6. 学習ユニットとPDF由来の教材作成
 
-### 6.1 原本と公開版
+詳細仕様は [数学教材の形式とPDFからの作成設計](math-content-authoring-design.md) にまとめる。この節と同文書が教材作成の契約であり、以前の「1概念1Markdown推奨」「PDF抽出は対象外」という方針を置き換える。
 
-**数学教材の編集原本はローカルMarkdown/YAML、クラウド実行時の正は検証・公開済みFirestore catalog**とする。語学の原本がFirestoreである現状を変更しない。
+### 6.1 推奨する編集単位
 
-初版ではWebから教材本文を編集しない。Webは閲覧、問題報告、学習状態の変更に限定する。これによりローカルとWebの二重編集・上書き競合を避ける。将来Web編集を追加するなら、変更提案をファイルにexportして取り込む別仕様を先に設ける。
+**1つの学習テーマを1学習ユニットにまとめる。** 定義・定理・Lemmaはユニット内の安定ID付き知識要素とし、以下を一緒に保存する。
 
-### 6.2 フォルダーの読み方
+- 中心の問い、核心、直感的な説明、使う場面。
+- 必要な定義・定理・公式・記法、適用条件と例外。
+- 解法の選択・手順・検算、最小の例、典型的な誤り。
+- 能力別の前提、評価目標、適した問題類型、扱わない範囲。
+- 出典、AIが補足した箇所、証明の網羅度、未解決事項。
 
-- `textbook` 直下の各科目フォルダーを表示ツリーの根に対応させる。
-- 科目配下は任意の深さを許容し、`part/chapter/section` を固定の段数にしない。
-- フォルダー名の数値は表示順に利用できるが、依存関係には使わない。
-- 直下にMarkdownがある科目も許容する。途中のフォルダーにある概要Markdownも扱う。空フォルダーをエラーにしない。
-- `.md` と明示的なメタデータだけを教材として扱う。PDF、隠しファイル、バックアップ等は一覧に警告を出して無視する。
-- シンボリックリンクとroot外参照は禁止。Windowsの区切りを正規化し、大文字小文字・Unicode正規化で衝突するパスを検出する。
-- フォルダー移動やタイトル修正でconceptIdが変わらないよう、IDはパスから計算しない。
+ファイルは人が読めるまとまりにし、DBへはConcept / Objective / capability / evidenceを取り出して格納する。定理の一覧だけを出題プロンプトにする設計にはしない。
 
-### 6.3 メタデータファイル（将来の形式。今回作成しない）
+### 6.2 PDF・編集原本・公開版
 
-ルートの `textbook/math.catalog.yaml` に科目と安定ID、フォルダーの対応を書き、各フォルダーの任意の `_node.yaml` で表示名・順序・nodeIdを上書きする。公開対象の全フォルダーには安定nodeIdが必要。未付与の場合はvalidateで一覧を返す。
+PDFは出典、確認済みMarkdown/YAMLは教材の編集原本、Firestore catalogは出題に使う公開版とする。元PDFは編集しない。初版の教材作成はローカルCLI/AI作業で行い、Webから本文を二重編集しない。
 
-著者作業を補助する `math:manifest` コマンドは、不足メタデータを標準出力または指定した出力先へ提案する。**既定では教材ディレクトリに書かない**。明示的な `--write-metadata` のときだけメタデータを作る。空のPart等や本文を生成する機能は含めない。
+AIには最初に主張・条件・式・例を出典に忠実に抽出させ、その後に核心と学習目標へ再構成させる。短縮時にも仮定・定義域・例外を失わない。原文にある内容とAIによる補足を区別し、曖昧な式や未解決参照は推測で埋めない。
 
-```yaml
-# 形式例。これを実教材として自動作成しない。
-schemaVersion: 1
-subjects:
-  - id: engineering-math
-    path: engineering_math
-    title: Engineering Math
-    rootNodeId: node-engineering-math
-    foundationProfileIds: []
-foundationProfiles: []
-```
+外部AIからのpackage取込と、組込みのPDF/画像抽出adapterを同じcontractへ接続する。抽出結果はdraft→照合→review→acceptを経て編集原本へ取り込む。公開は第8節の別操作で行う。数学アプリへ大容量PDF uploadやクラウドPDF保管を作ることは初版の必須条件ではない。
 
-科目だけ・概念0件の公開も許す。その場合、画面にはEngineering Mathと「教材未登録」を表示し、テスト作成は無効にする。メタデータ自体がなければ数学全体の初期空状態を出す。
+### 6.3 階層を先に固定しない
 
-### 6.4 1概念1Markdownの推奨形式
+`textbook` 直下は科目とする。科目内は `curriculum.yaml` の論理ツリーを出題範囲の正とし、node→unit→objectiveを解決する。実際のPart/Chapterフォルダーは必須にしない。PDFの目次や物理フォルダーからツリー案を作り、確認後に採用できる。
 
-以下は架空のサンプル。参照先はfixture内で定義する。本の実際の章番号を示さない。
+Markdownを `units/` に置く方式を推奨するが、後から章別フォルダーへ移してもよい。安定IDとmanifestが対応を管理し、pathを概念のIDにしない。今回、実教材のmetadata・フォルダー・本文を生成しない。
 
-````markdown
----
-schemaVersion: 1
-id: concept-linear-method
-kind: method
-title: 一階線形方程式の解法
-contentLanguage: ja
-tags: [differential-equations]
-source:
-  bookId: sample-book
-  edition: "sample"
-  locator: "sample section"
-objectives:
-  - id: objective-linear-method-apply
-    capability: apply
-    description: 条件を確認し、一階線形方程式を解ける
-    difficultyRange: [2, 4]
-    prerequisites:
-      allOf:
-        - conceptId: concept-product-rule
-          capability: apply
-      anyOf: []
-    recommended: []
-provideable: false
----
+### 6.4 必須contract
 
-## Statement
-対象とする方程式と手法を記述する。
+- `math.catalog.yaml`: 科目とpath、schemaVersion。
+- `subject.yaml`: 科目情報、source、profile。
+- `curriculum.yaml`: 任意深さのnodeとunit参照。
+- `sources.yaml`: 元PDFの版・hash・ページ対応。
+- `unit-<id>.md`: `format: math-learning-unit`、blocks、knowledgeItems、knowledgeRefs、objectives、problemFamiliesを持つ学習ユニット。
+- `provenance/<unit-id>.yaml`: block/claimごとの出典・補足・検証情報。
+- review receipt: 承認した内容とprovenanceのhashに結び付く記録。
 
-## Conditions
-係数の連続性、定義区間など、適用条件を記述する。
+定義のcanonical所有者はconceptごとに1ユニット。他のユニットは参照する。objectiveはユニットに属し、`assessedCapabilities` と `additionalPrerequisites` を持つ。objective固有の前提をconcept全体に強制しない。
 
-## Explanation
-概念の意味を記述する。
-
-## Examples
-必要であれば独自の短い例を記述する。
-
-## Pitfalls
-誤用しやすい条件を記述する。
-````
-
-必須: schemaVersion、id、kind、title、contentLanguage、Statement、Conditions。条件がない場合も「条件なし」と明記する。評価対象にするには1件以上のobjectiveが必要。`notation` 等はobjectivesなしでも前提として登録できるが、利用能力とその依存を別の `capabilities` メタデータで定義する。
-
-一般化した内部表現は `capabilities: { recognize?, apply?, prove? }` に各能力の依存を持ち、objectiveは該当能力と追加制約を参照する。上記の簡略形式はimport時に `apply` 能力へ正規化する。異なるobjectiveが同じ能力へ矛盾する依存を宣言した場合は拒否し、明示形式への書き換えを求める。
-
-`source` は出典情報であり、参照されたPDFの本文全体を自動送信する指示ではない。ライセンスや公開範囲は教材作成時に確認する。コンテンツ言語とUI/問題言語は別管理する。
-
-### 6.5 複数概念を含むMarkdown
-
-- front matterの `concepts[]` に概念ごとのid、anchor、kind、objectives等を書く。
-- 本文は `## 見出し {#stable-anchor}` 等の明示anchorで区切る。曖昧な見出し文字列の推測だけで切り分けない。
-- 共通導入部分は `sharedContext` として明示する。各概念のStatement / Conditionsを失わない。
-- importerはASTを使い、コードブロック内の `---` や見出しを誤分割しない。
-- LLMで本文から概念や依存を推測しても、結果は将来の「提案」に限定する。自動公開しない。
-- 初版で両形式を検証する。実装を段階化する場合でも、1概念形式だけで複数概念ファイルを黙って1概念として取り込むことは禁止。
-
-### 6.6 著者向け検証
-
-YAML安全parse、重複キー・unknown field拒否、JSON schema検証、UTF-8、ID重複、anchor重複、参照解決、能力定義、DAG、許可可能なG、source path、サイズ、数式構文を検証する。
-
-数式の描画成功は数学的正しさの証明ではない。importerは内容をLLMで勝手に修正しない。警告とエラーをファイル・anchor・理由付きで返す。
+公開時にschema、ID/anchor、DAG、未解決参照、出典、証明範囲、review hash、サイズ、数式構文を検証する。PDF bytes・ページ画像・未確認draftは公開データに含めない。科目だけでunitが0件でも公開でき、UIは教材未登録を表示する。
 
 ## 7. Firestore設計
 
@@ -351,7 +293,7 @@ YAML安全parse、重複キー・unknown field拒否、JSON schema検証、UTF-8
 | PDF/教材全文を毎回LLMに渡す | 範囲・出典・版を制御しにくく、大きくなるため初版では不採用 |
 | 1科目を1巨大ドキュメントに保存 | 更新とサイズ制限、部分取得の面で不採用 |
 | embedding検索だけで知識を選ぶ | 前提の漏れ・範囲外混入を防ぐ保証がないため権限判定には不採用 |
-| **概念単位の構造化データ + 原文 + 依存グラフ + 公開版** | 採用。必要な概念だけをLLMへ送り、出典と版を再現できる |
+| **学習ユニットから概念・目標を正規化 + 出典 + 依存グラフ + 公開版** | 採用。編集時の文脈を保ち、必要な情報だけをLLMへ送る |
 
 embeddingは将来の検索補助として追加できる。追加しても検索候補をKでフィルターし、範囲を拡張する権限を与えない。
 
@@ -367,9 +309,14 @@ math_catalogs/{catalogId}
   subjects/{subjectId}
     title, rootNodeId, order, foundationProfileIds
   nodes/{nodeId}
-    subjectId, parentId, ancestorIds[], type, title, relativePath, order
+    subjectId, parentId, ancestorIds[], kind, title, order, unitIds[]
   concepts/{conceptId}
-    subjectId, nodeId, revisionId, title, kind, assessable, objectiveIds[]
+    subjectId, ownerUnitId, revisionId, title, kind, capabilitySummary
+  units/{unitId}
+    subjectId, revisionId, title, objectiveIds[], conceptIds[]
+  objectives/{objectiveId}
+    unitId, assessedCapabilities[], additionalPrerequisites,
+    assessmentBlockRefs[], difficultyRange, proofRequirement, proofSupport, readiness
   profiles/{profileId}
     title, revision, acceptedCapabilities[], sourceDescription
   graph_chunks/{chunkId}
@@ -377,8 +324,18 @@ math_catalogs/{catalogId}
 
 math_concept_revisions/{revisionId}
   conceptId, schemaVersion, normalizedHash, contentLanguage,
-  source, normalized sections, objectives, capabilities, related,
-  originalMarkdown, parserVersion
+  source, normalized sections, capabilities, related,
+  sourceArtifactHash, blockRefs[], parserVersion
+
+math_unit_revisions/{revisionId}
+  unitId, sourceArtifactHash, blockIndex, overview, objectiveIds[],
+  conceptIds[], problemFamilies, proofCoverage, provenanceHash
+
+math_source_documents/{sourceRevisionId}
+  sourceId, fileHash, edition, title, pageCount, pageMapHash
+
+math_provenance_revisions/{hash}
+  bounded evidence records, review metadata; larger records use chunks
 
 math_scope_previews/{previewId}
   catalogId, request, scopeHash, requiredAcceptance,
@@ -426,10 +383,10 @@ test作成、基礎profile承認、readiness、報告等、testIdがまだない
 
 ### 7.3 ID・版・削除
 
-- Subject / node / concept / objectiveの論理IDは著者の安定ID。`[a-z0-9][a-z0-9_-]{0,95}` 等の限定文字集合と長さをschemaで固定する。
+- Subject / node / unit / concept / objectiveの論理IDは著者が管理する安定ID。抽出時にはツールが既存IDとの対応を提案し、新規IDを発行する。`[a-z0-9][a-z0-9_-]{0,95}` 等の限定文字集合と長さをschemaで固定する。
 - `revisionId` は概念ID・正規化内容・schemaVersion・parserVersionを含むSHA-256。フルhashを利用し、パス変更だけなら概念の意味revisionを変えない。
 - 原文ファイルのhashと意味内容のhashは分ける。改行LF正規化の規則を明文化し、数式・記号の意味が変わる空白は安易に消さない。
-- `catalogId` は公開manifest全体のhash。ツリー、出典path、依存、profileを含み、フォルダー移動も新catalogになる。
+- `catalogId` は公開manifest全体のhash。ツリー、unit/concept revision、objective、出典path、provenance/review hash、依存、profileを含み、フォルダー移動も新catalogになる。
 - 新公開版から消えた概念は、新テストの候補から外れる。旧revisionと旧catalogは既存テストの再開・review用に残す。
 - 論理IDの再利用は禁止。意味が別なら新ID。誤記修正は同IDの新revision。
 - 初版では過去の教材revision・テストの自動GCを実装しない。stagingと期限切れpreviewのみreconcileで期限付き削除を行う。削除時はサブコレクションも対象にする。
@@ -448,11 +405,11 @@ Firestoreの1ドキュメント上限は1 MiB。全文、問題群、答案履�
 - 1テスト: 20問まで、1答案32 KiB、1公開問題32 KiB、1解答・採点rubric128 KiBまで。
 - グラフ・scope: 200 KiB以下のchunkに分け、chunk数・hashをmanifestで検証する。
 
-原文保持は、単一概念ファイルならrevision内に格納できる。複数概念ファイルは `math_source_revisions/{sourceHash}` を追加し原文を1回だけ保存、各concept revisionはsourceHashとanchorを参照する。原文を保存するのは公開対象のMD/YAMLのみであり、PDFやローカルの絶対パスは保存しない。
+編集原本は `math_source_revisions/{sourceArtifactHash}` にMD/YAMLを1回だけ保存し、unit/concept revisionからblock参照で結ぶ。元PDFの登録情報・ページ対応は別のsource document。PDF bytes・ページ画像・ローカルの絶対パスをFirestoreに保存しない。詳しい変換契約は [教材作成設計の第9節](math-content-authoring-design.md#9-dbとllm-contextへのコンパイル) を参照する。
 
 検索に使わない本文・LaTeX・答案・rubric・大きい配列はindex除外を設定する。新規の `backend/firestore.math.indexes.json` と冪等な設定スクリプトを用意し、既存indexを削除・置換しない。必要な複合index:
 
-- catalog内concepts: `subjectId, nodeId`（遅延読込方式に応じて確定）。
+- catalog内units: `subjectId, title`。node→unitIds→objectiveIdsを基本経路とし、概念に単一nodeIdを強制しない。
 - jobs: `state, nextWakeAt`。
 - tests: `config.subjectId, updatedAt desc`、必要なら `state, updatedAt desc`。
 - reports: `state, createdAt desc`。
@@ -504,9 +461,9 @@ FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIRESTORE_DATABASE_ID='(default)' \
 E_DUPLICATE_CONCEPT_ID: 同じIDが2ファイルにある
 E_UNKNOWN_PREREQUISITE: concept-A.apply -> concept-missing.apply
 E_DEPENDENCY_CYCLE: A.apply -> B.apply -> A.apply
-E_MISSING_NODE_ID: 対象フォルダーのメタデータが未登録
+E_MISSING_NODE_ID: curriculumのノードIDが未登録
 E_INVALID_CONDITION_SECTION: 定理の適用条件が未定義
-W_IGNORED_PDF: PDFは今回の同期対象外
+W_SOURCE_PDF_NOT_PUBLISHED: PDFは抽出の入力。catalog同期ではbytesをアップロードしない
 W_EMPTY_SUBJECT: 公開できるが出題対象は0件
 W_REMOVED_OBJECTIVE: 新テストから外れる。過去履歴は保持
 ```
@@ -517,9 +474,10 @@ W_REMOVED_OBJECTIVE: 新テストから外れる。過去履歴は保持
 
 LLMには「科目全体」ではなく「1問の設計に必要なcontext pack」を渡す。
 
-- サーバーが選んだtarget objectiveと、そのConcept本文・Conditions。
+- サーバーが選んだtarget objective、assessment、関連する問題類型と、そのConcept本文・Conditions。
 - その問題で必要な前提のclosure。利用方法・条件は含めるが、不要な証明や長い例は除ける。
 - 使用候補の基礎Identity / Notation。巨大な基礎profile全体を毎回渡さない。
+- 対象目標に関するunitの誤用例・検算基準・limits。本文の全概念を無条件に渡さない。
 - 必要なら問題文で与えるGと、その正確な記述。
 - 許可ID一覧、禁止される範囲拡張、難易度軸、問題形式、回答言語。
 
@@ -727,6 +685,7 @@ revisionの補完はそのoperationの最初の送信前だけに行い、送信
 | --- | --- | --- |
 | GET `/catalog` | なし | activeCatalogId、科目一覧、機能利用可否。未公開は200で空 |
 | GET `/catalogs/:id/nodes` | subjectId、parentId、cursor | 任意深さのノード一覧、件数、教材状態 |
+| GET `/catalogs/:id/units/:unitId` | なし | ユニット本文、学習目標、例外、出典、公開状態 |
 | GET `/catalogs/:id/concepts/:conceptId` | なし | Concept本文・条件・依存・出典。教材閲覧用 |
 | GET `/foundation-profiles` | catalogId | profileと差分・承認状態 |
 | PUT `/foundation-acceptances/:profileId` | revision、hash、accepted、operationId | 版を固定した承認。既存テストは不変 |
@@ -798,7 +757,7 @@ params/body/queryにFastify schemaを付け、`additionalProperties: false`、�
 左: 教材ツリー、右: 出題設定、下: 範囲確認という構成を基本にし、モバイルでは縦に並べる。
 
 - 任意深さの展開・折り畳み、親チェックで子孫選択、部分選択表示。
-- ノード毎に概念数・評価可能目標数・空状態を表示する。
+- ノード毎にユニット数・概念数・評価可能目標数・空状態を表示する。
 - 同じ概念を複数選択経路から選んでも重複しない。
 - タイトル検索でノード・概念へ移動できる。検索結果を選んでも範囲を勝手に拡張しない。
 - 難易度、問題数、問題形式、出題方針、基礎profile、問題言語を選択。
@@ -844,7 +803,8 @@ params/body/queryにFastify schemaを付け、`additionalProperties: false`、�
 | --- | --- |
 | `backend/src/math-types.ts` / `frontend/src/math/types.ts` | 同じAPI contract。DB private型とpublic DTOを分ける |
 | `backend/src/math-schema.ts` | request / Markdown正規化 / LLM出力のschemaとruntime validation |
-| `backend/src/math-content.ts` | MD/YAML parse、anchor、出典、hash、サイズ検証 |
+| `backend/src/math-content.ts` / `math-unit-compiler.ts` | unit MD/YAML parse、block、出典、hash、概念・目標への正規化 |
+| authoring CLI・schemas・PDF/image adapter | [教材作成設計](math-content-authoring-design.md) 第10節のファイル一覧に従う |
 | `backend/src/math-graph.ts` | capability依存、DAG、OR選択、循環診断 |
 | `backend/src/math-scope.ts` | T/P/B/G、scope preview、snapshot hash |
 | `backend/src/math-planner.ts` | difficulty、coverage、組合せ、seed、重複対策 |
@@ -879,14 +839,16 @@ Firestoreクライアントをmath-storeで新規生成するなら、既存と�
 ### Phase 0: 契約の固定とfixture
 
 - この計画の型、既定値、上限、APIエラーをschema化する。
-- 小さな架空科目fixtureを作る。直列依存、代替依存、proofだけの依存、基礎Identity、循環、欠損ID、空科目、複数概念MDを含める。
+- 小さな架空科目fixtureを作る。直列依存、代替依存、proofだけの依存、基礎Identity、循環、欠損ID、空科目、学習ユニットMD、外部抽出package、自作の小さいPDFを含める。
 - `textbook/` を触らず、parse/graph/scopeの純粋テストを動かす。
 
 完了条件: Chapterを推測せずT/P/B/Gを計算でき、未知の前提を拒否できる。
 
 ### Phase 1: 教材の同期と閲覧
 
-- 原本contract、validate、manifest提案、dry-run、staging、atomic publishを実装。
+- 学習ユニットcontract、外部AI package取込、review/accept、unit compiler、論理ツリーを実装。
+- PDFページ準備と組込み抽出adapter、run checkpoint、出典・条件の照合を実装。provider未設定でも外部AI入口は利用できる。
+- validate、manifest提案、dry-run、staging、atomic publishを実装。
 - Firestore repository、catalog API、数学カード、科目・ツリー・概念閲覧、空状態を実装。
 - 実教材を本番同期せず、emulator fixtureで確認する。
 
@@ -920,7 +882,7 @@ Firestoreクライアントをmath-storeで新規生成するなら、既存と�
 
 Phase 0〜4を初版の完成範囲とする。途中段階を最終完成として扱わない。ただし段階ごとのcommit・feature capabilityで安全に統合する。
 
-後続: PDF/OCR自動取込、概念・依存提案の承認UI、embedding検索、CAS、手書き答案、図形、適応的出題、マルチユーザー。これらを初版の完成条件へ暗黙に追加しない。
+後続: WebのPDF upload/保管、全冊の自動処理を管理するWeb UI、embedding検索、CAS、手書き答案、図形、適応的出題、マルチユーザー。PDF由来の教材作成・外部package取込・ローカルreviewは初版に含む。実際の教科書全体の抽出・承認は、コード実装とは別の著者作業とする。
 
 ## 16. テスト・受入条件
 
@@ -1012,7 +974,7 @@ npm run test:browser --prefix frontend -- --grep math
 3. デプロイスクリプトに数学のenabled時の検証と必要な設定保持を追加し、Windows版も揃える。
 4. `./deploy.sh` でbackend/frontendをリリースする。数学promptは初版ではコード管理なので、数学だけを理由に `--prompts / --llm / --auth` を付けない。
 5. 数学カード、空状態、認証、worker configurationを確認する。実教材なしでも語学は従来通り動く。
-6. 著者が後日Markdownとmetadataを用意してから、dry-runを確認し、別操作でcatalogを公開する。
+6. 著者がPDFの対象範囲を指定し、AI抽出→学習ユニットのreview/acceptを行う。dry-runを確認して別操作でcatalogを公開する。手書きMDからの作成も可能。
 7. iOSは `npm run ios:sync --prefix frontend` とXcodeインストールが別途必要。Cloud Run deployだけでインストール済みnative bundleが更新されるとは報告しない。
 
 コードのロールバックと教材catalogのロールバックを別々に実施できるようにする。schemaVersionに対し未対応のbackendが起動した場合、数学の利用を明示エラーにして語学のデータを壊さない。ジョブ実行時もfrozenConfigのschema/prompt versionが処理可能か確認する。
@@ -1023,7 +985,9 @@ npm run test:browser --prefix frontend -- --grep math
 
 - [ ] 数学をlanguage / word / grammar / Group A/Bに偽装していない。
 - [ ] 英語の一時停止と既存語学ルートを維持した。
-- [ ] 実教材フォルダーのPart/Chapter/本文を作成・推測していない。
+- [ ] コード実装中に実教材のPart/Chapter/本文を生成していない。別途指定された抽出作業では階層を提案できるが、未確認で公開していない。
+- [ ] 学習ユニットの文脈を保ち、対象目標と参照知識を混ぜていない。
+- [ ] PDF出典・条件・例外・AI補足・未解決事項・review hashが追跡できる。
 - [ ] ツリーと前提グラフ、評価と利用許可、自己申告と成績を分離した。
 - [ ] 難易度が上がっても出題範囲を勝手に広げない。
 - [ ] 基礎知識は版付きで明示し、前提不足を隠さない。
