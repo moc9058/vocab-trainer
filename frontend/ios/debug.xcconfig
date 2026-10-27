@@ -1,1 +1,4 @@
 CAPACITOR_DEBUG = true
+
+// Keep personal signing settings out of the shared project.
+#include? "Personal.xcconfig"

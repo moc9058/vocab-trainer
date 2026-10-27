@@ -188,3 +188,29 @@ test('a captured image can switch to an explicitly pasted passage without reusin
   await expect(page.getByTestId('capture-selection')).toContainText('另一段原文。');
   expect(JSON.parse(await page.getByTestId('capture-selection').innerText()).origin.method).toBe('paste');
 });
+
+test('malformed saved meaning units hide only that block without regenerating the explanation', async ({ page }) => {
+  await page.addInitScript(() => {
+    const text = '你好。';
+    (window as any).fixture = {
+      id: 'article', language: 'chinese', title: text, text, items: [], groupBNames: [],
+      sourceOrigin: { version: 1, method: 'shared-text', sourceKind: 'comment', textConfirmed: true },
+      analysisProgress: { version: 1, chunks: [text], nextChunk: 1 },
+      focusedSentenceIndex: 0, status: 'in-progress', createdAt: '', updatedAt: '',
+      paragraphs: [{ sentences: [{ index: 0, text, readingAnalysis: {
+        version: 1, sourceText: text, explanationLanguage: 'ja', overview: '保存済みの挨拶の説明', ambiguityNotes: [], occurrences: [], constructions: [],
+        comprehension: { meaning: '保存済みの挨拶の説明', skeleton: '挨拶', connection: '', nuances: [], meaningUnits: {
+          version: 1, units: [{ text, range: { start: 0, end: 1 }, meaning: 'broken', role: 'broken' }], flow: 'broken',
+        } },
+      } }] }],
+    };
+  });
+  const calls: string[] = [];
+  await page.route(url => url.pathname.startsWith('/api/'), async route => { calls.push(route.request().url()); await route.fulfill({ status: 500, json: {} }); });
+  await page.goto('/tests/browser/harness.html?mode=meaning');
+  await page.getByRole('button', { name: 'Sentence explanation 1', exact: true }).click();
+  await expect(page.getByTestId('import-comprehension')).toContainText('保存済みの挨拶の説明');
+  await expect(page.getByTestId('import-meaning-units')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Update explanation', exact: true })).toBeEnabled();
+  expect(calls).toEqual([]);
+});

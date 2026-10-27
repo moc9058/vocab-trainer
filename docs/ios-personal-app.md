@@ -69,7 +69,7 @@ backendはPKCE transactionを原子的に消費し、Google codeの交換・ID t
    パスワード・2FAはAppleの画面に直接入力する。チャットへ送らない。
 3. 上のsync/openコマンドでプロジェクトを開く。
 4. App target → Signing & Capabilities → Automatically manage signingを有効化し、本人の **Personal Team** を選択する。
-   有料capabilityを追加しない。個人のTeam設定をコミットしない。
+   有料capabilityを追加しない。個人のTeam設定は下記のローカル設定へ保存し、project.pbxprojへコミットしない。
 5. iPhoneをMacへ接続し、双方の「信頼」を本人が承認する。
 6. iPhoneの「設定 → プライバシーとセキュリティ → デベロッパモード」を有効化し、再起動と確認を行う。
 7. Xcodeの実行先にiPhoneを選んでRunする。必要に応じて端末の「設定 → 一般 → VPNとデバイス管理」で開発者を信頼する。
@@ -78,6 +78,18 @@ backendはPKCE transactionを原子的に消費し、Google codeの交換・ID t
 
 Bundle IDを変更する必要がある場合は、Capacitor設定、Xcode target、Google iOS clientの登録を揃える。
 同じIDなら署名更新時にも既存アプリへ上書きできる。
+
+## 個人の署名設定をローカルに保持する
+
+`frontend/ios/Personal.xcconfig.example` を `frontend/ios/Personal.xcconfig` へコピーし、
+`DEVELOPMENT_TEAM = 自分のTeam ID` を設定する。Personal.xcconfigはGitの対象外。
+既にファイルがあれば上書きせず、その設定を使う。Team IDはXcodeのApple Account / Team情報で確認する。
+
+Debugの `debug.xcconfig` とReleaseの `release.xcconfig` がこのファイルを任意で読み込み、
+AppとAppUITestsの両targetに継承する。ファイルがないcheckoutでもSimulatorのコンパイルは可能。
+XcodeのTeam選択が `project.pbxproj` に `DEVELOPMENT_TEAM` を書いた場合は、値をPersonal.xcconfigへ移し、
+そのTeam行だけを共有projectから除く。ほかのproject変更を一括で元へ戻さない。
+署名証明書・provisioning profile・Appleログイン情報をリポジトリへ追加しない。
 
 ## 無料署名の期限後
 

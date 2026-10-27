@@ -86,4 +86,4 @@ Xcodeで同じPersonal Team・Bundle IDを選び、iPhoneへRunします。Googl
 
 本人のiPhoneでのControl Center撮影、小红书・财新の実画面、Personal Teamでの新しいIntentの実行、OSごとの共有・ロック挙動は、実機確認が必要です。Simulatorや合成画像の成功で代用しません。検証結果は[iOS検証記録](ios-verification.md)へ追記します。
 
-前回の設計の背景と後段の範囲は[初版の実装計画](../plan/ios-screen-reading-import-design.md)、解説修正・候補変換は[外部ソースの修正と読解支援](source-revisions.md)を参照してください。
+実装の照合結果・残る確認事項・後段の範囲は[実装整理記録](ios-meaning-units-implementation-audit.md)、解説修正・候補変換は[外部ソースの修正と読解支援](source-revisions.md)を参照してください。

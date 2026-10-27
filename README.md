@@ -12,13 +12,11 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 - [Cloud Run cost controls](docs/cloud-run-cost-controls.md): deployment settings and durable import infrastructure.
 - [Source implementation record](docs/external-source-implementation-audit.md): dated implementation and verification evidence.
 - [Recent documentation audit](docs/recent-updates-documentation-audit.md): coverage of the October 5–19 updates and corrected discrepancies.
-- [Meaning-unit explanation design](plan/source-meaning-units-design.md): source ranges, schema and compatibility decisions.
+- [iOS and meaning-unit implementation audit](docs/ios-meaning-units-implementation-audit.md): completed plans, implementation contracts and remaining acceptance checks.
 - [iPhone screen reading](docs/screen-reading-import.md): screenshot/text intake, on-device OCR, meaningful parts and A/B registration.
-- [Screen reading implementation plan](plan/ios-screen-reading-import-design.md): design decisions and remaining device verification.
 - [Control Center shortcut setup](docs/shortcuts/README.md): automatic screenshot intake, shared/copied text, missing-input handling and device setup.
 - [Personal iOS app](docs/ios-personal-app.md): Xcode project, Google login setup, free signing and updates.
 - [iOS verification](docs/ios-verification.md): checks performed and device checks still pending.
-- [Original iOS plan](plan/ios-personal-app-design.md): design rationale and implementation scope.
 
 ## Group A and Group B
 

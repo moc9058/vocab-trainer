@@ -24,7 +24,7 @@ git log --name-only --format='%h %s' 770a309^..235f329 -- '*.md'
 | compact解析、永続ジョブ、分割・再開・復旧、ストリーミング進捗（`2cfe7d3`、`0928e9f`、`748920b`、`1d622e3`） | README、開発リファレンス、費用制御、[実装・検証記録](external-source-implementation-audit.md) | `import-jobs.ts`、`import-job-store.ts`、`import-progress.ts`、`useImportAnalysisJob.ts`と照合。保存済み原文量と生成文字数の区別、540秒期限、進捗の集約、画面終了後の継続が記載済み。10月17日の検証記録は当時の記録として保持。 |
 | 文法・解説の範囲修正、変換、mini読み支援と構文同期（`c48e5df`、`d8f67c7`） | [修正機能仕様](source-revisions.md)、開発リファレンス、README | revision routes/store、`import-revisions.ts`、word links、`llm-features.ts`と照合。比較・採用・undo・競合、mini機能名、`x`化、旧記事補正、辞書・所属の保持が記載済み。READMEの目次から仕様へ直接リンクを追加。 |
 | レビュー進捗保存、旧mixed回答順保持、レビューのシャッフル（`dc66f36`、`4e18532`、`33a15af`） | READMEのQuiz sessions and review、開発リファレンス、live B仕様 | `quiz-review.ts`、Firestoreの明示read mapping、`sessionReview.ts`、combined routesと照合。固定回答範囲・保存順・cursor・競合・最後の確認済み位置への復帰は記載済み。READMEにレビューAPIの要求・応答・対象prefixを追記。 |
-| 意味のまとまり解説（`235f329`） | [設計・実装計画](../plan/source-meaning-units-design.md) | 計画に「設計のみ・未実装」と明記され、チェックリストは未完了。現行の読解型・表示には追加フィールド／専用表示がなく、実装済みとして扱わない。READMEと修正機能仕様から未実装と分かるリンクを追加。 |
+| 意味のまとまり解説（`235f329`） | [当時の設計・実装計画](https://github.com/moc9058/vocab-trainer/blob/235f329/plan/source-meaning-units-design.md) | 計画に「設計のみ・未実装」と明記され、チェックリストは未完了。現行の読解型・表示には追加フィールド／専用表示がなく、実装済みとして扱わない。READMEと修正機能仕様から未実装と分かるリンクを追加。 |
 
 ## 今回修正した不一致・不足
 
@@ -43,3 +43,7 @@ git log --name-only --format='%h %s' 770a309^..235f329 -- '*.md'
 今回の検証は、変更したMarkdownの相対ファイルリンク・アンカー、記載したAPI・スクリプト・npmコマンドの実在、実装との整合、`git diff --check`。文書のみの変更のためアプリケーションテストは再実行しない。本番の保存データ確認、一括再解析、設定アップロードは行わない。
 
 変更文書5件の相対リンク／アンカー37件、主要npmスクリプト10件、関連ソース・スクリプトのパス11件の確認が成功した。配信環境の確認ではDockerのWSL連携が利用できず、`docker info` が失敗したため、この環境からのデプロイは保留。
+
+## 後日の実装（2026-10-27追記）
+
+上表の意味のまとまり解説の未実装判定は2026-10-20時点の記録。2026-10-24に初版が実装され、2026-10-27の[実装整理](ios-meaning-units-implementation-audit.md)でコードと照合した。実装済みの計画は削除し、上表のリンクは当時のGit版へ向けた。元の監査結果・検証件数は変更していない。

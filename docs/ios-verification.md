@@ -153,3 +153,13 @@ Viteはnative生成物・dist-ios・test-resultsをwatch対象から除外した
 「画像を読み解く」は撮影アクションの出力をImageへ指定する。
 「選択した文章を読み解く」は受信入力を優先し、届かない場合のClipboard取得は明示操作にする。
 任意アプリの選択範囲の自動取得を保証しない。画像・本文の確認前に解析／辞書登録しない。
+
+## 未コミット差分・実装済み計画の整理（2026-10-27）
+
+[実装整理記録](ios-meaning-units-implementation-audit.md)へ3計画のコード照合、採用方式、残る実機・品質確認をまとめ、実装済みの計画ファイルを削除した。
+個人の署名TeamはGit対象外のPersonal.xcconfigへ保持し、Debug/Release・App/AppUITestsの継承と、ファイルを省略できることを確認した。
+翻訳文は維持し、Intentの6キーに付いたstaleをmanualへ整理。正規の生成configと同一の重複ファイルを削除した。
+
+production assetsのsync、Debug Simulator build-for-testing、署名なしRelease arm64 buildが成功した。
+アプリとUIテストのコンパイル確認であり、今回XCUITestの実行、実機install、Google実認証、実画面撮影、実LLM品質の確認は行っていない。
+過去の未確認事項を完了へ変更せず、[残る受け入れ確認](ios-meaning-units-implementation-audit.md#残る受け入れ確認)で追跡する。

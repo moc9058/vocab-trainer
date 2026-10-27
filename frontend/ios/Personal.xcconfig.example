@@ -1,0 +1,3 @@
+// Copy to Personal.xcconfig (ignored by Git) and set your signing Team ID.
+// Inherited by App and AppUITests in Debug and Release.
+// DEVELOPMENT_TEAM = YOUR_TEAM_ID
