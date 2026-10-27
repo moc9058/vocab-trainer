@@ -137,3 +137,21 @@ PowerShellでは環境変数を `$env:NAME=...` で設定する。実LLMコマ�
 - PowerShell実行はpwsh未導入のため未実施。独立したstaging projectは作らず、local/mock検証と本番の小さい専用記事による限定smokeで確認する。
 
 元計画のPhase A～Fは設計時の作業分解だった。実装の採否・差異・測定結果・実施した確認は本節に記録。料金の自動最適化、全モデル/全言語の実LLM benchmark、任意のサイズでの成功保証は実装済みと主張しない。
+
+## docs/plan の追加整理（2026-10-27）
+
+前回の計画整理はルート `plan/` の3件だけを対象とし、`docs/plan/` の2件を見落としていた。
+今回、以下も現行コードと照合して実装済みと確認し、計画ファイルを削除した。
+原文と2026-08-04の検証記録は[削除前のGit版](https://github.com/moc9058/vocab-trainer/tree/42eb439/docs/plan)に残る。
+
+| 削除した計画 | 現行実装の確認 |
+| --- | --- |
+| `word-index-docpath-crash-fix.md` | `73730ab`。`word-index-id.ts` のエンコード・サイズ上限・hash fallback、Firestoreの全7か所と保守スクリプトへの適用、bulk検索ガード、非語彙行の除外、userSplits schema、PUTでの補助lookup失敗の扱い、MISKEYED監査を確認。現在の仕様と保守コマンドは[開発リファレンス](development-reference.md)に記載済み。 |
+| `import-word-sentence-mismatch-fix.md` | `f9e4412`、`c5581a3`。文に単語・文法をネストしたschema、位置による文indexの付与、原文照合・帰属修復、反復語の補完、zh/enの不一致検出と登録防止、手動再割当て、ja/koの活用形互換、単体テストと例文監査スクリプトを確認。[開発リファレンス](development-reference.md)に現在の動作を記載済み。 |
+
+旧計画の「現状500」「テスト基盤なし」や当時の行番号・配備指示は、修正前の分析であり現在の作業指示として扱わない。
+今回promptやschemaを変更しておらず、`--prompts` のアップロード、一括再解析、本番データ修復は不要。
+元計画にあった本番のMISKEYED dry-run実施有無と、実LLM・実画面の当時の未実施項目は、今回のコード照合で完了とは扱わない。
+必要な保守判断時に既存の監査手順を参照する。本整理では本番の監査・書き換えや実LLM呼出しを行っていない。
+
+今回の関連回帰はNode 24で `word-index-id.test.ts` と `import-analysis.test.ts` の37件が成功。リポジトリ内の計画ディレクトリを再検索し、残存計画ファイルがないこと、削除ファイルへのローカルMarkdownリンクがないこと、`git diff --check`を確認した。
