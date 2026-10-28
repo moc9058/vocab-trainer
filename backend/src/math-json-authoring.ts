@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { Ajv } from "ajv";
 import { jsonAuthorPackageSchema, buildJsonCatalog, compileJsonSubject, parseJsonChapter, parseJsonSubject, parseStrictJson, subjectReviewHash, JSON_COMPILER_VERSION, type JsonChapter, type JsonSubject } from "./math-json-content.js";
-import { contentHash, invariant } from "./math-schema.js";
+import { contentHash, invariant, checkBytes } from "./math-schema.js";
 import { safePath } from "./math-content.js";
 export interface JsonPackage { schemaVersion: 2; subject: JsonSubject; chapters: JsonChapter[]; unresolved: string[] }
 export interface JsonRun { schemaVersion: 2; root: string; subjectPath: string; package: JsonPackage; baseHashes: Record<string,string|null>; reviewHash: string }
@@ -11,6 +11,7 @@ async function hashFile(root: string, file: string) { try { return contentHash(a
 const render = (value: unknown) => JSON.stringify(value,null,2)+"\n";
 const packageValidator = new Ajv({allErrors:true,strict:false}).compile(jsonAuthorPackageSchema);
 export function parseJsonAuthorPackage(input: unknown): JsonPackage {
+  checkBytes(input, 10 * 1024 * 1024);
   invariant(packageValidator(input), "E_JSON_PACKAGE_SCHEMA", 400, { errors: packageValidator.errors });
   const pkg = input as unknown as JsonPackage;
   invariant(pkg && Object.keys(pkg).sort().join(",") === "chapters,schemaVersion,subject,unresolved" && pkg.schemaVersion === 2 && Array.isArray(pkg.chapters) && pkg.chapters.length > 0 && pkg.chapters.length <= 1000 && Array.isArray(pkg.unresolved) && pkg.unresolved.every(s => typeof s === "string"), "E_JSON_PACKAGE_SCHEMA");

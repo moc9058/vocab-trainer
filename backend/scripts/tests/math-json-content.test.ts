@@ -20,6 +20,9 @@ test("v2 JSON schema accepts untitled items and recursive sections, rejects dupl
   const chapter=await example();
   const packageValidator = new Ajv({strict:false}).compile(jsonAuthorPackageSchema);
   assert.ok(packageValidator({schemaVersion:2,subject:subjectFor(chapter),chapters:[chapter],unresolved:[]}), JSON.stringify(packageValidator.errors));
+  assert.equal((jsonAuthorPackageSchema.$defs.chapter as any).$id,undefined);
+  assert.equal((jsonAuthorPackageSchema.$defs.chapter as any).properties.content.items.$ref,"#/$defs/chapter/$defs/content");
+  assert.equal(packageValidator({schemaVersion:2,subject:subjectFor(chapter),chapters:[{...chapter,unknown:true}],unresolved:[]}),false);
   const section=chapter.content[1] as any;
   section.content=[{type:"section",id:"nested",title:"Nested",content:section.content}];
   const compiled=compileJsonSubject(approve(subjectFor(chapter),[chapter]),[chapter]);
@@ -135,4 +138,13 @@ test("only explicitly declared capability/revision foundations can cross subject
   item.learning.requires[0].capability="apply";
   sa.foundationRefs[0].subjectId=sa.subjectId;
   assert.throws(()=>compileJsonSubject(sa,[a],false),/E_FOUNDATION_SUBJECT/);
+});
+
+test("objective assessment/proof blocks must resolve inside the compiled learning unit",async()=>{
+  const chapter=await example(),item=(chapter.content[1] as any).content[0];
+  item.objectives=[{id:"assess",description:"Recognize",assessedCapabilities:[{conceptId:item.id,capability:"recognize"}],additionalPrerequisites:{allOf:[],anyOf:[]},assessmentBlockIds:["example-definitions"],difficultyRange:[1,2],proofRequirement:"none",proofSupport:{coverage:"none",blockIds:[]},readiness:"ready"}];
+  assert.throws(()=>parseJsonChapter(chapter),/E_MISSING_BLOCK/);
+  item.objectives[0].assessmentBlockIds=["other-body"];
+  (chapter.content[1] as any).content.push({type:"item",id:"other",kind:"remark",content:[{type:"block",id:"other-body",format:"markdown",text:"Unrelated source"}]});
+  assert.throws(()=>compileJsonSubject(subjectFor(chapter),[chapter],false),/E_OBJECTIVE_BLOCK_SCOPE/);
 });

@@ -42,6 +42,16 @@ function schemaFile(name: string) {
 const ajv = new Ajv({ allErrors: true, strict: false });
 const chapterValidator = ajv.compile(schemaFile("math-chapter.schema.json"));
 const subjectValidator = ajv.compile(schemaFile("math-subject.schema.json"));
+function embedSchema(schema: any, location: string): any {
+  // JSON-Schema-aware validators honor $id scopes. Local constrained decoders may not;
+  // explicit package-root references make both consume the same primary contract.
+  const rewrite = (value: any): any => {
+    if (Array.isArray(value)) return value.map(rewrite);
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).filter(([key]) => key !== "$id" && key !== "$schema").map(([key, child]) => [key, key === "$ref" && typeof child === "string" && child.startsWith("#/") ? `${location}${child.slice(1)}` : rewrite(child)]));
+    return value;
+  };
+  return rewrite(schema);
+}
 export const jsonAuthorPackageSchema = {
   $schema: "http://json-schema.org/draft-07/schema#",
   type: "object", additionalProperties: false,
@@ -52,7 +62,7 @@ export const jsonAuthorPackageSchema = {
     unresolved: { type: "array", maxItems: 1000, items: { type: "string", maxLength: 2000 } },
   },
   required: ["schemaVersion", "subject", "chapters", "unresolved"],
-  $defs: { subject: schemaFile("math-subject.schema.json"), chapter: schemaFile("math-chapter.schema.json") },
+  $defs: { subject: embedSchema(schemaFile("math-subject.schema.json"), "#/$defs/subject"), chapter: embedSchema(schemaFile("math-chapter.schema.json"), "#/$defs/chapter") },
 };
 /** A small lexical JSON pass rejects duplicate object keys, including escaped aliases. */
 export function parseStrictJson(text: string): unknown {
@@ -109,7 +119,7 @@ export function walkJsonContent(content: JsonContent[], visit: (node: JsonConten
   for (const node of content) { visit(node, path); if (node.type !== "block") walkJsonContent(node.content, visit, [...path, node]); }
 }
 export function validateChapter(chapter: JsonChapter) {
-  const ids = new Set<string>(), items = new Map<string, JsonItem>(); let count = 0;
+  const ids = new Set<string>(), blockIds = new Set<string>(), items = new Map<string, JsonItem>(); let count = 0;
   invariant(!isAbsolute(chapter.source.originalFile) && !chapter.source.originalFile.includes("\\") && !chapter.source.originalFile.split("/").includes(".."), "E_UNSAFE_SOURCE_PATH");
   validateMathMarkdown(chapter.title);
   walkJsonContent(chapter.content, (node) => {
@@ -117,6 +127,7 @@ export function validateChapter(chapter: JsonChapter) {
     if (node.type !== "block" && node.title) validateMathMarkdown(node.title);
     if (node.type === "block") {
       // Raw HTML is never enabled in the renderer or accepted in new textbook content.
+      blockIds.add(node.id);
       const containsHtml = (n: any): boolean => n.type === "html" || (n.children ?? []).some(containsHtml);
       invariant(!containsHtml(markdownAst(node.text)), "E_RAW_HTML", 400, { blockId: node.id }); validateMathMarkdown(node.text);
     }
@@ -128,7 +139,7 @@ export function validateChapter(chapter: JsonChapter) {
     for (const o of item.objectives ?? []) {
       invariant(item.learning && o.assessedCapabilities.length > 0 && o.assessedCapabilities.every(r => r.conceptId === item.id && item.learning!.capabilities.includes(r.capability)), "E_OBJECTIVE_CAPABILITY");
       invariant(o.difficultyRange[0] <= o.difficultyRange[1], "E_DIFFICULTY_RANGE");
-      invariant([...o.assessmentBlockIds, ...o.proofSupport.blockIds].every(id => ids.has(id)), "E_MISSING_BLOCK");
+      invariant([...o.assessmentBlockIds, ...o.proofSupport.blockIds].every(id => blockIds.has(id)), "E_MISSING_BLOCK");
       if (o.assessedCapabilities.some(r => r.capability === "prove")) invariant(o.proofRequirement !== "none" && o.proofSupport.coverage !== "none" && o.proofSupport.blockIds.length > 0 && (o.proofRequirement !== "complete" || o.proofSupport.coverage === "complete"), "E_PROOF_SUPPORT_REQUIRED");
     }
     if (item.learning?.capabilities.includes("prove")) invariant(item.learning.proofCoverage !== "none", "E_PROOF_SUPPORT_REQUIRED");
@@ -186,6 +197,7 @@ export function compileJsonSubject(subject: JsonSubject, chapters: JsonChapter[]
       const revisionId = contentHash({ node, blocks, artifactHash, compilerVersion: JSON_COMPILER_VERSION });
       const citation: Citation = { citationId: `cite-${contentHash({ id: node.id, revisionId }).slice(0, 40)}`, conceptId: node.id, conceptRevisionId: revisionId, sourceOccurrenceId: node.id, origin: chapter.source.kind === "author" ? "author" : "source", subjectTitle: subject.title, sourceRevisionId: artifactHash, sourcePath: [...chapterPath, ...path.map(n => ({ sourceNodeId: n.id, kind: n.type === "section" ? "section" : n.kind, title: n.type === "section" ? n.title : displayTitle(n), ...(n.label ? { printedLabel: n.label } : {}) }))], itemKind: node.kind, ...(node.label ? { printedItemLabel: node.label } : {}), itemTitle: display, blockIds: blocks.map(b => b.id), hierarchyStatus: "verified", supportingCitationIds: [] };
       const compiledObjectives: Objective[] = node.objectives ? node.objectives.map(o => ({ ...o, unitId: node.id })) : node.learning.capabilities.filter(c => c !== "prove").map(capability => ({ id: `${node.id.slice(0, 68)}-${contentHash(node.id + capability).slice(0, 10)}-${capability}`, unitId: node.id, description: `${capability}: ${display}`, assessedCapabilities: [{ conceptId: node.id, capability }], additionalPrerequisites: emptyDeps(), assessmentBlockIds: blocks.map(b => b.id), difficultyRange: [1, 2], proofRequirement: "none", proofSupport: { coverage: "none", blockIds: [] }, readiness: "ready" }));
+      for (const objective of compiledObjectives) invariant([...objective.assessmentBlockIds, ...objective.proofSupport.blockIds].every(id => blocks.some(b => b.id === id)), "E_OBJECTIVE_BLOCK_SCOPE");
       const count = compiledObjectives.filter(o => o.readiness === "ready").length;
       if (node.content.some(c => c.type === "item")) {
         // A learnable parent must remain selectable even when it contains proof/remark supplements.
