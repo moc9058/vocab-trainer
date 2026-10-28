@@ -591,3 +591,60 @@ test("an uncertain grade remains pending and cannot contribute confirmed score o
     .get();
   assert(evidence.docs.every((d) => d.data().valid === false));
 });
+
+test("subject-scoped catalog reads follow foreign prerequisite and foundation references without loading unrelated subjects", async () => {
+  const id = contentHash("cross-subject-read-fixture");
+  const ref = collection("catalogs").doc(id);
+  const c = structuredClone(fixture.catalog);
+  c.concepts.find((x) => x.id === "vector-space")!.subjectId = "foundations";
+  c.subjects[0].foundationProfileIds = ["foundation"];
+  c.profiles = [
+    {
+      id: "foundation",
+      title: "Foundation",
+      revision: "1",
+      acceptedCapabilities: [
+        { conceptId: "vector-space", capability: "apply" },
+      ],
+      sourceDescription: "Fixture",
+    },
+  ];
+  await ref.set({
+    state: "published",
+    complete: true,
+    schemaVersion: 1,
+    parserVersion: c.parserVersion,
+  });
+  try {
+    for (const name of [
+      "subjects",
+      "nodes",
+      "units",
+      "concepts",
+      "objectives",
+      "profiles",
+    ] as const)
+      for (const row of c[name])
+        await ref
+          .collection(name)
+          .doc(row.id)
+          .set({
+            ...row,
+            ...(name === "objectives" ? { subjectId: c.subjects[0].id } : {}),
+          });
+    await ref
+      .collection("concepts")
+      .doc("unrelated")
+      .set({ ...c.concepts[0], id: "unrelated", subjectId: "other" });
+    const loaded = await loadCatalog(id, c.subjects[0].id);
+    assert(loaded.concepts.some((x) => x.id === "vector-space"));
+    assert(!loaded.concepts.some((x) => x.id === "unrelated"));
+    assert.equal(
+      resolveScope({ ...request(), profileIds: ["foundation"] }, loaded).plans
+        .length,
+      1,
+    );
+  } finally {
+    await db.recursiveDelete(ref);
+  }
+});

@@ -331,12 +331,68 @@ export async function loadCatalog(
       });
     }),
   );
-  return {
+  const catalog = {
     id,
     schemaVersion: 1,
     parserVersion: meta.parserVersion,
     ...Object.fromEntries(names.map((name, i) => [name, rows[i]])),
   } as Catalog;
+  if (subjectId) {
+    // Prerequisites and foundations may be owned by another subject. Fetch only
+    // referenced concepts, recursively, rather than scanning every other subject.
+    const loaded = new Set(catalog.concepts.map((c) => c.id));
+    const dependencies = (d: import("./math-types.js").Dependencies) => [
+      ...d.allOf,
+      ...d.anyOf.flatMap((branch) => branch.requires),
+    ];
+    const conceptRefs = (c: import("./math-types.js").Concept) => [
+      ...Object.values(c.capabilities).flatMap((v) =>
+        dependencies(v!.prerequisites),
+      ),
+      ...c.requiredToUseWhenGiven,
+    ];
+    let pending = [
+      ...catalog.concepts.flatMap(conceptRefs),
+      ...catalog.objectives.flatMap((o) => [
+        ...o.assessedCapabilities,
+        ...dependencies(o.additionalPrerequisites),
+      ]),
+      ...catalog.profiles
+        .filter((p) =>
+          catalog.subjects
+            .find((s) => s.id === subjectId)
+            ?.foundationProfileIds.includes(p.id),
+        )
+        .flatMap((p) => p.acceptedCapabilities),
+    ].map((r) => r.conceptId);
+    let fetched = 0;
+    while (pending.length) {
+      const ids = [...new Set(pending)].filter((id) => !loaded.has(id));
+      if (!ids.length) break;
+      fetched += ids.length;
+      invariant(
+        fetched <= MATH_LIMITS.capabilities,
+        "MATH_SCOPE_TOO_LARGE",
+        413,
+      );
+      pending = [];
+      for (let i = 0; i < ids.length; i += 100) {
+        const docs = await db.getAll(
+          ...ids
+            .slice(i, i + 100)
+            .map((id) => ref.collection("concepts").doc(id)),
+        );
+        for (const doc of docs) {
+          invariant(doc.exists, "MATH_CONCEPT_NOT_FOUND", 503);
+          const concept = doc.data() as import("./math-types.js").Concept;
+          loaded.add(concept.id);
+          catalog.concepts.push(concept);
+          pending.push(...conceptRefs(concept).map((r) => r.conceptId));
+        }
+      }
+    }
+  }
+  return catalog;
 }
 export async function catalogSummary() {
   const id = await activeCatalogId();

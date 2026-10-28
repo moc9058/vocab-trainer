@@ -37,7 +37,11 @@ import type {
   MathJob,
   Attempt,
 } from "../math-types.js";
-import { resolveScope, makePreview } from "../math-scope.js";
+import {
+  resolveScope,
+  makePreview,
+  foundationAcceptanceHash,
+} from "../math-scope.js";
 import {
   applyTestOperation,
   makeJob,
@@ -152,10 +156,7 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
         profiles: await Promise.all(
           catalog.profiles.map(async (p) => ({
             ...p,
-            capabilitiesHash: contentHash({
-              revision: p.revision,
-              capabilities: p.acceptedCapabilities,
-            }),
+            capabilitiesHash: foundationAcceptanceHash(catalog, p),
             acceptance: await readDoc(
               collection("foundation_acceptances").doc(p.id),
             ),
@@ -186,10 +187,7 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
       invariant(profile, "MATH_PROFILE_NOT_FOUND", 404);
       invariant(
         profile.revision === body.revision &&
-          contentHash({
-            revision: profile.revision,
-            capabilities: profile.acceptedCapabilities,
-          }) === body.hash,
+          foundationAcceptanceHash(catalog, profile) === body.hash,
         "MATH_PROFILE_CHANGED",
         409,
       );
@@ -448,10 +446,7 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
               collection("foundation_acceptances").doc(profile.id),
               tx,
             );
-            const expected = contentHash({
-              revision: profile.revision,
-              capabilities: profile.acceptedCapabilities,
-            });
+            const expected = foundationAcceptanceHash(profileCatalog, profile);
             for (const capability of profile.acceptedCapabilities) {
               const key = `baseline:${capability.conceptId}:${capability.capability}`;
               invariant(
@@ -485,10 +480,10 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
           for (const profile of acceptedProfiles)
             tx.set(collection("foundation_acceptances").doc(profile.id), {
               profileRevision: profile.revision,
-              acceptedCapabilitiesHash: contentHash({
-                revision: profile.revision,
-                capabilities: profile.acceptedCapabilities,
-              }),
+              acceptedCapabilitiesHash: foundationAcceptanceHash(
+                profileCatalog,
+                profile,
+              ),
               acceptedAt: now,
             });
           tx.create(collection("jobs").doc(jobId), bounded(job));

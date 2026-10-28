@@ -1,6 +1,7 @@
 import type {
   CapabilityRef,
   Catalog,
+  FoundationProfile,
   Objective,
   Scope,
   ScopePreview,
@@ -13,6 +14,26 @@ import {
   scopeRequestSchema,
 } from "./math-schema.js";
 import { refKey, resolveDependencies, uniqueRefs } from "./math-graph.js";
+/** Consent is bound to semantic concept revisions, not just stable capability IDs. */
+export function foundationAcceptanceHash(
+  catalog: Catalog,
+  profile: FoundationProfile,
+): string {
+  return contentHash({
+    revision: profile.revision,
+    capabilities: profile.acceptedCapabilities
+      .map((ref) => {
+        const concept = catalog.concepts.find((c) => c.id === ref.conceptId);
+        invariant(
+          concept?.capabilities[ref.capability],
+          "MATH_PROFILE_INVALID",
+          503,
+        );
+        return { ...ref, revisionId: concept.revisionId };
+      })
+      .sort((a, b) => refKey(a).localeCompare(refKey(b))),
+  });
+}
 export function resolveScope(
   input: ScopeRequest,
   catalog: Catalog,
@@ -92,7 +113,6 @@ export function resolveScope(
     [],
     new Set(baselineSeeds.map(refKey)),
   );
-  const baseline = baselineClosure.refs;
   let objectives = catalog.objectives.filter(
     (o) =>
       units.has(o.unitId) &&
@@ -214,12 +234,7 @@ export function resolveScope(
   const acceptedBaseline = new Set(
     chosenProfiles
       .filter(
-        (p) =>
-          acceptedProfiles[p.id] ===
-          contentHash({
-            revision: p.revision,
-            capabilities: p.acceptedCapabilities,
-          }),
+        (p) => acceptedProfiles[p.id] === foundationAcceptanceHash(catalog, p),
       )
       .flatMap((p) => p.acceptedCapabilities)
       .map(refKey),
@@ -252,7 +267,7 @@ export function resolveScope(
         o.assessedCapabilities.filter((r) => r.capability === "prove"),
       ),
     );
-    const allowed = uniqueRefs([...targets, ...resolved.refs, ...baseline]);
+    const allowed = uniqueRefs([...targets, ...resolved.refs]);
     const proof = mustEstablish.length > 0;
     const formats = request.answerFormats.filter((f) =>
       proof ? f === "proof" : f !== "proof",

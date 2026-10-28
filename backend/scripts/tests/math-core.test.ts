@@ -17,7 +17,11 @@ import {
   safePath,
 } from "../../src/math-content.js";
 import { validateGraph, resolveDependencies } from "../../src/math-graph.js";
-import { resolveScope, makePreview } from "../../src/math-scope.js";
+import {
+  resolveScope,
+  makePreview,
+  foundationAcceptanceHash,
+} from "../../src/math-scope.js";
 import {
   jsonSchema,
   contentHash,
@@ -25,6 +29,7 @@ import {
   MATH_LIMITS,
 } from "../../src/math-schema.js";
 import {
+  contextPack,
   gradeAttempt,
   generationResultSchema,
   validateCandidate,
@@ -401,4 +406,96 @@ test("grade evidence is grounded to unique answer excerpts; fabricated evidence 
   assert.equal(uncertain.state, "needs_review");
   assert.equal(uncertain.objectiveEvidence.length, 0);
   assert.equal(uncertain.criteria[0].evidenceRanges.length, 0);
+});
+
+test("generator context carries server-owned target and prerequisite roles instead of asking the model to infer foundations", () => {
+  const scope = resolveScope(request(), fixture.catalog),
+    pack = contextPack(fixture.catalog, scope, scope.plans[0]);
+  assert.equal(
+    pack.concepts.find((c) => c.id === "vector-space")!.role,
+    "prerequisite",
+  );
+  assert.equal(
+    pack.concepts.find((c) => c.id === "subspace-test")!.role,
+    "target",
+  );
+  assert(!pack.concepts.some((c) => c.role === "foundation"));
+});
+
+test("target-aware baseline resolution cannot retain an unchosen prerequisite branch", () => {
+  const c = structuredClone(fixture.catalog);
+  const target = { conceptId: "subspace-test", capability: "apply" as const };
+  const baseline = {
+    conceptId: "vector-space",
+    capability: "recognize" as const,
+  };
+  c.subjects[0].foundationProfileIds = ["foundation"];
+  c.profiles = [
+    {
+      id: "foundation",
+      title: "Foundation",
+      revision: "1",
+      acceptedCapabilities: [baseline],
+      sourceDescription: "Fixture",
+    },
+  ];
+  c.concepts.find(
+    (x) => x.id === target.conceptId,
+  )!.capabilities.apply!.prerequisites = { allOf: [], anyOf: [] };
+  c.concepts.find(
+    (x) => x.id === "subspace",
+  )!.capabilities.recognize!.prerequisites = { allOf: [], anyOf: [] };
+  c.concepts.find(
+    (x) => x.id === baseline.conceptId,
+  )!.capabilities.recognize!.prerequisites = {
+    allOf: [],
+    anyOf: [
+      {
+        id: "initial",
+        priority: 0,
+        requires: [{ conceptId: "subspace", capability: "recognize" }],
+      },
+      { id: "target-known", priority: 1, requires: [target] },
+    ],
+  };
+  assert.equal(
+    resolveDependencies(c, [baseline], [], new Set(["vector-space:recognize"]))
+      .branches[0].alternativeId,
+    "initial",
+  );
+  const scope = resolveScope({ ...request(), profileIds: ["foundation"] }, c);
+  assert.equal(scope.branches[0].alternativeId, "target-known");
+  assert(
+    !scope.plans[0].allowedCapabilities.some((r) => r.conceptId === "subspace"),
+  );
+});
+test("foundation consent expires when an accepted concept changes without renaming capability IDs", () => {
+  const c = structuredClone(fixture.catalog);
+  c.subjects[0].foundationProfileIds = ["foundation"];
+  c.profiles = [
+    {
+      id: "foundation",
+      title: "Foundation",
+      revision: "1",
+      acceptedCapabilities: [
+        { conceptId: "vector-space", capability: "apply" },
+      ],
+      sourceDescription: "Fixture",
+    },
+  ];
+  const hash = foundationAcceptanceHash(c, c.profiles[0]);
+  const input = { ...request(), profileIds: ["foundation"] };
+  assert(
+    !resolveScope(input, c, { foundation: hash }).requiredAcceptance.some((x) =>
+      x.startsWith("baseline:"),
+    ),
+  );
+  c.concepts.find((x) => x.id === "vector-space")!.revisionId =
+    contentHash("changed definition");
+  assert.notEqual(foundationAcceptanceHash(c, c.profiles[0]), hash);
+  assert(
+    resolveScope(input, c, { foundation: hash }).requiredAcceptance.includes(
+      "baseline:vector-space:apply",
+    ),
+  );
 });

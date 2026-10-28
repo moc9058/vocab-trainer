@@ -7,7 +7,7 @@ import { resolveMathConflict } from "../utils/answerOutbox";
 import { mathApi, queueMathOperation } from "./api";
 import type { TestView, StoredSolution, Attempt } from "./types";
 import MathMarkdown from "./MathMarkdown";
-import { MathSolutionView } from "./MathCitation";
+import { MathCitation, MathSolutionView } from "./MathCitation";
 import { MathErrorView } from "./MathRoutes";
 const memoryDrafts = new Map<string, string>(),
   pendingQuestions = new Map<string, Set<string>>();
@@ -344,20 +344,28 @@ export default function MathTestTaking() {
           {jobError && (
             <p className="math-muted">
               {t(
-                jobError === "MATH_MODEL_UNAVAILABLE"
-                  ? "mathModelUnavailable"
-                  : jobError === "MATH_JOB_BUDGET"
-                    ? "mathBudgetExceeded"
-                    : "mathValidationFailed",
+                jobError === "MATH_JOB_VERSION_UNSUPPORTED"
+                  ? "mathUnsupportedVersion"
+                  : jobError === "MATH_MODEL_UNAVAILABLE"
+                    ? "mathModelUnavailable"
+                    : jobError === "MATH_JOB_BUDGET"
+                      ? "mathBudgetExceeded"
+                      : "mathValidationFailed",
               )}
             </p>
           )}
           <button
-            disabled={busy}
+            disabled={busy || jobError === "MATH_JOB_VERSION_UNSUPPORTED"}
             onClick={() => void mutate("retry-generation")}
           >
             {t("mathRetryGeneration")}
           </button>
+          <Link
+            state={{ scopeRequest: view.config }}
+            to={`/math/subjects/${view.config.subjectId}`}
+          >
+            {t("mathNewTestFromScope")}
+          </Link>
           <button
             disabled={busy || !view.questionIds.length}
             onClick={() =>
@@ -555,6 +563,19 @@ export default function MathTestTaking() {
                   <p>
                     {c.awardedPoints} / {c.maxPoints}
                   </p>
+                  {c.citationIds.map((id) => {
+                    const citation =
+                      selectedAttempt.assessment?.citations?.find(
+                        (c) => c.citationId === id,
+                      );
+                    return citation ? (
+                      <MathCitation
+                        key={id}
+                        citation={citation}
+                        catalogId={view.catalogId}
+                      />
+                    ) : null;
+                  })}
                   <MathMarkdown>{c.feedback}</MathMarkdown>
                 </div>
               ))}

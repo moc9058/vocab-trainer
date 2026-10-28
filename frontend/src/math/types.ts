@@ -245,6 +245,7 @@ export interface PublicQuestion {
 export interface StoredSolution {
   candidate: Candidate;
   citations: Citation[];
+  citationRegistry?: Citation[];
   validation: Record<string, unknown>;
 }
 export interface GradeCriterion {
@@ -256,6 +257,7 @@ export interface GradeCriterion {
   citationIds: string[];
 }
 export interface Assessment {
+  citations?: Citation[];
   state: "graded" | "needs_review";
   criteria: GradeCriterion[];
   outsideMethodUsed: boolean;

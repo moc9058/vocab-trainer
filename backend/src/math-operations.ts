@@ -21,6 +21,7 @@ import {
   invariant,
   checkBytes,
   MATH_LIMITS,
+  PROMPT_VERSION,
 } from "./math-schema.js";
 import { validateAssessment } from "./math-generation.js";
 import { writeLearningEvidence } from "./math-learning.js";
@@ -75,7 +76,7 @@ export function makeJob(
     transportAttempts: 0,
     nextWakeAt: now,
     lease: null,
-    frozenConfig: { schemaVersion: 1, promptVersion: "math-1", models },
+    frozenConfig: { schemaVersion: 1, promptVersion: PROMPT_VERSION, models },
     calls: 0,
     tokens: 0,
     lastError: null,

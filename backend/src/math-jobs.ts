@@ -30,6 +30,7 @@ import {
   solveIndependently,
   compareSolutions,
   gradeAttempt,
+  contextPack,
   type MathLLM,
 } from "./math-generation.js";
 import { callLLM, recordUsage } from "./llm.js";
@@ -126,7 +127,11 @@ function runtimeLLM(job: MathJob): MathLLM {
         },
       },
     });
-    try {return JSON.parse(raw);} catch {throw new MathError("MATH_INVALID_MODEL_JSON",422); }
+    try {
+      return JSON.parse(raw);
+    } catch {
+      throw new MathError("MATH_INVALID_MODEL_JSON", 422);
+    }
   };
 }
 export async function runMathTask(
@@ -211,7 +216,19 @@ export async function runMathTask(
         const solution = await requiredDoc<StoredSolution>(
           testRef.collection("solutions").doc(attempt.questionId),
         );
-        grade = await gradeAttempt(llm, attempt, solution);
+        const scope = await getScope(job.testId),
+          catalog = await loadCatalog(scope.catalogId, scope.request.subjectId),
+          question = await requiredDoc<PublicQuestion>(
+            testRef.collection("questions").doc(attempt.questionId),
+          );
+        const plan = scope.plans[question.ordinal - 1];
+        invariant(plan, "MATH_PLAN_MISSING", 422);
+        grade = await gradeAttempt(
+          llm,
+          attempt,
+          solution,
+          contextPack(catalog, scope, plan),
+        );
         patch = { state: "succeeded" };
       }
       const gradingCatalog = grade

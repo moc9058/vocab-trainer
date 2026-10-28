@@ -29,7 +29,7 @@ export const MATH_LIMITS = {
   tokens: 1_500_000,
 } as const;
 export const PARSER_VERSION = "math-unit-1";
-export const PROMPT_VERSION = "math-1";
+export const PROMPT_VERSION = "math-2";
 export const idSchema = z.string().regex(/^[a-z0-9][a-z0-9_-]{0,95}$/);
 export const hashSchema = z.string().regex(/^[a-f0-9]{64}$/);
 export const operationIdSchema = z.string().regex(/^[a-zA-Z0-9_-]{8,100}$/);

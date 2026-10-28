@@ -75,7 +75,11 @@ export default function MathTestSetup() {
         cursor = response.nextCursor;
       } while (cursor);
       setNodes(rows);
-      setProfiles((await mathApi.profiles(catalog.activeCatalogId)).profiles);
+      setProfiles(
+        (await mathApi.profiles(catalog.activeCatalogId)).profiles.filter((p) =>
+          s.foundationProfileIds.includes(p.id),
+        ),
+      );
     } catch (e) {
       setError(e);
     } finally {

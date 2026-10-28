@@ -1,5 +1,6 @@
 const translations = {
   en: {
+    mathUnsupportedVersion: "This generation version is no longer supported. Create a new test and confirm its scope.",
     selectStudyCategory: "Choose a study category",
     mathVerification: "Verification test (excluded from learning evidence)",
     mathReadiness: "Self-declared readiness",
@@ -825,6 +826,7 @@ const translations = {
     grade: "How did you do?",
   },
   ja: {
+    mathUnsupportedVersion: "この生成方式の版には対応していません。新しいテストで範囲を確認してください。",
     selectStudyCategory: "学習カテゴリーを選択",
     mathVerification: "動作検証用テスト（学習の評価根拠には含めません）",
     mathReadiness: "前提知識の自己申告",
@@ -1647,6 +1649,7 @@ const translations = {
     grade: "できましたか？",
   },
   ko: {
+    mathUnsupportedVersion: "이 생성 버전은 더 이상 지원되지 않습니다. 새 시험을 만들고 범위를 확인하세요.",
     selectStudyCategory: "학습 카테고리를 선택하세요",
     mathVerification: "동작 검증용 시험 (학습 평가 근거에서 제외)",
     mathReadiness: "선수 지식 자기 평가",

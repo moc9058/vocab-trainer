@@ -7,11 +7,11 @@ Date: 2026-10-28 (Japan time).
 - Backend build and CLI TypeScript checks passed.
 - Existing backend unit suite: 117 passed; mixed API suite: 4 passed;
   import API suite: 9 passed, including Node 24 container runs.
-- Mathematics pure/compiler/authoring suite: 14 passed on the host, including
+- Mathematics pure/compiler/authoring suite: 17 passed on the host, including
   local rendering and a loopback-only mocked vision endpoint using an original PDF.
   The Node 24 build container runs the same logic suite, skipping only its optional
   local Poppler integration when Poppler is absent.
-- Isolated `demo-vocab-math` emulator suite: 12 passed, including repeated approval
+- Isolated `demo-vocab-math` emulator suite: 13 passed, including repeated approval
   of unchanged content, atomic catalog changes/rollback, stale dispatches,
   late-worker cancellation, persisted budgets and idempotent answers/grades.
 - Frontend TypeScript, production build and 121 unit tests passed.
@@ -55,3 +55,15 @@ equivalent mutually exclusive status branches under supported `anyOf`; a real
 model schema probe accepted that form. Regression tests cover this serialization.
 Grade excerpts are grounded to unique exact answer substrings by the server;
 unverifiable evidence stays in `needs_review`, outside confirmed score/evidence.
+
+Real-model generation also exposed ambiguity in the context pack’s knowledge
+roles. The pack now sends the server-assigned role for every allowed concept and
+requires copying it. The strict role/scope/citation gates remain in place. A direct
+real-model generation, independent solve and comparison passed with this context.
+New jobs freeze prompt version `math-2`; obsolete generation jobs fail explicitly
+and the UI offers a new scope preview rather than retrying an unsupported version.
+
+Final scope regressions also cover target-aware OR branch selection without
+retaining an unchosen baseline closure, concept-revision-bound foundation consent,
+and subject-scoped loading of foreign prerequisites and foundations. Grading uses
+the immutable knowledge policy and returns only server-resolved feedback citations.
