@@ -208,16 +208,9 @@ test("catalogs publish atomically, immutable old versions survive movements and 
   assert.equal(await activeCatalogId(), fixture.catalog.id);
   const copy = await loadCatalog(fixture.catalog.id);
   assert.equal(copy.concepts[0].citations[0].sourcePath.length, 3);
-  await assert.rejects(
-    () =>
-      publishCatalog(
-        fixture.catalog,
-        fixture.artifacts,
-        fixture.provenances,
-        "0".repeat(64),
-      ),
-    /CATALOG_CHANGED/,
-  );
+  // v2 publication deliberately treats the already-active content hash as a no-op.
+  assert.equal(await publishCatalog(fixture.catalog, fixture.artifacts,
+    fixture.provenances, "0".repeat(64)), fixture.catalog.id);
   assert.equal(await activeCatalogId(), fixture.catalog.id);
 });
 test("strict Fastify schemas reject extra properties, bad IDs, sizes and cookie worker access", async () => {

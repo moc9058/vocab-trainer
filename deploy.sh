@@ -148,9 +148,11 @@ prune_revisions() {
     done
 }
 
+MATH_RELEASE_REPORT="data/math-release-$(node -p 'require("node:crypto").randomUUID()').json"
+echo "==> Math release report: backend/${MATH_RELEASE_REPORT}"
 # Validate Git-managed JSON before any build or cloud write. Stage without activating.
 (cd backend && npx tsx scripts/math-release.ts validate)
-(cd backend && npx tsx scripts/math-release.ts stage --production --project "$PROJECT_ID" --database vocab-database)
+(cd backend && npx tsx scripts/math-release.ts stage --production --project "$PROJECT_ID" --database vocab-database --report "$MATH_RELEASE_REPORT")
 
 # Configure Docker auth for Artifact Registry
 gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
@@ -226,8 +228,8 @@ echo "==> Backend deployed at: ${BACKEND_URL}"
 # An authenticated data endpoint is not a health probe. This endpoint exposes only
 # reader capabilities; activation remains an explicit Firestore CAS.
 node backend/scripts/check-math-release-health.mjs "$BACKEND_URL"
-(cd backend && npx tsx scripts/math-release.ts activate --production --project "$PROJECT_ID" --database vocab-database)
-echo "==> Catalog activated; rollback metadata: backend/data/math-release.json"
+(cd backend && npx tsx scripts/math-release.ts activate --production --project "$PROJECT_ID" --database vocab-database --report "$MATH_RELEASE_REPORT")
+echo "==> Catalog activated; rollback metadata: backend/${MATH_RELEASE_REPORT}"
 
 
 # Build and push frontend

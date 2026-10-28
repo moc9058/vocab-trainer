@@ -117,12 +117,13 @@ The same content hash is a no-op. A failed stage/backend cannot activate a catal
 CAS conflicts fail rather than overwriting another release.
 
 Release reports store previous/current catalog IDs in ignored
-`backend/data/math-release.json`. After a frontend failure, explicitly roll back
+`backend/data/math-release-<release-id>.json`. After a frontend failure, explicitly roll back
 using that report (this changes only the catalog pointer):
 
 ```bash
 (cd backend && npx tsx scripts/math-release.ts rollback --production \
-  --project vocab-trainer-490014 --database vocab-database)
+  --project vocab-trainer-490014 --database vocab-database \
+  --report data/math-release-RELEASE-ID.json)
 ```
 
 `math-release.ts stage` and `activate` accept the same explicit target flags and

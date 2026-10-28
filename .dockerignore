@@ -1,14 +1,16 @@
-**/node_modules
-**/dist
-**/dist-ios
-.git
-.env
-**/.env
-**/data
-**/logs
-textbook
-frontend
-plan
-docs
-*.pdf
-**/*.pdf
+# Backend builds use repository context only to include the authoritative schemas.
+# Send an allowlist; never send local PDFs, credentials, envs, snapshots or venvs.
+**
+!backend/
+!backend/Dockerfile
+!backend/package.json
+!backend/package-lock.json
+!backend/tsconfig.json
+!backend/src/
+!backend/src/**
+!backend/scripts/
+!backend/scripts/copy-math-schemas.mjs
+!backend/DB/
+!backend/DB/**
+!prompt/
+!prompt/*.schema.json

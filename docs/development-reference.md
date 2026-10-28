@@ -588,7 +588,7 @@ Google OIDC. Normal deploy validates enabled math infrastructure and preserves i
 environment. Mathematics v2 additionally validates `textbook/catalog.json`, stages
 only allowlisted JSON, checks the deployed v1/v2 reader health, and activates the
 catalog with CAS before deploying the frontend. Release/rollback metadata is in
-ignored `backend/data/math-release.json`. Raw historical source deletion remains
+ignored `backend/data/math-release-<release-id>.json`. Raw historical source deletion remains
 an explicit maintenance operation. The nine Linear Algebra chapters are converted
 losslessly to JSON with reports in `docs/math-v2-conversion/`; initial v1 subset
 verification remains historical. Device installation remains a separate operation.

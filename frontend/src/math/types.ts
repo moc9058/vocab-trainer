@@ -293,6 +293,8 @@ export interface Draft {
   savedAt: number;
 }
 export interface Sitting {
+  startSequence?: number;
+  endSequence?: number | null;
   id: string;
   state: "active" | "ended";
   startedAt: number;
@@ -302,6 +304,8 @@ export interface Sitting {
     state: "idle" | "active" | "completed";
     revision: number;
     cursor: number;
+    startSequence?: number;
+    endSequence?: number | null;
     currentAttemptId?: string | null;
     attemptIds: string[];
   };

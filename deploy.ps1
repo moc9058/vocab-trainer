@@ -145,12 +145,14 @@ $FrontendImage = "$Region-docker.pkg.dev/$ProjectId/$FrontendRepo/frontend"
 
 Write-Host "==> Project: $ProjectId, Region: $Region"
 
+$MathReleaseReport = "data/math-release-$([guid]::NewGuid().ToString()).json"
+Write-Host "==> Math release report: backend/$MathReleaseReport"
 # Validate/stage before builds; activation follows backend health.
 Push-Location backend
 try {
     npx tsx scripts/math-release.ts validate
     Invoke-Checked "math JSON validation"
-    npx tsx scripts/math-release.ts stage --production --project $ProjectId --database vocab-database
+    npx tsx scripts/math-release.ts stage --production --project $ProjectId --database vocab-database --report $MathReleaseReport
     Invoke-Checked "math catalog staging"
 } finally { Pop-Location }
 
@@ -237,10 +239,10 @@ node backend/scripts/check-math-release-health.mjs $BackendUrl
 Invoke-Checked "math backend reader health"
 Push-Location backend
 try {
-    npx tsx scripts/math-release.ts activate --production --project $ProjectId --database vocab-database
+    npx tsx scripts/math-release.ts activate --production --project $ProjectId --database vocab-database --report $MathReleaseReport
     Invoke-Checked "math catalog CAS activation"
 } finally { Pop-Location }
-Write-Host "==> Catalog activated; rollback metadata: backend/data/math-release.json"
+Write-Host "==> Catalog activated; rollback metadata: backend/$MathReleaseReport"
 
 
 # Build and push frontend

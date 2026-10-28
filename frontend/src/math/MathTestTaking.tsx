@@ -492,7 +492,9 @@ export default function MathTestTaking() {
           {review?.state === "active" && (
             <>
               <p>
-                {review.cursor + 1} / {review.attemptIds.length}
+                {view.schemaVersion === 2
+                  ? `${review.cursor - (review.startSequence ?? view.sitting?.startSequence ?? 1) + 1} / ${Math.max(0, (review.endSequence ?? view.sitting?.endSequence ?? 0) - (review.startSequence ?? view.sitting?.startSequence ?? 1) + 1)}`
+                  : `${review.cursor + 1} / ${review.attemptIds.length}`}
               </p>
               <button
                 disabled={busy}
