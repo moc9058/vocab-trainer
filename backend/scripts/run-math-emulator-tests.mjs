@@ -26,6 +26,8 @@ const result = spawnSync(
     "--test-concurrency=1",
     "scripts/tests/emulator/math.test.ts",
     "scripts/tests/emulator/math-source.test.ts",
+    "scripts/tests/emulator/math-migrate-cli.test.ts",
+    "scripts/tests/emulator/math-release-cli.test.ts",
   ],
   {
     stdio: "inherit",
