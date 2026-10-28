@@ -46,7 +46,7 @@ async function errorFromResponse(res: Response): Promise<Error> {
   let details; try { details = JSON.parse(body); } catch { /* Non-JSON gateway error. */ }
   return new ApiError(
     res.status,
-    `API error: ${res.status}${body ? ` – ${body}` : ` ${res.statusText}`}`, details
+    `API error: ${res.status}${body ? ` – ${body}` : ` ${res.statusText}`}`, details?.error ?? details
   );
 }
 

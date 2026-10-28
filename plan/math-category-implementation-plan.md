@@ -6,7 +6,7 @@
 
 追加要件: ローカルPDF/OCR作業用プロンプト、全階層・使用定理を先に示す解説、LaTeXの保存・描画・原文照合を含む。[プロンプト入口](../prompt/README.md)
 
-状態: **設計・未実装**。このファイルは、別の実装エージェントが作業を開始できる仕様書である。
+状態: **実装済み（2026-10-28）**。実装・運用・検証範囲は [数学機能ガイド](../docs/math-category.md) を参照。この文書は実装時の設計仕様を保持する。実教材全体の取込・承認は別作業。
 
 対象リポジトリ: Vocab Trainer（React 19 / Vite 6 / Fastify 5 / TypeScript / Firestore / Cloud Run）
 
@@ -430,7 +430,7 @@ subcollectionの一覧はcursor pagination、初期limit50・最大100。全subj
 
 ### 8.1 将来追加するCLI
 
-以下は**未実装コマンド**。package scriptsの追加とともに利用可能にする。
+以下は計画時のCLI契約。現在は実装済みで、実際の使用方法は [数学機能ガイド](../docs/math-category.md) を参照。
 
 ```bash
 # ファイル検証のみ。クラウド認証・LLM不要

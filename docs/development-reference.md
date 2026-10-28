@@ -575,3 +575,16 @@ registration queues, modal edits and source saves; other active screens require 
 explicit leave confirmation. New inputs never replace the active passage. Native
 changes still require a separate Xcode install, followed by shortcut configuration.
 No backend schema/config upload or production migration is needed.
+
+
+## Mathematics (2026-10-28)
+
+See [the mathematics guide](math-category.md) for the API, source/authoring contract,
+immutable catalogs, capability scope, durable generation and grading jobs, outbox
+conflict handling and verification commands. Mathematics uses `/api/math` and
+`/math/*`, independently of language/A/B logic. Local entrypoints start a separate
+math worker. Public APIs share existing auth; exact internal math POST routes use
+Google OIDC. Normal deploy validates enabled math infrastructure and preserves its
+environment; it does not publish textbooks. The initial verification uses a small
+source-backed subset of the local Linear Algebra Markdown notes. Actual textbook
+extraction/approval and iOS device installation remain separate operations.

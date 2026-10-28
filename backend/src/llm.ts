@@ -225,7 +225,7 @@ export function resolveEffectiveModels(
   return out;
 }
 
-async function recordUsage(
+export async function recordUsage(
   usage: CompletionUsage | undefined,
   model: string,
   caller: string,
@@ -271,6 +271,8 @@ export interface LLMCallOptions {
   tier?: LLMTier;
   schema?: Record<string, unknown>;
   onChunk?: (chunk: string) => void;
+  maxOutputTokens?: number;
+  maxInputBytes?: number;
   /** Server-owned worker settings; never taken from a public request body. */
   worker?: { model: string; onUsage: (usage: CompletionUsage | undefined, model: string) => Promise<void> };
 }
@@ -291,6 +293,7 @@ export async function callLLM(opts: LLMCallOptions): Promise<string> {
 
 async function callLLMWithSignal(opts: LLMCallOptions, signal: AbortSignal): Promise<string> {
   const { system, user, route, tier = "mini", schema, onChunk } = opts;
+  if (opts.maxInputBytes && Buffer.byteLength(system + user) > opts.maxInputBytes) throw new Error("LLM_INPUT_LIMIT");
   const cl = await awaitWithLLMSignal(createOpenAIClient(), signal);
   const model = opts.worker?.model ?? await awaitWithLLMSignal(resolveModel(tier, route), signal);
   signal.throwIfAborted();
@@ -334,7 +337,7 @@ async function callLLMWithSignal(opts: LLMCallOptions, signal: AbortSignal): Pro
   async function runCompletion(activeModel: string, chunkHandler?: (chunk: string) => void) {
     if (!chunkHandler) {
       const response = await cl.chat.completions.create(
-        { model: activeModel, messages, response_format }, { signal, ...(opts.worker ? { timeout: IMPORT_WORKER_BUDGET_MS, maxRetries: 0 } : {}) },
+        { model: activeModel, messages, response_format, ...(opts.maxOutputTokens ? { max_completion_tokens: opts.maxOutputTokens } : {}) }, { signal, ...(opts.worker ? { timeout: IMPORT_WORKER_BUDGET_MS, maxRetries: 0 } : {}) },
       );
       signal.throwIfAborted();
       if (opts.worker) await opts.worker.onUsage(response.usage, activeModel);
@@ -349,6 +352,7 @@ async function callLLMWithSignal(opts: LLMCallOptions, signal: AbortSignal): Pro
         model: activeModel,
         messages,
         response_format,
+        ...(opts.maxOutputTokens ? { max_completion_tokens: opts.maxOutputTokens } : {}),
         stream: true,
         stream_options: { include_usage: true },
       },

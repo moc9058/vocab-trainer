@@ -185,7 +185,9 @@ if ($Uploads.Count -gt 0) {
 }
 
 node backend/scripts/check-import-jobs.mjs $ProjectId $Region
-Invoke-Checked "import job deployment prerequisites"
+if ($LASTEXITCODE -ne 0) { throw "Import worker prerequisite check failed" }
+node backend/scripts/check-math-jobs.mjs $ProjectId $Region
+Invoke-Checked "math job deployment prerequisites"
 
 # Deploy backend to Cloud Run
 Write-Host "==> Deploying backend to Cloud Run..."

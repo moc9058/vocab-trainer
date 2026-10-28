@@ -44,6 +44,7 @@ export interface ReviewOperation {
 }
 
 export type PendingAnswer =
+  | { domain: "math"; execute: () => Promise<unknown>; rebase: () => Promise<void>; resolve: (result: unknown) => void; reject: (error: unknown) => void; onDiscard?: () => void }
   | { domain: "review"; path: string; operation: ReviewOperation;
       resolve: (result: unknown) => void; reject: (error: unknown) => void }
   | {
@@ -107,6 +108,7 @@ export interface OutboxState {
   /** True while a flush attempt is in flight or a backoff timer is armed. */
   syncing: boolean;
   authBlocked: boolean;
+  conflictBlocked: boolean;
 }
 
 const BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 15_000, 30_000];
@@ -115,6 +117,7 @@ const queue: PendingAnswer[] = [];
 let failed = 0;
 let syncing = false;
 let authBlocked = false;
+let conflictBlocked = false;
 let attempt = 0;
 let timer: ReturnType<typeof setTimeout> | null = null;
 const listeners = new Set<(state: OutboxState) => void>();
@@ -124,7 +127,7 @@ const listeners = new Set<(state: OutboxState) => void>();
  * built object each call would make React see a change on every render and loop forever. A new
  * object is minted only when a field actually differs.
  */
-let snapshotCache: OutboxState = { pending: 0, failed: 0, syncing: false, authBlocked: false };
+let snapshotCache: OutboxState = { pending: 0, failed: 0, syncing: false, authBlocked: false, conflictBlocked: false };
 
 function refreshSnapshot(): void {
   const pending = queue.length;
@@ -132,9 +135,9 @@ function refreshSnapshot(): void {
   if (
     snapshotCache.pending !== pending ||
     snapshotCache.failed !== failed ||
-    snapshotCache.syncing !== isSyncing || snapshotCache.authBlocked !== authBlocked
+    snapshotCache.syncing !== isSyncing || snapshotCache.authBlocked !== authBlocked || snapshotCache.conflictBlocked !== conflictBlocked
   ) {
-    snapshotCache = { pending, failed, syncing: isSyncing, authBlocked };
+    snapshotCache = { pending, failed, syncing: isSyncing, authBlocked, conflictBlocked };
   }
 }
 
@@ -145,6 +148,7 @@ function emit(): void {
 
 function send(item: PendingAnswer): Promise<unknown> {
   switch (item.domain) {
+    case "math": return item.execute();
     case "review":
       if (failed > 0) return Promise.reject(new ApiError(409, "Some earlier answers could not be saved"));
       return putJson(item.path, item.operation);
@@ -217,7 +221,7 @@ function scheduleRetry(): void {
 }
 
 async function drain(): Promise<void> {
-  if (syncing || authBlocked) return;
+  if (syncing || authBlocked || conflictBlocked) return;
   syncing = true;
   emit();
 
@@ -225,7 +229,7 @@ async function drain(): Promise<void> {
     const item = queue[0];
     try {
       const result = await send(item);
-      if (item.domain === "review") item.resolve(result);
+      if (item.domain === "review" || item.domain === "math") item.resolve(result);
       queue.shift();
       attempt = 0;
       emit();
@@ -240,6 +244,9 @@ async function drain(): Promise<void> {
         scheduleRetry();
         emit();
         return;
+      }
+      if (item.domain === "math") {
+        conflictBlocked = true; syncing = false; emit(); return;
       }
       // A permanent refusal affects THIS answer. Authentication failures above keep the queue.
       // Drop permanent failures so one bad write cannot wedge
@@ -311,8 +318,9 @@ export function discardAnswers(): void {
   // Called only after explicit logout confirmation. Do not discard an in-flight head.
   if (syncing) throw new Error("Wait for the current answer to finish before signing out");
   if (timer !== null) { clearTimeout(timer); timer = null; }
-  for (const item of queue) if (item.domain === "review") item.reject(new ApiError(401, "Signed out"));
-  queue.length = 0; failed = 0; authBlocked = false; emit();
+  for (const item of queue) if (item.domain === "review" || item.domain === "math") item.reject(new ApiError(401, "Signed out"));
+  for (const item of queue) if (item.domain === "math") item.onDiscard?.();
+  queue.length = 0; failed = 0; authBlocked = false; conflictBlocked = false; emit();
 }
 export type FlushResult = "synced" | "auth" | "failed" | "pending";
 export function waitForAnswers(timeoutMs = 15_000): Promise<FlushResult> {
@@ -322,4 +330,12 @@ export function waitForAnswers(timeoutMs = 15_000): Promise<FlushResult> {
     const timer = setTimeout(() => { unsubscribe(); resolve("pending"); }, timeoutMs);
     const unsubscribe = subscribeToOutbox(state => { const done = result(state); if (done) { clearTimeout(timer); unsubscribe(); resolve(done); } });
   });
+}
+
+/** Retain mathematics requests on conflict until the learner explicitly resolves them. */
+export async function resolveMathConflict(retry: boolean): Promise<void> {
+  const item = queue[0]; if (!conflictBlocked || item?.domain !== "math") return;
+  if (retry) await item.rebase();
+  else { queue.shift(); item.onDiscard?.(); item.reject(new ApiError(409, "Local operation discarded")); }
+  conflictBlocked = false; flushAnswers(); emit();
 }

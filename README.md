@@ -7,6 +7,7 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 - [AGENTS.md](AGENTS.md): shared instructions for coding agents.
 - [CLAUDE.md](CLAUDE.md): Claude Code entry point to the shared instructions.
 - [Development reference](docs/development-reference.md): detailed architecture and operations.
+- [Mathematics category](docs/math-category.md): independent subject study, prerequisites, source-backed solutions and local authoring.
 - [Live Group B quiz](docs/live-group-b-quiz.md): current A+B behavior and session migration.
 - [Source revisions](docs/source-revisions.md): correction proposals, grammar-to-word conversion and reading assistance.
 - [Cloud Run cost controls](docs/cloud-run-cost-controls.md): deployment settings and durable import infrastructure.
@@ -17,6 +18,15 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 - [Control Center shortcut setup](docs/shortcuts/README.md): automatic screenshot intake, shared/copied text, missing-input handling and device setup.
 - [Personal iOS app](docs/ios-personal-app.md): Xcode project, Google login setup, free signing and updates.
 - [iOS verification](docs/ios-verification.md): checks performed and device checks still pending.
+
+## Mathematics
+
+The **Mathematics** card opens independent subjects and a curriculum tree at `/math`.
+Confirm assessed objectives and permitted prerequisites before generating a test.
+Math answers, drafts, grading jobs and review positions are saved in Firestore.
+Solutions show original source hierarchies before explaining the steps. Textbook
+publication is an explicit local authoring operation, separate from deployment.
+See the [mathematics guide](docs/math-category.md) for commands and verification.
 
 ## Group A and Group B
 

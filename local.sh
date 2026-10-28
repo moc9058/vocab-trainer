@@ -114,10 +114,10 @@ case "$COMMAND" in
     ensure_env; ensure_deps
     docker compose up -d firestore
     # Free :3000/:5173 in case the full stack is running.
-    docker compose stop backend frontend import-worker >/dev/null 2>&1 || true
+    docker compose stop backend frontend import-worker math-worker >/dev/null 2>&1 || true
     wait_emulator
     seed keep
-    docker compose up --build -d import-worker
+    docker compose up --build -d import-worker math-worker
     echo ""
     echo "Starting backend (dev:local) + frontend (vite) — Ctrl-C stops both."
     echo "Open http://localhost:5173 once vite is up."

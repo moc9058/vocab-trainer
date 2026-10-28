@@ -58,7 +58,7 @@ export default function LanguageSelectPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-900 p-6">
       <h1 className="mb-2 text-3xl font-bold text-gray-100">{t("appTitle")}</h1>
-      <p className="mb-10 text-gray-400">{t("selectQuizLanguage")}</p>
+      <p className="mb-10 text-gray-400">{t("selectStudyCategory")}</p>
 
       {loading ? (
         <p className="text-gray-500">Loading...</p>
@@ -80,6 +80,11 @@ export default function LanguageSelectPage() {
           ))}
         </div>
       )}
+
+      <button onClick={() => navigate("/math")} className="mt-4 w-56 rounded-xl border border-indigo-700 bg-gray-800 px-6 py-8 text-center hover:border-indigo-400">
+        <p className="text-xl font-semibold text-gray-100">{t("mathTitle")}</p>
+        <p className="mt-1 text-sm text-gray-400">{t("mathCardHint")}</p>
+      </button>
 
       <div className="mt-10 w-full max-w-sm">
         <section className="rounded-xl bg-gray-800/60 p-4">

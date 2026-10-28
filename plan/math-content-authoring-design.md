@@ -2,7 +2,7 @@
 
 作成日: 2026-10-28（日本時間）
 
-状態: 設計・未実装。既存のPDFを実際に抽出・分割した記録ではない。
+状態: **実装済み（2026-10-28）**。ローカルCLI・外部package・review/acceptを実装。実装時の契約はこの文書、利用手順と検証範囲は [数学機能ガイド](../docs/math-category.md) を参照。実教科書PDFの抽出・分割を実施した記録ではない。
 
 親計画: [数学カテゴリー実装計画](math-category-implementation-plan.md)
 
@@ -539,7 +539,7 @@ math_provenance_revisions/{hash}
 
 ### 10.1 将来のコマンド
 
-全て未実装。`--root` 等はbackend packageの実行ディレクトリを基準とし、解決後の場所を表示する。
+以下は計画時のCLI契約。現在は実装済み。`--root` 等はbackend packageの実行ディレクトリを基準とし、解決後の場所を表示する。
 
 ```bash
 # 対象PDFを登録し、読み取りと抽出の計画だけを作る

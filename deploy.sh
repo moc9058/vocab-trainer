@@ -179,6 +179,7 @@ else
 fi
 
 node backend/scripts/check-import-jobs.mjs "${PROJECT_ID}" "${REGION}"
+node backend/scripts/check-math-jobs.mjs "${PROJECT_ID}" "${REGION}"
 
 # Deploy backend to Cloud Run
 echo "==> Deploying backend to Cloud Run..."
