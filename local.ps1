@@ -132,10 +132,10 @@ switch ($Command) {
         Ensure-Env; Ensure-Deps
         docker compose up -d firestore; Invoke-Checked "starting emulator"
         # Free :3000/:5173 in case the full stack is running.
-        docker compose stop backend frontend import-worker math-worker 2>$null | Out-Null
+        docker compose stop backend frontend import-worker 2>$null | Out-Null
         Wait-Emulator
         Invoke-Seed -Force $false
-        docker compose up --build -d import-worker math-worker; Invoke-Checked "starting import worker"
+        docker compose up --build -d import-worker; Invoke-Checked "starting import worker"
         Write-Host ""
         Write-Host "Opening backend (dev:local) and frontend (vite) in two windows — close them to stop."
         Write-Host "Open http://localhost:5173 once vite is up."

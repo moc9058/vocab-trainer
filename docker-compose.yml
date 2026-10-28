@@ -60,23 +60,6 @@ services:
       firestore:
         condition: service_healthy
 
-  math-worker:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    command: ["node", "dist/math-local-worker.js"]
-    restart: on-failure
-    environment:
-      - FIRESTORE_EMULATOR_HOST=firestore:8080
-      - FIRESTORE_PROJECT=vocab-trainer-490014
-      - FIRESTORE_DATABASE_ID=vocab-database
-    env_file:
-      - path: .env
-        required: false
-    depends_on:
-      firestore:
-        condition: service_healthy
-
   frontend:
     build:
       context: ./frontend

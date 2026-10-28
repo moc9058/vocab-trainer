@@ -28,7 +28,6 @@ export interface LLMFeature {
 }
 
 export const LLM_FEATURES: LLMFeature[] = [
-  ...(["generate", "validate", "grade"] as const).map(feature => ({ key: `math-${feature}`, routes: [`math/${feature}`], defaultTier: "full" as const, label: `Mathematics: ${feature}`, description: feature === "validate" ? "Independently solves and validates generated mathematics questions." : feature === "grade" ? "Grades mathematics answers against a frozen rubric." : "Generates mathematics questions within the confirmed scope." })),
   {
     key: "vocab-smart-add",
     routes: ["vocab/smart-add"],

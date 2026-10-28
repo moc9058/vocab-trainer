@@ -1,3 +1,5 @@
+> Historical record: the mathematics implementation and textbook formats described below were removed on 2026-10-28. See [current status](math-category.md).
+
 # Mathematics v2 verification — 2026-10-28
 
 This records v2 separately from the historical [v1 verification](math-verification.md).

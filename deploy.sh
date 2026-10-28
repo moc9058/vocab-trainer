@@ -148,12 +148,6 @@ prune_revisions() {
     done
 }
 
-MATH_RELEASE_REPORT="data/math-release-$(node -p 'require("node:crypto").randomUUID()').json"
-echo "==> Math release report: backend/${MATH_RELEASE_REPORT}"
-# Validate Git-managed JSON before any build or cloud write. Stage without activating.
-(cd backend && npx tsx scripts/math-release.ts validate)
-(cd backend && npx tsx scripts/math-release.ts stage --production --project "$PROJECT_ID" --database vocab-database --report "$MATH_RELEASE_REPORT")
-
 # Configure Docker auth for Artifact Registry
 gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
@@ -185,7 +179,6 @@ else
 fi
 
 node backend/scripts/check-import-jobs.mjs "${PROJECT_ID}" "${REGION}"
-node backend/scripts/check-math-jobs.mjs "${PROJECT_ID}" "${REGION}"
 
 # Deploy backend to Cloud Run
 echo "==> Deploying backend to Cloud Run..."
@@ -216,6 +209,7 @@ gcloud run deploy vocab-trainer-backend \
   --cpu-throttling \
   --cpu-boost \
   --timeout=660 \
+  --remove-env-vars="MATH_TASK_PROJECT,MATH_TASK_REGION,MATH_TASK_QUEUE,MATH_TASK_ACCOUNT,MATH_WORKER_URL" \
   --update-env-vars="${BACKEND_ENV_VARS}"
 
 # Get backend URL
@@ -224,13 +218,6 @@ BACKEND_URL=$(gcloud run services describe vocab-trainer-backend \
   --region="${REGION}" \
   --format="value(status.url)")
 echo "==> Backend deployed at: ${BACKEND_URL}"
-
-# An authenticated data endpoint is not a health probe. This endpoint exposes only
-# reader capabilities; activation remains an explicit Firestore CAS.
-node backend/scripts/check-math-release-health.mjs "$BACKEND_URL"
-(cd backend && npx tsx scripts/math-release.ts activate --production --project "$PROJECT_ID" --database vocab-database --report "$MATH_RELEASE_REPORT")
-echo "==> Catalog activated; rollback metadata: backend/${MATH_RELEASE_REPORT}"
-
 
 # Build and push frontend
 echo "==> Building and pushing frontend..."

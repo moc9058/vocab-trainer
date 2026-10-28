@@ -145,17 +145,6 @@ $FrontendImage = "$Region-docker.pkg.dev/$ProjectId/$FrontendRepo/frontend"
 
 Write-Host "==> Project: $ProjectId, Region: $Region"
 
-$MathReleaseReport = "data/math-release-$([guid]::NewGuid().ToString()).json"
-Write-Host "==> Math release report: backend/$MathReleaseReport"
-# Validate/stage before builds; activation follows backend health.
-Push-Location backend
-try {
-    npx tsx scripts/math-release.ts validate
-    Invoke-Checked "math JSON validation"
-    npx tsx scripts/math-release.ts stage --production --project $ProjectId --database vocab-database --report $MathReleaseReport
-    Invoke-Checked "math catalog staging"
-} finally { Pop-Location }
-
 # Configure Docker auth for Artifact Registry
 gcloud auth configure-docker "$Region-docker.pkg.dev" --quiet
 Invoke-Checked "gcloud auth configure-docker"
@@ -197,8 +186,6 @@ if ($Uploads.Count -gt 0) {
 
 node backend/scripts/check-import-jobs.mjs $ProjectId $Region
 if ($LASTEXITCODE -ne 0) { throw "Import worker prerequisite check failed" }
-node backend/scripts/check-math-jobs.mjs $ProjectId $Region
-Invoke-Checked "math job deployment prerequisites"
 
 # Deploy backend to Cloud Run
 Write-Host "==> Deploying backend to Cloud Run..."
@@ -225,6 +212,7 @@ gcloud run deploy vocab-trainer-backend `
   --cpu-throttling `
   --cpu-boost `
   --timeout=660 `
+  --remove-env-vars="MATH_TASK_PROJECT,MATH_TASK_REGION,MATH_TASK_QUEUE,MATH_TASK_ACCOUNT,MATH_WORKER_URL" `
   --update-env-vars="$BackendEnvVars"
 Invoke-Checked "gcloud run deploy vocab-trainer-backend"
 
@@ -235,16 +223,6 @@ $BackendUrl = gcloud run services describe vocab-trainer-backend `
   --format="value(status.url)"
 Invoke-Checked "gcloud run services describe vocab-trainer-backend"
 Write-Host "==> Backend deployed at: $BackendUrl"
-node backend/scripts/check-math-release-health.mjs $BackendUrl
-Invoke-Checked "math backend reader health"
-Push-Location backend
-try {
-    npx tsx scripts/math-release.ts activate --production --project $ProjectId --database vocab-database --report $MathReleaseReport
-    Invoke-Checked "math catalog CAS activation"
-} finally { Pop-Location }
-Write-Host "==> Catalog activated; rollback metadata: backend/$MathReleaseReport"
-
-
 # Build and push frontend
 Write-Host "==> Building and pushing frontend..."
 $PrevFrontendId = Get-ImageId $FrontendImage

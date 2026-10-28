@@ -7,7 +7,7 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 - [AGENTS.md](AGENTS.md): shared instructions for coding agents.
 - [CLAUDE.md](CLAUDE.md): Claude Code entry point to the shared instructions.
 - [Development reference](docs/development-reference.md): detailed architecture and operations.
-- [Mathematics category](docs/math-category.md): independent subject study, prerequisites, source-backed solutions and local authoring.
+- [Mathematics category](docs/math-category.md): current minimal shell and reset scope.
 - [Live Group B quiz](docs/live-group-b-quiz.md): current A+B behavior and session migration.
 - [Source revisions](docs/source-revisions.md): correction proposals, grammar-to-word conversion and reading assistance.
 - [Cloud Run cost controls](docs/cloud-run-cost-controls.md): deployment settings and durable import infrastructure.
@@ -21,15 +21,11 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 
 ## Mathematics
 
-The **Mathematics** card opens independent subjects and a curriculum tree at `/math`.
-Select a curriculum range and difficulty. Leave the optional question count blank
-to continue until **Finish test**, or choose 1–20 questions. Prerequisites follow
-the reviewed chapter dependency graph automatically.
-Math answers, drafts, grading jobs and review positions are saved in Firestore.
-Solutions show original source hierarchies before explaining the steps. Normal deployment validates and stages the Git-managed JSON textbook allowlist,
-then activates it after the compatible backend is healthy. Historical source
-migration and raw Markdown deletion are separate maintenance operations.
-See the [mathematics guide](docs/math-category.md) for commands and verification.
+The **Mathematics** card and `/math/*` entry point remain as a minimal shell.
+The mode is being redesigned; tests are currently unavailable. The previous
+textbook JSON, authoring prompts/schemas, LLM input contract, generation, grading
+and persistence implementation have been removed. Deployment no longer publishes
+textbooks or activates catalogs. See the [mathematics guide](docs/math-category.md).
 
 ## Group A and Group B
 

@@ -10,7 +10,7 @@ import { useAuth } from "./auth/context";
 export default function App() {
   const { status, resumeEpoch } = useAuth();
   const location = useLocation();
-  const quizRoute = /^\/math\/tests\//.test(location.pathname) || /\/(quiz|grammar-quiz|combined-quiz|mixed-quiz|import-quiz-[ab]|expression-recall|expression-quiz)(\/|$)/.test(location.pathname);
+  const quizRoute = /\/(quiz|grammar-quiz|combined-quiz|mixed-quiz|import-quiz-[ab]|expression-recall|expression-quiz)(\/|$)/.test(location.pathname);
 
   if (status === "loading") {
     return (

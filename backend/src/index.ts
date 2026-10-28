@@ -1,6 +1,4 @@
 import Fastify from "fastify";
-import { mathRoutes } from "./routes/math.js";
-import { mathWorkerRoutes } from "./routes/math-worker.js";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import sensible from "@fastify/sensible";
@@ -81,7 +79,7 @@ await fastify.register(sensible);
 const PUBLIC_PATH_PREFIXES = ["/api/auth/"];
 
 fastify.addHook("onRequest", async (request, reply) => {
-  if (request.method === "POST" && ["/internal/import-analysis/run", "/internal/import-analysis/reconcile", "/internal/math/run", "/internal/math/reconcile"].includes(request.url.split("?")[0])) return; // Dedicated OIDC hook, never an unauthenticated worker.
+  if (request.method === "POST" && ["/internal/import-analysis/run", "/internal/import-analysis/reconcile"].includes(request.url.split("?")[0])) return; // Dedicated OIDC hook, never an unauthenticated worker.
   const cfg = getAuthConfig();
   if (!cfg) return;
 
@@ -121,13 +119,10 @@ await fastify.register(importRoutes, { prefix: "/api/import" });
 await fastify.register(importJobRoutes, { prefix: "/api/import" });
 await fastify.register(importRevisionRoutes, { prefix: "/api/import" });
 await fastify.register(importWorkerRoutes, { prefix: "/internal/import-analysis" });
-await fastify.register(mathRoutes, { prefix: "/api/math" });
-await fastify.register(mathWorkerRoutes, { prefix: "/internal/math" });
 await fastify.register(llmConfigRoutes, { prefix: "/api/llm-config" });
 
-// Capability metadata only: deployment/migration can verify the compatible reader.
-fastify.get("/health", async () => ({ status: "ok", mathSchemaVersions: [1, 2],
-  sourceFormats: ["textbook-json", "legacy-markdown"], sourceAliasVersion: 2 }));
+// Public liveness probe; no configuration or learning data is exposed.
+fastify.get("/health", async () => ({ status: "ok" }));
 
 const port = parseInt(process.env.PORT ?? "3000", 10);
 const host = process.env.HOST ?? "0.0.0.0";

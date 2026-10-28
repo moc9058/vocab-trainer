@@ -1,3 +1,5 @@
+> Historical record: the mathematics implementation and textbook formats described below were removed on 2026-10-28. See [current status](math-category.md).
+
 # Mathematics implementation verification
 
 Date: 2026-10-28 (Japan time).

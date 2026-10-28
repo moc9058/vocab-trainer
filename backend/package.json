@@ -9,7 +9,7 @@
     "dev:local": "tsx watch scripts/dev-local.ts",
     "seed:download": "tsx scripts/seed-download.ts",
     "seed:load": "tsx scripts/seed-load.ts",
-    "build": "tsc && node scripts/copy-math-schemas.mjs",
+    "build": "tsc",
     "test": "tsx --test src/*.test.ts",
     "test:mixed": "node --experimental-test-module-mocks --import tsx --test scripts/tests/mixed-*.test.ts",
     "start": "node dist/index.js",
@@ -18,19 +18,9 @@
     "test:import": "node --experimental-test-module-mocks --import tsx --test scripts/tests/import-*.test.ts",
     "test:import:emulator": "node scripts/run-import-job-emulator-tests.mjs",
     "test:mobile:emulator": "node --import tsx --test scripts/tests/emulator/mobile-auth.test.ts",
-    "ios:smoke": "node --experimental-test-module-mocks --import tsx scripts/ios-smoke-server.ts",
-    "math:validate": "tsx scripts/math-cli.ts validate",
-    "math:manifest": "tsx scripts/math-cli.ts manifest",
-    "math:sync": "tsx scripts/math-cli.ts sync",
-    "math:extract": "tsx scripts/math-cli.ts extract",
-    "math:author-review": "tsx scripts/math-cli.ts author-review",
-    "math:author-accept": "tsx scripts/math-cli.ts author-accept",
-    "math:extract:import": "tsx scripts/math-cli.ts extract-import",
-    "test:math": "node --experimental-test-module-mocks --import tsx --test scripts/tests/math-*.test.ts",
-    "test:math:emulator": "node scripts/run-math-emulator-tests.mjs"
+    "ios:smoke": "node --experimental-test-module-mocks --import tsx scripts/ios-smoke-server.ts"
   },
   "devDependencies": {
-    "@types/katex": "0.16.8",
     "@types/node": "^25.3.5",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
@@ -41,16 +31,9 @@
     "@fastify/sensible": "^6.0.4",
     "@google-cloud/firestore": "^8.3.0",
     "@google-cloud/tasks": "^7.3.0",
-    "ajv": "8.20.0",
     "dotenv": "^17.3.1",
     "fastify": "^5.8.2",
     "google-auth-library": "^11.3.1",
-    "katex": "0.19.1",
-    "openai": "^6.29.0",
-    "remark-math": "6.0.0",
-    "remark-parse": "11.0.0",
-    "unified": "11.0.5",
-    "yaml": "2.9.1",
-    "zod": "4.6.7"
+    "openai": "^6.29.0"
   }
 }

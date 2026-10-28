@@ -4,8 +4,6 @@ COPY backend/package.json backend/package-lock.json ./
 RUN npm ci
 COPY backend/tsconfig.json ./
 COPY backend/src src
-COPY backend/scripts/copy-math-schemas.mjs scripts/copy-math-schemas.mjs
-COPY prompt/*.schema.json /prompt/
 RUN npm run build
 
 FROM node:24-alpine AS runtime

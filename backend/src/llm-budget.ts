@@ -51,7 +51,7 @@ export async function withLLMBudget<T>(
 export function installLLMBudgets(fastify: FastifyInstance): void {
   fastify.addHook("onRoute", (route) => {
     const handler = route.handler;
-    const timeoutMs = ["/internal/import-analysis/run", "/internal/math/run"].includes(route.url) ? IMPORT_WORKER_BUDGET_MS : /^\/api\/import\/[^/]+\/analyze-stream$/.test(route.url)
+    const timeoutMs = route.url === "/internal/import-analysis/run" ? IMPORT_WORKER_BUDGET_MS : /^\/api\/import\/[^/]+\/analyze-stream$/.test(route.url)
       ? IMPORT_LLM_BUDGET_MS : LLM_BUDGET_MS;
     route.handler = async function (request, reply) {
       const disconnected = new AbortController();
