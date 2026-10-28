@@ -40,6 +40,7 @@ export function writeLearningEvidence(
           gradeVersion: attempt.gradeVersion,
           valid:
             test.purpose !== "verification" &&
+            attempt.assessmentState === "graded" &&
             !!current &&
             !test.invalidQuestionIds.includes(attempt.questionId),
           difficulty: test.config.difficulty,

@@ -18,8 +18,15 @@ import {
 } from "../../src/math-content.js";
 import { validateGraph, resolveDependencies } from "../../src/math-graph.js";
 import { resolveScope, makePreview } from "../../src/math-scope.js";
-import { contentHash, MathError, MATH_LIMITS } from "../../src/math-schema.js";
 import {
+  jsonSchema,
+  contentHash,
+  MathError,
+  MATH_LIMITS,
+} from "../../src/math-schema.js";
+import {
+  gradeAttempt,
+  generationResultSchema,
   validateCandidate,
   solveIndependently,
   compareSolutions,
@@ -338,4 +345,60 @@ test("review/accept installs a complete external package into an empty authoring
     await rm(root, { recursive: true, force: true });
     await rm(run, { recursive: true, force: true });
   }
+});
+
+test("strict model schema uses a supported anyOf with mutually exclusive status constants", () => {
+  const schema = jsonSchema(generationResultSchema) as any;
+  assert.equal(schema.properties.result.anyOf.length, 3);
+  assert(!JSON.stringify(schema).includes("oneOf"));
+  for (const status of ["NEEDS_CONTEXT", "IMPOSSIBLE_WITH_SCOPE"])
+    assert(
+      generationResultSchema.safeParse({
+        result:
+          status === "NEEDS_CONTEXT"
+            ? { status, requiredCapabilities: [], reason: "scope" }
+            : { status, reason: "scope" },
+      }).success,
+    );
+});
+
+test("grade evidence is grounded to unique answer excerpts; fabricated evidence stays unconfirmed", async () => {
+  const scope = resolveScope(request(), fixture.catalog),
+    candidate = validCandidate(fixture.catalog, scope, scope.plans[0]),
+    solution = {
+      candidate,
+      citations: fixture.catalog.concepts.flatMap((c) => c.citations),
+      validation: {},
+    };
+  const attempt: any = { answerText: "yes, all three conditions hold" };
+  const response = {
+    state: "graded",
+    criteria: [
+      {
+        criterionId: "all-conditions",
+        awardedPoints: 100,
+        maxPoints: 100,
+        feedback: "Verified",
+        evidenceRanges: [{ start: 99, end: 102, quote: "yes" }],
+        citationIds: [],
+      },
+    ],
+    outsideMethodUsed: false,
+    objectiveEvidence: [
+      { objectiveId: "apply-subspace-test", demonstrated: true },
+    ],
+    correctnessScore: 100,
+    gradeSource: "ai",
+    feedback: "Correct",
+  };
+  const grade = await gradeAttempt(async () => response, attempt, solution);
+  assert.deepEqual(grade.criteria[0].evidenceRanges, [
+    { start: 0, end: 3, quote: "yes" },
+  ]);
+  const bad = structuredClone(response);
+  bad.criteria[0].evidenceRanges[0].quote = "not in the answer";
+  const uncertain = await gradeAttempt(async () => bad, attempt, solution);
+  assert.equal(uncertain.state, "needs_review");
+  assert.equal(uncertain.objectiveEvidence.length, 0);
+  assert.equal(uncertain.criteria[0].evidenceRanges.length, 0);
 });

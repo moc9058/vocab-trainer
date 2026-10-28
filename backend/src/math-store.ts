@@ -191,11 +191,18 @@ export async function publishCatalog(
       continue;
     }
     const target = collection("provenance_revisions").doc(hash);
-    const {review,...provenance}=data as Record<string,unknown>;
-    invariant(contentHash(provenance)===hash,'MATH_PROVENANCE_HASH_MISMATCH');
+    const { review, ...provenance } = data as Record<string, unknown>;
+    invariant(
+      contentHash(provenance) === hash,
+      "MATH_PROVENANCE_HASH_MISMATCH",
+    );
     const chunks = await writeChunks(target, "chunks", provenance);
     await immutableSet(target, { chunks });
-    if(review)await immutableSet(target.collection('reviews').doc(contentHash(review)),review);
+    if (review)
+      await immutableSet(
+        target.collection("reviews").doc(contentHash(review)),
+        review,
+      );
   }
   await writeChunks(
     ref,
@@ -419,7 +426,7 @@ export async function testView(id: string): Promise<TestView> {
     pendingGrades = 0;
   for (const a of savedAttempts) {
     if (test.invalidQuestionIds.includes(a.questionId)) continue;
-    if (a.assessment) {
+    if (a.assessment && a.assessmentState === "graded") {
       score += a.assessment.correctnessScore;
       maxScore += a.assessment.criteria.reduce((s, c) => s + c.maxPoints, 0);
     } else pendingGrades++;

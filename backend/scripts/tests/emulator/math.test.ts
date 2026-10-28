@@ -528,4 +528,66 @@ test("persisted job budget cannot be reset by retry generation", async () => {
   assert.equal(job.state, "failed");
 });
 
-test('re-review of unchanged content reuses semantic and provenance revisions without overwriting older receipts',async()=>{const next=await linearAlgebraFixture();assert.equal(next.compiled.provenanceHash,fixture.compiled.provenanceHash);assert.equal(next.catalog.concepts[0].revisionId,fixture.catalog.concepts[0].revisionId);assert.notEqual(next.compiled.unit.reviewHash,fixture.compiled.unit.reviewHash);await publishCatalog(next.catalog,next.artifacts,next.provenances,fixture.catalog.id);const reviews=await collection('provenance_revisions').doc(fixture.compiled.provenanceHash).collection('reviews').get();assert.equal(reviews.size,2);const {rollbackCatalog}=await import('../../../src/math-store.js');await rollbackCatalog(fixture.catalog.id,next.catalog.id);});
+test("re-review of unchanged content reuses semantic and provenance revisions without overwriting older receipts", async () => {
+  const next = await linearAlgebraFixture();
+  assert.equal(next.compiled.provenanceHash, fixture.compiled.provenanceHash);
+  assert.equal(
+    next.catalog.concepts[0].revisionId,
+    fixture.catalog.concepts[0].revisionId,
+  );
+  assert.notEqual(
+    next.compiled.unit.reviewHash,
+    fixture.compiled.unit.reviewHash,
+  );
+  await publishCatalog(
+    next.catalog,
+    next.artifacts,
+    next.provenances,
+    fixture.catalog.id,
+  );
+  const reviews = await collection("provenance_revisions")
+    .doc(fixture.compiled.provenanceHash)
+    .collection("reviews")
+    .get();
+  assert.equal(reviews.size, 2);
+  const { rollbackCatalog } = await import("../../../src/math-store.js");
+  await rollbackCatalog(fixture.catalog.id, next.catalog.id);
+});
+
+test("an uncertain grade remains pending and cannot contribute confirmed score or learning evidence", async () => {
+  const created = await createTest();
+  await runJob(created.jobId);
+  let view = await testView(created.testId);
+  await applyTestOperation(view.id, "start", {
+    expectedRevision: view.revision,
+    operationId: randomUUID(),
+  });
+  view = await testView(view.id);
+  const submitted = await applyTestOperation(view.id, "attempts", {
+    questionId: view.questionIds[0],
+    sittingId: view.currentSittingId,
+    answerText: "yes",
+    paper: false,
+    expectedRevision: view.revision,
+    operationId: randomUUID(),
+  });
+  const job = await requiredDoc<MathJob>(
+    collection("jobs").doc(submitted.jobId as string),
+  );
+  await runMathTask(
+    { jobId: job.id, generation: job.generation, sequence: job.sequence },
+    async (feature, system, input) => {
+      const grade = (await llm(feature, system, input)) as any;
+      return { ...grade, state: "needs_review" };
+    },
+  );
+  view = await testView(view.id);
+  assert.equal(view.score, 0);
+  assert.equal(view.pendingGrades, 1);
+  const evidence = await collection("learning_states")
+    .doc("subspace-test")
+    .collection("evidence")
+    .where("testId", "==", view.id)
+    .get();
+  assert(evidence.docs.every((d) => d.data().valid === false));
+});

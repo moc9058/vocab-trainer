@@ -29,7 +29,9 @@ export type MathLLM = (
   schema: z.ZodType,
 ) => Promise<unknown>;
 export const generationResultSchema = z.strictObject({
-  result: z.discriminatedUnion("status", [
+  // Status constants make these branches exclusive. Plain union emits the
+  // supported anyOf form; Zod's discriminatedUnion emits an unsupported oneOf.
+  result: z.union([
     candidateSchema,
     z.strictObject({
       status: z.literal("NEEDS_CONTEXT"),
@@ -539,7 +541,46 @@ export async function gradeAttempt(
     input,
     assessmentSchema,
   );
-  const grade = validateAssessment(raw, attempt, solution);
+  const grounded = assessmentSchema.parse(raw);
+  let uncertain = false;
+  const boundaries = new Set([
+    0,
+    attempt.answerText.length,
+    ...[
+      ...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(
+        attempt.answerText,
+      ),
+    ].flatMap((s) => [s.index, s.index + s.segment.length]),
+  ]);
+  for (const criterion of grounded.criteria) {
+    criterion.evidenceRanges = criterion.evidenceRanges.flatMap((e) => {
+      if (
+        e.start < e.end &&
+        attempt.answerText.slice(e.start, e.end) === e.quote &&
+        boundaries.has(e.start) &&
+        boundaries.has(e.end)
+      )
+        return [e];
+      const at = attempt.answerText.indexOf(e.quote);
+      if (
+        e.quote &&
+        at >= 0 &&
+        attempt.answerText.indexOf(e.quote, at + 1) < 0 &&
+        boundaries.has(at) &&
+        boundaries.has(at + e.quote.length)
+      )
+        return [{ ...e, start: at, end: at + e.quote.length }];
+      uncertain = true;
+      criterion.feedback = "";
+      return [];
+    });
+  }
+  if (uncertain) {
+    grounded.state = "needs_review";
+    grounded.objectiveEvidence = [];
+    grounded.feedback = "";
+  }
+  const grade = validateAssessment(grounded, attempt, solution);
   invariant(grade.gradeSource === "ai", "MATH_INVALID_GRADE", 422);
   return grade;
 }
