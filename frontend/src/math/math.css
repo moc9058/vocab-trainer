@@ -136,3 +136,30 @@
     grid-template-columns: 1fr;
   }
 }
+
+.math-setup { max-width: 880px; margin: 0 auto; }
+.math-setup-controls { border-top: 1px solid #374151; margin-top: 24px; padding-top: 12px; }
+.math-page .math-primary-button { background: #4f46e5; border-color: #818cf8; font-weight: 600; }
+.math-page .math-secondary-button { background: transparent; }
+.math-page button:focus-visible, .math-page input:focus-visible, .math-page select:focus-visible {
+  outline: 2px solid #c7d2fe; outline-offset: 3px;
+}
+.math-tree ul { list-style: none; padding: 0; margin: 0 0 0 16px; }
+.math-tree > ul { margin-left: 0; }
+.math-tree-row { min-height: 48px; display: flex; align-items: center; border-radius: 6px; }
+.math-tree-row:hover { background: #1e293b; }
+.math-tree-selected { background: #312e8155; }
+.math-tree-row .math-tree-label { display: flex; align-items: center; flex: 1; min-width: 0; gap: 8px; margin: 0; padding: 8px 0; }
+.math-tree-label input { flex: 0 0 auto; width: 18px; height: 18px; accent-color: #818cf8; }
+.math-page .math-tree .math-icon-button { flex: 0 0 44px; width: 44px; min-height: 44px; padding: 0; margin: 0; border: 0; background: transparent; }
+.math-tree-spacer { flex: 0 0 44px; width: 44px; }
+.math-tree-count { flex: 0 0 30px; text-align: right; padding: 0 4px; }
+.math-tree-toolbar { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.math-page .math-count-input { width: 100px; }
+@media (max-width: 420px) {
+ .math-page { padding: 12px; }
+ .math-tree ul { margin-left: 16px; }
+ .math-tree > ul { margin-left: 0; }
+ .math-tree-count { display: none; }
+ .math-tree-row .math-icon-button:last-child { flex-basis: 32px; width: 32px; }
+}

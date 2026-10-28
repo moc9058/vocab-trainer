@@ -115,8 +115,8 @@ function MathHome() {
               )}
             </Link>
             <p>
-              {test.answeredQuestionIds.length} /{" "}
-              {test.questionIds.length || test.config.questionCount}
+              {test.answeredCount ?? test.answeredQuestionIds.length} /{" "}
+              {test.schemaVersion === 2 ? (test.questionLimit ?? t("mathContinuous")) : (test.questionIds.length || test.config.questionCount)}
             </p>
           </section>
         ))

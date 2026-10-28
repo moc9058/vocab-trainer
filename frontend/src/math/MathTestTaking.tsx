@@ -31,6 +31,9 @@ export default function MathTestTaking() {
     [report, setReport] = useState(""),
     [reportReason, setReportReason] = useState("incorrect-answer"),
     [scores, setScores] = useState<Record<string, number>>({}),
+    [history, setHistory] = useState<Attempt[]>([]),
+    [historyCursor, setHistoryCursor] = useState<string | null>(null),
+    [historyPage, setHistoryPage] = useState<string | undefined>(undefined),
     [jobError, setJobError] = useState<string | null>(null);
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -39,14 +42,19 @@ export default function MathTestTaking() {
       const result = await mathApi.test(testId);
       setView(result);
       setError(null);
-      if (result.state === "generation_failed") {
-        const job = await mathApi.job(result.generationJobId);
+      if (result.schemaVersion === 2) {
+        const page = await mathApi.attempts(testId, historyPage);
+        setHistory(page.items);
+        setHistoryCursor(page.nextCursor);
+      }
+      if (result.state === "generation_failed" || result.generationState === "failed") {
+        const job = await mathApi.job(result.pendingGenerationJobId ?? result.generationJobId);
         setJobError(job.lastError);
       }
     } catch (e) {
       setError(e);
     }
-  }, [testId]);
+  }, [testId, historyPage]);
   useEffect(() => {
     void load();
     const timer = setInterval(() => void load(), 3000);
@@ -55,7 +63,7 @@ export default function MathTestTaking() {
   const pending = pendingQuestions.get(testId) ?? new Set<string>();
   const question = view?.questions.find(
     (q) =>
-      !view.answeredQuestionIds.includes(q.id) &&
+      (view.schemaVersion === 2 ? q.id === view.currentQuestionId : !view.answeredQuestionIds.includes(q.id)) &&
       !view.invalidQuestionIds.includes(q.id) &&
       !pending.has(q.id),
   );
@@ -214,13 +222,14 @@ export default function MathTestTaking() {
       setError(e);
     }
   }
+  const attempts = view ? [...new Map([...history, ...view.attempts].map((a) => [a.id, a])).values()] : [];
   const review = view?.sitting?.review,
     reviewAttempt =
       review?.state === "active"
-        ? view?.attempts.find((a) => a.id === review.attemptIds[review.cursor])
+        ? attempts.find((a) => a.id === (review.currentAttemptId ?? review.attemptIds[review.cursor]))
         : null;
   const selectedAttempt =
-      reviewAttempt ?? view?.attempts.find((a) => a.id === selected),
+      reviewAttempt ?? attempts.find((a) => a.id === selected),
     selectedQuestion = selectedAttempt?.questionId ?? null;
   const autoReveal = useRef("");
   useEffect(() => {
@@ -262,8 +271,8 @@ export default function MathTestTaking() {
           )}
         </span>
         <span>
-          {view.answeredQuestionIds.length} /{" "}
-          {view.questionIds.length || view.config.questionCount}
+          {view.answeredCount ?? view.answeredQuestionIds.length} /{" "}
+          {view.schemaVersion === 2 ? (view.questionLimit ?? t("mathContinuous")) : (view.questionIds.length || view.config.questionCount)}
         </span>
         <span>
           {outbox.pending || dirty ? t("mathUnsaved") : t("mathSaved")}
@@ -328,18 +337,18 @@ export default function MathTestTaking() {
         <section className="math-card">
           <p>{t("mathGeneratingHint")}</p>
           <p>
-            {view.questionIds.length} / {view.config.questionCount}
+            {view.generatedCount ?? view.questionIds.length} / {view.questionLimit ?? view.config.questionCount ?? t("mathContinuous")}
           </p>
           <button disabled={busy} onClick={() => void mutate("cancel")}>
             {t("mathCancel")}
           </button>
         </section>
       )}
-      {view.state === "generation_failed" && (
+      {(view.state === "generation_failed" || view.generationState === "failed") && (
         <section className="math-card">
           <p>
-            {t("mathGenerationFailed")} · {view.questionIds.length} /{" "}
-            {view.config.questionCount}
+            {t("mathGenerationFailed")} · {view.generatedCount ?? view.questionIds.length} /{" "}
+            {view.questionLimit ?? view.config.questionCount ?? t("mathContinuous")}
           </p>
           {jobError && (
             <p className="math-muted">
@@ -356,7 +365,7 @@ export default function MathTestTaking() {
           )}
           <button
             disabled={busy || jobError === "MATH_JOB_VERSION_UNSUPPORTED"}
-            onClick={() => void mutate("retry-generation")}
+            onClick={() => void mutate(view.schemaVersion === 2 ? "next-question" : "retry-generation")}
           >
             {t("mathRetryGeneration")}
           </button>
@@ -366,7 +375,7 @@ export default function MathTestTaking() {
           >
             {t("mathNewTestFromScope")}
           </Link>
-          <button
+          {view.schemaVersion === 1 && <button
             disabled={busy || !view.questionIds.length}
             onClick={() =>
               void mutate("accept-partial", {
@@ -375,7 +384,7 @@ export default function MathTestTaking() {
             }
           >
             {t("mathAcceptPartial")}
-          </button>
+          </button>}
           <button disabled={busy} onClick={() => void mutate("cancel")}>
             {t("mathCancel")}
           </button>
@@ -453,6 +462,17 @@ export default function MathTestTaking() {
             )}
           </section>
         )}
+      {view.schemaVersion === 2 && view.state === "in_progress" && view.sitting?.state === "active" && !question && (
+        <section className="math-card">
+          {view.generationState === "queued" || view.generationState === "running" ?
+            <p role="status">{t("mathLoadingNext")}</p> :
+            <button className="math-primary-button" disabled={busy || outbox.conflictBlocked || !!outbox.pending}
+              onClick={() => void mutate("next-question")}>{t(view.generationState === "failed" ? "mathRetryGeneration" : "mathNextQuestion")}</button>}
+        </section>
+      )}
+      {view.schemaVersion === 2 && !["completed", "cancelled"].includes(view.state) && (
+        <button disabled={busy || outbox.conflictBlocked} onClick={() => void mutate("finish")}>{t("mathFinishTest")}</button>
+      )}
       {view.state === "in_progress" && view.sitting?.state === "active" && (
         <button disabled={busy} onClick={() => void mutate("end-sitting")}>
           {t("mathEndSitting")}
@@ -489,7 +509,7 @@ export default function MathTestTaking() {
           )}
         </section>
       )}
-      {(view.attempts.length > 0 || view.state === "completed") && (
+      {(attempts.length > 0 || view.state === "completed") && (
         <section className="math-card">
           <h2>{t("mathResults")}</h2>
           <p>
@@ -497,9 +517,9 @@ export default function MathTestTaking() {
             {view.pendingGrades}
           </p>
           <p>
-            {t("mathInvalidQuestions")}: {view.invalidQuestionIds.length}
+            {t("mathInvalidQuestions")}: {view.invalidCount ?? view.invalidQuestionIds.length}
           </p>
-          {view.attempts.map((a) => (
+          {attempts.map((a) => (
             <button
               key={a.id}
               onClick={() => {
@@ -508,7 +528,7 @@ export default function MathTestTaking() {
               }}
             >
               {t("mathQuestion")}{" "}
-              {view.questions.find((q) => q.id === a.questionId)?.ordinal} ·{" "}
+              {a.questionOrdinal ?? a.ordinal ?? view.questions.find((q) => q.id === a.questionId)?.ordinal ?? a.sequence ?? a.questionId} ·{" "}
               {a.skipped
                 ? t("mathSkipped")
                 : t(
@@ -525,6 +545,10 @@ export default function MathTestTaking() {
               {a.assessment ? ` · ${a.assessment.correctnessScore}` : ""}
             </button>
           ))}
+          {view.schemaVersion === 2 && <div>
+            {historyPage && <button disabled={busy} onClick={() => setHistoryPage(undefined)}>{t("mathLatestAnswers")}</button>}
+            {historyCursor && <button disabled={busy} onClick={() => setHistoryPage(historyCursor)}>{t("mathLoadMore")}</button>}
+          </div>}
           <p className="math-muted">{t("mathEvidenceHint")}</p>
           <Link
             state={{ scopeRequest: view.config }}

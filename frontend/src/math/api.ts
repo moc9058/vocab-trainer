@@ -7,11 +7,13 @@ import type {
   Concept,
   Unit,
   FoundationProfile,
-  ScopeRequest,
-  ScopePreview,
+  ScopeRequestV2,
+  ScopePreviewV2,
   MathTest,
   TestView,
   StoredSolution,
+  Attempt,
+  PublicQuestion,
 } from "./types";
 export const mathApi = {
   catalog: () =>
@@ -60,14 +62,14 @@ export const mathApi = {
         acceptance: unknown;
       })[];
     }>(`/api/math/foundation-profiles?catalogId=${catalogId}`),
-  preview: (request: ScopeRequest) =>
-    postJson<ScopePreview>("/api/math/scope-previews", request),
-  create: (preview: ScopePreview) =>
+  preview: (request: ScopeRequestV2) =>
+    postJson<ScopePreviewV2>("/api/math/scope-previews", request),
+  create: (preview: ScopePreviewV2) =>
     postJson<{ testId: string; jobId: string }>("/api/math/tests", {
-      previewId: preview.id,
+      schemaVersion: 2,
+      previewId: preview.previewId ?? preview.id,
       scopeHash: preview.scopeHash,
-      acceptance: preview.requiredAcceptance,
-      operationId: `create-${preview.id}`,
+      operationId: `create-${preview.previewId ?? preview.id}`,
     }),
   tests: (subjectId?: string, cursor?: string) =>
     fetchJson<{ items: MathTest[]; nextCursor: string | null }>(
@@ -92,6 +94,10 @@ export const mathApi = {
     }
     return view;
   },
+  attempts: (testId: string, cursor?: string) =>
+    fetchJson<{ items: Attempt[]; nextCursor: string | null }>(`/api/math/tests/${testId}/attempts?${new URLSearchParams({ limit: "20", ...(cursor ? { cursor } : {}) })}`),
+  questions: (testId: string, cursor?: string) =>
+    fetchJson<{ items: PublicQuestion[]; nextCursor: string | null }>(`/api/math/tests/${testId}/questions?${new URLSearchParams({ limit: "20", ...(cursor ? { cursor } : {}) })}`),
   report: (
     testId: string,
     questionId: string,

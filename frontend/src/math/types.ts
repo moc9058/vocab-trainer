@@ -96,6 +96,7 @@ export interface Unit {
   status: "ready" | "partial" | "reference-only";
 }
 export interface CurriculumNode {
+  eligibleObjectiveCount?: number;
   id: string;
   subjectId: string;
   parentId: string | null;
@@ -267,6 +268,9 @@ export interface Assessment {
   feedback: string;
 }
 export interface Attempt {
+  sequence?: number;
+  ordinal?: number;
+  questionOrdinal?: number;
   id: string;
   questionId: string;
   sittingId: string;
@@ -298,16 +302,26 @@ export interface Sitting {
     state: "idle" | "active" | "completed";
     revision: number;
     cursor: number;
+    currentAttemptId?: string | null;
     attemptIds: string[];
   };
 }
 export interface MathTest {
+  generationMode?: "finite" | "continuous";
+  questionLimit?: number | null;
+  generationState?: "idle" | "queued" | "running" | "failed";
+  generatedCount?: number;
+  answeredCount?: number;
+  invalidCount?: number;
+  currentQuestionId?: string | null;
+  pendingGenerationJobId?: string | null;
+  generationEpoch?: number;
   purpose?: "study" | "verification";
   id: string;
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   catalogId: string;
   scopeHash: string;
-  config: ScopeRequest;
+  config: ScopeRequest | ScopeRequestV2;
   state:
     | "generating"
     | "generation_failed"
@@ -361,4 +375,25 @@ export interface MathJob {
   lastError: string | null;
   createdAt: number;
   updatedAt: number;
+}
+
+/** Creation contract; v1 ScopeRequest remains for immutable historic snapshots. */
+export interface ScopeRequestV2 {
+  schemaVersion: 2;
+  subjectId: string;
+  selectedNodeIds: string[];
+  difficulty: 1 | 2 | 3 | 4 | 5;
+  questionCount?: number;
+  responseLanguage: "en" | "ja" | "ko";
+}
+export interface ScopePreviewV2 {
+  schemaVersion: 2;
+  id?: string;
+  previewId: string;
+  scopeHash: string;
+  catalogId: string;
+  curriculumHash: string;
+  eligibleObjectiveCount: number;
+  compactSummary: unknown;
+  expiresAt: number;
 }
