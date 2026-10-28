@@ -849,3 +849,160 @@ test("v2 finite completes at limit and grade jobs reference persisted question p
   assert.equal(view.score, 100);
   assert.equal(view.pendingGrades, 0);
 });
+
+test("v2 finite invalidation replaces only natural exhaustion and preserves fixed review boundaries", async () => {
+  const preview = await api("POST", "/scope-previews", requestV2());
+  const created = await api(
+    "POST",
+    "/tests",
+    {
+      schemaVersion: 2,
+      previewId: preview.id,
+      scopeHash: preview.scopeHash,
+      operationId: randomUUID(),
+    },
+    202,
+  );
+  await runJob(created.jobId);
+  let view = await testView(created.testId);
+  await applyTestOperation(created.testId, "start", {
+    operationId: randomUUID(),
+    expectedRevision: view.revision,
+  });
+  view = await testView(created.testId);
+  const oldQuestionId = view.currentQuestionId!;
+  await applyTestOperation(created.testId, "skip", {
+    operationId: randomUUID(),
+    expectedRevision: view.revision,
+    questionId: oldQuestionId,
+  });
+  view = await testView(created.testId);
+  assert.equal(view.state, "completed");
+  await applyTestOperation(created.testId, "review", {
+    operationId: randomUUID(),
+    action: "start",
+    reviewRevision: 0,
+  });
+  view = await testView(created.testId);
+  assert.equal(view.sitting!.review.currentAttemptId, view.attempts[0].id);
+  assert.equal(view.sitting!.review.endSequence, 1);
+  await applyTestOperation(created.testId, "invalidate", {
+    operationId: randomUUID(),
+    expectedRevision: view.revision,
+    questionId: oldQuestionId,
+    reason: "Invalid source",
+  });
+  view = await testView(created.testId);
+  assert.equal(view.state, "in_progress");
+  assert.equal(view.maxScore, 0);
+  await assert.rejects(
+    () =>
+      applyTestOperation(created.testId, "resume", {
+        operationId: randomUUID(),
+        expectedRevision: view.revision,
+      }),
+    /MATH_REVIEW_ACTIVE/,
+  );
+  await applyTestOperation(created.testId, "review", {
+    operationId: randomUUID(),
+    action: "finish",
+    reviewRevision: view.sitting!.review.revision,
+  });
+  await applyTestOperation(created.testId, "resume", {
+    operationId: randomUUID(),
+    expectedRevision: view.revision,
+  });
+  view = await testView(created.testId);
+  const nextA = { operationId: randomUUID(), expectedRevision: view.revision },
+    nextB = { operationId: randomUUID(), expectedRevision: view.revision };
+  const results = await Promise.allSettled([
+    applyTestOperation(created.testId, "next-question", nextA),
+    applyTestOperation(created.testId, "next-question", nextB),
+  ]);
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+  const index = results.findIndex((r) => r.status === "fulfilled"),
+    result = (results[index] as PromiseFulfilledResult<any>).value;
+  assert.deepEqual(
+    await applyTestOperation(
+      created.testId,
+      "next-question",
+      index === 0 ? nextA : nextB,
+    ),
+    result,
+  );
+  const nextJob = await requiredDoc<MathJob>(
+    collection("jobs").doc(result.jobId),
+  );
+  assert.equal(nextJob.ordinal, 2);
+  await collection("jobs")
+    .doc(result.jobId)
+    .update({ state: "failed", calls: 47, tokens: 123456 });
+  await collection("tests")
+    .doc(created.testId)
+    .update({ generationState: "failed" });
+  view = await testView(created.testId);
+  await applyTestOperation(created.testId, "retry-generation", {
+    operationId: randomUUID(),
+    expectedRevision: view.revision,
+  });
+  const retry = await requiredDoc<MathJob>(
+    collection("jobs").doc(result.jobId),
+  );
+  assert.equal(retry.calls, 47);
+  assert.equal(retry.tokens, 123456);
+  assert.equal(retry.ordinal, 2);
+  view = await testView(created.testId);
+  await applyTestOperation(created.testId, "finish", {
+    operationId: randomUUID(),
+    expectedRevision: view.revision,
+  });
+  view = await testView(created.testId);
+  // A different, explicitly finished finite test does not revive on invalidation.
+  assert.equal(view.state, "completed");
+  assert.equal(view.sitting!.review.state, "idle");
+  const stored = await requiredDoc<MathTest>(
+    collection("tests").doc(created.testId),
+  );
+  assert(stored.finishedAt);
+  const earlyPreview = await api("POST", "/scope-previews", {
+    ...requestV2(),
+    questionCount: 2,
+  });
+  const early = await api(
+    "POST",
+    "/tests",
+    {
+      schemaVersion: 2,
+      previewId: earlyPreview.id,
+      scopeHash: earlyPreview.scopeHash,
+      operationId: randomUUID(),
+    },
+    202,
+  );
+  await runJob(early.jobId);
+  let earlyView = await testView(early.testId);
+  await applyTestOperation(early.testId, "start", {
+    operationId: randomUUID(),
+    expectedRevision: earlyView.revision,
+  });
+  earlyView = await testView(early.testId);
+  const earlyQuestion = earlyView.currentQuestionId;
+  await applyTestOperation(early.testId, "skip", {
+    operationId: randomUUID(),
+    expectedRevision: earlyView.revision,
+    questionId: earlyQuestion,
+  });
+  earlyView = await testView(early.testId);
+  await applyTestOperation(early.testId, "finish", {
+    operationId: randomUUID(),
+    expectedRevision: earlyView.revision,
+  });
+  earlyView = await testView(early.testId);
+  await applyTestOperation(early.testId, "invalidate", {
+    operationId: randomUUID(),
+    expectedRevision: earlyView.revision,
+    questionId: earlyQuestion,
+    reason: "After explicit finish",
+  });
+  assert.equal((await testView(early.testId)).state, "completed");
+});

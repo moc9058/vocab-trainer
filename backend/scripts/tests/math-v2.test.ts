@@ -77,3 +77,35 @@ test("v2 rejects cyclic chapter closure", () => {
     /MATH_CHAPTER_DEPENDENCY_CYCLE/,
   );
 });
+
+test("v2 foundation declarations belong only to their owning subject and stay separate from prerequisites", () => {
+  const catalog = structuredClone(fixture.catalog),
+    concept = catalog.concepts.find((c) => c.id === "vector-space")!;
+  const ref = {
+    subjectId: "linear-algebra",
+    conceptId: concept.id,
+    capability: "apply" as const,
+    revisionId: concept.revisionId,
+  };
+  catalog.subjects[0].foundationRefs = [ref];
+  const scoped = resolveScopeV2(request, catalog);
+  assert.deepEqual(scoped.baseline, [
+    { conceptId: concept.id, capability: "apply" },
+  ]);
+  assert(
+    !scoped.prerequisites.some(
+      (r) => r.conceptId === concept.id && r.capability === "apply",
+    ),
+  );
+  catalog.subjects[0].foundationRefs = [];
+  catalog.subjects.push({
+    id: "other",
+    title: "Other",
+    rootNodeId: "other-root",
+    order: 1,
+    foundationProfileIds: [],
+    foundationRefs: [ref],
+  });
+  catalog.foundationRefs = [ref];
+  assert.deepEqual(resolveScopeV2(request, catalog).baseline, []);
+});

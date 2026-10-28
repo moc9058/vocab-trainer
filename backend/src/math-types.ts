@@ -105,7 +105,12 @@ export interface CurriculumNode {
   order: number;
   unitIds: string[];
 }
+export interface FoundationRef extends CapabilityRef {
+  subjectId: string;
+  revisionId: string;
+}
 export interface Subject {
+  foundationRefs?: FoundationRef[];
   id: string;
   title: string;
   rootNodeId: string;
@@ -355,6 +360,7 @@ export interface MathTest {
   currentQuestionId?: string | null;
   pendingGenerationJobId?: string | null;
   generationEpoch?: number;
+  finishedAt?: number;
   score?: number;
   maxScore?: number;
   pendingGrades?: number;

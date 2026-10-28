@@ -324,7 +324,16 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
   });
   app.post(
     "/tests",
-    { schema: { body: jsonSchema(createSchema) } },
+    {
+      schema: { body: jsonSchema(createSchema) },
+      preValidation: async (r) => {
+        invariant(
+          (r.body as any)?.schemaVersion === 2,
+          "MATH_V1_CREATION_UNSUPPORTED",
+          400,
+        );
+      },
+    },
     async (r, reply) => {
       const body = createSchema.parse(r.body),
         existing = await readDoc<any>(

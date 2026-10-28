@@ -375,7 +375,13 @@ export function resolveScopeV2(
         .filter((cap) => !!c.capabilities[cap])
         .map((capability) => ({ conceptId: c.id, capability })),
     );
-  const foundations = (catalog.foundationRefs ?? []).map((ref) => {
+  const selectedSubject = catalog.subjects.find(
+    (s) => s.id === request.subjectId,
+  );
+  const foundationRefs =
+    selectedSubject?.foundationRefs ??
+    (catalog.subjects.length === 1 ? (catalog.foundationRefs ?? []) : []);
+  const foundations = foundationRefs.map((ref) => {
     const concept = catalog.concepts.find((c) => c.id === ref.conceptId);
     invariant(
       concept?.revisionId === ref.revisionId &&
@@ -394,7 +400,9 @@ export function resolveScopeV2(
       schemaVersion: 2,
       questionLimit: request.questionCount ?? null,
     },
-    prerequisites: uniqueRefs([...scope.prerequisites, ...chapterRefs]),
+    prerequisites: uniqueRefs([...scope.prerequisites, ...chapterRefs]).filter(
+      (r) => !foundations.some((f) => refKey(f) === refKey(r)),
+    ),
     baseline: foundations,
     requiredAcceptance: [],
     plans: [],

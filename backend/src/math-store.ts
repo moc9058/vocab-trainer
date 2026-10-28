@@ -372,6 +372,8 @@ export async function loadCatalog(
       ...c.requiredToUseWhenGiven,
     ];
     let pending = [
+      ...(catalog.subjects.find((s) => s.id === subjectId)?.foundationRefs ??
+        (catalog.subjects.length === 1 ? (catalog.foundationRefs ?? []) : [])),
       ...catalog.concepts.flatMap(conceptRefs),
       ...catalog.objectives.flatMap((o) => [
         ...o.assessedCapabilities,

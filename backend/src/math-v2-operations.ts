@@ -59,7 +59,6 @@ export function v2Sitting(id: string, now: number, sequence: number): Sitting {
     endedAt: null,
     attemptIds: [],
     startSequence: sequence,
-    endSequence: null as unknown as number,
     review: { state: "idle", revision: 0, cursor: 0, attemptIds: [] },
   };
 }
@@ -411,6 +410,7 @@ export async function applyV2Operation(
         cancelGeneration();
         break;
       case "finish":
+        test.finishedAt = now;
         invariant(!terminal(test), "MATH_TEST_FINISHED", 409);
         cancelGeneration();
         closeV2(test, sitting, now);
@@ -491,6 +491,16 @@ export async function applyV2Operation(
         invariant(question && !question.invalid, "MATH_ALREADY_INVALID", 409);
         tx.update(ref.collection("questions").doc(qid!), { invalid: true });
         test.invalidCount = (test.invalidCount ?? 0) + 1;
+        // A naturally exhausted finite test needs a replacement. Explicit finish
+        // is final; grading and review never perform this transition.
+        if (
+          test.state === "completed" &&
+          test.generationMode === "finite" &&
+          !test.finishedAt &&
+          (test.generatedCount ?? 0) - test.invalidCount <
+            (test.questionLimit ?? 0)
+        )
+          test.state = "in_progress";
         if (test.currentQuestionId === qid) test.currentQuestionId = null;
         const a = qAttempt?.docs[0]?.data() as Attempt | undefined;
         if (a) {
@@ -577,7 +587,10 @@ export async function applyV2Operation(
             attemptQuestion?.invalid
               ? { ...test, invalidQuestionIds: [attempt.questionId] }
               : test,
-            attempt,
+            {
+              ...attempt,
+              history: before.assessment ? [before.assessment] : [],
+            },
             catalog,
           );
         output.gradeVersion = attempt.gradeVersion;
