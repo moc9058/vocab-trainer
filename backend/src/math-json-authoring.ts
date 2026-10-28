@@ -12,7 +12,7 @@ const render = (value: unknown) => JSON.stringify(value,null,2)+"\n";
 const packageValidator = new Ajv({allErrors:true,strict:false}).compile(jsonAuthorPackageSchema);
 export function parseJsonAuthorPackage(input: unknown): JsonPackage {
   invariant(packageValidator(input), "E_JSON_PACKAGE_SCHEMA", 400, { errors: packageValidator.errors });
-  const pkg = input as JsonPackage;
+  const pkg = input as unknown as JsonPackage;
   invariant(pkg && Object.keys(pkg).sort().join(",") === "chapters,schemaVersion,subject,unresolved" && pkg.schemaVersion === 2 && Array.isArray(pkg.chapters) && pkg.chapters.length > 0 && pkg.chapters.length <= 1000 && Array.isArray(pkg.unresolved) && pkg.unresolved.every(s => typeof s === "string"), "E_JSON_PACKAGE_SCHEMA");
   parseJsonSubject(pkg.subject); for(const chapter of pkg.chapters) parseJsonChapter(chapter);
   compileJsonSubject(pkg.subject,pkg.chapters,false); return pkg;
