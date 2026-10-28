@@ -1,0 +1,1074 @@
+{
+  "chapterId": "la-ch07",
+  "originalFile": "7. Operators on Inner Product Spaces.md",
+  "originalSha256": "06f5a2845d83687533d81955d390ca1b168bf7427f5159a9df88e44adaf19342",
+  "roundTripSha256": "06f5a2845d83687533d81955d390ca1b168bf7427f5159a9df88e44adaf19342",
+  "exactRoundTrip": true,
+  "mathCount": 273,
+  "mathTokenSha256": "9cc3b925fd1bff9415806de9763608365fcc76147d044db1b2a62319428a8aa4",
+  "headings": 54,
+  "items": 39,
+  "decorationCount": 36,
+  "mappings": [
+    {
+      "type": "heading",
+      "id": "la-ch07",
+      "sourceStart": 0,
+      "sourceEnd": 38,
+      "original": "# 7. Operators on Inner Product Spaces",
+      "action": "moved-to-chapter-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0001",
+      "sourceStart": 38,
+      "sourceEnd": 483,
+      "sha256": "e205d8755a0e5e7cb5d9f57dc67f511e9005be20ec211cd4df6ac014a3345afc"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-section-1",
+      "sourceStart": 483,
+      "sourceEnd": 500,
+      "original": "## 1. Definitions",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0002",
+      "sourceStart": 500,
+      "sourceEnd": 502,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-section-1-1",
+      "sourceStart": 502,
+      "sourceEnd": 544,
+      "original": "### 1.1. Self-Adjoint and Normal Operators",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0003",
+      "sourceStart": 544,
+      "sourceEnd": 546,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-1-1-1",
+      "sourceStart": 546,
+      "sourceEnd": 710,
+      "original": "#### 1.1.1. <span style=\"color: red\">(Adjoint operator)</span> Suppose $T\\in\\mathcal{L}(V,W)$. The **adjoint** of $T$ is the function $T^*:W\\rightarrow V$ such that",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0004",
+      "sourceStart": 710,
+      "sourceEnd": 929,
+      "sha256": "e557716a490365d7143eeca4b1361f237c98b8b53d6d6ecee7ed020430cec5ce"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-1-1-2",
+      "sourceStart": 929,
+      "sourceEnd": 1089,
+      "original": "#### 1.1.2. <span style=\"color: red\">(Conjugate transpose)</span> Let $A\\in F^{m\\times n}$. Then the **conjugate transpose** $A^*$ of $A$ is defined as follows.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0005",
+      "sourceStart": 1089,
+      "sourceEnd": 1137,
+      "sha256": "fc678e305a15a1996cc4767a24e79688e3ecb998d73be7b3fb373c050611e943"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-1-1-3",
+      "sourceStart": 1137,
+      "sourceEnd": 1267,
+      "original": "#### 1.1.3. <span style=\"color: red\">(Self-adjoint) </span>An operator $T\\in\\mathcal{L}(V)$ is called **self-adjoint** if $T=T^*$.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0006",
+      "sourceStart": 1267,
+      "sourceEnd": 1269,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-1-1-4",
+      "sourceStart": 1269,
+      "sourceEnd": 1391,
+      "original": "#### 1.1.4. <span style=\"color: red\">(Normal)</span> An operator $T\\in\\mathcal{L}(V)$ is called **normal** if $TT^*=T^*T$.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0007",
+      "sourceStart": 1391,
+      "sourceEnd": 1393,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-1-1-5",
+      "sourceStart": 1393,
+      "sourceEnd": 1520,
+      "original": "#### 1.1.5. <span style=\"color: red\">(Skew-adjoint)</span> An operator $T\\in\\mathcal{L}(V)$ is called skew-adjoint if $T^*=-T$.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0008",
+      "sourceStart": 1520,
+      "sourceEnd": 1522,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-1-2",
+      "sourceStart": 1522,
+      "sourceEnd": 1547,
+      "original": "### 1.2. Spectral Theorem",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0009",
+      "sourceStart": 1547,
+      "sourceEnd": 1729,
+      "sha256": "f9c73adcae06d15e87836e13bfecf475e67e2fee4d6c79239b5386371c5b8496"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-section-1-3",
+      "sourceStart": 1729,
+      "sourceEnd": 1756,
+      "original": "### 1.3. Positive Operators",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0010",
+      "sourceStart": 1756,
+      "sourceEnd": 1758,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-1-3-1",
+      "sourceStart": 1758,
+      "sourceEnd": 1899,
+      "original": "#### 1.3.1. <span style=\"color: red\">(Positive operator)</span> An operator $T\\in\\mathcal{L}(V)$ is called positive if it is self-adjoint and",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0011",
+      "sourceStart": 1899,
+      "sourceEnd": 2302,
+      "sha256": "518cc77effa9b5c729f440b5436dc54fbd78903b9cc19d9179f211f29c9da822"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-1-3-2",
+      "sourceStart": 2302,
+      "sourceEnd": 2461,
+      "original": "#### 1.3.2. An operator $R$ is a square root of an operator $T$ if $R^2=T$. For a positive operator, $\\sqrt{T}$ denotes the unique positive square root of $T$.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0012",
+      "sourceStart": 2461,
+      "sourceEnd": 2463,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-section-1-4",
+      "sourceStart": 2463,
+      "sourceEnd": 2527,
+      "original": "### 1.4. Isometrics, Unitary Operators, and Matrix Factorization",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0013",
+      "sourceStart": 2527,
+      "sourceEnd": 2529,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-1-4-1",
+      "sourceStart": 2529,
+      "sourceEnd": 2646,
+      "original": "#### 1.4.1. <span style=\"color: red\">(Isometry)</span> A linear map $S \\in \\mathcal{L}(V,W)$ is called an isometry if",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0014",
+      "sourceStart": 2646,
+      "sourceEnd": 2678,
+      "sha256": "5338b00380d6ae763972b71254f62834202a3342dd740fc99b7c2949a3c39976"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-1-4-2",
+      "sourceStart": 2678,
+      "sourceEnd": 2816,
+      "original": "#### 1.4.2. <span style=\"color: red\">(Unitary)</span> An operator $S\\in\\mathcal{L}(V)$ is called unitary if $S$ is an invertible isometry.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0015",
+      "sourceStart": 2816,
+      "sourceEnd": 3068,
+      "sha256": "d87d68207a3db27e692f54feb8b05800529524c6b6ff588c5f4ce582f143b5dd"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-section-1-5",
+      "sourceStart": 3068,
+      "sourceEnd": 3105,
+      "original": "### 1.5. Singular Value Decomposition",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0016",
+      "sourceStart": 3105,
+      "sourceEnd": 3107,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-1-5-1",
+      "sourceStart": 3107,
+      "sourceEnd": 3403,
+      "original": "#### 1.5.1. <span style=\"color: red\">(Singular value)</span> Suppose $T \\in \\mathcal{L}(V,W)$. The singular values of $T$ are nonnegative square roots of the eigenvalues of $T^*T$, listed in decreasing order, each included as many times as the dimension of the corresponding eigenspace of $T^*T$.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0017",
+      "sourceStart": 3403,
+      "sourceEnd": 3405,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-section-1-6",
+      "sourceStart": 3405,
+      "sourceEnd": 3458,
+      "original": "### 1.6. Consequences of Singular Value Decomposition",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0018",
+      "sourceStart": 3458,
+      "sourceEnd": 3460,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-1-6-1",
+      "sourceStart": 3460,
+      "sourceEnd": 3615,
+      "original": "#### 1.6.1. <span style=\"color: red\">(Norm of a linear map)</span> Suppose $T \\in \\mathcal{L}(V,W)$. Then the norm of $T$, denoted by $\\|T\\|$ is defined by",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0019",
+      "sourceStart": 3615,
+      "sourceEnd": 3673,
+      "sha256": "8e2aeb5bf3c58c8b0e023ca6b9faefb53e3a50a77a15f86e5b916be3787d0e67"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-section-2",
+      "sourceStart": 3673,
+      "sourceEnd": 3687,
+      "original": "## 2. Theorems",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0020",
+      "sourceStart": 3687,
+      "sourceEnd": 3689,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-section-2-1",
+      "sourceStart": 3689,
+      "sourceEnd": 3731,
+      "original": "### 2.1. Self-Adjoint and Normal Operators",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0021",
+      "sourceStart": 3731,
+      "sourceEnd": 3733,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-1-1",
+      "sourceStart": 3733,
+      "sourceEnd": 3910,
+      "original": "#### 2.1.1. Suppose $U,V,W$ are finite-dimensional inner product spaces, $T_1,T_2\\in\\mathcal L(U,V)$, $\\lambda\\in F$, and let $S\\in\\mathcal{L}(V,W),\\ T\\in\\mathcal{L}(U,V)$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0022",
+      "sourceStart": 3910,
+      "sourceEnd": 4152,
+      "sha256": "0fd664f86162bc811f2769f5a6907d0175f36f908e1d72195e6882b5b07bcef0"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-1-2",
+      "sourceStart": 4152,
+      "sourceEnd": 4258,
+      "original": "#### 2.1.2. Suppose $V,W$ are finite-dimensional inner product spaces and let $T\\in\\mathcal{L}(V,W)$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0023",
+      "sourceStart": 4258,
+      "sourceEnd": 4544,
+      "sha256": "fa5cfe9b3711aa1a1d61585e76f6321d36b2649014e81f350004ca03b5c76931"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-1-3",
+      "sourceStart": 4544,
+      "sourceEnd": 4745,
+      "original": "#### 2.1.3. Suppose $V,W$ are finite-dimensional inner product spaces and $T\\in\\mathcal{L}(V,W)$. Suppose $\\beta=\\{e_1,\\ldots,e_n\\},\\gamma=\\{f_1,\\ldots,f_m\\}$ are orthonormal bases of $V$ and $W$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0024",
+      "sourceStart": 4745,
+      "sourceEnd": 5043,
+      "sha256": "11a6cd1ff54743d9c6969e3bbac32e7054e68334167a56c7093ee4bd34d327db"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-1-4",
+      "sourceStart": 5043,
+      "sourceEnd": 5130,
+      "original": "#### 2.1.4. Suppose $V$ is a complex inner product space and $T\\in\\mathcal{L}(V)$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0025",
+      "sourceStart": 5130,
+      "sourceEnd": 5351,
+      "sha256": "5edef4e2af18b8a968be2eda60288536ab5ef05b9dea3029bdccabdb68c9824c"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-1-5",
+      "sourceStart": 5351,
+      "sourceEnd": 5413,
+      "original": "#### 2.1.5. Suppose $T\\in\\mathcal{L}(V)$ is self-adjoint. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0026",
+      "sourceStart": 5413,
+      "sourceEnd": 5515,
+      "sha256": "be75e592789dee641371751cd5be43ce4648a4d53773cf4af0176eab85e56d6d"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-1-6",
+      "sourceStart": 5515,
+      "sourceEnd": 5561,
+      "original": "#### 2.1.6. Suppose $T\\in\\mathcal{L}(V)$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0027",
+      "sourceStart": 5561,
+      "sourceEnd": 5814,
+      "sha256": "792dd9229f29e6b499aece9db81278aed28d9cc931dd6ee08157c566fddf4608"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-1-7",
+      "sourceStart": 5814,
+      "sourceEnd": 5922,
+      "original": "#### 2.1.7. Suppose $V$ is a finite-dimensional inner product space and $T\\in\\mathcal{L}(V)$ is normal. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0028",
+      "sourceStart": 5922,
+      "sourceEnd": 6285,
+      "sha256": "d1410b9c5f8aa1d0b799316567a32ebbcd66b61c8bd1d06c78cc441fa9b87ab5"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-section-2-2",
+      "sourceStart": 6285,
+      "sourceEnd": 6310,
+      "original": "### 2.2. Spectral Theorem",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0029",
+      "sourceStart": 6310,
+      "sourceEnd": 6312,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-2-1",
+      "sourceStart": 6312,
+      "sourceEnd": 6422,
+      "original": "#### 2.2.1. Suppose $T\\in \\mathcal{L}(V)$ is self-adjoint and $b,c\\in\\mathbb R$ are such that $b^2 < 4c$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0030",
+      "sourceStart": 6422,
+      "sourceEnd": 6578,
+      "sha256": "972a98a49ac2bbcb28de9de307cb707cb942f0f1fad396e3ffeabc085b0851e5"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-2-2",
+      "sourceStart": 6578,
+      "sourceEnd": 6777,
+      "original": "#### 2.2.2. Suppose $T \\in \\mathcal{L}(V)$ is self-adjoint. Then the minimal polynomial of $T$ equals $(z-\\lambda_1)\\cdots(z-\\lambda_m)$ for some distinct $\\lambda_1,\\ldots,\\lambda_m \\in \\mathbb{R}$.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0031",
+      "sourceStart": 6777,
+      "sourceEnd": 7119,
+      "sha256": "6f4444568445da31ac428579aa0c0a57b88d1fe01de0ea9358d217fb5cc7860a"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-2-3",
+      "sourceStart": 7119,
+      "sourceEnd": 7281,
+      "original": "#### 2.2.3. <span style=\"color: red\">(Real spectral theorem)</span> Suppose $F=\\mathbb{R}$ and $T\\in\\mathcal{L}(V)$. Then the following statements are equivalent.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0032",
+      "sourceStart": 7281,
+      "sourceEnd": 7453,
+      "sha256": "30264af36d2bea9bffc3e948e9666003a529de8402d6382fbae608cc30adbec4"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-2-4",
+      "sourceStart": 7453,
+      "sourceEnd": 7618,
+      "original": "#### 2.2.4. <span style=\"color: red\">(Complex spectral theorem)</span> Suppose $F=\\mathbb{C}$ and $T\\in\\mathcal{L}(V)$. Then the following statements are equivalent.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0033",
+      "sourceStart": 7618,
+      "sourceEnd": 7784,
+      "sha256": "ac1e4e2c656218613d9bc77ddb644701bd00ad81e28ea06463dd84da0886011b"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-section-2-3",
+      "sourceStart": 7784,
+      "sourceEnd": 7811,
+      "original": "### 2.3. Positive Operators",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0034",
+      "sourceStart": 7811,
+      "sourceEnd": 7813,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-3-1",
+      "sourceStart": 7813,
+      "sourceEnd": 7954,
+      "original": "#### 2.3.1. Let $V$ be a finite-dimensional inner product space and let $T \\in \\mathcal{L}(V)$. Then the following statements are equivalent.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0035",
+      "sourceStart": 7954,
+      "sourceEnd": 8396,
+      "sha256": "af463c6dbb620b5a468449f957a5e024ac07b425eed7a278415c343a095166f8"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-3-2",
+      "sourceStart": 8396,
+      "sourceEnd": 8514,
+      "original": "#### 2.3.2. Suppose $T$ is a positive operator on $V$ and $v\\in V$ is such that $\\langle Tv,v \\rangle=0$. Then $Tv=0$.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0036",
+      "sourceStart": 8514,
+      "sourceEnd": 8516,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-section-2-4",
+      "sourceStart": 8516,
+      "sourceEnd": 8580,
+      "original": "### 2.4. Isometrics, Unitary Operators, and Matrix Factorization",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0037",
+      "sourceStart": 8580,
+      "sourceEnd": 8582,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-4-1",
+      "sourceStart": 8582,
+      "sourceEnd": 8731,
+      "original": "#### 2.4.1. Suppose $V,W$ are finite-dimensional inner product spaces and let $S \\in \\mathcal{L}(V,W)$. Then the following statements are equivalent.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0038",
+      "sourceStart": 8731,
+      "sourceEnd": 9144,
+      "sha256": "ee8ee64150121532ac0e8cbb5e5d2bf2afa7f76b695b4d1c83e487435f7c45ad"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-4-2",
+      "sourceStart": 9144,
+      "sourceEnd": 9340,
+      "original": "#### 2.4.2. Suppose $V$ is a finite-dimensional inner product space with an orthonormal basis $\\beta=\\{e_1,\\ldots,e_n\\}$ and let $S\\in\\mathcal{L}(V)$. Then the following statements are equivalent.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0039",
+      "sourceStart": 9340,
+      "sourceEnd": 9630,
+      "sha256": "baef943cd6a90ae9ae2783995d9e722f2ca83ed5d6b66264e5229319dcd3208a"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-4-3",
+      "sourceStart": 9630,
+      "sourceEnd": 9738,
+      "original": "#### 2.4.3. Suppose $F=\\mathbb{C}$ and $S \\in \\mathcal{L}(V)$. Then the following statements are equivalent.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0040",
+      "sourceStart": 9738,
+      "sourceEnd": 9906,
+      "sha256": "5e78c39fc992d556d860f76ec155d420745e4f9725ce1b3f60802603db92ea05"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-4-4",
+      "sourceStart": 9906,
+      "sourceEnd": 9995,
+      "original": "#### 2.4.4. Suppose $Q \\in F^{n \\times n}$. Then the following statements are equivalent.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0041",
+      "sourceStart": 9995,
+      "sourceEnd": 10143,
+      "sha256": "d044cb41559f0d7f760b1f9e929871b82d132f8a76201aab1c2848916926b103"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-4-5",
+      "sourceStart": 10143,
+      "sourceEnd": 10408,
+      "original": "#### 2.4.5. <span style=\"color: red\">(QR factorization)</span> Suppose $A\\in F^{n\\times n}$ has linearly independent columns. Then there exist unique matrices $Q\\text{(unitary)},R\\text{(upper triangular with positive diagonal entries)} \\in F^{n \\times n}$ such that",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0042",
+      "sourceStart": 10408,
+      "sourceEnd": 10519,
+      "sha256": "43008d2f3cfb6c036cae0b3fc330a24b3a1d5ae8e7abc81c4d5d3885900fb2a8"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-4-6",
+      "sourceStart": 10519,
+      "sourceEnd": 10738,
+      "original": "#### 2.4.6. <span style=\"color: red\">(Cholesky factorization)</span> Suppose $B$ is a positive definite matrix. Then there exists a unique upper-triangular matrix $R$ with only positive numbers on its diagonal such that",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0043",
+      "sourceStart": 10738,
+      "sourceEnd": 10755,
+      "sha256": "55485b45ac005045864e3ea4725ab08814fce166f4641f46775f95314bbcf718"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-section-2-5",
+      "sourceStart": 10755,
+      "sourceEnd": 10792,
+      "original": "### 2.5. Singular Value Decomposition",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0044",
+      "sourceStart": 10792,
+      "sourceEnd": 10794,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-5-1",
+      "sourceStart": 10794,
+      "sourceEnd": 10844,
+      "original": "#### 2.5.1. Suppose $T \\in \\mathcal{L}(V,W)$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0045",
+      "sourceStart": 10844,
+      "sourceEnd": 11071,
+      "sha256": "36713408f8aac5e6f3e60d1cc45879b2fa49e54c570803b8d40172966c346351"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-5-2",
+      "sourceStart": 11071,
+      "sourceEnd": 11121,
+      "original": "#### 2.5.2. Suppose $T \\in \\mathcal{L}(V,W)$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0046",
+      "sourceStart": 11121,
+      "sourceEnd": 11429,
+      "sha256": "a2d8f17b4b7e59f9212c21421daa09eea4732a01043fe5175e50c8f68d12f3c3"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-5-3",
+      "sourceStart": 11429,
+      "sourceEnd": 11745,
+      "original": "#### 2.5.3. <span style=\"color: red\">(Singular value decomposition)</span> Suppose $T \\in \\mathcal{L}(V,W)$ and the positive singular values of $T$ are $s_1,\\ldots,s_m$, counted with multiplicity ($m=\\operatorname{rank}T$). Then there exist orthonormal lists $e_1,\\ldots,e_m$ in $V$ and $f_1,\\ldots,f_m$ in $W$ where",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0047",
+      "sourceStart": 11745,
+      "sourceEnd": 12151,
+      "sha256": "82c4f8006a62e813606768f25de6b3a9f679290bc8e142440c1d8e7410ead24b"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-5-4",
+      "sourceStart": 12151,
+      "sourceEnd": 12454,
+      "original": "#### 2.5.4. <span style=\"color: red\">(SVD for matrix)</span> Suppose $A \\in F^{p \\times n}$ of rank $m \\geq 1$. Then there exist $B \\in F^{p \\times m}$ with orthonormal columns, a diagonal matrix with positive entries $D \\in F^{m \\times m}$, and $C \\in F^{n \\times m}$ with orthonormal columns such that",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0048",
+      "sourceStart": 12454,
+      "sourceEnd": 12472,
+      "sha256": "4d921fd70da2ca9e51b3fbefbca1f8a51c4d2bae82fd5f9ceb92af40e24e9087"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-section-2-6",
+      "sourceStart": 12472,
+      "sourceEnd": 12525,
+      "original": "### 2.6. Consequences of Singular Value Decomposition",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0049",
+      "sourceStart": 12525,
+      "sourceEnd": 12527,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-6-1",
+      "sourceStart": 12527,
+      "sourceEnd": 12625,
+      "original": "#### 2.6.1. Suppose $T \\in \\mathcal{L}(V,W)$. Let $s_1$ be the largest singular value of $T$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0050",
+      "sourceStart": 12625,
+      "sourceEnd": 12767,
+      "sha256": "c317853bdfc9d5dc693428060ab545778dfacd383f5abf1256fd5d135293f732"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-6-2",
+      "sourceStart": 12767,
+      "sourceEnd": 12819,
+      "original": "#### 2.6.2. Suppose $S,T \\in \\mathcal{L}(V,W)$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0051",
+      "sourceStart": 12819,
+      "sourceEnd": 12980,
+      "sha256": "e485a25d160d544e498e9cace880fc8013cb6d26374600905d851c8d222832cd"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-6-3",
+      "sourceStart": 12980,
+      "sourceEnd": 13216,
+      "original": "#### 2.6.3. Suppose $T \\in \\mathcal{L}(V,W)$ and $s_1 \\geq \\cdots \\geq s_m$ are the positive singular values of $T$ with corresponding orthonormal vectors $e_1,\\ldots,e_m$ in $V$ and $f_1,\\ldots,f_m$ in $W$. Suppose $1 \\leq k < m$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0052",
+      "sourceStart": 13216,
+      "sourceEnd": 13490,
+      "sha256": "bf9e994ca6195e04ae0eb80185d494231568003d872f0805fd804ca2582a190a"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-item-2-6-4",
+      "sourceStart": 13490,
+      "sourceEnd": 13603,
+      "original": "#### 2.6.4. Suppose $T \\in \\mathcal{L}(V)$. Then there exists a unitary operator $S \\in \\mathcal{L}(V)$ such that",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0053",
+      "sourceStart": 13603,
+      "sourceEnd": 13627,
+      "sha256": "7c098b6416807d26cfbd539013709b2cd45f127303053d6452ebd08dfa498264"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch07-section-3",
+      "sourceStart": 13627,
+      "sourceEnd": 13641,
+      "original": "## 3. Examples",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch07-block-0054",
+      "sourceStart": 13641,
+      "sourceEnd": 13890,
+      "sha256": "1815a3e9acfea168565a2361adb55c9c8f4b0551f26187f1a6b1f08976c3c34c"
+    }
+  ],
+  "decorations": [
+    {
+      "blockId": "la-ch07-item-1-1-1",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 18,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-1-1-2",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 21,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-1-1-3",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 15,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-1-1-4",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 8,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-1-1-5",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 14,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-1-3-1",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 19,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-1-4-1",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 10,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-1-4-2",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 9,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-1-5-1",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 16,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-1-6-1",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 22,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-2-2-3",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 23,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-2-2-4",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 26,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-2-4-5",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 18,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-2-4-6",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 24,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-2-5-3",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 30,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-item-2-5-4",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 16,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch07-block-0054",
+      "tokens": [
+        {
+          "offset": 7,
+          "html": "<details>"
+        },
+        {
+          "offset": 8,
+          "html": "<summary>"
+        },
+        {
+          "offset": 16,
+          "html": "</summary>"
+        },
+        {
+          "offset": 210,
+          "html": "</details>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    }
+  ],
+  "learningReview": "recognize/apply only; difficulty [1,2]; no inferred proof permission or high difficulty; shared chapter assumptions preserved in each compiled unit",
+  "suspicions": []
+}

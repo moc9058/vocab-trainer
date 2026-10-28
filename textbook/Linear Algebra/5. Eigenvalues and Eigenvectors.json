@@ -1,0 +1,1368 @@
+{
+  "schemaVersion": 2,
+  "subjectId": "linear-algebra",
+  "chapterId": "la-ch05",
+  "title": "Eigenvalues and Eigenvectors",
+  "source": {
+    "kind": "local-notes",
+    "originalFile": "5. Eigenvalues and Eigenvectors.md",
+    "originalSha256": "0d39aeca58957931345270385a1870097797b800bbbe456d23adfb31b5687320",
+    "urls": [
+      "https://www.notion.so/40669428c86181299f5ad22adfdda377",
+      "https://app.notion.com/p/24669428c86180d2a549d06f861e841b)"
+    ],
+    "originalHeadings": [
+      "# 5. Eigenvalues and Eigenvectors",
+      "## 1. Definitions",
+      "### 1.1. Invariant Subspaces",
+      "#### 1.1.1. A linear map from a vector space to itself is called an **operator**.",
+      "#### 1.1.2. Suppose $T \\in \\mathcal{L}(V)$. A subspace $U$ of $V$ is called **invariant** under $T$ if $Tu \\in U$ for every $u \\in U$.",
+      "#### 1.1.3. Suppose $T \\in \\mathcal{L}(V)$. A number $\\lambda \\in F$ is called an **eigenvalue** of $T$ if there exists $v\\in V$ such that $v \\neq 0$ and $Tv=\\lambda v$.",
+      "#### 1.1.4. Suppose $T \\in \\mathcal{L}(V)$ and $\\lambda\\in F$ is an eigenvalue of $T$. A vector $v\\in V$ is called an **eigenvector** of $T$ corresponding to $\\lambda$ if $v \\neq 0$ and $Tv=\\lambda v$.",
+      "#### 1.1.5. Suppose $T \\in \\mathcal{L}(V)$ and $p\\in \\mathcal{P}(F)$ is a polynomial given by",
+      "#### 1.1.6. Suppose $V$ is finite-dimensional, $T\\in\\mathcal{L}(V)$, and $U$ is a subspace of $V$ invariant under $T$. Then the **quotient operator** $T/U\\in\\mathcal{L}(V/U)$ is defined by",
+      "### 1.2. The Minimal Polynomial",
+      "#### 1.2.1. Suppose $V$ is finite-dimensional and $T\\in\\mathcal{L}(V)$. Then the minimal polynomial of $T$ is the unique monic polynomial $p\\in\\mathcal{P}(F)$ of smallest degree such that $p(T)=0$.",
+      "### 1.3. Upper-Triangular Matrices",
+      "### 1.4. Diagonalizable Operators",
+      "#### 1.4.1. Suppose $V$ is a finite-dimensional vector space. An operator on $V$ is called diagonalizable if the operator has a diagonal matrix with respect to some basis of $V$.",
+      "#### 1.4.2. Suppose $T\\in\\mathcal{L}(V)$ and $\\lambda\\in F$. The eigenspace of $T$ corresponding to $\\lambda$ is the subspace $E(\\lambda,T)$ of $V$ defined by",
+      "#### 1.4.3. <span style=\"color: red\">(Gershgorin disks)</span> Suppose $T\\in\\mathcal{L}(V)$, $\\mathscr{B}=\\{v_1,\\ldots,v_n\\}$ is a basis of $V$, and $A=[T]_{\\mathscr{B}}$. A **Gershgorin disk** of $T$ with respect to the basis $\\mathscr{B}$ is a set of the form",
+      "### 1.5. Commuting Operators",
+      "#### 1.5.1. Two operators $S,T$ on the same vector space are said to **commute** if $ST=TS$.",
+      "## 2. Theorems",
+      "### 2.1. Invariant Subspaces",
+      "#### 2.1.1. Suppose $V$ is finite-dimensional, $T\\in \\mathcal{L}(V)$, and $\\lambda \\in F$. Then the following statements are equivalent.",
+      "#### 2.1.2. Suppose $T\\in\\mathcal{L}(V)$. Then every list of eigenvectors of $T$ corresponding to distinct eigenvalues of $T$ is linearly independent.",
+      "#### 2.1.3. Suppose $T\\in\\mathcal{L}(V)$ and $p\\in\\mathcal{P}(F)$. Then $\\ker(p(T))$ and $\\operatorname{range}(p(T))$ are invariant under $T$.",
+      "#### 2.1.4. Suppose $V$ is finite-dimensional, $T\\in\\mathcal{L}(V),\\ \\lambda\\in F$. Then $\\lambda$ is an eigenvalue of $T$ if and only if $\\lambda$ is an eigenvalue of the dual operator $T'$.",
+      "#### 2.1.5. Let $T\\in\\mathcal{L}(V)$ and let $m\\geq1$ be an integer. Then the following statements hold.",
+      "#### 2.1.6. Suppose $V$ is finite-dimensional. Then $\\beta = \\{v_1,\\ldots,v_m\\}$ is linearly independent if and only if there exists $T\\in\\mathcal{L}(V)$ such that $\\beta$ is a set of eigenvectors of distinct eigenvalues.",
+      "### 2.2. The Minimal Polynomial",
+      "#### 2.2.1. Every operator on a finite-dimensional nonzero complex vector space has an eigenvalue.",
+      "#### 2.2.2. Suppose $V$ is a finite-dimensional vector space and $T\\in\\mathcal{L}(V)$. Then there is a unique monic polynomial $p\\in\\mathcal{P}(F)$ of smallest degree such that $p(T)=0$. Furthermore, $\\deg(p) \\leq \\dim(V)$.",
+      "#### 2.2.3. Suppose $V$ is a finite-dimensional vector space and $T\\in\\mathcal{L}(V)$. Then",
+      "#### 2.2.4. Suppose $V$ is a finite-dimensional vector space, $T\\in\\mathcal{L}(V)$, and $q\\in\\mathcal{P}(F)$. Then $q(T)=0$ if and only if $q$ is a polynomial multiple of the minimal polynomial of $T$.",
+      "#### 2.2.5. Suppose $V$ is a finite-dimensional vector space, $T\\in\\mathcal{L}(V)$, $q\\in\\mathcal{P}(F)$, and $U$ is a subspace of $V$ that is invariant under $T$. Then the minimal polynomial of $T$ is a polynomial multiple of the minimal polynomial of $T|_{U}$.",
+      "#### 2.2.6. Suppose $V$ is a finite-dimensional vector space and $T\\in\\mathcal{L}(V)$. Then $T$ is not invertible if and only if the constant term of the minimal polynomial of $T$ is zero.",
+      "#### 2.2.7. Suppose $F=\\mathbb{C}$, $T\\in\\mathcal{L}(V)$, $p\\in\\mathcal{P}(\\mathbb{C})$ is a nonconstant polynomial, and $\\alpha \\in \\mathbb{C}$. Then $\\alpha$ is an eigenvalue of $p(T)$ if and only if $\\alpha=p(\\lambda)$ for some eigenvalue of $T$.",
+      "#### 2.2.8. Every operator on an odd-dimensional vector space has an eigenvalue, even if $F=\\mathbb{R}$.",
+      "### 2.3. Upper-Triangular Matrices",
+      "#### 2.3.1. Suppose $V$ is a finite-dimensional vector space with a basis $\\mathscr{B}=\\{v_1,\\ldots,v_n\\}$ and $T\\in\\mathcal{L}(V)$. Then",
+      "#### 2.3.2. Suppose $V$ is a finite-dimensional vector space with a basis with respect to which $T$ has an upper triangular matrix with diagonal entries $\\lambda_1,\\ldots,\\lambda_n$, then",
+      "#### 2.3.3. Suppose $V$ is finite-dimensional and $T\\in\\mathcal{L}(V)$. Then $T$ has an upper triangular matrix with respect to some basis of $V$ if and only if the minimal polynomial of $T$ equals $(z-\\lambda_1)\\cdots(z-\\lambda_m)$ for some $\\lambda_1,\\ldots,\\lambda_m\\in F$, possibly repeated.",
+      "### 2.4. Diagonalizable Operators",
+      "#### 2.4.1. Suppose $T\\in\\mathcal{L}(V)$ and $\\lambda_1,\\ldots,\\lambda_m$ are distinct eigenvalues of $T$. Then",
+      "#### 2.4.2. Suppose $V$ is a finite-dimensional vector space and $T\\in\\mathcal{L}(V)$. Let $\\lambda_1,\\ldots,\\lambda_m$ denote the distinct eigenvalues of $T$. Then the following statements are equivalent.",
+      "#### 2.4.3. Suppose $V$ is a finite-dimensional vector space and $T\\in\\mathcal{L}(V)$. Then $T$ is diagonalizable if and only if the minimal polynomial of $T$ equals $(z-\\lambda_1)\\cdots(z-\\lambda_m)$ for distinct $\\lambda_1,\\ldots,\\lambda_m\\in F$.",
+      "#### 2.4.4. Suppose $T\\in\\mathcal{L}(V)$ is diagonalizable and $U$ is a subspace of $V$ that is invariant under $T$. Then $T|_U$ is a diagonalizable operator on $U$.",
+      "#### 2.4.5. Suppose $V$ is a finite-dimensional vector space, $T\\in\\mathcal{L}(V)$ and $\\mathscr{B}$ is a basis of $V$. Then each eigenvalue of $T$ is contained in at least one Gershgorin disk of $T$ with respect to the basis $\\mathscr{B}$.",
+      "### 2.5. Commuting Operators",
+      "#### 2.5.1. Suppose $V$ is a finite-dimensional vector space, $S,T\\in\\mathcal{L}(V)$, and $\\mathscr{B}$ is a basis of $V$. Then $S$ and $T$ commute if and only if $[S]_{\\mathscr{B}}$ and $[T]_{\\mathscr{B}}$ commute.",
+      "#### 2.5.2. Suppose $S,T\\in\\mathcal{L}(V)$ commute and $\\lambda\\in F$. Then $E(\\lambda,S)$ is invariant under $T$.",
+      "#### 2.5.3. Two diagonalizable operators on the same finite-dimensional vector space have diagonal matrices with respect to the same basis if and only if the two operators commute.",
+      "#### 2.5.4. Every pair of commuting operators on a finite-dimensional nonzero complex vector space has a common eigenvector.",
+      "#### 2.5.5. Suppose $V$ is a finite-dimensional complex vector space and $S,T$ are commuting operators on $V$. Then there is a basis with respect to which both $S$ and $T$ have upper-triangular matrices.",
+      "#### 2.5.6. Suppose $V$ is a finite-dimensional complex vector space and $S,T$ are commuting operators on $V$. Then",
+      "## 3. Examples"
+    ]
+  },
+  "content": [
+    {
+      "type": "block",
+      "id": "la-ch05-block-0001",
+      "format": "markdown",
+      "text": "\n\nSource: https://www.notion.so/40669428c86181299f5ad22adfdda377\n\n> Throughout this chapter, $V$ is a finite-dimensional vector space over $F=\\mathbb R$ or $\\mathbb C$, and $T\\in\\mathcal L(V)$. A statement about the existence of an eigenvalue assumes $V\\ne\\{0\\}$. The minimal polynomial of the unique operator on $\\{0\\}$ is $1$, with empty products interpreted as $1$.\n\n"
+    },
+    {
+      "type": "section",
+      "id": "la-ch05-section-1",
+      "title": "Definitions",
+      "label": "1",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch05-block-0002",
+          "format": "markdown",
+          "text": "\n\n"
+        },
+        {
+          "type": "section",
+          "id": "la-ch05-section-1-1",
+          "title": "Invariant Subspaces",
+          "label": "1.1",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch05-block-0003",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-1-1-1",
+              "kind": "definition",
+              "label": "1.1.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-1-1-1-heading",
+                  "format": "markdown",
+                  "text": "A linear map from a vector space to itself is called an **operator**."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0004",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-1-1-2",
+              "kind": "definition",
+              "label": "1.1.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-1-1-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T \\in \\mathcal{L}(V)$. A subspace $U$ of $V$ is called **invariant** under $T$ if $Tu \\in U$ for every $u \\in U$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0005",
+                  "format": "markdown",
+                  "text": "\n\nNote that $U$ is invariant under $T$ if $T|_U$ is an operator on $U$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-1-1-3",
+              "kind": "definition",
+              "label": "1.1.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-1-1-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T \\in \\mathcal{L}(V)$. A number $\\lambda \\in F$ is called an **eigenvalue** of $T$ if there exists $v\\in V$ such that $v \\neq 0$ and $Tv=\\lambda v$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0006",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-1-1-4",
+              "kind": "definition",
+              "label": "1.1.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-1-1-4-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T \\in \\mathcal{L}(V)$ and $\\lambda\\in F$ is an eigenvalue of $T$. A vector $v\\in V$ is called an **eigenvector** of $T$ corresponding to $\\lambda$ if $v \\neq 0$ and $Tv=\\lambda v$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0007",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-1-1-5",
+              "kind": "definition",
+              "label": "1.1.5",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-1-1-5-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T \\in \\mathcal{L}(V)$ and $p\\in \\mathcal{P}(F)$ is a polynomial given by"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0008",
+                  "format": "markdown",
+                  "text": "\n\n$$\np(z)=a_0+a_1z+\\ldots+a_mz^m\n$$\n\nfor all $z\\in F$. Then $p(T)$ is the operator on $V$ defined by\n\n$$\np(T)=a_0I+a_1T+\\ldots+a_mT^m\n$$\n\nwhere $T^m=\\overbrace{T\\circ \\cdots \\circ T}^{m\\text{ times}}$, $T^0=I$.\n\n(1) Note that if $T^{-1}$ exists, then $T^{-m}=\\big(T^{-1}\\big)^m$.\n\n(2) Note that $(pq)(T)=p(T)q(T)=q(T)p(T)$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-1-1-6",
+              "kind": "definition",
+              "label": "1.1.6",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-1-1-6-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is finite-dimensional, $T\\in\\mathcal{L}(V)$, and $U$ is a subspace of $V$ invariant under $T$. Then the **quotient operator** $T/U\\in\\mathcal{L}(V/U)$ is defined by"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0009",
+                  "format": "markdown",
+                  "text": "\n\n$$\n(T/U)(v+U)=Tv+U,\\ \\forall v\\in V.\n$$\n\n- Note that the quotient operator is well-defined because $U$ is invariant under $T$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch05-section-1-2",
+          "title": "The Minimal Polynomial",
+          "label": "1.2",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch05-block-0010",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-1-2-1",
+              "kind": "definition",
+              "label": "1.2.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-1-2-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is finite-dimensional and $T\\in\\mathcal{L}(V)$. Then the minimal polynomial of $T$ is the unique monic polynomial $p\\in\\mathcal{P}(F)$ of smallest degree such that $p(T)=0$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0011",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "item",
+          "id": "la-ch05-item-1-3",
+          "kind": "definition",
+          "label": "1.3",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch05-item-1-3-heading",
+              "format": "markdown",
+              "text": "Upper-Triangular Matrices"
+            },
+            {
+              "type": "block",
+              "id": "la-ch05-block-0012",
+              "format": "markdown",
+              "text": "\n\nA square matrix $A$ is upper triangular if $A_{i,j}=0$ whenever $i>j$.\n\n"
+            }
+          ],
+          "title": "Upper-Triangular Matrices",
+          "learning": {
+            "capabilities": [
+              "recognize",
+              "apply"
+            ],
+            "requires": [],
+            "proofCoverage": "none"
+          }
+        },
+        {
+          "type": "section",
+          "id": "la-ch05-section-1-4",
+          "title": "Diagonalizable Operators",
+          "label": "1.4",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch05-block-0013",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-1-4-1",
+              "kind": "definition",
+              "label": "1.4.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-1-4-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional vector space. An operator on $V$ is called diagonalizable if the operator has a diagonal matrix with respect to some basis of $V$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0014",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-1-4-2",
+              "kind": "definition",
+              "label": "1.4.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-1-4-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T\\in\\mathcal{L}(V)$ and $\\lambda\\in F$. The eigenspace of $T$ corresponding to $\\lambda$ is the subspace $E(\\lambda,T)$ of $V$ defined by"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0015",
+                  "format": "markdown",
+                  "text": "\n\n$$\nE(\\lambda, T)=\\ker(T-\\lambda I)=\\{v\\in V: Tv=\\lambda v\\}\n$$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-1-4-3",
+              "kind": "definition",
+              "label": "1.4.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-1-4-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T\\in\\mathcal{L}(V)$, $\\mathscr{B}=\\{v_1,\\ldots,v_n\\}$ is a basis of $V$, and $A=[T]_{\\mathscr{B}}$. A **Gershgorin disk** of $T$ with respect to the basis $\\mathscr{B}$ is a set of the form"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0016",
+                  "format": "markdown",
+                  "text": "\n\n$$\nD_i=\\big\\{z\\in F:|z-A_{i,i}|\\leq \\sum_{\n\\begin{subarray}{l}\n   j=1\\\\\n   j\\neq i\n\\end{subarray}}^{n}|A_{i,j}|\\big\\}\n$$\n\n"
+                }
+              ],
+              "title": "Gershgorin disks",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch05-section-1-5",
+          "title": "Commuting Operators",
+          "label": "1.5",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch05-block-0017",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-1-5-1",
+              "kind": "definition",
+              "label": "1.5.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-1-5-1-heading",
+                  "format": "markdown",
+                  "text": "Two operators $S,T$ on the same vector space are said to **commute** if $ST=TS$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0018",
+                  "format": "markdown",
+                  "text": "\n\nTwo square matrices $A,B$ are said to commute if $AB=BA$.\n\n- Note that for $p,q\\in\\mathcal{P}(F)$, $p(T)$ and $q(T)$ commute.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "la-ch05-section-2",
+      "title": "Theorems",
+      "label": "2",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch05-block-0019",
+          "format": "markdown",
+          "text": "\n\n"
+        },
+        {
+          "type": "section",
+          "id": "la-ch05-section-2-1",
+          "title": "Invariant Subspaces",
+          "label": "2.1",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch05-block-0020",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-1-1",
+              "kind": "theorem",
+              "label": "2.1.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-1-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is finite-dimensional, $T\\in \\mathcal{L}(V)$, and $\\lambda \\in F$. Then the following statements are equivalent."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0021",
+                  "format": "markdown",
+                  "text": "\n\n(1) $\\lambda$ is an eigenvalue of $T$.\n\n(2) $T-\\lambda I$ is not injective.\n\n(3) $T-\\lambda I$ is not surjective.\n\n(4) $T-\\lambda I$ is not invertible.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-1-2",
+              "kind": "theorem",
+              "label": "2.1.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-1-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T\\in\\mathcal{L}(V)$. Then every list of eigenvectors of $T$ corresponding to distinct eigenvalues of $T$ is linearly independent."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0022",
+                  "format": "markdown",
+                  "text": "\n\nProof sketch. Induct on the number of eigenvectors. Applying $T-\\lambda_mI$ to a linear relation reduces it to a relation among the first $m-1$ eigenvectors; distinctness of the eigenvalues forces every coefficient to vanish.\n\n- Note that if $V$ is finite-dimensional, then each operator on $V$ has at most $\\dim(V)$ distinct eigenvalues.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-1-3",
+              "kind": "theorem",
+              "label": "2.1.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-1-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T\\in\\mathcal{L}(V)$ and $p\\in\\mathcal{P}(F)$. Then $\\ker(p(T))$ and $\\operatorname{range}(p(T))$ are invariant under $T$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0023",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-1-4",
+              "kind": "theorem",
+              "label": "2.1.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-1-4-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is finite-dimensional, $T\\in\\mathcal{L}(V),\\ \\lambda\\in F$. Then $\\lambda$ is an eigenvalue of $T$ if and only if $\\lambda$ is an eigenvalue of the dual operator $T'$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0024",
+                  "format": "markdown",
+                  "text": "\n\nProof sketch. $\\ker(T'-\\lambda I)=(\\operatorname{range}(T-\\lambda I))^0$. In finite dimensions, this annihilator is nonzero exactly when $T-\\lambda I$ is not surjective.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-1-5",
+              "kind": "theorem",
+              "label": "2.1.5",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-1-5-heading",
+                  "format": "markdown",
+                  "text": "Let $T\\in\\mathcal{L}(V)$ and let $m\\geq1$ be an integer. Then the following statements hold."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0025",
+                  "format": "markdown",
+                  "text": "\n\n(1) $T$ is injective $\\iff$ $T^m$ is injective.\n\n(2) $T$ is surjective $\\iff$ $T^m$ is surjective.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-1-6",
+              "kind": "theorem",
+              "label": "2.1.6",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-1-6-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is finite-dimensional. Then $\\beta = \\{v_1,\\ldots,v_m\\}$ is linearly independent if and only if there exists $T\\in\\mathcal{L}(V)$ such that $\\beta$ is a set of eigenvectors of distinct eigenvalues."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0026",
+                  "format": "markdown",
+                  "text": "\n\nNote that we can determine the linear independence by finding such $T$.\n\nExample. On $\\operatorname{span}(e^{\\lambda_1x},\\ldots,e^{\\lambda_kx})$, the differentiation operator $D$ has these nonzero functions as eigenvectors with distinct eigenvalues $\\lambda_1,\\ldots,\\lambda_k$. Hence they are linearly independent.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch05-section-2-2",
+          "title": "The Minimal Polynomial",
+          "label": "2.2",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch05-block-0027",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-2-1",
+              "kind": "theorem",
+              "label": "2.2.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-2-1-heading",
+                  "format": "markdown",
+                  "text": "Every operator on a finite-dimensional nonzero complex vector space has an eigenvalue."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0028",
+                  "format": "markdown",
+                  "text": "\n\nProof sketch. For $v\\ne0$ and $n=\\dim V$, the list $v,Tv,\\ldots,T^nv$ is linearly dependent. Hence $p(T)v=0$ for a nonzero polynomial $p$. Factor $p$ over $\\mathbb C$; if every $T-\\lambda I$ were injective, their product would be injective, contradicting $p(T)v=0$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-2-2",
+              "kind": "theorem",
+              "label": "2.2.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-2-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional vector space and $T\\in\\mathcal{L}(V)$. Then there is a unique monic polynomial $p\\in\\mathcal{P}(F)$ of smallest degree such that $p(T)=0$. Furthermore, $\\deg(p) \\leq \\dim(V)$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0029",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-2-3",
+              "kind": "theorem",
+              "label": "2.2.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-2-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional vector space and $T\\in\\mathcal{L}(V)$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0030",
+                  "format": "markdown",
+                  "text": "\n\n(1) The zeros of the minimal polynomial of $T$ are all the eigenvalues of $T$.\n\n(2) If $V$ is a complex vector space, then the minimal polynomial of $T$ has the form\n\n$$\n(z-\\lambda_1)\\cdots (z-\\lambda_m),\n$$\n\nwhere $\\lambda_1,\\ldots,\\lambda_m$ is a list of all the eigenvalues of $T$, possibly with repetitions.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-2-4",
+              "kind": "theorem",
+              "label": "2.2.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-2-4-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional vector space, $T\\in\\mathcal{L}(V)$, and $q\\in\\mathcal{P}(F)$. Then $q(T)=0$ if and only if $q$ is a polynomial multiple of the minimal polynomial of $T$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0031",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-2-5",
+              "kind": "theorem",
+              "label": "2.2.5",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-2-5-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional vector space, $T\\in\\mathcal{L}(V)$, $q\\in\\mathcal{P}(F)$, and $U$ is a subspace of $V$ that is invariant under $T$. Then the minimal polynomial of $T$ is a polynomial multiple of the minimal polynomial of $T|_{U}$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0032",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-2-6",
+              "kind": "theorem",
+              "label": "2.2.6",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-2-6-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional vector space and $T\\in\\mathcal{L}(V)$. Then $T$ is not invertible if and only if the constant term of the minimal polynomial of $T$ is zero."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0033",
+                  "format": "markdown",
+                  "text": "\n\nProof sketch. $T$ is not invertible if and only if $0$ is an eigenvalue of $T$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-2-7",
+              "kind": "theorem",
+              "label": "2.2.7",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-2-7-heading",
+                  "format": "markdown",
+                  "text": "Suppose $F=\\mathbb{C}$, $T\\in\\mathcal{L}(V)$, $p\\in\\mathcal{P}(\\mathbb{C})$ is a nonconstant polynomial, and $\\alpha \\in \\mathbb{C}$. Then $\\alpha$ is an eigenvalue of $p(T)$ if and only if $\\alpha=p(\\lambda)$ for some eigenvalue of $T$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0034",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-2-8",
+              "kind": "theorem",
+              "label": "2.2.8",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-2-8-heading",
+                  "format": "markdown",
+                  "text": "Every operator on an odd-dimensional vector space has an eigenvalue, even if $F=\\mathbb{R}$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0035",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch05-section-2-3",
+          "title": "Upper-Triangular Matrices",
+          "label": "2.3",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch05-block-0036",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-3-1",
+              "kind": "theorem",
+              "label": "2.3.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-3-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional vector space with a basis $\\mathscr{B}=\\{v_1,\\ldots,v_n\\}$ and $T\\in\\mathcal{L}(V)$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0037",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\begin{bmatrix}T\\end{bmatrix}_{\\mathscr{B}}\\text{ is upper triangular} \\\\\n\\iff \\operatorname{span}(v_1,\\ldots,v_k)\\text{ is invariant under }T\\text{ for each }k=1,\\ldots,n\n$$\n\n(1) The matrix of $T$ with respect to $v_1,\\ldots,v_n$ is upper triangular.\n\n(2) $\\operatorname{span}(v_1,\\ldots,v_k)$ is invariant under $T$ for each $k=1,\\ldots,n$.\n\n(3) $Tv_k\\in \\operatorname{span}\\{v_1,\\ldots,v_k\\}$ for each $k=1,\\ldots,n$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-3-2",
+              "kind": "theorem",
+              "label": "2.3.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-3-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional vector space with a basis with respect to which $T$ has an upper triangular matrix with diagonal entries $\\lambda_1,\\ldots,\\lambda_n$, then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0038",
+                  "format": "markdown",
+                  "text": "\n\n(1)  $(T-\\lambda_1 I)\\cdots(T-\\lambda_n I)=0$\n\n- Note that every polynomial that makes $T$ the zero operator is the multiple of the minimal polynomial.\n  - If $q(T)=0$ and $\\lambda$ is an eigenvalue, then $q(\\lambda)=0$.\n\n- For each diagonal entry $\\lambda_k$, the matrix of $T-\\lambda_kI$ is triangular with a zero diagonal entry and is therefore not invertible. Thus $\\lambda_k$ is an eigenvalue.\n\n(2) $\\lambda_1,\\ldots,\\lambda_n$ are precisely the eigenvalues of $T$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-3-3",
+              "kind": "theorem",
+              "label": "2.3.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-3-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is finite-dimensional and $T\\in\\mathcal{L}(V)$. Then $T$ has an upper triangular matrix with respect to some basis of $V$ if and only if the minimal polynomial of $T$ equals $(z-\\lambda_1)\\cdots(z-\\lambda_m)$ for some $\\lambda_1,\\ldots,\\lambda_m\\in F$, possibly repeated."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0039",
+                  "format": "markdown",
+                  "text": "\n\n- Note that if $F=\\mathbb{C}$, then $T$ always has an upper-triangular matrix with respect to some basis of $V$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch05-section-2-4",
+          "title": "Diagonalizable Operators",
+          "label": "2.4",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch05-block-0040",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-4-1",
+              "kind": "theorem",
+              "label": "2.4.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-4-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T\\in\\mathcal{L}(V)$ and $\\lambda_1,\\ldots,\\lambda_m$ are distinct eigenvalues of $T$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0041",
+                  "format": "markdown",
+                  "text": "\n\n$$\nE(\\lambda_1,T)+\\cdots+E(\\lambda_m,T)\n$$\n\nis a direct sum. Furthermore, if $V$ is finite-dimensional, then\n\n$$\n\\dim E(\\lambda_1,T)+\\cdots+\\dim E(\\lambda_m,T) \\leq \\dim(V).\n$$\n\nNote that $\\dim(V_1)+\\cdots+\\dim(V_n)=\\dim(V_1\\oplus\\cdots \\oplus V_n)$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-4-2",
+              "kind": "theorem",
+              "label": "2.4.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-4-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional vector space and $T\\in\\mathcal{L}(V)$. Let $\\lambda_1,\\ldots,\\lambda_m$ denote the distinct eigenvalues of $T$. Then the following statements are equivalent."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0042",
+                  "format": "markdown",
+                  "text": "\n\n(1) $T$ is diagonalizable.\n\n(2) $V$ has a basis consisting of eigenvectors of $T$.\n\n(3) $V=E(\\lambda_1,T)\\oplus\\cdots\\oplus E(\\lambda_m,T)$\n\n(4) $\\dim(V)=\\dim(E(\\lambda_1,T))+\\cdots+\\dim(E(\\lambda_m,T))$.\n\n- Note that if there are $\\dim(V)$ distinct eigenvalues, then $T$ is diagonalizable (not vice versa).\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-4-3",
+              "kind": "theorem",
+              "label": "2.4.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-4-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional vector space and $T\\in\\mathcal{L}(V)$. Then $T$ is diagonalizable if and only if the minimal polynomial of $T$ equals $(z-\\lambda_1)\\cdots(z-\\lambda_m)$ for distinct $\\lambda_1,\\ldots,\\lambda_m\\in F$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0043",
+                  "format": "markdown",
+                  "text": "\n\n- Note that idempotent operators are always diagonalizable.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-4-4",
+              "kind": "theorem",
+              "label": "2.4.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-4-4-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T\\in\\mathcal{L}(V)$ is diagonalizable and $U$ is a subspace of $V$ that is invariant under $T$. Then $T|_U$ is a diagonalizable operator on $U$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0044",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-4-5",
+              "kind": "theorem",
+              "label": "2.4.5",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-4-5-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional vector space, $T\\in\\mathcal{L}(V)$ and $\\mathscr{B}$ is a basis of $V$. Then each eigenvalue of $T$ is contained in at least one Gershgorin disk of $T$ with respect to the basis $\\mathscr{B}$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0045",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch05-section-2-5",
+          "title": "Commuting Operators",
+          "label": "2.5",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch05-block-0046",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-5-1",
+              "kind": "theorem",
+              "label": "2.5.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-5-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional vector space, $S,T\\in\\mathcal{L}(V)$, and $\\mathscr{B}$ is a basis of $V$. Then $S$ and $T$ commute if and only if $[S]_{\\mathscr{B}}$ and $[T]_{\\mathscr{B}}$ commute."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0047",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-5-2",
+              "kind": "theorem",
+              "label": "2.5.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-5-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $S,T\\in\\mathcal{L}(V)$ commute and $\\lambda\\in F$. Then $E(\\lambda,S)$ is invariant under $T$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0048",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-5-3",
+              "kind": "theorem",
+              "label": "2.5.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-5-3-heading",
+                  "format": "markdown",
+                  "text": "Two diagonalizable operators on the same finite-dimensional vector space have diagonal matrices with respect to the same basis if and only if the two operators commute."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0049",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-5-4",
+              "kind": "theorem",
+              "label": "2.5.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-5-4-heading",
+                  "format": "markdown",
+                  "text": "Every pair of commuting operators on a finite-dimensional nonzero complex vector space has a common eigenvector."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0050",
+                  "format": "markdown",
+                  "text": "\n\nProof sketch. Choose an eigenvalue $\\lambda$ of $S$. The nonzero space $E(\\lambda,S)$ is invariant under $T$; an eigenvector of $T|_{E(\\lambda,S)}$ is a common eigenvector.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-5-5",
+              "kind": "theorem",
+              "label": "2.5.5",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-5-5-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional complex vector space and $S,T$ are commuting operators on $V$. Then there is a basis with respect to which both $S$ and $T$ have upper-triangular matrices."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0051",
+                  "format": "markdown",
+                  "text": "\n\nProof sketch. Choose a common eigenvector $v\\ne0$ and write $V=\\operatorname{span}(v)\\oplus W$. For the projection $P(cv+w)=w$, the induced maps $PS|_W$ and $PT|_W$ commute. Induction gives a common triangularizing basis of $W$; prepend $v$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch05-item-2-5-6",
+              "kind": "theorem",
+              "label": "2.5.6",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch05-item-2-5-6-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional complex vector space and $S,T$ are commuting operators on $V$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch05-block-0052",
+                  "format": "markdown",
+                  "text": "\n\n(1) Every eigenvalue of $S+T$ is an eigenvalue of $S$ plus an eigenvalue of $T$.\n\n(2) Every eigenvalue of $ST$ is an eigenvalue of $S$ times an eigenvalue of $T$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "la-ch05-section-3",
+      "title": "Examples",
+      "label": "3",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch05-block-0053",
+          "format": "markdown",
+          "text": "\n\n---\n\n\n교정·보완 메모\n\n거듭제곱의 양의 정수 조건, 삼각화의 체 조건, 최소다항식·고유벡터 관련 증명 메모를 보완했습니다.\n\n원본: [5. Eigenvalues and Eigenvectors](https://app.notion.com/p/24669428c86180d2a549d06f861e841b)\n\n\n"
+        }
+      ]
+    }
+  ]
+}

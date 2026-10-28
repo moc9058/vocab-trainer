@@ -110,6 +110,11 @@ export async function importAuthorPackage(
   root: string,
   runDirectory: string,
 ) {
+  if ((input as any)?.schemaVersion === 2) {
+    const { importJsonAuthorPackage } = await import("./math-json-authoring.js");
+    return importJsonAuthorPackage(input, root, runDirectory);
+  }
+  // Legacy package adapter is retained for explicit migration of existing authoring runs.
   checkBytes(input, 20 * MATH_LIMITS.markdownBytes);
   const pkg = packageSchema.parse(input),
     baseHashes: Record<string, string | null> = {};
@@ -160,6 +165,10 @@ export async function importAuthorPackage(
   return run;
 }
 export async function reviewAuthorRun(runDirectory: string) {
+  if (JSON.parse(await readFile(join(runDirectory, "run.json"), "utf8")).schemaVersion === 2) {
+    const { reviewJsonAuthorRun } = await import("./math-json-authoring.js");
+    return reviewJsonAuthorRun(runDirectory);
+  }
   const run = JSON.parse(
     await readFile(join(runDirectory, "run.json"), "utf8"),
   ) as AuthoringRun;
@@ -199,6 +208,10 @@ export async function acceptAuthorRun(
   expectedHash: string,
   reviewedBy: string,
 ) {
+  if (JSON.parse(await readFile(join(runDirectory, "run.json"), "utf8")).schemaVersion === 2) {
+    const { acceptJsonAuthorRun } = await import("./math-json-authoring.js");
+    return acceptJsonAuthorRun(runDirectory, unitIds, expectedHash, reviewedBy);
+  }
   const review = await reviewAuthorRun(runDirectory),
     run = JSON.parse(
       await readFile(join(runDirectory, "run.json"), "utf8"),
@@ -207,7 +220,7 @@ export async function acceptAuthorRun(
   invariant(
     unitIds.length > 0 &&
       new Set(unitIds).size === unitIds.length &&
-      unitIds.every((id) => review.units.some((u) => u.id === id)),
+      unitIds.every((id) => review.units.some((u: { id: string }) => u.id === id)),
     "E_UNKNOWN_UNIT",
   );
   invariant(!run.package.unresolved.length, "E_UNRESOLVED_PACKAGE");

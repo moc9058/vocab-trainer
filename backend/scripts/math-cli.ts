@@ -14,6 +14,7 @@ import {
   reviewAuthorRun,
   acceptAuthorRun,
 } from "../src/math-authoring.js";
+import { parseStrictJson } from "../src/math-json-content.js";
 const { values, positionals } = parseArgs({
   allowPositionals: true,
   options: {
@@ -173,7 +174,7 @@ if (command === "validate") {
   invariant(values.package, "E_PACKAGE_REQUIRED");
   const output = resolve(values.output ?? `data/math-authoring/${Date.now()}`);
   const run = await importAuthorPackage(
-    JSON.parse(await readFile(resolve(values.package), "utf8")),
+    parseStrictJson(await readFile(resolve(values.package), "utf8")),
     root,
     output,
   );

@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 2,
+  "compilerVersion": "math-json-2",
+  "chapters": [
+    {
+      "chapterId": "la-ch01",
+      "originalFile": "1. Vector Spaces.md",
+      "originalSha256": "f76b4bf8a658227571c95f7cc8e277fd7d3c55d265bc7197c76c16a0df94f534",
+      "roundTripSha256": "f76b4bf8a658227571c95f7cc8e277fd7d3c55d265bc7197c76c16a0df94f534",
+      "exactRoundTrip": true,
+      "mathCount": 65,
+      "mathTokenSha256": "8fc0c20147237362b626fd52cd8f60ad76d37410f00a5fdd8c3874edc780e36d",
+      "headings": 14,
+      "items": 9,
+      "decorationCount": 4
+    },
+    {
+      "chapterId": "la-ch02",
+      "originalFile": "2. Finite-Dimensional Vector Spaces.md",
+      "originalSha256": "dc87a9955852fbd6624e6f8aa43130028bb61a89f3a29b89cf25c87d6df9c020",
+      "roundTripSha256": "dc87a9955852fbd6624e6f8aa43130028bb61a89f3a29b89cf25c87d6df9c020",
+      "exactRoundTrip": true,
+      "mathCount": 56,
+      "mathTokenSha256": "e081c99888849c42d357fb9204fcdce318e5936e2fff1d3269fef95e3ff8ae7e",
+      "headings": 18,
+      "items": 14,
+      "decorationCount": 4
+    },
+    {
+      "chapterId": "la-ch03",
+      "originalFile": "3. Linear Maps.md",
+      "originalSha256": "c8636ac1570e3c17d265a834c437c701f84b2818c0086771de9ee7d6186eac96",
+      "roundTripSha256": "c8636ac1570e3c17d265a834c437c701f84b2818c0086771de9ee7d6186eac96",
+      "exactRoundTrip": true,
+      "mathCount": 213,
+      "mathTokenSha256": "3a6c9eb69d9935a75842f4f2d6bc7edc13818c75fe7c24f677af7fb4d0ee3f54",
+      "headings": 45,
+      "items": 38,
+      "decorationCount": 16
+    },
+    {
+      "chapterId": "la-ch04",
+      "originalFile": "4. Polynomials.md",
+      "originalSha256": "3b222c3df008c3e78165d77671ce9f3cdb582ed6f3843d7923bc962b9341fac9",
+      "roundTripSha256": "3b222c3df008c3e78165d77671ce9f3cdb582ed6f3843d7923bc962b9341fac9",
+      "exactRoundTrip": true,
+      "mathCount": 55,
+      "mathTokenSha256": "d0d4fc96d6ab5620630c90670fa589604be02efbb1308e55ee38c99639e51879",
+      "headings": 11,
+      "items": 7,
+      "decorationCount": 4
+    },
+    {
+      "chapterId": "la-ch05",
+      "originalFile": "5. Eigenvalues and Eigenvectors.md",
+      "originalSha256": "0d39aeca58957931345270385a1870097797b800bbbe456d23adfb31b5687320",
+      "roundTripSha256": "0d39aeca58957931345270385a1870097797b800bbbe456d23adfb31b5687320",
+      "exactRoundTrip": true,
+      "mathCount": 292,
+      "mathTokenSha256": "16c7153c24c80be2b13c71027712a7a5a3abec1d9e1a832f3c531362e26d9e06",
+      "headings": 53,
+      "items": 40,
+      "decorationCount": 6
+    },
+    {
+      "chapterId": "la-ch06",
+      "originalFile": "6. Inner Product Spaces.md",
+      "originalSha256": "9c759722dce317336fb16dc13cd731a4b0a92847b6c2123a744fe41b9ecb49cb",
+      "roundTripSha256": "9c759722dce317336fb16dc13cd731a4b0a92847b6c2123a744fe41b9ecb49cb",
+      "exactRoundTrip": true,
+      "mathCount": 152,
+      "mathTokenSha256": "b313af2683b8de7c8b1b7d00e31ce7fa4a7e6c0006bbdb81a0e96281c70b2a01",
+      "headings": 34,
+      "items": 24,
+      "decorationCount": 22
+    },
+    {
+      "chapterId": "la-ch07",
+      "originalFile": "7. Operators on Inner Product Spaces.md",
+      "originalSha256": "06f5a2845d83687533d81955d390ca1b168bf7427f5159a9df88e44adaf19342",
+      "roundTripSha256": "06f5a2845d83687533d81955d390ca1b168bf7427f5159a9df88e44adaf19342",
+      "exactRoundTrip": true,
+      "mathCount": 273,
+      "mathTokenSha256": "9cc3b925fd1bff9415806de9763608365fcc76147d044db1b2a62319428a8aa4",
+      "headings": 54,
+      "items": 39,
+      "decorationCount": 36
+    },
+    {
+      "chapterId": "la-ch08",
+      "originalFile": "8. Operators on Complex Vector Spaces.md",
+      "originalSha256": "cd9fcba8ee46bc26d7aa831cbb5c3054aef439e9de3444b4c0f1d854f1f54b70",
+      "roundTripSha256": "cd9fcba8ee46bc26d7aa831cbb5c3054aef439e9de3444b4c0f1d854f1f54b70",
+      "exactRoundTrip": true,
+      "mathCount": 165,
+      "mathTokenSha256": "b43465f988d4f9ccb405bd49eea0f7cff99d160ca6870b3a14ad35e007000f33",
+      "headings": 35,
+      "items": 23,
+      "decorationCount": 24
+    },
+    {
+      "chapterId": "la-ch09",
+      "originalFile": "9. Multilinear Algebra and Determinants.md",
+      "originalSha256": "0317e3ae5d404a4a363dfd83b2a8edeae31022c3a1c515cb1496c9a1eb6acb09",
+      "roundTripSha256": "0317e3ae5d404a4a363dfd83b2a8edeae31022c3a1c515cb1496c9a1eb6acb09",
+      "exactRoundTrip": true,
+      "mathCount": 224,
+      "mathTokenSha256": "b1ba0feb87b7b96848f0f7242dc5210dc6a242f294c242dec5692f36d4413689",
+      "headings": 47,
+      "items": 35,
+      "decorationCount": 32
+    }
+  ],
+  "reviewHash": "1bccaccd4e295c38f3c5e09d2c86b027f7bffc29a2c1437961e8d6465d4385b6",
+  "mathematicalCorrectnessReview": "Not claimed. Conversion preserves the supplied notes exactly under reversible decoration/title moves; objectives are conservative deterministic defaults."
+}

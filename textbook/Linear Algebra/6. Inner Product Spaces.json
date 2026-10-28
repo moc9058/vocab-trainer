@@ -1,0 +1,866 @@
+{
+  "schemaVersion": 2,
+  "subjectId": "linear-algebra",
+  "chapterId": "la-ch06",
+  "title": "Inner Product Spaces",
+  "source": {
+    "kind": "local-notes",
+    "originalFile": "6. Inner Product Spaces.md",
+    "originalSha256": "9c759722dce317336fb16dc13cd731a4b0a92847b6c2123a744fe41b9ecb49cb",
+    "urls": [
+      "https://www.notion.so/40669428c86181099e8cf8dcb42ec54d",
+      "https://app.notion.com/p/24c69428c861802bb3b7da85981d4322)"
+    ],
+    "originalHeadings": [
+      "# 6. Inner Product Spaces",
+      "## 1. Definitions",
+      "### 1.1. Inner Products and Norms",
+      "#### 1.1.1. <span style=\"color: red\">(Inner product)</span> An inner product on $V$ is a function that takes each ordered pair $(u,v)$ of elements of $V$ to a number $\\langle u,v\\rangle\\in F$ and has the following properties.",
+      "#### 1.1.2. <span style=\"color: red\">(Norm)</span> For $v\\in V$, the norm of $v$ is defined by",
+      "#### 1.1.3. Two vectors $v,w \\in V$ are called **orthogonal** if $\\langle v,w \\rangle=0$.",
+      "### 1.2. Orthonormal Bases",
+      "#### 1.2.1. A list of vectors $\\beta=(e_1,\\ldots,e_n)$ is called **orthonormal** if",
+      "### 1.3. Orthogonal Complements and Minimization Problems",
+      "#### 1.3.1. If $U$ is a subset of $V$, then the orthogonal complement of $U$ is denoted by $U^{\\perp}$, defined as follows.",
+      "#### 1.3.2. Let $V$ be an inner product space and let $U$ be a finite-dimensional subspace of $V$. Then the orthogonal projection $P_U\\in\\mathcal{L}(V)$ is defined as follows.",
+      "#### 1.3.3. <span style=\"color: red\">(Pseudoinverse)</span> Suppose $V,W$ are finite-dimensional inner product spaces and $T\\in\\mathcal{L}(V,W)$. The **pseudoinverse** $T^{\\dagger}\\in\\mathcal{L}(W,V)$ of $T$ is a linear map defined by",
+      "## 2. Theorems",
+      "### 2.1. Inner Products and Norms",
+      "#### 2.1.1. (Cauchy-Schwarz inequality) Suppose $u,v\\in V$. Then",
+      "#### 2.1.2. <span style=\"color: red\">(Triangle inequality)</span> Suppose $u,v\\in V$. Then",
+      "#### 2.1.3. <span style=\"color: red\">(Parallelogram equality)</span> Suppose $u,v\\in V$. Then",
+      "### 2.2. Orthonormal Bases",
+      "#### 2.2.1. Every orthonormal set is linearly independent.",
+      "#### 2.2.2. <span style=\"color: red\">(Bessel’s inequality)</span> Suppose $e_1,\\ldots,e_n$ is an orthonormal list of vectors in $V$. If $v\\in V$, then",
+      "#### 2.2.3. Suppose $e_1,\\ldots,e_n$ is an orthonormal basis of $V$ and $u,v\\in V$. Then",
+      "#### 2.2.4. <span style=\"color: red\">(Gram-Schmidt Procedure)</span> Suppose $v_1,\\ldots,v_m$ is a list of linearly independent vectors in $V$. Let $f_1=v_1$. For $k=2,\\ldots,m$, define",
+      "#### 2.2.5. Suppose $V$ is finite-dimensional inner product space and $T\\in \\mathcal{L}(V)$. Then $T$ has an upper-triangular matrix representation with respect to some orthonormal basis if and only if the minimal polynomial of $T$ is in the form of $(z-\\lambda_1)\\cdots(z-\\lambda_m)$.",
+      "#### 2.2.6. <span style=\"color: red\">(Riesz representation theorem)</span> Suppose $V$ is finite-dimensional inner product space and $\\varphi$ is a linear functional on $V$. Then there exists a unique vector $v\\in V$ such that",
+      "### 2.3. Orthogonal Complements and Minimization Problems",
+      "#### 2.3.1. Suppose $V$ is an inner product space and let $U$ be a finite-dimensional subspace of $V$. Then",
+      "#### 2.3.2. Suppose $V$ is an inner product space and let $U$ be a finite-dimensional subspace of $V$.  Then",
+      "#### 2.3.3. Suppose $U$ is a finite-dimensional subspace. Then $P_U$ has following properties.",
+      "#### 2.3.4. Suppose $V$ is finite-dimensional. For each $v\\in V$, define $\\varphi_v\\in V'$ by",
+      "#### 2.3.5. Suppose $U$ is a finite-dimensional subspace of $V$, $v\\in V$ and $u \\in U$. Then",
+      "#### 2.3.6. Let $T\\in \\mathcal{L}(V,W)$ between finite-dimensional inner product spaces. Then",
+      "#### 2.3.7. Let $T\\in\\mathcal{L}(V,W)$ between finite-dimensional inner product spaces and $w\\in W$. Then",
+      "#### 2.3.8. Let $T \\in \\mathcal{L}(V,W)$ between finite-dimensional inner product spaces. Then",
+      "## 3. Examples"
+    ]
+  },
+  "content": [
+    {
+      "type": "block",
+      "id": "la-ch06-block-0001",
+      "format": "markdown",
+      "text": "\n\nSource: https://www.notion.so/40669428c86181099e8cf8dcb42ec54d\n\n> Throughout this chapter, $F=\\mathbb R$ or $\\mathbb C$, and inner products are linear in the first variable and conjugate-linear in the second. Every statement involving $T^\\dagger$ assumes that $V,W$ are finite-dimensional inner product spaces. For general inner product spaces, statements about projection and double orthogonal complements here assume that $U$ is finite-dimensional.\n\n"
+    },
+    {
+      "type": "section",
+      "id": "la-ch06-section-1",
+      "title": "Definitions",
+      "label": "1",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch06-block-0002",
+          "format": "markdown",
+          "text": "\n\n"
+        },
+        {
+          "type": "section",
+          "id": "la-ch06-section-1-1",
+          "title": "Inner Products and Norms",
+          "label": "1.1",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch06-block-0003",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-1-1-1",
+              "kind": "definition",
+              "label": "1.1.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-1-1-1-heading",
+                  "format": "markdown",
+                  "text": "An inner product on $V$ is a function that takes each ordered pair $(u,v)$ of elements of $V$ to a number $\\langle u,v\\rangle\\in F$ and has the following properties."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0004",
+                  "format": "markdown",
+                  "text": "\n\n(1) $\\langle v,v\\rangle\\in\\mathbb R$ and $\\langle v,v \\rangle \\geq 0$\n\n(2) $\\langle v,v\\rangle=0$ if and only if $v=0$\n\n(3) $\\langle u+v,w \\rangle=\\langle u,w\\rangle + \\langle v,w\\rangle$\n\n(4) $\\langle \\lambda v,w \\rangle=\\lambda \\langle v,w\\rangle$\n\n(5) $\\langle w,v \\rangle=\\overline{\\langle v,w \\rangle}$\n\n- Note that an **inner product space** is a vector space along with an inner product on $V$.\n\n- Note that for each fixed $v\\in V$, $u\\mapsto\\langle u, v\\rangle$ is a linear map from $V$ to $F$.\n\n"
+                }
+              ],
+              "title": "Inner product",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-1-1-2",
+              "kind": "definition",
+              "label": "1.1.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-1-1-2-heading",
+                  "format": "markdown",
+                  "text": "For $v\\in V$, the norm of $v$ is defined by"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0005",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\|v\\|=\\sqrt{\\langle v,v \\rangle}.\n$$\n\n"
+                }
+              ],
+              "title": "Norm",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-1-1-3",
+              "kind": "definition",
+              "label": "1.1.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-1-1-3-heading",
+                  "format": "markdown",
+                  "text": "Two vectors $v,w \\in V$ are called **orthogonal** if $\\langle v,w \\rangle=0$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0006",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch06-section-1-2",
+          "title": "Orthonormal Bases",
+          "label": "1.2",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch06-block-0007",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-1-2-1",
+              "kind": "definition",
+              "label": "1.2.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-1-2-1-heading",
+                  "format": "markdown",
+                  "text": "A list of vectors $\\beta=(e_1,\\ldots,e_n)$ is called **orthonormal** if"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0008",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\langle e_i, e_j \\rangle=\\delta_{i,j}, \\|e_i\\|=1.\n$$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch06-section-1-3",
+          "title": "Orthogonal Complements and Minimization Problems",
+          "label": "1.3",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch06-block-0009",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-1-3-1",
+              "kind": "definition",
+              "label": "1.3.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-1-3-1-heading",
+                  "format": "markdown",
+                  "text": "If $U$ is a subset of $V$, then the orthogonal complement of $U$ is denoted by $U^{\\perp}$, defined as follows."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0010",
+                  "format": "markdown",
+                  "text": "\n\n$$\nU^{\\perp}=\\{v\\in V:\\langle u,v \\rangle = 0\\text{ for every }u\\in U\\}.\n$$\n\n- Note that $G\\subseteq H \\rightarrow H^{\\perp}\\subseteq G^{\\perp}$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-1-3-2",
+              "kind": "definition",
+              "label": "1.3.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-1-3-2-heading",
+                  "format": "markdown",
+                  "text": "Let $V$ be an inner product space and let $U$ be a finite-dimensional subspace of $V$. Then the orthogonal projection $P_U\\in\\mathcal{L}(V)$ is defined as follows."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0011",
+                  "format": "markdown",
+                  "text": "\n\n$$\nP_U(v)=u,\\ v=u+u^{\\perp}\n$$\n\n- Here $v=u+u^{\\perp}$ is the unique decomposition with $u\\in U$ and $u^{\\perp}\\in U^{\\perp}$. For infinite-dimensional Hilbert spaces, the same decomposition holds for closed subspaces. Closedness alone does not suffice in an arbitrary incomplete inner product space.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-1-3-3",
+              "kind": "definition",
+              "label": "1.3.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-1-3-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V,W$ are finite-dimensional inner product spaces and $T\\in\\mathcal{L}(V,W)$. The **pseudoinverse** $T^{\\dagger}\\in\\mathcal{L}(W,V)$ of $T$ is a linear map defined by"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0012",
+                  "format": "markdown",
+                  "text": "\n\n$$\nT^{\\dagger}w=\\big(T|_{(\\ker(T))^{\\perp}}\\big)^{-1}P_{\\operatorname{range}(T)}w\n$$\n\n- The restriction $T|_{(\\ker T)^\\perp}:(\\ker T)^\\perp\\to\\operatorname{range}T$ is an isomorphism under the finite-dimensional assumptions.\n\n"
+                }
+              ],
+              "title": "Pseudoinverse",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "la-ch06-section-2",
+      "title": "Theorems",
+      "label": "2",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch06-block-0013",
+          "format": "markdown",
+          "text": "\n\n"
+        },
+        {
+          "type": "section",
+          "id": "la-ch06-section-2-1",
+          "title": "Inner Products and Norms",
+          "label": "2.1",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch06-block-0014",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-1-1",
+              "kind": "theorem",
+              "label": "2.1.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-1-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $u,v\\in V$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0015",
+                  "format": "markdown",
+                  "text": "\n\n$$\n|\\langle u,v \\rangle| \\leq \\|u\\|\\|v\\|.\n$$\n\nThis inequality is an equality if and only if one of $u,v$ is a scalar multiple of the other.\n\n- For $v\\ne0$, note that\n\n$$\nu=\\cfrac{\\langle u,v \\rangle}{\\|v\\|^2}v+\\bigg(u-\\cfrac{\\langle u,v \\rangle}{\\|v\\|^2}v\\bigg)\n$$\n\n"
+                }
+              ],
+              "title": "Cauchy-Schwarz inequality",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-1-2",
+              "kind": "theorem",
+              "label": "2.1.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-1-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $u,v\\in V$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0016",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\|u+v\\|\\leq \\|u\\|+\\|v\\|\n$$\n\n"
+                }
+              ],
+              "title": "Triangle inequality",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-1-3",
+              "kind": "theorem",
+              "label": "2.1.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-1-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $u,v\\in V$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0017",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\|u+v\\|^2+\\|u-v\\|^2=2(\\|u\\|^2+\\|v\\|^2)\n$$\n\n"
+                }
+              ],
+              "title": "Parallelogram equality",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch06-section-2-2",
+          "title": "Orthonormal Bases",
+          "label": "2.2",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch06-block-0018",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-2-1",
+              "kind": "theorem",
+              "label": "2.2.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-2-1-heading",
+                  "format": "markdown",
+                  "text": "Every orthonormal set is linearly independent."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0019",
+                  "format": "markdown",
+                  "text": "\n\nProof sketch. Suppose $e_1,\\ldots,e_n$ is an orthonormal list of vectors of $V$. Then\n\n$$\n\\|a_1e_1+\\cdots a_ne_n\\|^2=|a_1|^2+\\cdots |a_n|^2.\n$$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-2-2",
+              "kind": "theorem",
+              "label": "2.2.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-2-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $e_1,\\ldots,e_n$ is an orthonormal list of vectors in $V$. If $v\\in V$, then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0020",
+                  "format": "markdown",
+                  "text": "\n\n$$\n|\\langle v,e_1 \\rangle|^2+\\cdots |\\langle v,e_n \\rangle|^2 \\leq \\|v\\|^2\n$$\n\n"
+                }
+              ],
+              "title": "Bessel’s inequality",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-2-3",
+              "kind": "theorem",
+              "label": "2.2.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-2-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $e_1,\\ldots,e_n$ is an orthonormal basis of $V$ and $u,v\\in V$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0021",
+                  "format": "markdown",
+                  "text": "\n\n(1) $v=\\langle v,e_1 \\rangle e_1+\\cdots\\langle v, e_n \\rangle e_n$\n\n(2) $\\|v\\|^2=|\\langle v,e_1 \\rangle|^2 + \\cdots |\\langle v,e_n \\rangle|^2$\n\n(3) $\\langle u,v \\rangle=\\langle u,e_1\\rangle \\overline{\\langle v,e_1 \\rangle}+\\cdots\\langle u,e_n \\rangle\\overline{\\langle v,e_n \\rangle}$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-2-4",
+              "kind": "theorem",
+              "label": "2.2.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-2-4-heading",
+                  "format": "markdown",
+                  "text": "Suppose $v_1,\\ldots,v_m$ is a list of linearly independent vectors in $V$. Let $f_1=v_1$. For $k=2,\\ldots,m$, define"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0022",
+                  "format": "markdown",
+                  "text": "\n\n$$\nf_k=v_k-\\sum_{i=1}^{k-1}\\cfrac{\\langle v_k,f_i \\rangle}{\\|f_i\\|^2}f_i.\n$$\n\nLet $e_i=\\cfrac{f_i}{\\|f_i\\|}$. Then $e_1,\\ldots,e_m$ is an orthonormal list of vectors in $V$ such that\n\n$$\n\\operatorname{span}\\{e_1,\\ldots,e_k\\}=\\operatorname{span}\\{v_1,\\ldots,v_k\\}\n$$\n\nfor each $k=1,\\ldots,m$.\n\n- Note that every finite-dimensional inner product space has an orthonormal basis.\n\n- Note that every orthonormal list in a finite-dimensional inner product space can be extended to an orthonormal basis.\n\n"
+                }
+              ],
+              "title": "Gram-Schmidt Procedure",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-2-5",
+              "kind": "theorem",
+              "label": "2.2.5",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-2-5-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is finite-dimensional inner product space and $T\\in \\mathcal{L}(V)$. Then $T$ has an upper-triangular matrix representation with respect to some orthonormal basis if and only if the minimal polynomial of $T$ is in the form of $(z-\\lambda_1)\\cdots(z-\\lambda_m)$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0023",
+                  "format": "markdown",
+                  "text": "\n\n- Note that the Gram-Schmidt process assures $\\operatorname{span}\\{v_1,\\ldots,v_k\\}=\\operatorname{span}\\{e_1,\\ldots,e_k\\}$ for all $k=1,\\ldots,m$.\n\n(Schur’s theorem) Every operator in a finite-dimensional complex inner product space has an orthonormal basis with respect to which the matrix representation is upper-triangular.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-2-6",
+              "kind": "theorem",
+              "label": "2.2.6",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-2-6-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is finite-dimensional inner product space and $\\varphi$ is a linear functional on $V$. Then there exists a unique vector $v\\in V$ such that"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0024",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\varphi(x)=\\langle x,v\\rangle\n$$\n\nfor all $x\\in V$.\n\n- Note that $v=\\overline{\\varphi(e_1)}e_1+\\cdots +\\overline{\\varphi(e_n)}e_n$ and it is unique regardless of which orthonormal $e_1,\\ldots,e_n$ is chosen.\n\n"
+                }
+              ],
+              "title": "Riesz representation theorem",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch06-section-2-3",
+          "title": "Orthogonal Complements and Minimization Problems",
+          "label": "2.3",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch06-block-0025",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-3-1",
+              "kind": "theorem",
+              "label": "2.3.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-3-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is an inner product space and let $U$ be a finite-dimensional subspace of $V$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0026",
+                  "format": "markdown",
+                  "text": "\n\n$$\nV=U\\oplus U^{\\perp}.\n$$\n\n$\\because\\ v=\\underbrace{\\big(\\langle v,u_1\\rangle u_1+\\cdots +\\langle v,u_n \\rangle u_n\\big)}_{u}+\\underbrace{\\big(v-\\langle v,u_1\\rangle u_1-\\cdots -\\langle v,u_n \\rangle u_n\\big)}_{w}$\n\n- Note that if $V$ is finite-dimensional, then $\\dim(V)=\\dim(U)+\\dim(U^{\\perp}).$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-3-2",
+              "kind": "theorem",
+              "label": "2.3.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-3-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is an inner product space and let $U$ be a finite-dimensional subspace of $V$.  Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0027",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\big(U^{\\perp}\\big)^{\\perp}=U.\n$$\n\n- Note that $U^{\\perp}=\\{0\\} \\iff U=V$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-3-3",
+              "kind": "theorem",
+              "label": "2.3.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-3-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $U$ is a finite-dimensional subspace. Then $P_U$ has following properties."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0028",
+                  "format": "markdown",
+                  "text": "\n\n(1) $\\operatorname{range}(P_U)=U$\n\n(2) $\\ker(P_U)=U^{\\perp}$\n\n(3) $v-P_Uv \\in U^{\\perp}$ for every $v\\in V$\n\n(4) $P_U^2=P_U$\n\n(5) $\\|P_Uv\\|^2\\leq\\|v\\|^2$ for every $v \\in V$\n\n(6) Suppose $e_1,\\ldots,e_n$ is an orthonormal basis of $U$. Then\n\n$$\nP_Uv=\\langle v,e_1 \\rangle e_1+\\cdots \\langle v,e_n \\rangle e_n.\n$$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-3-4",
+              "kind": "theorem",
+              "label": "2.3.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-3-4-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is finite-dimensional. For each $v\\in V$, define $\\varphi_v\\in V'$ by"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0029",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\varphi_v(u)=\\langle u,v \\rangle\n$$\n\nfor each $u \\in V$. Then $v \\mapsto \\varphi_v$ is a bijection from $V$ to $V'$.\n\n- Note that the mapping $v \\mapsto \\varphi_v$ is not a linear map if $F=\\mathbb{C}$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-3-5",
+              "kind": "theorem",
+              "label": "2.3.5",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-3-5-heading",
+                  "format": "markdown",
+                  "text": "Suppose $U$ is a finite-dimensional subspace of $V$, $v\\in V$ and $u \\in U$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0030",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\|v-P_Uv\\|\\leq\\|v-u\\|\n$$\n\nand the inequality becomes equality if and only if $u=P_Uv$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-3-6",
+              "kind": "theorem",
+              "label": "2.3.6",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-3-6-heading",
+                  "format": "markdown",
+                  "text": "Let $T\\in \\mathcal{L}(V,W)$ between finite-dimensional inner product spaces. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0031",
+                  "format": "markdown",
+                  "text": "\n\n(1) If $T$ is invertible, then $T^{-1}=T^{\\dagger}$.\n\n(2) $TT^{\\dagger}=P_{\\operatorname{range}(T)}$\n\n(3) $T^{\\dagger}T=P_{(\\ker(T))^{\\perp}}$\n\n- All pseudoinverse assertions here use finite-dimensional inner product spaces; infinite-dimensional extensions require additional hypotheses.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-3-7",
+              "kind": "theorem",
+              "label": "2.3.7",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-3-7-heading",
+                  "format": "markdown",
+                  "text": "Let $T\\in\\mathcal{L}(V,W)$ between finite-dimensional inner product spaces and $w\\in W$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0032",
+                  "format": "markdown",
+                  "text": "\n\n(1) If $v\\in V$, then\n\n$$\n\\|T(T^{\\dagger}w)-w\\|\\leq\\|Tv-w\\|\n$$\n\nwith equality if and only if $v\\in T^{\\dagger}w+\\ker(T)$.\n\n(2) If $v\\in T^{\\dagger}w+\\ker(T)$, then\n\n$$\n\\|T^{\\dagger}w\\|\\leq\\|v\\|\n$$\n\nwith equality if and only if $v=T^{\\dagger}w$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch06-item-2-3-8",
+              "kind": "theorem",
+              "label": "2.3.8",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch06-item-2-3-8-heading",
+                  "format": "markdown",
+                  "text": "Let $T \\in \\mathcal{L}(V,W)$ between finite-dimensional inner product spaces. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch06-block-0033",
+                  "format": "markdown",
+                  "text": "\n\n(1) $TT^{\\dagger}T=T$ and $T^{\\dagger}TT^{\\dagger}=T^{\\dagger}$\n\n(2) $\\big(T^{\\dagger}\\big)^{\\dagger}=T$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "la-ch06-section-3",
+      "title": "Examples",
+      "label": "3",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch06-block-0034",
+          "format": "markdown",
+          "text": "\n\n---\n\n\n교정·보완 메모\n\n내적의 선형성 관례와 유한차원 조건을 명시하고, 직교분해·이중 직교여공간·의사역행렬의 과도한 일반화를 교정했습니다.\n\n원본: [6. Inner Product Spaces](https://app.notion.com/p/24c69428c861802bb3b7da85981d4322)\n\n\n"
+        }
+      ]
+    }
+  ]
+}

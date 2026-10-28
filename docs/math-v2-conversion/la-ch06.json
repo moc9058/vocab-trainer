@@ -1,0 +1,676 @@
+{
+  "chapterId": "la-ch06",
+  "originalFile": "6. Inner Product Spaces.md",
+  "originalSha256": "9c759722dce317336fb16dc13cd731a4b0a92847b6c2123a744fe41b9ecb49cb",
+  "roundTripSha256": "9c759722dce317336fb16dc13cd731a4b0a92847b6c2123a744fe41b9ecb49cb",
+  "exactRoundTrip": true,
+  "mathCount": 152,
+  "mathTokenSha256": "b313af2683b8de7c8b1b7d00e31ce7fa4a7e6c0006bbdb81a0e96281c70b2a01",
+  "headings": 34,
+  "items": 24,
+  "decorationCount": 22,
+  "mappings": [
+    {
+      "type": "heading",
+      "id": "la-ch06",
+      "sourceStart": 0,
+      "sourceEnd": 25,
+      "original": "# 6. Inner Product Spaces",
+      "action": "moved-to-chapter-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0001",
+      "sourceStart": 25,
+      "sourceEnd": 479,
+      "sha256": "c847055ee60b312d472c62a0fd25f02fea4f775e8e75c963fa31aa83c67848b1"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-section-1",
+      "sourceStart": 479,
+      "sourceEnd": 496,
+      "original": "## 1. Definitions",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0002",
+      "sourceStart": 496,
+      "sourceEnd": 498,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-section-1-1",
+      "sourceStart": 498,
+      "sourceEnd": 531,
+      "original": "### 1.1. Inner Products and Norms",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0003",
+      "sourceStart": 531,
+      "sourceEnd": 533,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-1-1-1",
+      "sourceStart": 533,
+      "sourceEnd": 758,
+      "original": "#### 1.1.1. <span style=\"color: red\">(Inner product)</span> An inner product on $V$ is a function that takes each ordered pair $(u,v)$ of elements of $V$ to a number $\\langle u,v\\rangle\\in F$ and has the following properties.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0004",
+      "sourceStart": 758,
+      "sourceEnd": 1264,
+      "sha256": "dadb8c41b165c4f8b6b5c572e2f010ff5090b8cf1763c0a4901b9d9847ebba42"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-1-1-2",
+      "sourceStart": 1264,
+      "sourceEnd": 1358,
+      "original": "#### 1.1.2. <span style=\"color: red\">(Norm)</span> For $v\\in V$, the norm of $v$ is defined by",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0005",
+      "sourceStart": 1358,
+      "sourceEnd": 1401,
+      "sha256": "f7fed03f4a97ba54ae5530aad27558948f97ada1e95dc8cf669117fc2e8113ed"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-1-1-3",
+      "sourceStart": 1401,
+      "sourceEnd": 1490,
+      "original": "#### 1.1.3. Two vectors $v,w \\in V$ are called **orthogonal** if $\\langle v,w \\rangle=0$.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0006",
+      "sourceStart": 1490,
+      "sourceEnd": 1492,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-section-1-2",
+      "sourceStart": 1492,
+      "sourceEnd": 1518,
+      "original": "### 1.2. Orthonormal Bases",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0007",
+      "sourceStart": 1518,
+      "sourceEnd": 1520,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-1-2-1",
+      "sourceStart": 1520,
+      "sourceEnd": 1603,
+      "original": "#### 1.2.1. A list of vectors $\\beta=(e_1,\\ldots,e_n)$ is called **orthonormal** if",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0008",
+      "sourceStart": 1603,
+      "sourceEnd": 1662,
+      "sha256": "40ded8b07b0c425ffbfabc585de51a5c7982bbd70e04f54ca913fd1b0d67da94"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-section-1-3",
+      "sourceStart": 1662,
+      "sourceEnd": 1719,
+      "original": "### 1.3. Orthogonal Complements and Minimization Problems",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0009",
+      "sourceStart": 1719,
+      "sourceEnd": 1721,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-1-3-1",
+      "sourceStart": 1721,
+      "sourceEnd": 1844,
+      "original": "#### 1.3.1. If $U$ is a subset of $V$, then the orthogonal complement of $U$ is denoted by $U^{\\perp}$, defined as follows.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0010",
+      "sourceStart": 1844,
+      "sourceEnd": 1993,
+      "sha256": "3fbfc77ee27b0ac6602c483a5945dce354aeae237ebd258b0d005c67f68cb67a"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-1-3-2",
+      "sourceStart": 1993,
+      "sourceEnd": 2168,
+      "original": "#### 1.3.2. Let $V$ be an inner product space and let $U$ be a finite-dimensional subspace of $V$. Then the orthogonal projection $P_U\\in\\mathcal{L}(V)$ is defined as follows.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0011",
+      "sourceStart": 2168,
+      "sourceEnd": 2472,
+      "sha256": "4d6ed17a2d0ed43bb0ebe42b6904b40b2b9fe89fcdea951b470ea8786ec40e49"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-1-3-3",
+      "sourceStart": 2472,
+      "sourceEnd": 2706,
+      "original": "#### 1.3.3. <span style=\"color: red\">(Pseudoinverse)</span> Suppose $V,W$ are finite-dimensional inner product spaces and $T\\in\\mathcal{L}(V,W)$. The **pseudoinverse** $T^{\\dagger}\\in\\mathcal{L}(W,V)$ of $T$ is a linear map defined by",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0012",
+      "sourceStart": 2706,
+      "sourceEnd": 2934,
+      "sha256": "90e844fedccb5120125ad026dd1e0208e0fbe69b8cdc623953b4514a0fd036f4"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-section-2",
+      "sourceStart": 2934,
+      "sourceEnd": 2948,
+      "original": "## 2. Theorems",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0013",
+      "sourceStart": 2948,
+      "sourceEnd": 2950,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-section-2-1",
+      "sourceStart": 2950,
+      "sourceEnd": 2983,
+      "original": "### 2.1. Inner Products and Norms",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0014",
+      "sourceStart": 2983,
+      "sourceEnd": 2985,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-1-1",
+      "sourceStart": 2985,
+      "sourceEnd": 3049,
+      "original": "#### 2.1.1. (Cauchy-Schwarz inequality) Suppose $u,v\\in V$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0015",
+      "sourceStart": 3049,
+      "sourceEnd": 3317,
+      "sha256": "78fe0c86a575a5a50d88d6aa791f518fad7aa8dce03bf0a606b4be52d9349bb2"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-1-2",
+      "sourceStart": 3317,
+      "sourceEnd": 3407,
+      "original": "#### 2.1.2. <span style=\"color: red\">(Triangle inequality)</span> Suppose $u,v\\in V$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0016",
+      "sourceStart": 3407,
+      "sourceEnd": 3440,
+      "sha256": "e6c4b7086745342feb2fc61f5c1c31c5c73bde1e98753346a1ece4c7e91e12ec"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-1-3",
+      "sourceStart": 3440,
+      "sourceEnd": 3533,
+      "original": "#### 2.1.3. <span style=\"color: red\">(Parallelogram equality)</span> Suppose $u,v\\in V$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0017",
+      "sourceStart": 3533,
+      "sourceEnd": 3581,
+      "sha256": "d8fbac9098e036b70d5e3620ea3bc9d3bcfd0ef36b268f8e38032a3b1fd60e07"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-section-2-2",
+      "sourceStart": 3581,
+      "sourceEnd": 3607,
+      "original": "### 2.2. Orthonormal Bases",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0018",
+      "sourceStart": 3607,
+      "sourceEnd": 3609,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-2-1",
+      "sourceStart": 3609,
+      "sourceEnd": 3667,
+      "original": "#### 2.2.1. Every orthonormal set is linearly independent.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0019",
+      "sourceStart": 3667,
+      "sourceEnd": 3814,
+      "sha256": "8c5bcf3957e08229efccd134b12e789566eb22a35a30e33457627d5d9646733b"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-2-2",
+      "sourceStart": 3814,
+      "sourceEnd": 3964,
+      "original": "#### 2.2.2. <span style=\"color: red\">(Bessel’s inequality)</span> Suppose $e_1,\\ldots,e_n$ is an orthonormal list of vectors in $V$. If $v\\in V$, then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0020",
+      "sourceStart": 3964,
+      "sourceEnd": 4045,
+      "sha256": "78464152a0d7087adb8b7fefc0c7f49712d753c490eba6d23438fd586c69d6f0"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-2-3",
+      "sourceStart": 4045,
+      "sourceEnd": 4133,
+      "original": "#### 2.2.3. Suppose $e_1,\\ldots,e_n$ is an orthonormal basis of $V$ and $u,v\\in V$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0021",
+      "sourceStart": 4133,
+      "sourceEnd": 4421,
+      "sha256": "9d3852dc6ae23bb97b18355c77412f85a709681c65417cbf710109c2908ef6ac"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-2-4",
+      "sourceStart": 4421,
+      "sourceEnd": 4606,
+      "original": "#### 2.2.4. <span style=\"color: red\">(Gram-Schmidt Procedure)</span> Suppose $v_1,\\ldots,v_m$ is a list of linearly independent vectors in $V$. Let $f_1=v_1$. For $k=2,\\ldots,m$, define",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0022",
+      "sourceStart": 4606,
+      "sourceEnd": 5106,
+      "sha256": "c475894e72d44da53b652f55dd2316afd2bff1e9ee8f1b303c355b03ad8306be"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-2-5",
+      "sourceStart": 5106,
+      "sourceEnd": 5391,
+      "original": "#### 2.2.5. Suppose $V$ is finite-dimensional inner product space and $T\\in \\mathcal{L}(V)$. Then $T$ has an upper-triangular matrix representation with respect to some orthonormal basis if and only if the minimal polynomial of $T$ is in the form of $(z-\\lambda_1)\\cdots(z-\\lambda_m)$.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0023",
+      "sourceStart": 5391,
+      "sourceEnd": 5753,
+      "sha256": "3b1df9bc7ba76fd32f16ec663850c61bf04f841c64beeea2c4b336e568b5c412"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-2-6",
+      "sourceStart": 5753,
+      "sourceEnd": 5979,
+      "original": "#### 2.2.6. <span style=\"color: red\">(Riesz representation theorem)</span> Suppose $V$ is finite-dimensional inner product space and $\\varphi$ is a linear functional on $V$. Then there exists a unique vector $v\\in V$ such that",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0024",
+      "sourceStart": 5979,
+      "sourceEnd": 6193,
+      "sha256": "af15fba52fa0c9eb5ca94b4ba8ee34ca500564ca833e41b12d8bce248dab6984"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-section-2-3",
+      "sourceStart": 6193,
+      "sourceEnd": 6250,
+      "original": "### 2.3. Orthogonal Complements and Minimization Problems",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0025",
+      "sourceStart": 6250,
+      "sourceEnd": 6252,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-3-1",
+      "sourceStart": 6252,
+      "sourceEnd": 6359,
+      "original": "#### 2.3.1. Suppose $V$ is an inner product space and let $U$ be a finite-dimensional subspace of $V$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0026",
+      "sourceStart": 6359,
+      "sourceEnd": 6661,
+      "sha256": "9223342cf99dfb043925d2b8ef10c789974127144f52d85ee5ce703ad68db95a"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-3-2",
+      "sourceStart": 6661,
+      "sourceEnd": 6769,
+      "original": "#### 2.3.2. Suppose $V$ is an inner product space and let $U$ be a finite-dimensional subspace of $V$.  Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0027",
+      "sourceStart": 6769,
+      "sourceEnd": 6850,
+      "sha256": "68c05610c44a37fd57dd99a08205acdcd469630d50bd33562ea0bc4e4d6b4567"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-3-3",
+      "sourceStart": 6850,
+      "sourceEnd": 6944,
+      "original": "#### 2.3.3. Suppose $U$ is a finite-dimensional subspace. Then $P_U$ has following properties.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0028",
+      "sourceStart": 6944,
+      "sourceEnd": 7260,
+      "sha256": "5762dffba1607ccc5fcbab4b62620fce1451fd8b9ac00673acd8c1c458d1cc33"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-3-4",
+      "sourceStart": 7260,
+      "sourceEnd": 7353,
+      "original": "#### 2.3.4. Suppose $V$ is finite-dimensional. For each $v\\in V$, define $\\varphi_v\\in V'$ by",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0029",
+      "sourceStart": 7353,
+      "sourceEnd": 7562,
+      "sha256": "7b931b5ef72fe7a01aa03e08e5e304661740b926efcd2b92deb7ca8d8cbd042b"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-3-5",
+      "sourceStart": 7562,
+      "sourceEnd": 7655,
+      "original": "#### 2.3.5. Suppose $U$ is a finite-dimensional subspace of $V$, $v\\in V$ and $u \\in U$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0030",
+      "sourceStart": 7655,
+      "sourceEnd": 7748,
+      "sha256": "4241a2f6a410ccac94ed3785d6c21eb9ce5d793fe4f50710cc68b849f45e0e8a"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-3-6",
+      "sourceStart": 7748,
+      "sourceEnd": 7841,
+      "original": "#### 2.3.6. Let $T\\in \\mathcal{L}(V,W)$ between finite-dimensional inner product spaces. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0031",
+      "sourceStart": 7841,
+      "sourceEnd": 8132,
+      "sha256": "17258d5d5c269161a1e37b685931e2c149c390249ee2e3c3aff61466987bed3a"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-3-7",
+      "sourceStart": 8132,
+      "sourceEnd": 8237,
+      "original": "#### 2.3.7. Let $T\\in\\mathcal{L}(V,W)$ between finite-dimensional inner product spaces and $w\\in W$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0032",
+      "sourceStart": 8237,
+      "sourceEnd": 8485,
+      "sha256": "8394b7141f5c8822856bf6800330d9eb1b631f09dab7c360e9ead0a526de959f"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-item-2-3-8",
+      "sourceStart": 8485,
+      "sourceEnd": 8579,
+      "original": "#### 2.3.8. Let $T \\in \\mathcal{L}(V,W)$ between finite-dimensional inner product spaces. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0033",
+      "sourceStart": 8579,
+      "sourceEnd": 8687,
+      "sha256": "c830d7854d2feeb1a1b3038558ff220252b7ead27246e2942419cfe5fa091ef3"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch06-section-3",
+      "sourceStart": 8687,
+      "sourceEnd": 8701,
+      "original": "## 3. Examples",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch06-block-0034",
+      "sourceStart": 8701,
+      "sourceEnd": 8914,
+      "sha256": "1e3dfdb04223440fb164ef40998e6570d62f76db3735ec2d8b072d2596d13397"
+    }
+  ],
+  "decorations": [
+    {
+      "blockId": "la-ch06-item-1-1-1",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 15,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch06-item-1-1-2",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 6,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch06-item-1-3-3",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 15,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch06-item-2-1-2",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 21,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch06-item-2-1-3",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 24,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch06-item-2-2-2",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 21,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch06-item-2-2-4",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 24,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch06-block-0023",
+      "tokens": [
+        {
+          "offset": 150,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 167,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch06-item-2-2-6",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 30,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch06-block-0034",
+      "tokens": [
+        {
+          "offset": 7,
+          "html": "<details>"
+        },
+        {
+          "offset": 8,
+          "html": "<summary>"
+        },
+        {
+          "offset": 16,
+          "html": "</summary>"
+        },
+        {
+          "offset": 174,
+          "html": "</details>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    }
+  ],
+  "learningReview": "recognize/apply only; difficulty [1,2]; no inferred proof permission or high difficulty; shared chapter assumptions preserved in each compiled unit",
+  "suspicions": []
+}

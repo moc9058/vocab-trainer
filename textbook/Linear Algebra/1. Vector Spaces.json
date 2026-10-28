@@ -1,0 +1,342 @@
+{
+  "schemaVersion": 2,
+  "subjectId": "linear-algebra",
+  "chapterId": "la-ch01",
+  "title": "Vector Spaces",
+  "source": {
+    "kind": "local-notes",
+    "originalFile": "1. Vector Spaces.md",
+    "originalSha256": "f76b4bf8a658227571c95f7cc8e277fd7d3c55d265bc7197c76c16a0df94f534",
+    "urls": [
+      "https://www.notion.so/40669428c861814bb362d6a492324792",
+      "https://app.notion.com/p/23669428c8618031805be5c692758af1)"
+    ],
+    "originalHeadings": [
+      "# 1. Vector Spaces",
+      "## 1. Definitions",
+      "### 1.1. Vector space",
+      "#### Properties",
+      "### 1.2. Subspace",
+      "### 1.3. Direct sum",
+      "## 2. Theorems",
+      "### 2.1. A subset $U\\subseteq V$ is a subspace of $V$ if and only if $U$ satisfies the following three conditions:",
+      "### 2.2. For subspaces $V_1,\\ldots,V_n$ of a vector space, their sum, defined below, is the smallest subspace that contains each $V_k$.",
+      "### 2.3. Let $V_1,\\ldots,V_m$ be subspaces of $V$. Then $V_1+\\ldots+V_m$ is a direct sum if and only if the only way to write $0$ as a sum $v_1+\\ldots+v_m$ is by taking all $v_k=0$.",
+      "### 2.4. Suppose $U,W$ are subspaces of $V$. Then",
+      "## 3. Examples",
+      "### 3.1. $V=F^{\\mathbb N}$",
+      "### 3.2. Example: $V=F^{S}$ for a set $S$"
+    ]
+  },
+  "content": [
+    {
+      "type": "block",
+      "id": "la-ch01-block-0001",
+      "format": "markdown",
+      "text": "\n\nSource: https://www.notion.so/40669428c861814bb362d6a492324792\n\n> Throughout this chapter, $F=\\mathbb R$ or $\\mathbb C$, and all subspaces use the same scalar field.\n\n"
+    },
+    {
+      "type": "section",
+      "id": "la-ch01-section-1",
+      "title": "Definitions",
+      "label": "1",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch01-block-0002",
+          "format": "markdown",
+          "text": "\n\n"
+        },
+        {
+          "type": "item",
+          "id": "la-ch01-item-1-1",
+          "kind": "definition",
+          "label": "1.1",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch01-item-1-1-heading",
+              "format": "markdown",
+              "text": "Vector space"
+            },
+            {
+              "type": "block",
+              "id": "la-ch01-block-0003",
+              "format": "markdown",
+              "text": "\n\n- A vector space over a field $F$ is a set $V$ along with an addition on $V$ and a scalar multiplication over $F$ such that the following properties hold.\n  - Commutativity: $u+v=v+u$.\n\n  - Associativity: $(u+v)+w=u+(v+w)$ and $(ab)v=a(bv)$.\n\n  - Additive identity: there exists $0\\in V$ such that $v+0=v$.\n\n  - Additive inverses: for each $v\\in V$, there exists $-v\\in V$ with $v+(-v)=0$.\n\n  - Multiplicative identity: $1v=v$.\n\n  - Distributivity: $a(u+v)=au+av$ and $(a+b)v=av+bv$.\n\nThese identities hold for all $u,v,w\\in V$ and $a,b\\in F$.\n\n"
+            },
+            {
+              "type": "block",
+              "id": "la-ch01-block-0004",
+              "format": "markdown",
+              "text": "#### Properties\n\n- A vector space has a unique additive identity ($0$).\n\n- Every element ($x$) in a vector space has a unique additive inverse ($-x$).\n\n- $0v=0$ and $a0=0$ for all $v\\in V$ and $a\\in F$.\n\n- $(-1)v=-v\\text{ for every }v\\in V$.\n\n"
+            }
+          ],
+          "title": "Vector space",
+          "learning": {
+            "capabilities": [
+              "recognize",
+              "apply"
+            ],
+            "requires": [],
+            "proofCoverage": "none"
+          }
+        },
+        {
+          "type": "item",
+          "id": "la-ch01-item-1-2",
+          "kind": "definition",
+          "label": "1.2",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch01-item-1-2-heading",
+              "format": "markdown",
+              "text": "Subspace"
+            },
+            {
+              "type": "block",
+              "id": "la-ch01-block-0005",
+              "format": "markdown",
+              "text": "\n\n- A subset $U$ of a vector space $V$ is a subspace if $U$ is itself a vector space with the same additive identity, addition, and scalar multiplication as on $V$.\n\n"
+            }
+          ],
+          "title": "Subspace",
+          "learning": {
+            "capabilities": [
+              "recognize",
+              "apply"
+            ],
+            "requires": [],
+            "proofCoverage": "none"
+          }
+        },
+        {
+          "type": "item",
+          "id": "la-ch01-item-1-3",
+          "kind": "definition",
+          "label": "1.3",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch01-item-1-3-heading",
+              "format": "markdown",
+              "text": "Direct sum"
+            },
+            {
+              "type": "block",
+              "id": "la-ch01-block-0006",
+              "format": "markdown",
+              "text": "\n\n- Let $V_1,\\ldots,V_n$ be subspaces of a vector space. The sum $V=V_1 + \\ldots + V_n$ is called a direct sum if each element of $V$ can be written in only one way as a sum $v_1 + \\ldots + v_n$, where each $v_k\\in V_k$.\n\n- $V_1\\oplus V_2\\oplus \\ldots\\oplus V_n$ denotes the direct sum.\n\n"
+            }
+          ],
+          "title": "Direct sum",
+          "learning": {
+            "capabilities": [
+              "recognize",
+              "apply"
+            ],
+            "requires": [],
+            "proofCoverage": "none"
+          }
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "la-ch01-section-2",
+      "title": "Theorems",
+      "label": "2",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch01-block-0007",
+          "format": "markdown",
+          "text": "\n\n"
+        },
+        {
+          "type": "item",
+          "id": "la-ch01-item-2-1",
+          "kind": "theorem",
+          "label": "2.1",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch01-item-2-1-heading",
+              "format": "markdown",
+              "text": "A subset $U\\subseteq V$ is a subspace of $V$ if and only if $U$ satisfies the following three conditions:"
+            },
+            {
+              "type": "block",
+              "id": "la-ch01-block-0008",
+              "format": "markdown",
+              "text": "\n\n- $0\\in U$\n\n- $u,w\\in U \\text{ implies }u+w\\in U$\n\n- $a\\in F\\text{ and }u\\in U\\text{ implies }au\\in U$\n\n"
+            }
+          ],
+          "learning": {
+            "capabilities": [
+              "recognize",
+              "apply"
+            ],
+            "requires": [],
+            "proofCoverage": "none"
+          }
+        },
+        {
+          "type": "item",
+          "id": "la-ch01-item-2-2",
+          "kind": "theorem",
+          "label": "2.2",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch01-item-2-2-heading",
+              "format": "markdown",
+              "text": "For subspaces $V_1,\\ldots,V_n$ of a vector space, their sum, defined below, is the smallest subspace that contains each $V_k$."
+            },
+            {
+              "type": "block",
+              "id": "la-ch01-block-0009",
+              "format": "markdown",
+              "text": "\n\n$$\nV_{1}+V_{2}+\\ldots+V_{n}=\\{v_1+v_2+\\ldots+v_n:v_k\\in V_k \\text{ for }k=1,\\ldots,n\\}\n$$\n\n"
+            }
+          ],
+          "learning": {
+            "capabilities": [
+              "recognize",
+              "apply"
+            ],
+            "requires": [],
+            "proofCoverage": "none"
+          }
+        },
+        {
+          "type": "item",
+          "id": "la-ch01-item-2-3",
+          "kind": "theorem",
+          "label": "2.3",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch01-item-2-3-heading",
+              "format": "markdown",
+              "text": "Let $V_1,\\ldots,V_m$ be subspaces of $V$. Then $V_1+\\ldots+V_m$ is a direct sum if and only if the only way to write $0$ as a sum $v_1+\\ldots+v_m$ is by taking all $v_k=0$."
+            },
+            {
+              "type": "block",
+              "id": "la-ch01-block-0010",
+              "format": "markdown",
+              "text": "\n\n"
+            }
+          ],
+          "learning": {
+            "capabilities": [
+              "recognize",
+              "apply"
+            ],
+            "requires": [],
+            "proofCoverage": "none"
+          }
+        },
+        {
+          "type": "item",
+          "id": "la-ch01-item-2-4",
+          "kind": "theorem",
+          "label": "2.4",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch01-item-2-4-heading",
+              "format": "markdown",
+              "text": "Suppose $U,W$ are subspaces of $V$. Then"
+            },
+            {
+              "type": "block",
+              "id": "la-ch01-block-0011",
+              "format": "markdown",
+              "text": "\n\n$$\nU+W \\text{ is a direct sum }\\iff U\\cap W=\\{0\\}\n$$\n\n"
+            }
+          ],
+          "learning": {
+            "capabilities": [
+              "recognize",
+              "apply"
+            ],
+            "requires": [],
+            "proofCoverage": "none"
+          }
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "la-ch01-section-3",
+      "title": "Examples",
+      "label": "3",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch01-block-0012",
+          "format": "markdown",
+          "text": "\n\n"
+        },
+        {
+          "type": "item",
+          "id": "la-ch01-item-3-1",
+          "kind": "example",
+          "label": "3.1",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch01-item-3-1-heading",
+              "format": "markdown",
+              "text": "$V=F^{\\mathbb N}$"
+            },
+            {
+              "type": "block",
+              "id": "la-ch01-block-0013",
+              "format": "markdown",
+              "text": "\n\n$$\nF^{\\mathbb N}=\\{(x_1,x_2,\\ldots):x_k\\in F\\text{ for every }k\\in\\mathbb N\\}\n$$\n\nwhere addition and scalar multiplication are defined as follows.\n\n$$\n(x_1,x_2,\\ldots)+(y_1,y_2,\\ldots)=(x_1+y_1,x_2+y_2,\\ldots),\\\\\na(x_1,x_2,\\ldots)=(ax_1,ax_2,\\ldots).\n$$\n\n"
+            }
+          ],
+          "learning": {
+            "capabilities": [
+              "recognize",
+              "apply"
+            ],
+            "requires": [],
+            "proofCoverage": "none"
+          }
+        },
+        {
+          "type": "item",
+          "id": "la-ch01-item-3-2",
+          "kind": "example",
+          "label": "3.2",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch01-item-3-2-heading",
+              "format": "markdown",
+              "text": "Example: $V=F^{S}$ for a set $S$"
+            },
+            {
+              "type": "block",
+              "id": "la-ch01-block-0014",
+              "format": "markdown",
+              "text": "\n\n$$\nF^{S}:\\text{The set of all functions from }S\\text{ to }F\n$$\n\nwhere addition and scalar multiplication are defined as follows.\n\n$$\n(f+g)(s)=f(s)+g(s),\\qquad (af)(s)=af(s)\n$$\n\nfor every $f,g\\in F^S$, $a\\in F$, and $s\\in S$.\n\n---\n\n\n교정·보완 메모\n\n영벡터의 스칼라곱과 수열 공간 표기를 바로잡고, 벡터공간 공리와 함수 공간의 연산 정의를 완성했습니다.\n\n원본: [1. Vector Space](https://app.notion.com/p/23669428c8618031805be5c692758af1)\n\n\n"
+            }
+          ],
+          "learning": {
+            "capabilities": [
+              "recognize",
+              "apply"
+            ],
+            "requires": [],
+            "proofCoverage": "none"
+          }
+        }
+      ]
+    }
+  ]
+}

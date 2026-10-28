@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 2,
+  "subjectId": "linear-algebra",
+  "title": "Linear Algebra",
+  "contentLanguage": "en",
+  "nodes": [
+    {
+      "id": "la",
+      "kind": "subject",
+      "parentId": null,
+      "order": 0,
+      "title": "Linear Algebra"
+    },
+    {
+      "id": "la-ch01",
+      "kind": "chapter",
+      "parentId": "la",
+      "order": 1,
+      "title": "Vector Spaces",
+      "contentFile": "1. Vector Spaces.json"
+    },
+    {
+      "id": "la-ch02",
+      "kind": "chapter",
+      "parentId": "la",
+      "order": 2,
+      "title": "Finite-Dimensional Vector Spaces",
+      "contentFile": "2. Finite-Dimensional Vector Spaces.json"
+    },
+    {
+      "id": "la-ch03",
+      "kind": "chapter",
+      "parentId": "la",
+      "order": 3,
+      "title": "Linear Maps",
+      "contentFile": "3. Linear Maps.json"
+    },
+    {
+      "id": "la-ch04",
+      "kind": "chapter",
+      "parentId": "la",
+      "order": 4,
+      "title": "Polynomials",
+      "contentFile": "4. Polynomials.json"
+    },
+    {
+      "id": "la-ch05",
+      "kind": "chapter",
+      "parentId": "la",
+      "order": 5,
+      "title": "Eigenvalues and Eigenvectors",
+      "contentFile": "5. Eigenvalues and Eigenvectors.json"
+    },
+    {
+      "id": "la-ch06",
+      "kind": "chapter",
+      "parentId": "la",
+      "order": 6,
+      "title": "Inner Product Spaces",
+      "contentFile": "6. Inner Product Spaces.json"
+    },
+    {
+      "id": "la-ch07",
+      "kind": "chapter",
+      "parentId": "la",
+      "order": 7,
+      "title": "Operators on Inner Product Spaces",
+      "contentFile": "7. Operators on Inner Product Spaces.json"
+    },
+    {
+      "id": "la-ch08",
+      "kind": "chapter",
+      "parentId": "la",
+      "order": 8,
+      "title": "Operators on Complex Vector Spaces",
+      "contentFile": "8. Operators on Complex Vector Spaces.json"
+    },
+    {
+      "id": "la-ch09",
+      "kind": "chapter",
+      "parentId": "la",
+      "order": 9,
+      "title": "Multilinear Algebra and Determinants",
+      "contentFile": "9. Multilinear Algebra and Determinants.json"
+    }
+  ],
+  "dependencies": {
+    "semantics": "requires-all",
+    "edges": [
+      {
+        "nodeId": "la-ch02",
+        "requires": [
+          "la-ch01"
+        ]
+      },
+      {
+        "nodeId": "la-ch03",
+        "requires": [
+          "la-ch02"
+        ]
+      },
+      {
+        "nodeId": "la-ch04",
+        "requires": [
+          "la-ch03"
+        ]
+      },
+      {
+        "nodeId": "la-ch05",
+        "requires": [
+          "la-ch04"
+        ]
+      },
+      {
+        "nodeId": "la-ch06",
+        "requires": [
+          "la-ch05"
+        ]
+      },
+      {
+        "nodeId": "la-ch07",
+        "requires": [
+          "la-ch06"
+        ]
+      },
+      {
+        "nodeId": "la-ch08",
+        "requires": [
+          "la-ch07"
+        ]
+      },
+      {
+        "nodeId": "la-ch09",
+        "requires": [
+          "la-ch08"
+        ]
+      }
+    ]
+  },
+  "foundationRefs": [],
+  "review": {
+    "contentHash": "1bccaccd4e295c38f3c5e09d2c86b027f7bffc29a2c1437961e8d6465d4385b6",
+    "compilerVersion": "math-json-2",
+    "reviewedBy": "math-v2-conservative-conversion",
+    "reviewedAt": "2026-10-28"
+  }
+}

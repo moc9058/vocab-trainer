@@ -1,0 +1,220 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 2
+    },
+    "subjectId": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "contentLanguage": {
+      "enum": [
+        "en",
+        "ja",
+        "ko"
+      ]
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"
+          },
+          "kind": {
+            "enum": [
+              "subject",
+              "part",
+              "chapter"
+            ]
+          },
+          "parentId": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "order": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "contentFile": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "parentId",
+          "order",
+          "title"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "chapter"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "contentFile"
+              ]
+            },
+            "else": {
+              "not": {
+                "required": [
+                  "contentFile"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 1000
+    },
+    "dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "semantics": {
+          "const": "requires-all"
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "nodeId": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"
+              },
+              "requires": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"
+                },
+                "minItems": 1,
+                "maxItems": 1000
+              }
+            },
+            "required": [
+              "nodeId",
+              "requires"
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 1000
+        }
+      },
+      "required": [
+        "semantics",
+        "edges"
+      ]
+    },
+    "foundationRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "subjectId": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"
+          },
+          "conceptId": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_-]{0,95}$"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "recognize",
+              "apply",
+              "prove"
+            ]
+          },
+          "revisionId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "required": [
+          "subjectId",
+          "conceptId",
+          "capability",
+          "revisionId"
+        ]
+      },
+      "minItems": 0,
+      "maxItems": 100
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contentHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "compilerVersion": {
+          "const": "math-json-2"
+        },
+        "reviewedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "reviewedAt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      },
+      "required": [
+        "contentHash",
+        "compilerVersion",
+        "reviewedBy",
+        "reviewedAt"
+      ]
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "subjectId",
+    "title",
+    "contentLanguage",
+    "nodes",
+    "dependencies",
+    "foundationRefs"
+  ],
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://vocab-trainer.local/math-subject.schema.json"
+}

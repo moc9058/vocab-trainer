@@ -677,6 +677,17 @@ export const sourceDocumentSchema = z.strictObject({
   ),
 });
 export async function buildCatalog(root: string) {
+  try {
+    await lstat(resolve(root, "catalog.json"));
+    const { buildJsonCatalog } = await import("./math-json-content.js");
+    return await buildJsonCatalog(root);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  return buildLegacyCatalog(root);
+}
+/** Migration-only Markdown/YAML reader; new authoring uses JSON. */
+export async function buildLegacyCatalog(root: string) {
   const warnings: string[] = [],
     sources: Record<string, string> = {},
     provenances: Record<string, unknown> = {};

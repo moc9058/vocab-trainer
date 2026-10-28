@@ -1,0 +1,1220 @@
+{
+  "schemaVersion": 2,
+  "subjectId": "linear-algebra",
+  "chapterId": "la-ch09",
+  "title": "Multilinear Algebra and Determinants",
+  "source": {
+    "kind": "local-notes",
+    "originalFile": "9. Multilinear Algebra and Determinants.md",
+    "originalSha256": "0317e3ae5d404a4a363dfd83b2a8edeae31022c3a1c515cb1496c9a1eb6acb09",
+    "urls": [
+      "https://www.notion.so/40669428c8618154826feb2613f71fb1",
+      "https://app.notion.com/p/25269428c86180709a42dc448a04244b)"
+    ],
+    "originalHeadings": [
+      "# 9. Multilinear Algebra and Determinants",
+      "## 1. Definitions",
+      "### 1.1. Bilinear Forms and Quadratic Forms",
+      "#### 1.1.1. <span style=\"color: red\">(Bilinear form)</span> A bilinear form is a function $\\beta : V \\times V \\rightarrow F$ such that",
+      "#### 1.1.2. <span style=\"color: red\">(Matrix representation of bilinear form)</span> Suppose $\\beta$ is a bilinear form and let $\\mathscr{B}=(e_1,\\ldots,e_n)$ be an ordered basis of $V$. The matrix representation is defined as $M_{\\mathscr{B}}(\\beta)_{i,j}=\\beta(e_i,e_j)$.",
+      "#### 1.1.3. <span style=\"color: red\">(Quadratic form)</span> For $\\beta \\in V^{(2)}$, define $q_\\beta:V \\rightarrow F$ by $q_\\beta(v)=\\beta(v,v)$. A function $q:V\\to F$ is called a quadratic form on $V$ if there exists $\\beta$ such that $q=q_\\beta$.",
+      "### 1.2. Alternating Multilinear Forms",
+      "#### 1.2.1. <span style=\"color: red\">(Multilinear form)</span> An $m$-linear form on $V$ is a function $\\alpha:V^m\\to F$ that is linear in each variable while the other variables are fixed. The vector space of these forms is denoted by $V^{(m)}$.",
+      "#### 1.2.2. <span style=\"color: red\">(Permutation)</span> Let $S_m$ denote the permutations of $\\{1,\\ldots,m\\}$, and let $\\sigma\\in S_m$. Then",
+      "### 1.3. Determinants",
+      "#### 1.3.1. <span style=\"color: red\">(Determinant)</span> Let $n=\\dim V\\geq1$. For $\\alpha\\in V_{\\mathrm{alt}}^{(n)}$ and $T\\in\\mathcal L(V)$, define",
+      "#### 1.3.2. <span style=\"color: red\">(Characteristic polynomial)</span> Suppose $T \\in \\mathcal{L}(V)$. The polynomial defined as follows is called the characteristic polynomial.",
+      "### 1.4. Tensor Products",
+      "#### 1.4.1. Let $\\mathcal{B}(V_1,\\ldots,V_m)$ denote the set of all $m$-linear forms $\\beta:V_1 \\times \\cdots \\times V_m \\rightarrow F$.",
+      "#### 1.4.2. <span style=\"color: red\">(Tensor product)</span> Let $V_1 \\otimes \\cdots \\otimes V_m:=\\mathcal{B}(V_1',\\ldots,V_m')$. The tensor product $v_1 \\otimes \\cdots \\otimes v_m \\in \\mathcal{B}(V_1',\\ldots,V_m')$ is defined as follows",
+      "#### 1.4.3. <span style=\"color: red\">(Inner product of tensor product)</span> Suppose $V_1,\\ldots,V_m$ are inner product spaces. Then define the inner product on $V_1 \\otimes \\cdots \\otimes V_m$ as the one that satisfies the following:",
+      "## 2. Theorems",
+      "### 2.1. Bilinear Forms and Quadratic Forms",
+      "#### 2.1.1. Suppose $\\beta$ is a bilinear form on $V$ and $T\\in\\mathcal{L}(V)$. Define bilinear forms $\\alpha$ and $\\gamma$ on $V$ by",
+      "#### 2.1.2. <span style=\"color: red\">(Change of basis formula)</span> Suppose $\\beta \\in V^{(2)}$. Suppose $\\mathscr{B}=\\{e_1,\\ldots,e_n\\},\\ \\mathscr{C}=\\{f_1,\\ldots,f_n\\}$ are bases of $V$. Let",
+      "#### 2.1.3. Suppose $\\rho \\in V^{(2)}$. Then the following statements are equivalent.",
+      "#### 2.1.4. Suppose $F=\\mathbb{R}$ and $V$ is an inner product space. Let $\\rho \\in V_{\\mathrm{sym}}^{(2)}$. Then there exists an orthonormal basis $\\mathscr{B}$ where $M_{\\mathscr{B}}(\\rho)$ is diagonal.",
+      "#### 2.1.5. $V^{(2)}=V_{\\mathrm{sym}}^{(2)}\\oplus V_{\\mathrm{alt}}^{(2)}$.",
+      "#### 2.1.6. Suppose $V=F^n$. $q$ is a quadratic form on $V$ if and only if there exists $A \\in F^{n \\times n}$ such that",
+      "#### 2.1.7. Suppose $q:V\\to F$. Then $q$ is a quadratic form if and only if there exists a unique $\\rho \\in V_{\\mathrm{sym}}^{(2)}$ such that $q = q_\\rho$.",
+      "#### 2.1.8. Suppose $q$ is a quadratic form. Then",
+      "### 2.2. Alternating Multilinear Forms",
+      "#### 2.2.1. Suppose $\\alpha \\in V_{\\mathrm{alt}}^{(m)}$ and $v_1,\\ldots,v_m$ are linearly dependent. Then",
+      "#### 2.2.2. Suppose $\\alpha \\in V_{\\mathrm{alt}}^{(m)}$. For every $\\sigma\\in S_m$ and $v_1,\\ldots,v_m\\in V$,",
+      "#### 2.2.3. Let $n=\\dim(V)$. Let $e_1,\\ldots,e_n$ be a basis of $V$, $\\varphi_1,\\ldots,\\varphi_n$ be the dual basis and $v_1,\\ldots,v_n \\in V$. Then",
+      "#### 2.2.4. Suppose $n=\\dim(V),\\alpha \\in V_{\\mathrm{alt}}^{(n)}$ is nonzero and $e_1,\\ldots,e_n$ is a list of vectors in $V$. Then $\\alpha(e_1,\\ldots,e_n) \\neq 0$ if and only if $e_1,\\ldots,e_n$ is linearly independent.",
+      "### 2.3. Determinants",
+      "#### 2.3.1. The map $(v_1,\\ldots,v_n) \\mapsto \\det(v_1,\\ldots,v_n)$ is an alternating $n$-linear form on $F^n$.",
+      "#### 2.3.2. Let $A \\in F^{n \\times n}$. Then",
+      "#### 2.3.3. <span style=\"color: red\">(Properties of determinants)</span> Suppose $S,T \\in \\mathcal{L}(V)$ and $A,B \\in F^{n \\times n}$.",
+      "#### 2.3.4. Suppose $V$ is an inner product vector space.",
+      "#### 2.3.5. Suppose $F=\\mathbb{C}$. Let $\\lambda_1,\\ldots,\\lambda_m$ be distinct eigenvalues of $T \\in \\mathcal{L}(V)$ and let $d_1,\\ldots,d_m$ denote their multiplicities. Then",
+      "#### 2.3.6. <span style=\"color: red\">(Cayley-Hamilton theorem)</span> Let $q$ be the characteristic polynomial of $T \\in \\mathcal{L}(V)$. Then $q(T)=0$.",
+      "#### 2.3.7. The characteristic polynomial of $T \\in \\mathcal{L}(V)$ can be written as",
+      "#### 2.3.8. <span style=\"color: red\">(Hadamard’s inequality)</span> Suppose $A\\in F^{n \\times n}$. Then",
+      "#### 2.3.9. <span style=\"color: red\">(Vandermonde matrix)</span> Let $\\beta_1,\\ldots,\\beta_n \\in F$. Then",
+      "### 2.4. Tensor Products",
+      "#### 2.4.1. $(v_1,\\ldots,v_m)\\mapsto v_1 \\otimes \\cdots \\otimes v_m$ is $m$-linear.",
+      "#### 2.4.2. Suppose $\\beta_i =\\{e_{i,1},\\ldots,e_{i,n_i}\\}$ is a linearly independent list in $V_i$ for each $i$, $i=1,\\ldots,m$. Then",
+      "#### 2.4.3. Suppose $\\Gamma : V_1 \\times \\cdots \\times V_m \\rightarrow U$ is an $m$-linear map. Then there exists a unique linear map $\\hat{\\Gamma}:V_1 \\otimes \\cdots \\otimes V_m \\rightarrow U$ such that",
+      "#### 2.4.4. Suppose $V$ and $W$ are inner product spaces, and let $e_1,\\ldots,e_m$ and $f_1,\\ldots,f_n$ be orthonormal bases of $V$ and $W$, respectively. Then",
+      "## 3. Examples"
+    ]
+  },
+  "content": [
+    {
+      "type": "block",
+      "id": "la-ch09-block-0001",
+      "format": "markdown",
+      "text": "\n\nSource: https://www.notion.so/40669428c8618154826feb2613f71fb1\n\n> Throughout this chapter, all vector spaces are finite-dimensional over $F=\\mathbb R$ or $\\mathbb C$, $n=\\dim V\\geq1$, and $m\\geq1$ is an integer. Bases used for matrices are ordered. Bilinear means linear in both variables, including over $\\mathbb C$; it is different from a complex inner product. The tensor-product construction using multilinear forms on dual spaces below uses finite-dimensionality. Inner products are linear in the first variable.\n\n"
+    },
+    {
+      "type": "section",
+      "id": "la-ch09-section-1",
+      "title": "Definitions",
+      "label": "1",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch09-block-0002",
+          "format": "markdown",
+          "text": "\n\n"
+        },
+        {
+          "type": "section",
+          "id": "la-ch09-section-1-1",
+          "title": "Bilinear Forms and Quadratic Forms",
+          "label": "1.1",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch09-block-0003",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-1-1-1",
+              "kind": "definition",
+              "label": "1.1.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-1-1-1-heading",
+                  "format": "markdown",
+                  "text": "A bilinear form is a function $\\beta : V \\times V \\rightarrow F$ such that"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0004",
+                  "format": "markdown",
+                  "text": "\n\n$$\nv\\mapsto \\beta(v,u)\\ \\text{and}\\ v \\mapsto \\beta(u,v)\n$$\n\nare both linear functionals on $V$ for every $u \\in V$. The set of bilinear forms is denoted by $V^{(2)}$.\n\n- A bilinear form $\\beta$ is symmetric if $\\beta(u,v)=\\beta(v,u)$ for all $u,v\\in V$. Their space is denoted by $V_{\\mathrm{sym}}^{(2)}$.\n\n- The space of alternating bilinear forms is denoted by $V_{\\mathrm{alt}}^{(2)}$\n  - $\\alpha \\in V_{\\mathrm{alt}}^{(2)}$ if $\\alpha(v,v)=0$ for every $v\\in V$\n\n"
+                }
+              ],
+              "title": "Bilinear form",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-1-1-2",
+              "kind": "definition",
+              "label": "1.1.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-1-1-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $\\beta$ is a bilinear form and let $\\mathscr{B}=(e_1,\\ldots,e_n)$ be an ordered basis of $V$. The matrix representation is defined as $M_{\\mathscr{B}}(\\beta)_{i,j}=\\beta(e_i,e_j)$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0005",
+                  "format": "markdown",
+                  "text": "\n\n- Note that $\\beta \\mapsto M_{\\mathscr{B}}(\\beta)$ is an isomorphism.\n\n"
+                }
+              ],
+              "title": "Matrix representation of bilinear form",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-1-1-3",
+              "kind": "definition",
+              "label": "1.1.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-1-1-3-heading",
+                  "format": "markdown",
+                  "text": "For $\\beta \\in V^{(2)}$, define $q_\\beta:V \\rightarrow F$ by $q_\\beta(v)=\\beta(v,v)$. A function $q:V\\to F$ is called a quadratic form on $V$ if there exists $\\beta$ such that $q=q_\\beta$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0006",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "title": "Quadratic form",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch09-section-1-2",
+          "title": "Alternating Multilinear Forms",
+          "label": "1.2",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch09-block-0007",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-1-2-1",
+              "kind": "definition",
+              "label": "1.2.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-1-2-1-heading",
+                  "format": "markdown",
+                  "text": "An $m$-linear form on $V$ is a function $\\alpha:V^m\\to F$ that is linear in each variable while the other variables are fixed. The vector space of these forms is denoted by $V^{(m)}$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0008",
+                  "format": "markdown",
+                  "text": "\n\n- $\\alpha \\in V_{\\mathrm{alt}}^{(m)}$: $\\alpha(v_1,\\ldots,v_m)=0$ if $v_j=v_k$ for some $j \\neq k$\n\n"
+                }
+              ],
+              "title": "Multilinear form",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-1-2-2",
+              "kind": "definition",
+              "label": "1.2.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-1-2-2-heading",
+                  "format": "markdown",
+                  "text": "Let $S_m$ denote the permutations of $\\{1,\\ldots,m\\}$, and let $\\sigma\\in S_m$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0009",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\operatorname{sgn}(\\sigma)=(-1)^{N}\n$$\n\nwhere $N$ is the number of pairs of integers $(k,l)$ with $1 \\leq k < l \\leq m$ such that $k$ appears after $l$ in the list $\\sigma(1),\\ldots,\\sigma(m)$.\n\n"
+                }
+              ],
+              "title": "Permutation",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch09-section-1-3",
+          "title": "Determinants",
+          "label": "1.3",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch09-block-0010",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-1-3-1",
+              "kind": "definition",
+              "label": "1.3.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-1-3-1-heading",
+                  "format": "markdown",
+                  "text": "Let $n=\\dim V\\geq1$. For $\\alpha\\in V_{\\mathrm{alt}}^{(n)}$ and $T\\in\\mathcal L(V)$, define"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0011",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\alpha_T(v_1,\\ldots,v_n)=\\alpha(Tv_1,\\ldots,Tv_n).\n$$\n\nDefine $\\det T$ to be the coefficient such that\n\n$$\n\\alpha_T=(\\det T)\\alpha,\\ \\forall \\alpha\\in V_{\\mathrm{alt}}^{(n)}.\n$$\n\nFor $A \\in F^{n \\times n}$, define $\\det A=\\det T$ for $T \\in \\mathcal{L}(F^n)$ whose matrix representation with respect to the standard basis is equal to $A$.\n\n- The map $\\alpha\\mapsto\\alpha_T$ is a linear endomorphism of the one-dimensional space $V_{\\mathrm{alt}}^{(n)}$. Hence it is multiplication by a unique scalar.\n\n"
+                }
+              ],
+              "title": "Determinant",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-1-3-2",
+              "kind": "definition",
+              "label": "1.3.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-1-3-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T \\in \\mathcal{L}(V)$. The polynomial defined as follows is called the characteristic polynomial."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0012",
+                  "format": "markdown",
+                  "text": "\n\n$$\nz \\mapsto \\det(zI-T)\n$$\n\n"
+                }
+              ],
+              "title": "Characteristic polynomial",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch09-section-1-4",
+          "title": "Tensor Products",
+          "label": "1.4",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch09-block-0013",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-1-4-1",
+              "kind": "definition",
+              "label": "1.4.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-1-4-1-heading",
+                  "format": "markdown",
+                  "text": "Let $\\mathcal{B}(V_1,\\ldots,V_m)$ denote the set of all $m$-linear forms $\\beta:V_1 \\times \\cdots \\times V_m \\rightarrow F$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0014",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-1-4-2",
+              "kind": "definition",
+              "label": "1.4.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-1-4-2-heading",
+                  "format": "markdown",
+                  "text": "Let $V_1 \\otimes \\cdots \\otimes V_m:=\\mathcal{B}(V_1',\\ldots,V_m')$. The tensor product $v_1 \\otimes \\cdots \\otimes v_m \\in \\mathcal{B}(V_1',\\ldots,V_m')$ is defined as follows"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0015",
+                  "format": "markdown",
+                  "text": "\n\n$$\n(v_1 \\otimes \\cdots \\otimes v_m)(\\phi_1,\\ldots,\\phi_m )=\\phi_1(v_1)\\cdots\\phi_m(v_m).\n$$\n\n- Note that $\\dim(V_1\\otimes \\cdots \\otimes V_m)=\\dim(V_1)\\cdots \\dim(V_m)$\n\n"
+                }
+              ],
+              "title": "Tensor product",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-1-4-3",
+              "kind": "definition",
+              "label": "1.4.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-1-4-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V_1,\\ldots,V_m$ are inner product spaces. Then define the inner product on $V_1 \\otimes \\cdots \\otimes V_m$ as the one that satisfies the following:"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0016",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\langle v_1 \\otimes \\cdots \\otimes v_m, u_1 \\otimes \\cdots \\otimes u_m \\rangle=\\langle v_1,u_1 \\rangle \\cdots \\langle v_m, u_m\\rangle\n$$\n\n- This prescription extends sesquilinearly from pure tensors and defines a unique positive-definite inner product; existence and positivity follow by using tensor products of orthonormal bases.\n\n- Note that $\\|v_1 \\otimes \\cdots \\otimes v_m\\|=\\|v_1\\|\\cdots\\|v_m\\|$\n\n"
+                }
+              ],
+              "title": "Inner product of tensor product",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "la-ch09-section-2",
+      "title": "Theorems",
+      "label": "2",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch09-block-0017",
+          "format": "markdown",
+          "text": "\n\n"
+        },
+        {
+          "type": "section",
+          "id": "la-ch09-section-2-1",
+          "title": "Bilinear Forms and Quadratic Forms",
+          "label": "2.1",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch09-block-0018",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-1-1",
+              "kind": "theorem",
+              "label": "2.1.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-1-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $\\beta$ is a bilinear form on $V$ and $T\\in\\mathcal{L}(V)$. Define bilinear forms $\\alpha$ and $\\gamma$ on $V$ by"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0019",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\alpha(u,v)=\\beta(u,Tv)\\ \\text{and}\\ \\gamma(u,v)=\\beta(Tu,v).\n$$\n\nLet $\\mathscr{B}$ be a basis of $V$. Then\n\n$$\nM_{\\mathscr{B}}(\\alpha)=M_{\\mathscr{B}}(\\beta)[T]_{\\mathscr B}\\ \\text{and}\\ M_{\\mathscr{B}}(\\gamma)=[T]_{\\mathscr B}^{\\mathsf T}M_{\\mathscr{B}}(\\beta).\n$$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-1-2",
+              "kind": "theorem",
+              "label": "2.1.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-1-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $\\beta \\in V^{(2)}$. Suppose $\\mathscr{B}=\\{e_1,\\ldots,e_n\\},\\ \\mathscr{C}=\\{f_1,\\ldots,f_n\\}$ are bases of $V$. Let"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0020",
+                  "format": "markdown",
+                  "text": "\n\n$$\nA=M_{\\mathscr{B}}(\\beta),\\ B=M_{\\mathscr{C}}(\\beta)\\ \\text{and}\\ C=[I]_{\\mathscr{B}}^{\\mathscr{C}}.\n$$\n\nThen $A=C^{\\mathsf T}BC$.\n\n- Bilinear-form matrices transform by congruence, $A=C^{\\mathsf T}BC$, whereas operator matrices transform by similarity. For a real orthogonal change matrix, $C^{\\mathsf T}=C^{-1}$, so the two transformation rules have the same algebraic form.\n\n"
+                }
+              ],
+              "title": "Change of basis formula",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-1-3",
+              "kind": "theorem",
+              "label": "2.1.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-1-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $\\rho \\in V^{(2)}$. Then the following statements are equivalent."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0021",
+                  "format": "markdown",
+                  "text": "\n\n(1) $\\rho$ is a symmetric bilinear form on $V$\n\n(2) $M_{\\mathscr{B}}(\\rho)$ is a symmetric matrix for every basis $\\mathscr{B}$ of $V$\n\n(3) $M_{\\mathscr{B}}(\\rho)$ is a symmetric matrix for some basis $\\mathscr{B}$ of $V$\n\n(4) $M_{\\mathscr{B}}(\\rho)$ is a diagonal matrix for some basis $\\mathscr{B}$ of $V$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-1-4",
+              "kind": "theorem",
+              "label": "2.1.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-1-4-heading",
+                  "format": "markdown",
+                  "text": "Suppose $F=\\mathbb{R}$ and $V$ is an inner product space. Let $\\rho \\in V_{\\mathrm{sym}}^{(2)}$. Then there exists an orthonormal basis $\\mathscr{B}$ where $M_{\\mathscr{B}}(\\rho)$ is diagonal."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0022",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-1-5",
+              "kind": "theorem",
+              "label": "2.1.5",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-1-5-heading",
+                  "format": "markdown",
+                  "text": "$V^{(2)}=V_{\\mathrm{sym}}^{(2)}\\oplus V_{\\mathrm{alt}}^{(2)}$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0023",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-1-6",
+              "kind": "theorem",
+              "label": "2.1.6",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-1-6-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V=F^n$. $q$ is a quadratic form on $V$ if and only if there exists $A \\in F^{n \\times n}$ such that"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0024",
+                  "format": "markdown",
+                  "text": "\n\n$$\nq(x_1,\\ldots,x_n)=\\sum_{i=1}^n\\sum_{j=1}^n A_{i,j}x_ix_j.\n$$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-1-7",
+              "kind": "theorem",
+              "label": "2.1.7",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-1-7-heading",
+                  "format": "markdown",
+                  "text": "Suppose $q:V\\to F$. Then $q$ is a quadratic form if and only if there exists a unique $\\rho \\in V_{\\mathrm{sym}}^{(2)}$ such that $q = q_\\rho$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0025",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-1-8",
+              "kind": "theorem",
+              "label": "2.1.8",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-1-8-heading",
+                  "format": "markdown",
+                  "text": "Suppose $q$ is a quadratic form. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0026",
+                  "format": "markdown",
+                  "text": "\n\n(1) There exists a basis $e_1,\\ldots,e_n$ of $V$ and $\\lambda_1,\\ldots,\\lambda_n \\in F$ such that\n\n$$\nq(x_1e_1+\\cdots+x_ne_n)=\\lambda_1 x_1^2 + \\cdots + \\lambda_n x_n^2\n$$\n\n(2) If $F=\\mathbb{R}$ and $V$ is an inner product space, then the basis in (1) can be chosen to be an orthonormal basis of $V$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch09-section-2-2",
+          "title": "Alternating Multilinear Forms",
+          "label": "2.2",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch09-block-0027",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-2-1",
+              "kind": "theorem",
+              "label": "2.2.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-2-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $\\alpha \\in V_{\\mathrm{alt}}^{(m)}$ and $v_1,\\ldots,v_m$ are linearly dependent. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0028",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\alpha(v_1,\\ldots,v_m)=0\n$$\n\n- If $m > \\dim(V)$, then $0$ is the only alternating $m$-linear form\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-2-2",
+              "kind": "theorem",
+              "label": "2.2.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-2-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $\\alpha \\in V_{\\mathrm{alt}}^{(m)}$. For every $\\sigma\\in S_m$ and $v_1,\\ldots,v_m\\in V$,"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0029",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\alpha(v_{\\sigma(1)},\\ldots,v_{\\sigma(m)})=\\operatorname{sgn}(\\sigma)\\alpha(v_1,\\ldots,v_m)\n$$\n\n- Note that swapping two entries in a permutation multiplies the sign of the permutation by $-1$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-2-3",
+              "kind": "theorem",
+              "label": "2.2.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-2-3-heading",
+                  "format": "markdown",
+                  "text": "Let $n=\\dim(V)$. Let $e_1,\\ldots,e_n$ be a basis of $V$, $\\varphi_1,\\ldots,\\varphi_n$ be the dual basis and $v_1,\\ldots,v_n \\in V$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0030",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\alpha(v_1,\\ldots,v_n)=\\alpha(e_1,\\ldots,e_n)\\sum_{\\sigma \\in S_n}\\operatorname{sgn}(\\sigma)\\varphi_{\\sigma(1)}(v_1)\\cdots\\varphi_{\\sigma(n)}(v_n)\n$$\n\nfor every $\\alpha \\in V_{\\mathrm{alt}}^{(n)}$.\n\n- Note that $\\dim(V_{\\mathrm{alt}}^{(n)})=1$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-2-4",
+              "kind": "theorem",
+              "label": "2.2.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-2-4-heading",
+                  "format": "markdown",
+                  "text": "Suppose $n=\\dim(V),\\alpha \\in V_{\\mathrm{alt}}^{(n)}$ is nonzero and $e_1,\\ldots,e_n$ is a list of vectors in $V$. Then $\\alpha(e_1,\\ldots,e_n) \\neq 0$ if and only if $e_1,\\ldots,e_n$ is linearly independent."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0031",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch09-section-2-3",
+          "title": "Determinants",
+          "label": "2.3",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch09-block-0032",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-3-1",
+              "kind": "theorem",
+              "label": "2.3.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-3-1-heading",
+                  "format": "markdown",
+                  "text": "The map $(v_1,\\ldots,v_n) \\mapsto \\det(v_1,\\ldots,v_n)$ is an alternating $n$-linear form on $F^n$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0033",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-3-2",
+              "kind": "theorem",
+              "label": "2.3.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-3-2-heading",
+                  "format": "markdown",
+                  "text": "Let $A \\in F^{n \\times n}$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0034",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\det A = \\sum_{\\sigma \\in S_n}\\operatorname{sgn}(\\sigma)A_{\\sigma(1),1}\\cdots A_{\\sigma(n),n}.\n$$\n\n- Note that if $A$ is upper-triangular with $\\lambda_1,\\ldots,\\lambda_n$ on the diagonal, then $\\det A = \\lambda_1\\cdots\\lambda_n$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-3-3",
+              "kind": "theorem",
+              "label": "2.3.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-3-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $S,T \\in \\mathcal{L}(V)$ and $A,B \\in F^{n \\times n}$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0035",
+                  "format": "markdown",
+                  "text": "\n\n(1) $\\det ST = \\det S \\cdot \\det T$ and $\\det AB = \\det A \\cdot \\det B$.\n\n(2) $T$ is invertible if and only if $\\det T \\neq 0$. Furthermore, if $T$ is invertible, then\n\n$$\n\\det T^{-1}=\\cfrac{1}{\\det T}.\n$$\n\n- $A$ is invertible if and only if $\\det A \\neq 0$.\n\n(3) Let $S \\in \\mathcal{L}(W,V)$ be invertible. Then\n\n$$\n\\det(S^{-1}TS)=\\det(T)\n$$\n\n- Note that $\\det T = \\det [T]_{\\mathscr{B}}$ for any basis $\\mathscr{B}$.\n\n- Suppose $F = \\mathbb{C}$. Then $\\det T=\\lambda_1\\cdots\\lambda_n$, where the eigenvalues are listed with algebraic multiplicity.\n\n(4) $\\det T=\\det T'$ and $\\det A=\\det A^{\\mathsf T}$. If $V$ is an inner product space, $\\det T^*=\\overline{\\det T}$.\n\n(5) If $V$ is an inner product space, $|\\det T|=\\sqrt{\\det(T^*T)}=\\text{product of singular values of }T$.\n\n"
+                }
+              ],
+              "title": "Properties of determinants",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-3-4",
+              "kind": "theorem",
+              "label": "2.3.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-3-4-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is an inner product vector space."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0036",
+                  "format": "markdown",
+                  "text": "\n\n(1) If $S \\in \\mathcal{L}(V)$ is unitary, then $|\\det S|=1$.\n\n(2) If $T \\in \\mathcal{L}(V)$ is positive, then $\\det T \\geq 0$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-3-5",
+              "kind": "theorem",
+              "label": "2.3.5",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-3-5-heading",
+                  "format": "markdown",
+                  "text": "Suppose $F=\\mathbb{C}$. Let $\\lambda_1,\\ldots,\\lambda_m$ be distinct eigenvalues of $T \\in \\mathcal{L}(V)$ and let $d_1,\\ldots,d_m$ denote their multiplicities. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0037",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\det(zI-T)=(z-\\lambda_1)^{d_1}\\cdots(z-\\lambda_m)^{d_m}.\n$$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-3-6",
+              "kind": "theorem",
+              "label": "2.3.6",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-3-6-heading",
+                  "format": "markdown",
+                  "text": "Let $q$ be the characteristic polynomial of $T \\in \\mathcal{L}(V)$. Then $q(T)=0$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0038",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "title": "Cayley-Hamilton theorem",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-3-7",
+              "kind": "theorem",
+              "label": "2.3.7",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-3-7-heading",
+                  "format": "markdown",
+                  "text": "The characteristic polynomial of $T \\in \\mathcal{L}(V)$ can be written as"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0039",
+                  "format": "markdown",
+                  "text": "\n\n$$\nz^n - \\operatorname{tr}(T)z^{n-1} + \\cdots + (-1)^{n}(\\det T).\n$$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-3-8",
+              "kind": "theorem",
+              "label": "2.3.8",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-3-8-heading",
+                  "format": "markdown",
+                  "text": "Suppose $A\\in F^{n \\times n}$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0040",
+                  "format": "markdown",
+                  "text": "\n\n$$\n|\\det A| \\leq \\prod_{k=1}^n\\|A_{\\cdot,k}\\|\n$$\n\n"
+                }
+              ],
+              "title": "Hadamard’s inequality",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-3-9",
+              "kind": "theorem",
+              "label": "2.3.9",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-3-9-heading",
+                  "format": "markdown",
+                  "text": "Let $\\beta_1,\\ldots,\\beta_n \\in F$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0041",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\det \\begin{pmatrix}\n1 & \\beta_1 & \\beta_1^2 & \\cdots & \\beta_1^{n-1}\\\\\n1 & \\beta_2 & \\beta_2^2 & \\cdots & \\beta_2^{n-1}\\\\\n\\\\\n & & \\ddots & & \\\\\n\\\\\n1 & \\beta_n & \\beta_n^2 & \\cdots & \\beta_n^{n-1}\\\\\n\\end{pmatrix}=\\prod_{1\\leq j < k \\leq n}(\\beta_k - \\beta_j).\n$$\n\n"
+                }
+              ],
+              "title": "Vandermonde matrix",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch09-section-2-4",
+          "title": "Tensor Products",
+          "label": "2.4",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch09-block-0042",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-4-1",
+              "kind": "theorem",
+              "label": "2.4.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-4-1-heading",
+                  "format": "markdown",
+                  "text": "$(v_1,\\ldots,v_m)\\mapsto v_1 \\otimes \\cdots \\otimes v_m$ is $m$-linear."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0043",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-4-2",
+              "kind": "theorem",
+              "label": "2.4.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-4-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $\\beta_i =\\{e_{i,1},\\ldots,e_{i,n_i}\\}$ is a linearly independent list in $V_i$ for each $i$, $i=1,\\ldots,m$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0044",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\alpha=\\{e_{1,j_1} \\otimes \\cdots \\otimes e_{m,j_m}\\}_{j_1=1,\\ldots,n_1,\\ldots,j_m=1,\\ldots,n_m}\n$$\n\nis a linearly independent subset of $V_1 \\otimes \\cdots \\otimes V_m$. Furthermore, if $\\beta_i$’s are bases, then so is $\\alpha$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-4-3",
+              "kind": "theorem",
+              "label": "2.4.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-4-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $\\Gamma : V_1 \\times \\cdots \\times V_m \\rightarrow U$ is an $m$-linear map. Then there exists a unique linear map $\\hat{\\Gamma}:V_1 \\otimes \\cdots \\otimes V_m \\rightarrow U$ such that"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0045",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\hat{\\Gamma}(v_1\\otimes\\cdots\\otimes v_m)=\\Gamma(v_1,\\ldots,v_m).\n$$\n\nConversely, suppose $T \\in \\mathcal{L}(V_1 \\otimes \\cdots \\otimes V_m,U)$. Then there exists a unique $m$-linear map $T^{\\#}:V_1 \\times \\cdots \\times V_m \\rightarrow U$ such that\n\n$$\nT^{\\#}(v_1,\\ldots,v_m)=T(v_1 \\otimes  \\cdots \\otimes v_m).\n$$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch09-item-2-4-4",
+              "kind": "theorem",
+              "label": "2.4.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch09-item-2-4-4-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ and $W$ are inner product spaces, and let $e_1,\\ldots,e_m$ and $f_1,\\ldots,f_n$ be orthonormal bases of $V$ and $W$, respectively. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch09-block-0046",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\{e_i\\otimes f_j:1\\leq i\\leq m,\\ 1\\leq j\\leq n\\}\n$$\n\nis an orthonormal basis of $V \\otimes W$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "la-ch09-section-3",
+      "title": "Examples",
+      "label": "3",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch09-block-0047",
+          "format": "markdown",
+          "text": "\n\n---\n\n\n교정·보완 메모\n\n이차형식과 행렬식의 정의, 순열 첨자, 텐서곱의 다중선형성·기저를 교정했습니다. 원본 2.4.3의 번호 누락을 해소하도록 이후 항목을 연속적으로 조정했습니다.\n\n원본: [9. Multilinear Algebra and Determinants](https://app.notion.com/p/25269428c86180709a42dc448a04244b)\n\n\n"
+        }
+      ]
+    }
+  ]
+}

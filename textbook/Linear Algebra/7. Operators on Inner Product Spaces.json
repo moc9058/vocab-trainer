@@ -1,0 +1,1383 @@
+{
+  "schemaVersion": 2,
+  "subjectId": "linear-algebra",
+  "chapterId": "la-ch07",
+  "title": "Operators on Inner Product Spaces",
+  "source": {
+    "kind": "local-notes",
+    "originalFile": "7. Operators on Inner Product Spaces.md",
+    "originalSha256": "06f5a2845d83687533d81955d390ca1b168bf7427f5159a9df88e44adaf19342",
+    "urls": [
+      "https://www.notion.so/40669428c86181a98db1c0c40725fbe8",
+      "https://app.notion.com/p/24c69428c86180418630c5e1c7191e1a)"
+    ],
+    "originalHeadings": [
+      "# 7. Operators on Inner Product Spaces",
+      "## 1. Definitions",
+      "### 1.1. Self-Adjoint and Normal Operators",
+      "#### 1.1.1. <span style=\"color: red\">(Adjoint operator)</span> Suppose $T\\in\\mathcal{L}(V,W)$. The **adjoint** of $T$ is the function $T^*:W\\rightarrow V$ such that",
+      "#### 1.1.2. <span style=\"color: red\">(Conjugate transpose)</span> Let $A\\in F^{m\\times n}$. Then the **conjugate transpose** $A^*$ of $A$ is defined as follows.",
+      "#### 1.1.3. <span style=\"color: red\">(Self-adjoint) </span>An operator $T\\in\\mathcal{L}(V)$ is called **self-adjoint** if $T=T^*$.",
+      "#### 1.1.4. <span style=\"color: red\">(Normal)</span> An operator $T\\in\\mathcal{L}(V)$ is called **normal** if $TT^*=T^*T$.",
+      "#### 1.1.5. <span style=\"color: red\">(Skew-adjoint)</span> An operator $T\\in\\mathcal{L}(V)$ is called skew-adjoint if $T^*=-T$.",
+      "### 1.2. Spectral Theorem",
+      "### 1.3. Positive Operators",
+      "#### 1.3.1. <span style=\"color: red\">(Positive operator)</span> An operator $T\\in\\mathcal{L}(V)$ is called positive if it is self-adjoint and",
+      "#### 1.3.2. An operator $R$ is a square root of an operator $T$ if $R^2=T$. For a positive operator, $\\sqrt{T}$ denotes the unique positive square root of $T$.",
+      "### 1.4. Isometrics, Unitary Operators, and Matrix Factorization",
+      "#### 1.4.1. <span style=\"color: red\">(Isometry)</span> A linear map $S \\in \\mathcal{L}(V,W)$ is called an isometry if",
+      "#### 1.4.2. <span style=\"color: red\">(Unitary)</span> An operator $S\\in\\mathcal{L}(V)$ is called unitary if $S$ is an invertible isometry.",
+      "### 1.5. Singular Value Decomposition",
+      "#### 1.5.1. <span style=\"color: red\">(Singular value)</span> Suppose $T \\in \\mathcal{L}(V,W)$. The singular values of $T$ are nonnegative square roots of the eigenvalues of $T^*T$, listed in decreasing order, each included as many times as the dimension of the corresponding eigenspace of $T^*T$.",
+      "### 1.6. Consequences of Singular Value Decomposition",
+      "#### 1.6.1. <span style=\"color: red\">(Norm of a linear map)</span> Suppose $T \\in \\mathcal{L}(V,W)$. Then the norm of $T$, denoted by $\\|T\\|$ is defined by",
+      "## 2. Theorems",
+      "### 2.1. Self-Adjoint and Normal Operators",
+      "#### 2.1.1. Suppose $U,V,W$ are finite-dimensional inner product spaces, $T_1,T_2\\in\\mathcal L(U,V)$, $\\lambda\\in F$, and let $S\\in\\mathcal{L}(V,W),\\ T\\in\\mathcal{L}(U,V)$. Then",
+      "#### 2.1.2. Suppose $V,W$ are finite-dimensional inner product spaces and let $T\\in\\mathcal{L}(V,W)$. Then",
+      "#### 2.1.3. Suppose $V,W$ are finite-dimensional inner product spaces and $T\\in\\mathcal{L}(V,W)$. Suppose $\\beta=\\{e_1,\\ldots,e_n\\},\\gamma=\\{f_1,\\ldots,f_m\\}$ are orthonormal bases of $V$ and $W$. Then",
+      "#### 2.1.4. Suppose $V$ is a complex inner product space and $T\\in\\mathcal{L}(V)$. Then",
+      "#### 2.1.5. Suppose $T\\in\\mathcal{L}(V)$ is self-adjoint. Then",
+      "#### 2.1.6. Suppose $T\\in\\mathcal{L}(V)$. Then",
+      "#### 2.1.7. Suppose $V$ is a finite-dimensional inner product space and $T\\in\\mathcal{L}(V)$ is normal. Then",
+      "### 2.2. Spectral Theorem",
+      "#### 2.2.1. Suppose $T\\in \\mathcal{L}(V)$ is self-adjoint and $b,c\\in\\mathbb R$ are such that $b^2 < 4c$. Then",
+      "#### 2.2.2. Suppose $T \\in \\mathcal{L}(V)$ is self-adjoint. Then the minimal polynomial of $T$ equals $(z-\\lambda_1)\\cdots(z-\\lambda_m)$ for some distinct $\\lambda_1,\\ldots,\\lambda_m \\in \\mathbb{R}$.",
+      "#### 2.2.3. <span style=\"color: red\">(Real spectral theorem)</span> Suppose $F=\\mathbb{R}$ and $T\\in\\mathcal{L}(V)$. Then the following statements are equivalent.",
+      "#### 2.2.4. <span style=\"color: red\">(Complex spectral theorem)</span> Suppose $F=\\mathbb{C}$ and $T\\in\\mathcal{L}(V)$. Then the following statements are equivalent.",
+      "### 2.3. Positive Operators",
+      "#### 2.3.1. Let $V$ be a finite-dimensional inner product space and let $T \\in \\mathcal{L}(V)$. Then the following statements are equivalent.",
+      "#### 2.3.2. Suppose $T$ is a positive operator on $V$ and $v\\in V$ is such that $\\langle Tv,v \\rangle=0$. Then $Tv=0$.",
+      "### 2.4. Isometrics, Unitary Operators, and Matrix Factorization",
+      "#### 2.4.1. Suppose $V,W$ are finite-dimensional inner product spaces and let $S \\in \\mathcal{L}(V,W)$. Then the following statements are equivalent.",
+      "#### 2.4.2. Suppose $V$ is a finite-dimensional inner product space with an orthonormal basis $\\beta=\\{e_1,\\ldots,e_n\\}$ and let $S\\in\\mathcal{L}(V)$. Then the following statements are equivalent.",
+      "#### 2.4.3. Suppose $F=\\mathbb{C}$ and $S \\in \\mathcal{L}(V)$. Then the following statements are equivalent.",
+      "#### 2.4.4. Suppose $Q \\in F^{n \\times n}$. Then the following statements are equivalent.",
+      "#### 2.4.5. <span style=\"color: red\">(QR factorization)</span> Suppose $A\\in F^{n\\times n}$ has linearly independent columns. Then there exist unique matrices $Q\\text{(unitary)},R\\text{(upper triangular with positive diagonal entries)} \\in F^{n \\times n}$ such that",
+      "#### 2.4.6. <span style=\"color: red\">(Cholesky factorization)</span> Suppose $B$ is a positive definite matrix. Then there exists a unique upper-triangular matrix $R$ with only positive numbers on its diagonal such that",
+      "### 2.5. Singular Value Decomposition",
+      "#### 2.5.1. Suppose $T \\in \\mathcal{L}(V,W)$. Then",
+      "#### 2.5.2. Suppose $T \\in \\mathcal{L}(V,W)$. Then",
+      "#### 2.5.3. <span style=\"color: red\">(Singular value decomposition)</span> Suppose $T \\in \\mathcal{L}(V,W)$ and the positive singular values of $T$ are $s_1,\\ldots,s_m$, counted with multiplicity ($m=\\operatorname{rank}T$). Then there exist orthonormal lists $e_1,\\ldots,e_m$ in $V$ and $f_1,\\ldots,f_m$ in $W$ where",
+      "#### 2.5.4. <span style=\"color: red\">(SVD for matrix)</span> Suppose $A \\in F^{p \\times n}$ of rank $m \\geq 1$. Then there exist $B \\in F^{p \\times m}$ with orthonormal columns, a diagonal matrix with positive entries $D \\in F^{m \\times m}$, and $C \\in F^{n \\times m}$ with orthonormal columns such that",
+      "### 2.6. Consequences of Singular Value Decomposition",
+      "#### 2.6.1. Suppose $T \\in \\mathcal{L}(V,W)$. Let $s_1$ be the largest singular value of $T$. Then",
+      "#### 2.6.2. Suppose $S,T \\in \\mathcal{L}(V,W)$. Then",
+      "#### 2.6.3. Suppose $T \\in \\mathcal{L}(V,W)$ and $s_1 \\geq \\cdots \\geq s_m$ are the positive singular values of $T$ with corresponding orthonormal vectors $e_1,\\ldots,e_m$ in $V$ and $f_1,\\ldots,f_m$ in $W$. Suppose $1 \\leq k < m$. Then",
+      "#### 2.6.4. Suppose $T \\in \\mathcal{L}(V)$. Then there exists a unitary operator $S \\in \\mathcal{L}(V)$ such that",
+      "## 3. Examples"
+    ]
+  },
+  "content": [
+    {
+      "type": "block",
+      "id": "la-ch07-block-0001",
+      "format": "markdown",
+      "text": "\n\nSource: https://www.notion.so/40669428c86181a98db1c0c40725fbe8\n\n> Throughout this chapter, $V,W,U$ are finite-dimensional inner product spaces over $F=\\mathbb R$ or $\\mathbb C$. Inner products are linear in the first variable. Singular values include zeros and are counted with multiplicity as the square roots of the $\\dim V$ eigenvalues of $T^*T$; hence the list has length $\\dim V$. A largest singular value is used only when $V\\ne\\{0\\}$.\n\n"
+    },
+    {
+      "type": "section",
+      "id": "la-ch07-section-1",
+      "title": "Definitions",
+      "label": "1",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch07-block-0002",
+          "format": "markdown",
+          "text": "\n\n"
+        },
+        {
+          "type": "section",
+          "id": "la-ch07-section-1-1",
+          "title": "Self-Adjoint and Normal Operators",
+          "label": "1.1",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch07-block-0003",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-1-1-1",
+              "kind": "definition",
+              "label": "1.1.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-1-1-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T\\in\\mathcal{L}(V,W)$. The **adjoint** of $T$ is the function $T^*:W\\rightarrow V$ such that"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0004",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\langle Tv, w\\rangle_W = \\langle v, T^*w \\rangle_V\n$$\n\nfor every $v\\in V$ and $w \\in W$.\n\n- It can be easily shown that $T^*$ exists uniquely and is linear, by the finite-dimensional Riesz representation theorem.\n\n"
+                }
+              ],
+              "title": "Adjoint operator",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-1-1-2",
+              "kind": "definition",
+              "label": "1.1.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-1-1-2-heading",
+                  "format": "markdown",
+                  "text": "Let $A\\in F^{m\\times n}$. Then the **conjugate transpose** $A^*$ of $A$ is defined as follows."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0005",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\big(A^*\\big)_{i,j}=\\overline{A_{j,i}}\n$$\n\n"
+                }
+              ],
+              "title": "Conjugate transpose",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-1-1-3",
+              "kind": "definition",
+              "label": "1.1.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-1-1-3-heading",
+                  "format": "markdown",
+                  "text": "An operator $T\\in\\mathcal{L}(V)$ is called **self-adjoint** if $T=T^*$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0006",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "title": "Self-adjoint",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-1-1-4",
+              "kind": "definition",
+              "label": "1.1.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-1-1-4-heading",
+                  "format": "markdown",
+                  "text": "An operator $T\\in\\mathcal{L}(V)$ is called **normal** if $TT^*=T^*T$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0007",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "title": "Normal",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-1-1-5",
+              "kind": "definition",
+              "label": "1.1.5",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-1-1-5-heading",
+                  "format": "markdown",
+                  "text": "An operator $T\\in\\mathcal{L}(V)$ is called skew-adjoint if $T^*=-T$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0008",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "title": "Skew-adjoint",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "item",
+          "id": "la-ch07-item-1-2",
+          "kind": "definition",
+          "label": "1.2",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch07-item-1-2-heading",
+              "format": "markdown",
+              "text": "Spectral Theorem"
+            },
+            {
+              "type": "block",
+              "id": "la-ch07-block-0009",
+              "format": "markdown",
+              "text": "\n\nAn orthonormal eigenbasis is an orthonormal basis consisting of eigenvectors of an operator. The real and complex spectral theorems in §2.2 characterize when such a basis exists.\n\n"
+            }
+          ],
+          "title": "Spectral Theorem",
+          "learning": {
+            "capabilities": [
+              "recognize",
+              "apply"
+            ],
+            "requires": [],
+            "proofCoverage": "none"
+          }
+        },
+        {
+          "type": "section",
+          "id": "la-ch07-section-1-3",
+          "title": "Positive Operators",
+          "label": "1.3",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch07-block-0010",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-1-3-1",
+              "kind": "definition",
+              "label": "1.3.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-1-3-1-heading",
+                  "format": "markdown",
+                  "text": "An operator $T\\in\\mathcal{L}(V)$ is called positive if it is self-adjoint and"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0011",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\langle Tv,v \\rangle \\geq 0,\\ v\\in V.\n$$\n\n- For a positive operator $T$, invertibility is equivalent to $\\langle Tv,v\\rangle>0$ for every nonzero $v\\in V$. Over $\\mathbb C$, the condition $\\langle Tv,v\\rangle\\geq0$ for all $v$ already implies self-adjointness.\n\n- A matrix $B \\in F^{n \\times n}$ is called **positive definite** if $B^*=B$ and $\\langle Bx,x \\rangle>0$ for all nonzero $x \\in F^n$.\n\n"
+                }
+              ],
+              "title": "Positive operator",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-1-3-2",
+              "kind": "definition",
+              "label": "1.3.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-1-3-2-heading",
+                  "format": "markdown",
+                  "text": "An operator $R$ is a square root of an operator $T$ if $R^2=T$. For a positive operator, $\\sqrt{T}$ denotes the unique positive square root of $T$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0012",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch07-section-1-4",
+          "title": "Isometrics, Unitary Operators, and Matrix Factorization",
+          "label": "1.4",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch07-block-0013",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-1-4-1",
+              "kind": "definition",
+              "label": "1.4.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-1-4-1-heading",
+                  "format": "markdown",
+                  "text": "A linear map $S \\in \\mathcal{L}(V,W)$ is called an isometry if"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0014",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\|Sv\\|=\\|v\\|,\\ v\\in V.\n$$\n\n"
+                }
+              ],
+              "title": "Isometry",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-1-4-2",
+              "kind": "definition",
+              "label": "1.4.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-1-4-2-heading",
+                  "format": "markdown",
+                  "text": "An operator $S\\in\\mathcal{L}(V)$ is called unitary if $S$ is an invertible isometry."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0015",
+                  "format": "markdown",
+                  "text": "\n\n- Note that an isometry operator in a finite-dimensional inner product space is always unitary.\n\n- Note that $|\\lambda|=1$ for any eigenvalue of $S$.\n\n- A matrix $A\\in F^{n\\times n}$ is called unitary if its columns form orthonormal basis in $F^n$.\n\n"
+                }
+              ],
+              "title": "Unitary",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch07-section-1-5",
+          "title": "Singular Value Decomposition",
+          "label": "1.5",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch07-block-0016",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-1-5-1",
+              "kind": "definition",
+              "label": "1.5.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-1-5-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T \\in \\mathcal{L}(V,W)$. The singular values of $T$ are nonnegative square roots of the eigenvalues of $T^*T$, listed in decreasing order, each included as many times as the dimension of the corresponding eigenspace of $T^*T$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0017",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "title": "Singular value",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch07-section-1-6",
+          "title": "Consequences of Singular Value Decomposition",
+          "label": "1.6",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch07-block-0018",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-1-6-1",
+              "kind": "definition",
+              "label": "1.6.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-1-6-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T \\in \\mathcal{L}(V,W)$. Then the norm of $T$, denoted by $\\|T\\|$ is defined by"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0019",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\|T\\|=\\sup\\{\\|Tv\\|:v \\in V\\ and\\ \\|v\\| \\leq 1\\}.\n$$\n\n"
+                }
+              ],
+              "title": "Norm of a linear map",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "la-ch07-section-2",
+      "title": "Theorems",
+      "label": "2",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch07-block-0020",
+          "format": "markdown",
+          "text": "\n\n"
+        },
+        {
+          "type": "section",
+          "id": "la-ch07-section-2-1",
+          "title": "Self-Adjoint and Normal Operators",
+          "label": "2.1",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch07-block-0021",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-1-1",
+              "kind": "theorem",
+              "label": "2.1.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-1-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $U,V,W$ are finite-dimensional inner product spaces, $T_1,T_2\\in\\mathcal L(U,V)$, $\\lambda\\in F$, and let $S\\in\\mathcal{L}(V,W),\\ T\\in\\mathcal{L}(U,V)$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0022",
+                  "format": "markdown",
+                  "text": "\n\n(1) $(T_1+T_2)^*=T_1^*+T_2^*$\n\n(2) $(\\lambda T)^*=\\overline{\\lambda}T^*$\n\n(3) $\\big(T^*\\big)^*=T$\n\n(4) $\\big( ST \\big)^*=T^* S^*$\n\n(5) $I^*=I$\n\n(6) If $T$ is invertible, then $T^*$ is invertible and $\\big(T^{-1}\\big)^*=\\big(T^*\\big)^{-1}$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-1-2",
+              "kind": "theorem",
+              "label": "2.1.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-1-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V,W$ are finite-dimensional inner product spaces and let $T\\in\\mathcal{L}(V,W)$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0023",
+                  "format": "markdown",
+                  "text": "\n\n(1) $\\ker(T^*)=(\\operatorname{range}(T))^{\\perp}$\n\n(2) $\\operatorname{range}(T^*)=(\\ker(T))^{\\perp}$\n\n(3) $\\ker(T)=\\big(\\operatorname{range}(T^*)\\big)^{\\perp}$\n\n(4) $\\operatorname{range}(T)=\\big(\\ker(T^*)\\big)^{\\perp}$\n\n- Note that $\\operatorname{rank}(T)=\\operatorname{rank}(T^*)$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-1-3",
+              "kind": "theorem",
+              "label": "2.1.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-1-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V,W$ are finite-dimensional inner product spaces and $T\\in\\mathcal{L}(V,W)$. Suppose $\\beta=\\{e_1,\\ldots,e_n\\},\\gamma=\\{f_1,\\ldots,f_m\\}$ are orthonormal bases of $V$ and $W$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0024",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\big[T^*\\big]_{\\gamma}^{\\beta}=\\Big(\\big[T\\big]_{\\beta}^{\\gamma}\\Big)^*\n$$\n\n- Let $U$ be a subspace of a finite-dimensional inner product space $V$ and let $R:V \\rightarrow V',\\ R(v)=\\varphi_v$ where $\\varphi_v(u)=\\langle u,v \\rangle$ in Riesz representation theorem. Then $U^0=R(U^{\\perp})$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-1-4",
+              "kind": "theorem",
+              "label": "2.1.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-1-4-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a complex inner product space and $T\\in\\mathcal{L}(V)$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0025",
+                  "format": "markdown",
+                  "text": "\n\n(1) $\\langle Tv,v \\rangle=0\\text{ for every }v\\in V \\iff T=0$\n\n(2) $T\\text{ is self-adjoint} \\iff \\langle Tv, v \\rangle \\in \\mathbb{R}\\text{ for every }v\\in V$\n\n- Note the property (1) does not hold if $F=\\mathbb{R}$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-1-5",
+              "kind": "theorem",
+              "label": "2.1.5",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-1-5-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T\\in\\mathcal{L}(V)$ is self-adjoint. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0026",
+                  "format": "markdown",
+                  "text": "\n\n(1) Every eigenvalue of $T$ is real\n\n(2) $\\langle Tv,v \\rangle=0\\text{ for every }v\\in V \\iff T=0$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-1-6",
+              "kind": "theorem",
+              "label": "2.1.6",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-1-6-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T\\in\\mathcal{L}(V)$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0027",
+                  "format": "markdown",
+                  "text": "\n\n$$\nT \\text{ is normal}\\\\\n\\iff \\|Tv\\|=\\|T^*v\\|\\text{ for every }v\\in V\\\\\n\\overset{F=\\mathbb{C}}{\\iff}T=A+iB \\text{ for some commuting self-adjoint }A,B\\\\\n\\overset{F=\\mathbb{C}}{\\iff} \\exists\\ p \\in \\mathcal{P}(\\mathbb{C})\\text{ such that }T^*=p(T)\n$$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-1-7",
+              "kind": "theorem",
+              "label": "2.1.7",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-1-7-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional inner product space and $T\\in\\mathcal{L}(V)$ is normal. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0028",
+                  "format": "markdown",
+                  "text": "\n\n(1) $\\ker(T)=\\ker(T^*)$\n\n(2) $\\operatorname{range}(T)=\\operatorname{range}(T^*)$\n\n(3) $V=\\ker(T)\\oplus \\operatorname{range}(T)$\n\n(4) $T-\\lambda I$ is normal for every $\\lambda\\in F$\n\n(5) If $v\\in V$ and $\\lambda\\in F$, then $Tv=\\lambda v$ if and only if $T^*v=\\overline{\\lambda} v$\n\n(6) Eigenvectors of $T$ corresponding to distinct eigenvalues are orthogonal\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch07-section-2-2",
+          "title": "Spectral Theorem",
+          "label": "2.2",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch07-block-0029",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-2-1",
+              "kind": "theorem",
+              "label": "2.2.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-2-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T\\in \\mathcal{L}(V)$ is self-adjoint and $b,c\\in\\mathbb R$ are such that $b^2 < 4c$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0030",
+                  "format": "markdown",
+                  "text": "\n\n$$\nT^2+bT+cI\n$$\n\nis an invertible operator.\n\nProof sketch. For $v\\ne0$, $\\langle(T^2+bT+cI)v,v\\rangle=\\|(T+\\frac b2 I)v\\|^2+(c-\\frac{b^2}{4})\\|v\\|^2>0$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-2-2",
+              "kind": "theorem",
+              "label": "2.2.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-2-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T \\in \\mathcal{L}(V)$ is self-adjoint. Then the minimal polynomial of $T$ equals $(z-\\lambda_1)\\cdots(z-\\lambda_m)$ for some distinct $\\lambda_1,\\ldots,\\lambda_m \\in \\mathbb{R}$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0031",
+                  "format": "markdown",
+                  "text": "\n\nProof sketch. Self-adjoint operators have real eigenvalues. Over $\\mathbb R$, an irreducible quadratic factor $z^2+bz+c$ satisfies $b^2<4c$, so §2.2.1 makes $T^2+bT+cI$ invertible; such a factor cannot occur in the minimal polynomial. Finally, self-adjointness rules out repeated linear factors: $\\ker((T-\\lambda I)^2)=\\ker(T-\\lambda I)$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-2-3",
+              "kind": "theorem",
+              "label": "2.2.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-2-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $F=\\mathbb{R}$ and $T\\in\\mathcal{L}(V)$. Then the following statements are equivalent."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0032",
+                  "format": "markdown",
+                  "text": "\n\n(1) $T$ is self-adjoint\n\n(2) $T$ has a diagonal matrix with respect to some orthonormal basis of $V$\n\n(3) $V$ has an orthonormal basis consisting of eigenvectors of $T$\n\n"
+                }
+              ],
+              "title": "Real spectral theorem",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-2-4",
+              "kind": "theorem",
+              "label": "2.2.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-2-4-heading",
+                  "format": "markdown",
+                  "text": "Suppose $F=\\mathbb{C}$ and $T\\in\\mathcal{L}(V)$. Then the following statements are equivalent."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0033",
+                  "format": "markdown",
+                  "text": "\n\n(1) $T$ is normal\n\n(2) $T$ has a diagonal matrix with respect to some orthonormal basis of $V$\n\n(3) $V$ has an orthonormal basis consisting of eigenvectors of $T$\n\n"
+                }
+              ],
+              "title": "Complex spectral theorem",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch07-section-2-3",
+          "title": "Positive Operators",
+          "label": "2.3",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch07-block-0034",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-3-1",
+              "kind": "theorem",
+              "label": "2.3.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-3-1-heading",
+                  "format": "markdown",
+                  "text": "Let $V$ be a finite-dimensional inner product space and let $T \\in \\mathcal{L}(V)$. Then the following statements are equivalent."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0035",
+                  "format": "markdown",
+                  "text": "\n\n(1) $T$ is a positive operator.\n\n(2) $T$ is self-adjoint and all eigenvalues of $T$ are nonnegative.\n\n(3) With respect to some orthonormal basis of $V$, the matrix of $T$ is a diagonal matrix with only nonnegative numbers on the diagonal.\n\n(4) $T$ has a positive square root\n\n(5) $T$ has a self-adjoint square root\n\n(6) $T=R^*R$ for some $R \\in \\mathcal{L}(V)$\n\n- Note that each positive operator on $V$ has a unique positive square root.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-3-2",
+              "kind": "theorem",
+              "label": "2.3.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-3-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T$ is a positive operator on $V$ and $v\\in V$ is such that $\\langle Tv,v \\rangle=0$. Then $Tv=0$."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0036",
+                  "format": "markdown",
+                  "text": "\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch07-section-2-4",
+          "title": "Isometrics, Unitary Operators, and Matrix Factorization",
+          "label": "2.4",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch07-block-0037",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-4-1",
+              "kind": "theorem",
+              "label": "2.4.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-4-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V,W$ are finite-dimensional inner product spaces and let $S \\in \\mathcal{L}(V,W)$. Then the following statements are equivalent."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0038",
+                  "format": "markdown",
+                  "text": "\n\n(1) $S$ is an isometry\n\n(2) $S^*S=I$\n\n(3) $\\langle Su, Sv \\rangle = \\langle u,v \\rangle$ for all $u,v\\in V$\n\n(4) $Se_1,\\ldots,Se_n$ is an orthonormal list in $W$ for an orthonormal basis $e_1,\\ldots,e_n$ of $V$\n\n(5) Suppose $\\beta,\\gamma$ are orthonormal bases of $V,W$, respectively. Then the columns of $[S]_\\beta^\\gamma$ form an orthonormal list in $F^{\\dim W}$ with respect to the Euclidean inner product.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-4-2",
+              "kind": "theorem",
+              "label": "2.4.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-4-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $V$ is a finite-dimensional inner product space with an orthonormal basis $\\beta=\\{e_1,\\ldots,e_n\\}$ and let $S\\in\\mathcal{L}(V)$. Then the following statements are equivalent."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0039",
+                  "format": "markdown",
+                  "text": "\n\n(1) $S$ is a unitary operator\n\n(2) $S^*S=SS^*=I$\n\n(3) $S$ is invertible and $S^{-1}=S^*$\n\n(4) $Se_1,\\ldots,Se_n$ is an orthonormal basis of $V$\n\n(5) The rows of $[S]_{\\beta}$ form an orthonormal basis of $F^n$ with respect to the Euclidean inner product\n\n(6) $S^*$ is a unitary operator\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-4-3",
+              "kind": "theorem",
+              "label": "2.4.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-4-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $F=\\mathbb{C}$ and $S \\in \\mathcal{L}(V)$. Then the following statements are equivalent."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0040",
+                  "format": "markdown",
+                  "text": "\n\n(1) $S$ is a unitary operator\n\n(2) There is an orthonormal basis of $V$ consisting of eigenvectors of $S$, whose corresponding eigenvalues all have absolute value 1\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-4-4",
+              "kind": "theorem",
+              "label": "2.4.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-4-4-heading",
+                  "format": "markdown",
+                  "text": "Suppose $Q \\in F^{n \\times n}$. Then the following statements are equivalent."
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0041",
+                  "format": "markdown",
+                  "text": "\n\n(1) $Q$ is a unitary matrix\n\n(2) The rows of $Q$ form an orthonormal basis of $F^n$\n\n(3) $\\|Qv\\|=\\|v\\|$ for every $v \\in F^n$\n\n(4) $Q^*Q=QQ^*=I$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-4-5",
+              "kind": "theorem",
+              "label": "2.4.5",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-4-5-heading",
+                  "format": "markdown",
+                  "text": "Suppose $A\\in F^{n\\times n}$ has linearly independent columns. Then there exist unique matrices $Q\\text{(unitary)},R\\text{(upper triangular with positive diagonal entries)} \\in F^{n \\times n}$ such that"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0042",
+                  "format": "markdown",
+                  "text": "\n\n$$\nA=QR.\n$$\n\n- The columns of $Q$ can be computed by applying Gram-Schmidt procedure to the columns of $A$.\n\n"
+                }
+              ],
+              "title": "QR factorization",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-4-6",
+              "kind": "theorem",
+              "label": "2.4.6",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-4-6-heading",
+                  "format": "markdown",
+                  "text": "Suppose $B$ is a positive definite matrix. Then there exists a unique upper-triangular matrix $R$ with only positive numbers on its diagonal such that"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0043",
+                  "format": "markdown",
+                  "text": "\n\n$$\nB=R^*R.\n$$\n\n"
+                }
+              ],
+              "title": "Cholesky factorization",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch07-section-2-5",
+          "title": "Singular Value Decomposition",
+          "label": "2.5",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch07-block-0044",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-5-1",
+              "kind": "theorem",
+              "label": "2.5.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-5-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T \\in \\mathcal{L}(V,W)$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0045",
+                  "format": "markdown",
+                  "text": "\n\n(1) $T^*T$ is a positive operator on $V$\n\n(2) $\\ker(T^*T)=\\ker(T)$\n\n(3) $\\operatorname{range}(T^*T)=\\operatorname{range}(T^*)=(\\ker(T))^\\perp$\n\n(4) $\\operatorname{rank}(T^*T)=\\operatorname{rank}(T^*)=\\operatorname{rank}(T)$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-5-2",
+              "kind": "theorem",
+              "label": "2.5.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-5-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T \\in \\mathcal{L}(V,W)$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0046",
+                  "format": "markdown",
+                  "text": "\n\n(1) $T$ is injective $\\iff$ $0$ is not a singular value of $T$\n\n(2) $T$ is surjective $\\iff$ the number of positive singular values of $T$ equals $\\dim(W)$\n\n(3) The number of positive singular values of $T$ equals $\\operatorname{rank}(T)$\n\n(4) $T$ is an isometry $\\iff$ all singular values of $T$ equal 1\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-5-3",
+              "kind": "theorem",
+              "label": "2.5.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-5-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T \\in \\mathcal{L}(V,W)$ and the positive singular values of $T$ are $s_1,\\ldots,s_m$, counted with multiplicity ($m=\\operatorname{rank}T$). Then there exist orthonormal lists $e_1,\\ldots,e_m$ in $V$ and $f_1,\\ldots,f_m$ in $W$ where"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0047",
+                  "format": "markdown",
+                  "text": "\n\n$$\nf_k=\\cfrac{Te_k}{s_k},\\ k=1,\\ldots,m\n$$\n\nsuch that\n\n$$\nTv=s_1 \\langle v,e_1 \\rangle f_1 + \\cdots +s_m \\langle v,e_m \\rangle f_m\\\\\nT^*w=s_1\\langle w,f_1 \\rangle e_1+\\cdots+s_m\\langle w,f_m \\rangle e_m\\\\\nT^{\\dagger}w=\\cfrac{\\langle w,f_1 \\rangle}{s_1}e_1 + \\cdots + \\cfrac{\\langle w,f_m \\rangle}{s_m}e_m\n$$\n\nfor every $v \\in V$ and $w \\in W$. If $T=0$, take $m=0$ and interpret all three sums as zero.\n\n"
+                }
+              ],
+              "title": "Singular value decomposition",
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-5-4",
+              "kind": "theorem",
+              "label": "2.5.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-5-4-heading",
+                  "format": "markdown",
+                  "text": "(SVD for matrix) Suppose $A \\in F^{p \\times n}$ of rank $m \\geq 1$. Then there exist $B \\in F^{p \\times m}$ with orthonormal columns, a diagonal matrix with positive entries $D \\in F^{m \\times m}$, and $C \\in F^{n \\times m}$ with orthonormal columns such that"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0048",
+                  "format": "markdown",
+                  "text": "\n\n$$\nA=BDC^*.\n$$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        },
+        {
+          "type": "section",
+          "id": "la-ch07-section-2-6",
+          "title": "Consequences of Singular Value Decomposition",
+          "label": "2.6",
+          "content": [
+            {
+              "type": "block",
+              "id": "la-ch07-block-0049",
+              "format": "markdown",
+              "text": "\n\n"
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-6-1",
+              "kind": "theorem",
+              "label": "2.6.1",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-6-1-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T \\in \\mathcal{L}(V,W)$. Let $s_1$ be the largest singular value of $T$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0050",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\|T\\| = s_1\n$$\n\nfor $V\\ne\\{0\\}$. If $V=\\{0\\}$, then $\\|T\\|=0$.\n\n- Note that $\\|Tv\\| \\leq \\|T\\|\\|v\\|$ and $\\|T\\|$ is the smallest bound.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-6-2",
+              "kind": "theorem",
+              "label": "2.6.2",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-6-2-heading",
+                  "format": "markdown",
+                  "text": "Suppose $S,T \\in \\mathcal{L}(V,W)$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0051",
+                  "format": "markdown",
+                  "text": "\n\n(1) $\\|T\\| \\geq 0$\n\n(2) $\\|T\\|=0 \\iff T=0$\n\n(3) $\\|\\lambda T\\|=|\\lambda|\\|T\\|$ for all $\\lambda \\in F$\n\n(4) $\\|S + T\\| \\leq \\|S\\|+\\|T\\|$\n\n(5) $\\|T^*\\|=\\|T\\|$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-6-3",
+              "kind": "theorem",
+              "label": "2.6.3",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-6-3-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T \\in \\mathcal{L}(V,W)$ and $s_1 \\geq \\cdots \\geq s_m$ are the positive singular values of $T$ with corresponding orthonormal vectors $e_1,\\ldots,e_m$ in $V$ and $f_1,\\ldots,f_m$ in $W$. Suppose $1 \\leq k < m$. Then"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0052",
+                  "format": "markdown",
+                  "text": "\n\n$$\n\\min\\{\\|T-S\\|:S \\in \\mathcal{L}(V,W)\\text{ and }\\operatorname{rank}(S)\\leq k\\}=s_{k+1}.\n$$\n\nFurthermore, $\\operatorname{rank}(T_k)=k$ and $\\|T-T_k\\|=s_{k+1}$ where\n\n$$\nT_kv=s_1\\langle v,e_1 \\rangle f_1 + \\cdots + s_k \\langle v,e_k \\rangle f_k\n$$\n\nfor every $v \\in V$.\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            },
+            {
+              "type": "item",
+              "id": "la-ch07-item-2-6-4",
+              "kind": "theorem",
+              "label": "2.6.4",
+              "content": [
+                {
+                  "type": "block",
+                  "id": "la-ch07-item-2-6-4-heading",
+                  "format": "markdown",
+                  "text": "Suppose $T \\in \\mathcal{L}(V)$. Then there exists a unitary operator $S \\in \\mathcal{L}(V)$ such that"
+                },
+                {
+                  "type": "block",
+                  "id": "la-ch07-block-0053",
+                  "format": "markdown",
+                  "text": "\n\n$$\nT=S\\sqrt{T^*T}\n$$\n\n"
+                }
+              ],
+              "learning": {
+                "capabilities": [
+                  "recognize",
+                  "apply"
+                ],
+                "requires": [],
+                "proofCoverage": "none"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "id": "la-ch07-section-3",
+      "title": "Examples",
+      "label": "3",
+      "content": [
+        {
+          "type": "block",
+          "id": "la-ch07-block-0054",
+          "format": "markdown",
+          "text": "\n\n---\n\n\n교정·보완 메모\n\n양의 정부호에서 영벡터를 제외하고, 수반사상에 내적 조건을 추가했습니다. QR의 양의 대각 조건, SVD의 치역·행렬 크기·누락된 덧셈 기호를 교정했습니다.\n\n원본: [7. Operators on Inner Product Spaces](https://app.notion.com/p/24c69428c86180418630c5e1c7191e1a)\n\n\n"
+        }
+      ]
+    }
+  ]
+}

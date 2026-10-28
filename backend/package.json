@@ -9,7 +9,7 @@
     "dev:local": "tsx watch scripts/dev-local.ts",
     "seed:download": "tsx scripts/seed-download.ts",
     "seed:load": "tsx scripts/seed-load.ts",
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-math-schemas.mjs",
     "test": "tsx --test src/*.test.ts",
     "test:mixed": "node --experimental-test-module-mocks --import tsx --test scripts/tests/mixed-*.test.ts",
     "start": "node dist/index.js",

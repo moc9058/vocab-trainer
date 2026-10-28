@@ -19,9 +19,9 @@ const repository = resolve(
 );
 export const linearAlgebraPath = join(
   repository,
-  "textbook/Linear Algebra/1. Vector Spaces.md",
+  "backend/scripts/tests/fixtures/legacy-vector-spaces.md",
 );
-/** Verification uses the user's actual notes; originals are never modified. */
+/** Small historical Markdown fixture exercises the migration-only v1 compiler. */
 export async function linearAlgebraFixture(root?: string) {
   const sourceBytes = await readFile(linearAlgebraPath);
   const notes = sourceBytes.toString("utf8").replace(/\r\n?/g, "\n");

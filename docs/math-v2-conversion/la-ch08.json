@@ -1,0 +1,693 @@
+{
+  "chapterId": "la-ch08",
+  "originalFile": "8. Operators on Complex Vector Spaces.md",
+  "originalSha256": "cd9fcba8ee46bc26d7aa831cbb5c3054aef439e9de3444b4c0f1d854f1f54b70",
+  "roundTripSha256": "cd9fcba8ee46bc26d7aa831cbb5c3054aef439e9de3444b4c0f1d854f1f54b70",
+  "exactRoundTrip": true,
+  "mathCount": 165,
+  "mathTokenSha256": "b43465f988d4f9ccb405bd49eea0f7cff99d160ca6870b3a14ad35e007000f33",
+  "headings": 35,
+  "items": 23,
+  "decorationCount": 24,
+  "mappings": [
+    {
+      "type": "heading",
+      "id": "la-ch08",
+      "sourceStart": 0,
+      "sourceEnd": 39,
+      "original": "# 8. Operators on Complex Vector Spaces",
+      "action": "moved-to-chapter-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0001",
+      "sourceStart": 39,
+      "sourceEnd": 496,
+      "sha256": "bfc4436c927abd8d6f42b798b3854b07d6d257bc6aa791cfb50e76aa5014496e"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-section-1",
+      "sourceStart": 496,
+      "sourceEnd": 513,
+      "original": "## 1. Definitions",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0002",
+      "sourceStart": 513,
+      "sourceEnd": 515,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-section-1-1",
+      "sourceStart": 515,
+      "sourceEnd": 558,
+      "original": "### 1.1. Operators on Complex Vector Spaces",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0003",
+      "sourceStart": 558,
+      "sourceEnd": 560,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-1-1-1",
+      "sourceStart": 560,
+      "sourceEnd": 849,
+      "original": "#### 1.1.1. <span style=\"color: red\">(Generalized eigenvector)</span> Suppose $T\\in \\mathcal{L}(V)$ and $\\lambda$<span style=\"color: blue\"><u>** is an eigenvalue**</u></span> of $T$. A vector $v \\in V$ is called a generalized eigenvector of $T$ corresponding to $\\lambda$ if $v \\neq 0$ and",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0004",
+      "sourceStart": 849,
+      "sourceEnd": 909,
+      "sha256": "de8c2350674b53e7e8c7132c35edcc12498d3bf5e33d5195abea037b4dfa80fc"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-1-1-2",
+      "sourceStart": 909,
+      "sourceEnd": 1028,
+      "original": "#### 1.1.2. <span style=\"color: red\">(Nilpotent)</span> An operator is called nilpotent if some power of it equals $0$.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0005",
+      "sourceStart": 1028,
+      "sourceEnd": 1030,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-section-1-2",
+      "sourceStart": 1030,
+      "sourceEnd": 1075,
+      "original": "### 1.2. Generalized Eigenspace Decomposition",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0006",
+      "sourceStart": 1075,
+      "sourceEnd": 1077,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-1-2-1",
+      "sourceStart": 1077,
+      "sourceEnd": 1276,
+      "original": "#### 1.2.1. <span style=\"color: red\">(Generalized eigenspace)</span> Suppose $T \\in \\mathcal{L}(V), \\dim(V)=n$ and $\\lambda \\in F$. The generalized eigenspace corresponding to $\\lambda$ is defined by",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0007",
+      "sourceStart": 1276,
+      "sourceEnd": 1447,
+      "sha256": "2ce02766935a4c4444e29ee30b7e8e137cde3e5a5fdf3cd29ef3af8588a8ba3c"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-1-2-2",
+      "sourceStart": 1447,
+      "sourceEnd": 1633,
+      "original": "#### 1.2.2. <span style=\"color: red\">(Multiplicity)</span> Suppose $T \\in \\mathcal{L}(V)$ and $\\dim(V)=n$. The multiplicity of an eigenvalue $\\lambda$ of $T$ is defined as the following:",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0008",
+      "sourceStart": 1633,
+      "sourceEnd": 1728,
+      "sha256": "7e41835851f1f8534aa48f3fa58e90d53c4deb87e16c7fc88b755db87090edd4"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-1-2-3",
+      "sourceStart": 1728,
+      "sourceEnd": 2049,
+      "original": "#### 1.2.3. <span style=\"color: red\">(Characteristic polynomial)</span> Suppose $T\\in \\mathcal{L}(V),\\ \\dim(V)=n$ and $F=\\mathbb{C}$. Let $\\lambda_1,\\ldots,\\lambda_m$ denote the distinct eigenvalues of $T$ with multiplicities $d_1,\\ldots,d_m$. Then the following polynomial is called the characteristic polynomial of $T$.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0009",
+      "sourceStart": 2049,
+      "sourceEnd": 2173,
+      "sha256": "1f70b7468df182331bf63a3d2fd9b12530ed46dc930b6e37c6ede20a4c625953"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-section-1-3",
+      "sourceStart": 2173,
+      "sourceEnd": 2234,
+      "original": "### 1.3. Consequences of Generalized Eigenspace Decomposition",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0010",
+      "sourceStart": 2234,
+      "sourceEnd": 2236,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-1-3-1",
+      "sourceStart": 2236,
+      "sourceEnd": 2381,
+      "original": "#### 1.3.1. <span style=\"color: red\">(Jordan basis)</span> Suppose $T\\in\\mathcal{L}(V)$. A basis $\\beta$ of $V$ is called Jordan basis for $T$ if",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0011",
+      "sourceStart": 2381,
+      "sourceEnd": 2671,
+      "sha256": "edaf1235dc3d4568fbb8e774f92f4d9e8bb66ace74eace371f2c22f5c297b9e3"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-section-1-4",
+      "sourceStart": 2671,
+      "sourceEnd": 2730,
+      "original": "### 1.4. Trace: A Connection Between Matrices and Operators",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0012",
+      "sourceStart": 2730,
+      "sourceEnd": 2732,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-1-4-1",
+      "sourceStart": 2732,
+      "sourceEnd": 2819,
+      "original": "#### 1.4.1. <span style=\"color: red\">(Trace)</span> Suppose $A\\in F^{n \\times n}$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0013",
+      "sourceStart": 2819,
+      "sourceEnd": 2982,
+      "sha256": "8e38aa55bb74da087a6e2949ad4a719ba20fb1a6ba0420aa1923ddcbbcd2af75"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-section-2",
+      "sourceStart": 2982,
+      "sourceEnd": 2996,
+      "original": "## 2. Theorems",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0014",
+      "sourceStart": 2996,
+      "sourceEnd": 2998,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-section-2-1",
+      "sourceStart": 2998,
+      "sourceEnd": 3041,
+      "original": "### 2.1. Operators on Complex Vector Spaces",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0015",
+      "sourceStart": 3041,
+      "sourceEnd": 3043,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-1-1",
+      "sourceStart": 3043,
+      "sourceEnd": 3102,
+      "original": "#### 2.1.1. Suppose $T\\in \\mathcal{L}(V),\\ \\dim(V)=n$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0016",
+      "sourceStart": 3102,
+      "sourceEnd": 3333,
+      "sha256": "9a9f0612e198fcc7bd1846746d5b92525c7e03ac1289fdadf35fded3fdccc592"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-1-2",
+      "sourceStart": 3333,
+      "sourceEnd": 3473,
+      "original": "#### 2.1.2. Suppose $F = \\mathbb{C}$ and $T \\in \\mathcal{L}(V)$. Then there is a basis of $V$ consisting of generalized eigenvectors of $T$.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0017",
+      "sourceStart": 3473,
+      "sourceEnd": 3475,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-1-3",
+      "sourceStart": 3475,
+      "sourceEnd": 3553,
+      "original": "#### 2.1.3. Suppose $T\\in \\mathcal{L}(V)$. Then the following statements hold.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0018",
+      "sourceStart": 3553,
+      "sourceEnd": 3751,
+      "sha256": "60118768629816d3cf2cf63bd9a8cac1b69bc8723d316ecf47d1413924f1cbea"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-1-4",
+      "sourceStart": 3751,
+      "sourceEnd": 3842,
+      "original": "#### 2.1.4. Suppose $T \\in \\mathcal{L}(V),\\ \\dim(V)=n$. Then the following statements hold.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0019",
+      "sourceStart": 3842,
+      "sourceEnd": 4094,
+      "sha256": "c15cb22c0b90ad27dfe728101c03077a2daee5d3211f047374086cdc048a2970"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-1-5",
+      "sourceStart": 4094,
+      "sourceEnd": 4195,
+      "original": "#### 2.1.5. Suppose $T \\in \\mathcal{L}(V),\\ \\dim(V)=n$. Then the following statements are equivalent.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0020",
+      "sourceStart": 4195,
+      "sourceEnd": 4462,
+      "sha256": "b7d7dd83d02803ad11e5041d46251404466ca32e0ff8e3ef25f4a77a1663a906"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-section-2-2",
+      "sourceStart": 4462,
+      "sourceEnd": 4507,
+      "original": "### 2.2. Generalized Eigenspace Decomposition",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0021",
+      "sourceStart": 4507,
+      "sourceEnd": 4509,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-2-1",
+      "sourceStart": 4509,
+      "sourceEnd": 4644,
+      "original": "#### 2.2.1. Suppose $F=\\mathbb{C}$ and $T\\in \\mathcal{L}(V)$. Let $\\lambda_1,\\ldots,\\lambda_m$ be the distinct eigenvalues of $T$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0022",
+      "sourceStart": 4644,
+      "sourceEnd": 4781,
+      "sha256": "2982d5817207c27522986bfdae1a6aad6af967ad50a99f9040297b3e5791431b"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-2-2",
+      "sourceStart": 4781,
+      "sourceEnd": 4960,
+      "original": "#### 2.2.2. <span style=\"color: red\">(Cayley-Hamilton theorem)</span> Suppose $F=\\mathbb{C},\\ T \\in \\mathcal{L}(V)$ and $q$ is the characteristic polynomial of $T$. Then $q(T)=0$.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0023",
+      "sourceStart": 4960,
+      "sourceEnd": 5247,
+      "sha256": "3145d27983475ff4e27964379a789c63e3ec6157687498111b1c7b753d5a4683"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-2-3",
+      "sourceStart": 5247,
+      "sourceEnd": 5539,
+      "original": "#### 2.2.3. Suppose $F = \\mathbb{C}, T \\in \\mathcal{L}(V)$ and $\\dim(V)=n$. Suppose $\\beta = \\{v_1,\\ldots,v_n\\}$ is a basis of $V$ such that $[T]_\\beta$ is upper triangular. Then the number of times that each eigenvalue $\\lambda$ appears on the diagonal element equals the multiplicity of it.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0024",
+      "sourceStart": 5539,
+      "sourceEnd": 5839,
+      "sha256": "89232e329cfb37a3fe187eebf06021d02a18eb130fcb30978f3c1c769fcae3ca"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-2-4",
+      "sourceStart": 5839,
+      "sourceEnd": 6055,
+      "original": "#### 2.2.4. Suppose $F = \\mathbb{C}, T \\in \\mathcal{L}(V)$ and $\\dim(V)=n$. Let $\\lambda_1,\\ldots,\\lambda_m$ be the distinct eigenvalues of $T$ with multiplicities $d_1,\\ldots,d_m$. There exists a basis $\\beta$ where",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0025",
+      "sourceStart": 6055,
+      "sourceEnd": 6264,
+      "sha256": "f76d9da1403c7361f48a4f5e030edffe75068c254473e809799ea5eabe53f837"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-section-2-3",
+      "sourceStart": 6264,
+      "sourceEnd": 6325,
+      "original": "### 2.3. Consequences of Generalized Eigenspace Decomposition",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0026",
+      "sourceStart": 6325,
+      "sourceEnd": 6327,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-3-1",
+      "sourceStart": 6327,
+      "sourceEnd": 6411,
+      "original": "#### 2.3.1. Suppose $T\\in\\mathcal{L}(V)$ is nilpotent. Then $I+T$ has a square root.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0027",
+      "sourceStart": 6411,
+      "sourceEnd": 6571,
+      "sha256": "f307f624e61773b174d92fee2b2f141b4433713cbf9b4b23a09d3cc580ec00c5"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-3-2",
+      "sourceStart": 6571,
+      "sourceEnd": 6689,
+      "original": "#### 2.3.2. Suppose $V$ is a complex vector space and $T\\in \\mathcal{L}(V)$ is invertible. Then $T$ has a square root.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0028",
+      "sourceStart": 6689,
+      "sourceEnd": 6691,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-3-3",
+      "sourceStart": 6691,
+      "sourceEnd": 6798,
+      "original": "#### 2.3.3. Suppose $T\\in\\mathcal{L}(V)$ is nilpotent. Then there is a basis of $V$ that is a Jordan basis.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0029",
+      "sourceStart": 6798,
+      "sourceEnd": 7141,
+      "sha256": "dc1d11241ffdda194e17ed1fa7e80670646510fb94f971dbdb330ca2adbccad1"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-section-2-4",
+      "sourceStart": 7141,
+      "sourceEnd": 7200,
+      "original": "### 2.4. Trace: A Connection Between Matrices and Operators",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0030",
+      "sourceStart": 7200,
+      "sourceEnd": 7202,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-4-1",
+      "sourceStart": 7202,
+      "sourceEnd": 7301,
+      "original": "#### 2.4.1. Suppose $T \\in \\mathcal{L}(V), \\dim(V)=n$ and let $\\beta,\\gamma$ are bases of $V$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0031",
+      "sourceStart": 7301,
+      "sourceEnd": 7369,
+      "sha256": "25bd9d3265af279d6cdc5ce5178ea4a9b9d94df396950b2e18ad6fbe375f3220"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-4-2",
+      "sourceStart": 7369,
+      "sourceEnd": 7534,
+      "original": "#### 2.4.2. Suppose $F=\\mathbb{C}$ and $T \\in \\mathcal{L}(V)$ with distinct eigenvalues $\\lambda_1,\\ldots,\\lambda_m$, whose multiplicities are $d_1,\\ldots,d_m$. Then",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0032",
+      "sourceStart": 7534,
+      "sourceEnd": 8052,
+      "sha256": "12c9bbb889fc0c46d2a6191e132c04299f44da1671a649fd7104e6bcaaefc774"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-4-3",
+      "sourceStart": 8052,
+      "sourceEnd": 8177,
+      "original": "#### 2.4.3. The function $\\operatorname{tr}:\\mathcal{L}(V)\\rightarrow F$ is a linear functional on $\\mathcal{L}(V)$ such that",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0033",
+      "sourceStart": 8177,
+      "sourceEnd": 8555,
+      "sha256": "698bb7f456fa48e909a2f5befc91fbfcccdb34bfe5c9c50150a7b5273ec80202"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-item-2-4-4",
+      "sourceStart": 8555,
+      "sourceEnd": 8641,
+      "original": "#### 2.4.4. There do not exist operators $S,T \\in \\mathcal{L}(V)$ such that $ST-TS=I$.",
+      "action": "moved-to-item-title-and-statement"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0034",
+      "sourceStart": 8641,
+      "sourceEnd": 8643,
+      "sha256": "75a11da44c802486bc6f65640aa48a730f0f684c5c07a42ba3cd1735eb3fb070"
+    },
+    {
+      "type": "heading",
+      "id": "la-ch08-section-3",
+      "sourceStart": 8643,
+      "sourceEnd": 8657,
+      "original": "## 3. Examples",
+      "action": "moved-to-section-title"
+    },
+    {
+      "type": "body",
+      "blockId": "la-ch08-block-0035",
+      "sourceStart": 8657,
+      "sourceEnd": 8892,
+      "sha256": "dd27b9a55cacca3f98eaeb0a6cb88e569fe46ea6c5db9f4efa80af0a645b800b"
+    }
+  ],
+  "decorations": [
+    {
+      "blockId": "la-ch08-item-1-1-1",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 25,
+          "html": "</span>"
+        },
+        {
+          "offset": 69,
+          "html": "<span style=\"color: blue\">"
+        },
+        {
+          "offset": 69,
+          "html": "<u>"
+        },
+        {
+          "offset": 90,
+          "html": "</u>"
+        },
+        {
+          "offset": 90,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch08-item-1-1-2",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 11,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch08-item-1-2-1",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 24,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch08-item-1-2-2",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 14,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch08-item-1-2-3",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 27,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch08-item-1-3-1",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 14,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch08-item-1-4-1",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 7,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch08-item-2-2-2",
+      "tokens": [
+        {
+          "offset": 0,
+          "html": "<span style=\"color: red\">"
+        },
+        {
+          "offset": 25,
+          "html": "</span>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    },
+    {
+      "blockId": "la-ch08-block-0035",
+      "tokens": [
+        {
+          "offset": 7,
+          "html": "<details>"
+        },
+        {
+          "offset": 8,
+          "html": "<summary>"
+        },
+        {
+          "offset": 16,
+          "html": "</summary>"
+        },
+        {
+          "offset": 196,
+          "html": "</details>"
+        }
+      ],
+      "annotation": "Source color/underline emphasis retained in conversion metadata; textual content and existing Markdown emphasis are preserved."
+    }
+  ],
+  "learningReview": "recognize/apply only; difficulty [1,2]; no inferred proof permission or high difficulty; shared chapter assumptions preserved in each compiled unit",
+  "suspicions": []
+}
