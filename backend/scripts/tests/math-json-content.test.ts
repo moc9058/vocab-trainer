@@ -8,13 +8,19 @@ import { buildJsonCatalog, compileJsonSubject, parseJsonChapter, parseJsonSubjec
 import { compileCurriculumDependencies, dependencyClosure } from "../../src/math-curriculum-dependencies.js";
 import { importJsonAuthorPackage, reviewJsonAuthorRun, acceptJsonAuthorRun } from "../../src/math-json-authoring.js";
 import { createHash } from "node:crypto";
+import { Ajv } from "ajv";
+import { jsonAuthorPackageSchema } from "../../src/math-json-content.js";
+import { importAuthorPackage, reviewAuthorRun, acceptAuthorRun } from "../../src/math-authoring.js";
 const repository = fileURLToPath(new URL("../../../", import.meta.url));
 const example = () => readFile(join(repository,"prompt/math-chapter.example.json"),"utf8").then(parseJsonChapter);
 const subjectFor = (chapter:JsonChapter):JsonSubject => ({schemaVersion:2,subjectId:chapter.subjectId,title:"Example",contentLanguage:"en",nodes:[{id:"example-root",kind:"subject",parentId:null,title:"Example",order:0},{id:chapter.chapterId,kind:"chapter",parentId:"example-root",title:chapter.title,contentFile:"chapter.json",order:1}],dependencies:{semantics:"requires-all",edges:[]},foundationRefs:[]});
 function approve(subject:JsonSubject,chapters:JsonChapter[]) { subject.review={contentHash:subjectReviewHash(subject,chapters),compilerVersion:JSON_COMPILER_VERSION,reviewedBy:"test",reviewedAt:"2026-10-28"}; return subject; }
 const hash = (s:string) => createHash("sha256").update(s).digest("hex");
 test("v2 JSON schema accepts untitled items and recursive sections, rejects duplicate keys and unknown fields",async()=>{
-  const chapter=await example(); const section=chapter.content[1] as any;
+  const chapter=await example();
+  const packageValidator = new Ajv({strict:false}).compile(jsonAuthorPackageSchema);
+  assert.ok(packageValidator({schemaVersion:2,subject:subjectFor(chapter),chapters:[chapter],unresolved:[]}), JSON.stringify(packageValidator.errors));
+  const section=chapter.content[1] as any;
   section.content=[{type:"section",id:"nested",title:"Nested",content:section.content}];
   const compiled=compileJsonSubject(approve(subjectFor(chapter),[chapter]),[chapter]);
   assert.equal(compiled.concepts[0].title,"definition 1.1");
@@ -75,19 +81,41 @@ test("all nine chapter JSONs compile, preserve the original bytes through the re
   for(const file of s.nodes.filter((n:any)=>n.kind==="chapter").map((n:any)=>n.contentFile)) {
     const c=parseJsonChapter(await readFile(join(repository,"textbook/Linear Algebra",file),"utf8"));
     const report=JSON.parse(await readFile(join(repository,"docs/math-v2-conversion",`${c.chapterId}.json`),"utf8"));
-    const blocks=new Map<string,string>(); walkJsonContent(c.content,n=>{if(n.type==="block") blocks.set(n.id,n.text);});
+    const blocks=new Map<string,string>(),nodes=new Map<string,any>(); walkJsonContent(c.content,n=>{nodes.set(n.id,n);if(n.type==="block") blocks.set(n.id,n.text);});
+    for (const mapping of report.mappings.filter((m:any)=>m.type==="heading" && m.id!==c.chapterId)) {
+      const node=nodes.get(mapping.id);
+      const clean=mapping.original.replace(/^#+\s+/,"").replace(/^(?:\*\*)?(\d+(?:\.\d+)*)(?:\*\*)?\.\s*/,"").replace(/<\/?(?:span\b[^>]*|u|details|summary)>/gi,"");
+      if(node.type==="section") assert.equal(node.title,clean);
+      else {
+        const named=clean.match(/^\(([^()$=]+)\)\s*/);
+        const expected=named && node.title===named[1].trim()?clean.slice(named[0].length):clean;
+        assert.equal(blocks.get(`${node.id}-heading`)??"",expected);
+        if(node.title && !named) assert.equal(node.title,clean);
+      }
+    }
     const restored=report.mappings.map((m:any)=>{if(m.type==="heading")return m.original;let text=blocks.get(m.blockId)!; const tokens=report.decorations.find((d:any)=>d.blockId===m.blockId)?.tokens??[];for(const t of [...tokens].reverse()) text=text.slice(0,t.offset)+t.html+text.slice(t.offset);assert.equal(hash(text),m.sha256);return text;}).join("");
     assert.equal(hash(restored),c.source.originalSha256); assert.equal(hash(restored),report.roundTripSha256);
   }
 });
 test("JSON package review/accept is hash-bound, detects edits, and replays without changing source hashes",async()=>{
   const root=await mkdtemp(join(tmpdir(),"math-json-author-")),run=await mkdtemp(join(tmpdir(),"math-json-run-"));
-  try {const c=await example(),s=subjectFor(c); const imported=await importJsonAuthorPackage({schemaVersion:2,subject:s,chapters:[c],unresolved:[]},root,run);
-    assert.equal((await reviewJsonAuthorRun(run)).units[0].id,c.chapterId);
+  try {const c=await example(),s=subjectFor(c); const imported=await importAuthorPackage({schemaVersion:2,subject:s,chapters:[c],unresolved:[]},root,run);
+    assert.equal((await reviewAuthorRun(run)).units[0].id,c.chapterId);
     await assert.rejects(acceptJsonAuthorRun(run,[c.chapterId],"wrong","test"),/E_REVIEW_HASH_MISMATCH/);
-    await acceptJsonAuthorRun(run,[c.chapterId],imported.reviewHash,"test");
+    await acceptAuthorRun(run,[c.chapterId],imported.reviewHash,"test");
     const first=await buildJsonCatalog(root);
-    await acceptJsonAuthorRun(run,[c.chapterId],imported.reviewHash,"test");
+    await acceptAuthorRun(run,[c.chapterId],imported.reviewHash,"test");
     assert.equal((await buildJsonCatalog(root)).catalog.id,first.catalog.id);
+  } finally {await rm(root,{recursive:true,force:true});await rm(run,{recursive:true,force:true});}
+});
+
+test("JSON acceptance detects a changed authoring original before any overwrite",async()=>{
+  const root=await mkdtemp(join(tmpdir(),"math-json-conflict-")),run=await mkdtemp(join(tmpdir(),"math-json-conflict-run-"));
+  try {const c=await example(),s=subjectFor(c),pkg={schemaVersion:2,subject:s,chapters:[c],unresolved:[]};
+    const imported=await importAuthorPackage(pkg,root,run);
+    await mkdir(join(root,s.subjectId),{recursive:true});
+    const file=join(root,s.subjectId,"chapter.json"); await writeFile(file,JSON.stringify(c)+"\n");
+    await assert.rejects(acceptAuthorRun(run,[c.chapterId],imported.reviewHash,"test"),/E_AUTHORING_CONFLICT/);
+    assert.equal(await readFile(file,"utf8"),JSON.stringify(c)+"\n");
   } finally {await rm(root,{recursive:true,force:true});await rm(run,{recursive:true,force:true});}
 });

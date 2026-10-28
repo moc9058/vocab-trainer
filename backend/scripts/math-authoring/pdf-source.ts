@@ -1,14 +1,11 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { resolve, join } from "node:path";
+import { resolve, join, basename } from "node:path";
 import { createHash } from "node:crypto";
-import { invariant, contentHash, jsonSchema } from "../../src/math-schema.js";
-import {
-  packageSchema,
-  importAuthorPackage,
-} from "../../src/math-authoring.js";
-import { parseUnit } from "../../src/math-content.js";
+import { invariant, contentHash } from "../../src/math-schema.js";
+import { jsonAuthorPackageSchema, parseStrictJson } from "../../src/math-json-content.js";
+import { parseJsonAuthorPackage } from "../../src/math-json-authoring.js";
 const exec = promisify(execFile);
 /** PDF bytes and page images never leave this local CLI or enter Firestore. */
 export async function extractPdf(root: string, options: Record<string, any>) {
@@ -22,14 +19,14 @@ export async function extractPdf(root: string, options: Record<string, any>) {
       join(output, "request.json"),
       JSON.stringify(
         {
-          schemaVersion: 1,
+          schemaVersion: 2,
           subjectId: options.subject,
           sourceId: options["source-id"],
           pages: options.pages ?? null,
           blocking: ["E_LOCAL_PDF_REQUIRED"],
           ocrPolicy: "local-only",
           semanticPolicy: options["semantic-policy"] ?? "local-only",
-          schema: jsonSchema(packageSchema),
+          schema: jsonAuthorPackageSchema,
         },
         null,
         2,
@@ -70,7 +67,7 @@ export async function extractPdf(root: string, options: Record<string, any>) {
     invariant(selected.length <= 30, "E_EXTRACTION_RANGE_TOO_LARGE");
   }
   const plan = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     root,
     subjectId: options.subject,
     sourceId: options["source-id"],
@@ -80,16 +77,16 @@ export async function extractPdf(root: string, options: Record<string, any>) {
     contextPages: [],
     ocrPolicy: "local-only",
     semanticPolicy: options["semantic-policy"] ?? "local-only",
-    promptVersion: "math-extract-1",
+    promptVersion: "math-extract-json-2",
     model: options["local-model"] ?? process.env.MATH_LOCAL_MODEL ?? null,
   };
   const request = {
     plan,
     instructions: await readFile(
-      resolve("../prompt/math-pdf-to-learning-units.md"),
+      new URL("../../../prompt/math-pdf-to-learning-units.md", import.meta.url),
       "utf8",
     ),
-    schema: jsonSchema(packageSchema),
+    schema: jsonAuthorPackageSchema,
   };
   await writeFile(
     join(output, "request.json"),
@@ -144,8 +141,8 @@ export async function extractPdf(root: string, options: Record<string, any>) {
       JSON.stringify(manifest, null, 2),
     );
   if (manifest.state === "needs-review") {
-    const savedPackage = packageSchema.parse(
-      JSON.parse(await readFile(join(output, "package.json"), "utf8")),
+    const savedPackage = parseJsonAuthorPackage(
+      parseStrictJson(await readFile(join(output, "package.json"), "utf8")),
     );
     invariant(
       contentHash(savedPackage) === manifest.packageHash,
@@ -275,21 +272,19 @@ export async function extractPdf(root: string, options: Record<string, any>) {
           role: "system",
           content:
             request.instructions +
-            "\nCompose an unapproved review package. Never claim verification from OCR alone: formulaVerified and verified must remain false until separate source comparison. Keep unclear hierarchy unresolved. Do not invent canonical IDs for existing concepts. Schema is provided.",
+            "\nCompose a schemaVersion:2 JSON chapter review package. Preserve full hierarchy and text; never invent proof support, advanced objectives or canonical IDs. source.kind must be local-ocr, source.originalFile must be the PDF basename and source.originalSha256 must equal plan.sourceRevisionId. Do not add subject.review. Keep every uncertainty in unresolved; source comparison is mandatory before acceptance. Schema is provided.",
         },
         { role: "user", content: JSON.stringify({ plan, observations }) },
       ],
-      jsonSchema(packageSchema),
+      jsonAuthorPackageSchema,
     );
-    const pkg = packageSchema.parse(JSON.parse(raw));
-    invariant(
-      pkg.units.every((u) =>
-        parseUnit(u.markdown).meta.sourceRevisionIds.every(
-          (id) => id === sourceHash,
-        ),
-      ),
-      "E_EXTRACTION_SOURCE_MISMATCH",
-    );
+    const pkg = parseJsonAuthorPackage(parseStrictJson(raw));
+    invariant(pkg.subject.subjectId === options.subject && pkg.chapters.every(chapter =>
+      chapter.source.kind === "local-ocr" && chapter.source.originalSha256 === sourceHash && chapter.source.originalFile === basename(pdf)
+    ), "E_EXTRACTION_SOURCE_MISMATCH");
+    invariant(!pkg.subject.review, "E_OCR_CANNOT_SELF_APPROVE");
+    // OCR/model output alone can never complete the separate source-comparison review.
+    pkg.unresolved = [...new Set([...pkg.unresolved, "SOURCE_COMPARISON_REQUIRED"])];
     manifest.packageHash = contentHash(pkg);
     await writeFile(join(output, "package.json"), JSON.stringify(pkg, null, 2));
     manifest.state = "needs-review";

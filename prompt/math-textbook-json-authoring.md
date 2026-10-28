@@ -33,7 +33,7 @@
 で承認します。科目構造と章の全体を一緒に承認し、部分的に壊れたDAGを保存しません。
 review receiptはsubject.reviewに保存し、教材全体・依存定義・compiler versionのhashに結び付けます。
 直接編集後は再レビューが必要です。acceptは競合検知と再開用journalを使います。
-Markdown/YAMLの旧package/readerは既存教材を移す互換adapterであり、新教材の推奨経路ではありません。
+Markdown/YAMLの旧package/readerは既存教材を読む移行互換adapterです。新規acceptは `E_LEGACY_AUTHORING_READ_ONLY` で拒否し、v2 JSON packageへの変換と再レビューを要求します。
 OCR自体は引き続きlocal-onlyです。リモートOCRへ自動切替しません。
 
 `npm run math:validate --prefix backend -- --root textbook` は同じSchemaを利用して

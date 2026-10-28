@@ -20,6 +20,8 @@ MODE: draft
 
 入力のプレースホルダーを実際の値として実行しない。PDFが一意なら既存パスから解決できるが、複数候補・異なる版・対象範囲が曖昧なら調査結果を示し、依存する処理だけ保留する。範囲未指定なら目次とページ対応の小範囲調査・計画まで。全冊の意味抽出は始めない。
 
+新しい最終成果物は **schemaVersion:2の章JSON package** とする。[JSON作成指示](math-textbook-json-authoring.md)、[章Schema](math-chapter.schema.json)、[科目Schema](math-subject.schema.json) を優先する。Markdown/YAML教材は移行専用の読み取り互換で、新たなacceptはできない。
+
 このリポジトリで使う場合は [教材作成設計](../plan/math-content-authoring-design.md)、[実装計画](../plan/math-category-implementation-plan.md)、[OCRガイド](math-ocr-local-guide.md) を参照する。別環境では本プロンプトの契約に従い、不足しているcompiler等を実行済みと報告しない。
 
 ## 2. ローカル処理の境界
@@ -134,6 +136,8 @@ $$
 
 ## 9. 出典contract
 
+以下のSourceSpanはローカルの観測・照合sidecarに保存する。章JSONのsourceへSchema外のfieldを追加しない。公開用の章JSONではsourceに原PDFのbasename、実SHA-256、既知URL、必要な元見出しを保存し、階層はmanifest/section/itemで明示する。未確認の書名・版・ページを補完しない。
+
 ```ts
 interface SourceSpan {
   sourceRevisionId: string;
@@ -163,42 +167,45 @@ interface SourceSpan {
 
 ```text
 OUTPUT_ROOT/
-  run-manifest.json          # source hash、範囲、tool/model/version、policy
-  source-outline.yaml       # 原著の全階層とページ対応
-  raw/                      # OCR MD/JSON/画像。既存出力を上書きしない
-  observations.jsonl        # 忠実な抽出と出典
-  units/<unit-id>.md        # 学習ユニットdraft
-  provenance/<unit-id>.yaml # block/claimの出典、補足、修正記録
-  curriculum.proposed.yaml  # 学習用ツリーの提案。実フォルダーは作らない
-  dependencies.proposed.yaml
-  coverage-ledger.json     # 処理済み/省略/範囲外context/未解決
-  unresolved.json
-  ocr-benchmark.md          # 実行した候補だけを記載
-  review.md                # 確認箇所、差分、公開できない目標
+  request.json              # schemaVersion:2、入力範囲と利用するJSON Schema
+  checkpoint.json           # source hash、範囲、tool/model、calls/tokens、再開位置
+  page-<n>.png              # ローカルのみの照合画像
+  page-<n>.md               # ローカルのみの忠実なOCR観測
+  package.json              # 最終的なJSON教材draft（下記）
+  source-spans.json          # 必要な観測位置・ページ情報。公開用本文とは別
+  coverage-ledger.json       # 処理済み/省略/範囲外context/未解決
+  review.md                 # 未確認の式・出典・依存。JSON本文の代わりではない
 ```
 
-unit front matterは次の形を基礎にする。全参照先は実際のblocks/概念で埋め、placeholderを残したものをvalidと報告しない。
+組込みadapterはrequest/checkpoint/page観測/packageを保存する。独立したエージェントは
+追加のsource-spans/coverage/reviewを作り、実際に作ったファイルだけを報告する。
+最終packageは次の形で、subject/chaptersはそれぞれ単一の正であるSchemaに完全適合させる。
 
-```yaml
-format: math-learning-unit
-schemaVersion: 1
-unitId: <stable-id>
-title: <学習テーマ>
-contentLanguage: ja
-status: draft
-sourceRevisionIds: []
-blocks: []
-knowledgeItems: []
-knowledgeRefs: []
-objectives: []
-problemFamilies: []
-proofCoverage: none
-unresolved: []
+```json
+{
+  "schemaVersion": 2,
+  "subject": "実際にはmath-subject.schema.jsonに適合するobject",
+  "chapters": ["実際にはmath-chapter.schema.jsonに適合するobject"],
+  "unresolved": ["SOURCE_COMPARISON_REQUIRED"]
+}
 ```
 
-blocksは安定ID/kind/anchor/provenanceIdを持つ。knowledgeItemsはstatement/conditionsのblockとcapabilitiesを持つ。objectivesはassessedCapabilities、additionalPrerequisites、assessmentBlockIds、difficultyRange、proofSupportを持つ。詳細は教材作成設計に従う。
+上記は外形の説明であり、文字列placeholderのままvalidと報告しない。
+実際の短い章は [完全なJSON例](math-chapter.example.json) を参照する。
+章は順序付きsection/item/block、item.title/keywordsは任意とする。
+前提の依存はsubject.dependenciesとitem.learning.requiresへ明示する。
+objectives省略時はrecognize/applyの難易度1–2のみで、proveや高難易度を推論しない。
+証明が無い定理を証明教材ありにしない。proof itemのprovesItemIdは実在する対象へ結び付ける。
 
-生成したdraftを実教材ディレクトリへ自動コピーしない。承認済みmetadataを偽造せず、公開・commit・pushの対象にPDF、画像、生OCRを混入させない。
+組込みPDF adapterではchapter.source.kindをlocal-ocr、originalFileをPDFのbasename、
+originalSha256を元PDFの実SHA-256とする。subjectIdは指定科目と一致させる。
+モデルがsubject.reviewを自分で生成してはならない。OCR出力だけで照合済みとせず、
+`SOURCE_COMPARISON_REQUIRED` が解決するまではaccept不可とする。
+
+生成draftを実教材へ自動コピーしない。別途原ページと比較して未解決事項を解消し、
+修正packageを `math:extract:import → math:author-review → math:author-accept` へ渡す。
+acceptは全章を一緒に検証し、review hashが教材JSON・依存・compiler versionへ結び付く。
+科目JSONと章JSONだけを正本へ保存する。PDF/画像/raw OCR/絶対パスは公開しない。
 
 ## 11. 完了前の検査と報告
 

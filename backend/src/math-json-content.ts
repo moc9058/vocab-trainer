@@ -42,6 +42,18 @@ function schemaFile(name: string) {
 const ajv = new Ajv({ allErrors: true, strict: false });
 const chapterValidator = ajv.compile(schemaFile("math-chapter.schema.json"));
 const subjectValidator = ajv.compile(schemaFile("math-subject.schema.json"));
+export const jsonAuthorPackageSchema = {
+  $schema: "http://json-schema.org/draft-07/schema#",
+  type: "object", additionalProperties: false,
+  properties: {
+    schemaVersion: { const: 2 },
+    subject: { $ref: "#/$defs/subject" },
+    chapters: { type: "array", minItems: 1, maxItems: 1000, items: { $ref: "#/$defs/chapter" } },
+    unresolved: { type: "array", maxItems: 1000, items: { type: "string", maxLength: 2000 } },
+  },
+  required: ["schemaVersion", "subject", "chapters", "unresolved"],
+  $defs: { subject: schemaFile("math-subject.schema.json"), chapter: schemaFile("math-chapter.schema.json") },
+};
 /** A small lexical JSON pass rejects duplicate object keys, including escaped aliases. */
 export function parseStrictJson(text: string): unknown {
   checkBytes(text, 2 * 1024 * 1024);

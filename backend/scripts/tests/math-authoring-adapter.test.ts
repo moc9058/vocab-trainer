@@ -9,9 +9,9 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
-import { linearAlgebraFixture } from "./math-fixtures.js";
+import { basename } from "node:path";
 import { extractPdf } from "../math-authoring/pdf-source.js";
-const fixture = await linearAlgebraFixture();
+
 test(
   "local PDF adapter prepares images, uses loopback only and resumes completed checkpoints without more inference",
   { skip: !available && "Local Poppler is unavailable" },
@@ -30,27 +30,15 @@ test(
       let content =
         "The zero subspace contains zero and is closed under addition and scalar multiplication.";
       if (request.response_format) {
-        const provenance = structuredClone(fixture.provenance);
-        for (const record of provenance.records) {
-          record.verified = false;
-          record.formulaVerified = false;
-          for (const span of record.evidence) span.sourceRevisionId = hash;
-        }
         content = JSON.stringify({
-          schemaVersion: 1,
-          subject: { id: "linear-algebra", title: "Linear Algebra" },
-          units: [
-            {
-              markdown: fixture.markdown.replaceAll(
-                fixture.sourceRevisionId,
-                hash,
-              ),
-              provenance,
-            },
-          ],
-          sources: [],
-          coverage: [{ page: 1, status: "processed", omissions: [] }],
-          unresolved: ["Source comparison required"],
+          schemaVersion: 2,
+          subject: {
+            schemaVersion: 2, subjectId: "linear-algebra", title: "Linear Algebra", contentLanguage: "en",
+            nodes: [{id:"la",kind:"subject",parentId:null,title:"Linear Algebra",order:0},{id:"ch1",kind:"chapter",parentId:"la",title:"Zero subspace",order:1,contentFile:"chapter.json"}],
+            dependencies: {semantics:"requires-all",edges:[]},foundationRefs:[],
+          },
+          chapters: [{schemaVersion:2,subjectId:"linear-algebra",chapterId:"ch1",title:"Zero subspace",source:{kind:"local-ocr",originalFile:basename(pdf),originalSha256:hash},content:[{type:"item",id:"zero-subspace",kind:"definition",content:[{type:"block",id:"zero-body",format:"markdown",text:"The zero subspace is $\\{0\\}$ ."}],learning:{capabilities:["recognize","apply"],requires:[],proofCoverage:"none"}}]}],
+          unresolved: [],
         });
       }
       res.setHeader("Content-Type", "application/json");
@@ -82,6 +70,11 @@ test(
       );
       assert.equal(checkpoint.state, "needs-review");
       assert.equal(checkpoint.calls, 2);
+      const pkg = JSON.parse(await readFile(join(output, "package.json"), "utf8"));
+      assert.equal(pkg.schemaVersion, 2);
+      assert.equal(pkg.chapters[0].source.originalSha256, hash);
+      assert.deepEqual(pkg.unresolved, ["SOURCE_COMPARISON_REQUIRED"]);
+      assert.equal(pkg.units, undefined);
       assert.deepEqual(checkpoint.completedPages, [1]);
       await extractPdf(output, { ...options, resume: true });
       assert.equal(calls, 2);

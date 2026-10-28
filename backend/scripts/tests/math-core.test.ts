@@ -276,7 +276,7 @@ test("YAML duplicates, code-fence headings, unsafe LaTeX and source/review chang
     fixture.markdown,
   );
 });
-test("authoring compiler round trip, containment and atomic review conflicts use temporary copies of Linear Algebra", async () => {
+test("legacy authoring compiler remains readable while acceptance is explicitly read-only", async () => {
   const root = await mkdtemp(join(tmpdir(), "vocab-math-")),
     run = await mkdtemp(join(tmpdir(), "vocab-review-"));
   try {
@@ -297,7 +297,7 @@ test("authoring compiler round trip, containment and atomic review conflicts use
     assert.equal((await reviewAuthorRun(run)).reviewHash, imported.reviewHash);
     await assert.rejects(
       () => acceptAuthorRun(run, ["vector-subspaces"], "0".repeat(64), "test"),
-      /E_REVIEW_HASH_MISMATCH/,
+      /E_LEGACY_AUTHORING_READ_ONLY/,
     );
     await writeFile(
       join(root, "linear-algebra/units/unit-vector-subspaces.md"),
@@ -306,46 +306,11 @@ test("authoring compiler round trip, containment and atomic review conflicts use
     await assert.rejects(
       () =>
         acceptAuthorRun(run, ["vector-subspaces"], imported.reviewHash, "test"),
-      /E_AUTHORING_CONFLICT/,
+      /E_LEGACY_AUTHORING_READ_ONLY/,
     );
     await assert.rejects(() => safePath(root, "../escape"), /E_UNSAFE_PATH/);
     await symlink("/tmp", join(root, "escape"));
     await assert.rejects(() => safePath(root, "escape"), /E_SYMLINK/);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-    await rm(run, { recursive: true, force: true });
-  }
-});
-
-test("review/accept installs a complete external package into an empty authoring root and replays its journal safely", async () => {
-  const root = await mkdtemp(join(tmpdir(), "math-accept-root-")),
-    run = await mkdtemp(join(tmpdir(), "math-accept-run-"));
-  try {
-    const pkg = {
-      schemaVersion: 1,
-      subject: { id: "linear-algebra", title: "Linear Algebra" },
-      units: [{ markdown: fixture.markdown, provenance: fixture.provenance }],
-      sources: [fixture.source],
-      coverage: [],
-      unresolved: [],
-    };
-    const imported = await importAuthorPackage(pkg, root, run);
-    await acceptAuthorRun(
-      run,
-      ["vector-subspaces"],
-      imported.reviewHash,
-      "source-verified-test",
-    );
-    const first = await buildCatalog(root);
-    assert.equal(first.catalog.units.length, 1);
-    assert.equal(first.catalog.concepts.length, 3);
-    await acceptAuthorRun(
-      run,
-      ["vector-subspaces"],
-      imported.reviewHash,
-      "source-verified-test",
-    );
-    assert.equal((await buildCatalog(root)).catalog.id, first.catalog.id);
   } finally {
     await rm(root, { recursive: true, force: true });
     await rm(run, { recursive: true, force: true });

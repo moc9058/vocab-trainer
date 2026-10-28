@@ -1,21 +1,24 @@
 /** Local JSON review/accept workflow. The manifest and full subject graph are reviewed atomically. */
-import { readFile, writeFile, mkdir, rename, lstat } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { buildJsonCatalog, compileJsonSubject, parseJsonChapter, parseJsonSubject, parseStrictJson, subjectReviewHash, JSON_COMPILER_VERSION, type JsonChapter, type JsonSubject } from "./math-json-content.js";
+import { Ajv } from "ajv";
+import { jsonAuthorPackageSchema, buildJsonCatalog, compileJsonSubject, parseJsonChapter, parseJsonSubject, parseStrictJson, subjectReviewHash, JSON_COMPILER_VERSION, type JsonChapter, type JsonSubject } from "./math-json-content.js";
 import { contentHash, invariant } from "./math-schema.js";
 import { safePath } from "./math-content.js";
 export interface JsonPackage { schemaVersion: 2; subject: JsonSubject; chapters: JsonChapter[]; unresolved: string[] }
 export interface JsonRun { schemaVersion: 2; root: string; subjectPath: string; package: JsonPackage; baseHashes: Record<string,string|null>; reviewHash: string }
 async function hashFile(root: string, file: string) { try { return contentHash(await readFile(await safePath(root,file),"utf8")); } catch(error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return null; throw error; } }
 const render = (value: unknown) => JSON.stringify(value,null,2)+"\n";
-function parsePackage(input: unknown): JsonPackage {
+const packageValidator = new Ajv({allErrors:true,strict:false}).compile(jsonAuthorPackageSchema);
+export function parseJsonAuthorPackage(input: unknown): JsonPackage {
+  invariant(packageValidator(input), "E_JSON_PACKAGE_SCHEMA", 400, { errors: packageValidator.errors });
   const pkg = input as JsonPackage;
   invariant(pkg && Object.keys(pkg).sort().join(",") === "chapters,schemaVersion,subject,unresolved" && pkg.schemaVersion === 2 && Array.isArray(pkg.chapters) && pkg.chapters.length > 0 && pkg.chapters.length <= 1000 && Array.isArray(pkg.unresolved) && pkg.unresolved.every(s => typeof s === "string"), "E_JSON_PACKAGE_SCHEMA");
   parseJsonSubject(pkg.subject); for(const chapter of pkg.chapters) parseJsonChapter(chapter);
   compileJsonSubject(pkg.subject,pkg.chapters,false); return pkg;
 }
 export async function importJsonAuthorPackage(input: unknown, root: string, runDirectory: string) {
-  const pkg=parsePackage(input),baseHashes:Record<string,string|null>={};
+  const pkg=parseJsonAuthorPackage(input),baseHashes:Record<string,string|null>={};
   let prefix=pkg.subject.subjectId;
   try {
     const manifest = parseStrictJson(await readFile(await safePath(root, "catalog.json"), "utf8")) as any;
@@ -32,7 +35,7 @@ export async function importJsonAuthorPackage(input: unknown, root: string, runD
 async function readRun(runDirectory:string) {
   const run=parseStrictJson(await readFile(join(runDirectory,"run.json"),"utf8")) as JsonRun;
   const {reviewHash,...body}=run;
-  invariant(contentHash(body)===reviewHash,"E_REVIEW_HASH_MISMATCH"); parsePackage(run.package); return run;
+  invariant(contentHash(body)===reviewHash,"E_REVIEW_HASH_MISMATCH"); parseJsonAuthorPackage(run.package); return run;
 }
 export async function reviewJsonAuthorRun(runDirectory:string) {
   const run=await readRun(runDirectory);
