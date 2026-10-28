@@ -119,3 +119,20 @@ test("JSON acceptance detects a changed authoring original before any overwrite"
     assert.equal(await readFile(file,"utf8"),JSON.stringify(c)+"\n");
   } finally {await rm(root,{recursive:true,force:true});await rm(run,{recursive:true,force:true});}
 });
+
+test("only explicitly declared capability/revision foundations can cross subject boundaries",async()=>{
+  const a=await example(),b=structuredClone(a); b.subjectId="foundation-algebra"; b.chapterId="foundation-chapter";
+  walkJsonContent(b.content,n=>{n.id="foundation-"+n.id;});
+  const sb=subjectFor(b); sb.nodes[0].id="foundation-root"; sb.nodes[1].parentId="foundation-root";
+  const compiledB=compileJsonSubject(approve(sb,[b]),[b]);
+  const sa=subjectFor(a),item=(a.content[1] as any).content[0];
+  item.learning.requires=[{itemId:compiledB.concepts[0].id,capability:"apply"}];
+  assert.throws(()=>compileJsonSubject(sa,[a],false),/E_CROSS_CHAPTER_DEPENDENCY/);
+  sa.foundationRefs=[{subjectId:b.subjectId,conceptId:compiledB.concepts[0].id,capability:"apply",revisionId:compiledB.concepts[0].revisionId}];
+  assert.equal(compileJsonSubject(approve(sa,[a]),[a]).concepts.length,1);
+  item.learning.requires[0].capability="recognize";
+  assert.throws(()=>compileJsonSubject(sa,[a],false),/E_CROSS_CHAPTER_DEPENDENCY/);
+  item.learning.requires[0].capability="apply";
+  sa.foundationRefs[0].subjectId=sa.subjectId;
+  assert.throws(()=>compileJsonSubject(sa,[a],false),/E_FOUNDATION_SUBJECT/);
+});

@@ -149,6 +149,8 @@ function displayTitle(item: JsonItem) { return item.title ?? `${item.kind}${item
 export function compileJsonSubject(subject: JsonSubject, chapters: JsonChapter[], requireReview = true) {
   parseJsonSubject(subject); for (const chapter of chapters) parseJsonChapter(chapter);
   const deps = compileCurriculumDependencies(subject.nodes, subject.dependencies.edges);
+  invariant(subject.foundationRefs.every(r => r.subjectId !== subject.subjectId), "E_FOUNDATION_SUBJECT");
+  const isDeclaredFoundation = (ref: { conceptId: string; capability: Capability }) => subject.foundationRefs.some(f => f.conceptId === ref.conceptId && f.capability === ref.capability);
   const reviewHash = subjectReviewHash(subject, chapters);
   if (requireReview) invariant(subject.review?.contentHash === reviewHash && subject.review.compilerVersion === JSON_COMPILER_VERSION, "E_JSON_REVIEW_REQUIRED");
   const nodes: CurriculumNode[] = subject.nodes.map(n => ({ id: n.id, subjectId: subject.subjectId, parentId: n.parentId, ancestorIds: deps.ancestors[n.id], kind: n.kind, title: n.title, order: n.order, unitIds: [] }));
@@ -203,11 +205,11 @@ export function compileJsonSubject(subject: JsonSubject, chapters: JsonChapter[]
   invariant(new Set(chapterIds).size === chapterIds.length && subject.nodes.filter(n => n.kind === "chapter").every(n => chapterIds.includes(n.id)), "E_MISSING_CHAPTER");
   for (const concept of concepts) for (const capability of Object.values(concept.capabilities)) for (const ref of capability!.prerequisites.allOf) {
     const source = conceptChapterIds[concept.id], target = conceptChapterIds[ref.conceptId];
-    invariant(target && (source === target || dependencyClosure(deps.chapterDependencies, source).includes(target)), "E_CROSS_CHAPTER_DEPENDENCY");
+    invariant(isDeclaredFoundation(ref) || (target && (source === target || dependencyClosure(deps.chapterDependencies, source).includes(target))), "E_CROSS_CHAPTER_DEPENDENCY");
   }
   for (const objective of objectives) for (const ref of [...objective.additionalPrerequisites.allOf, ...objective.additionalPrerequisites.anyOf.flatMap(a => a.requires)]) {
     const source = conceptChapterIds[objective.unitId], target = conceptChapterIds[ref.conceptId];
-    invariant(target && (source === target || dependencyClosure(deps.chapterDependencies, source).includes(target)), "E_CROSS_CHAPTER_DEPENDENCY");
+    invariant(isDeclaredFoundation(ref) || (target && (source === target || dependencyClosure(deps.chapterDependencies, source).includes(target))), "E_CROSS_CHAPTER_DEPENDENCY");
   }
   return { nodes, units, concepts, objectives, sources, artifacts, chapterDependencies: deps.chapterDependencies, conceptChapterIds, reviewHash };
 }
