@@ -10,7 +10,7 @@
 | [ローカルOCRの選択・実行ガイド](math-ocr-local-guide.md) | Mac mini M4向け。MinerU 4.x、比較候補、LaTeX品質検査 |
 | [出典付き数学解説](math-solution-with-sources.md) | 確定した問題と許可知識から、全階層・使用定理付きの解説を作る |
 
-v2の契約は [数学モードv2計画](../plan/math-mode-v2-implementation-plan.md) とJSON Schemaを優先する。従来設計は [実装計画](../plan/math-category-implementation-plan.md) と [教材作成設計](../plan/math-content-authoring-design.md)。このフォルダーはエージェント用の作業指示であり、アプリのruntime promptを自動更新するものではない。
+v2の契約は [数学機能ガイド](../docs/math-category.md) とJSON Schemaを優先する。従来設計は [実装計画](../plan/math-category-implementation-plan.md) と [教材作成設計](../plan/math-content-authoring-design.md)。このフォルダーはエージェント用の作業指示であり、アプリのruntime promptを自動更新するものではない。
 
 使用例:
 

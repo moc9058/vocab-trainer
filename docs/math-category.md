@@ -6,6 +6,10 @@ separate `/math/*` route and `math_*` Firestore namespace; it is never a languag
 word, grammar, or A/B group. The existing shared learner and authentication model
 also applies here. The English study-language pause remains in place.
 
+The v2 contracts are the [chapter schema](../prompt/math-chapter.schema.json),
+[subject schema](../prompt/math-subject.schema.json) and this guide. Release
+evidence is recorded separately in [v2 verification](math-v2-verification.md).
+
 ## Study workflow
 
 1. Open **Mathematics**, select a subject, then check a curriculum range.
@@ -218,19 +222,20 @@ budgets are exercised. Browser tests cover failure-independent entry, v2 range s
 draft/submission. The original synthetic
 PDF under `src/test-fixtures/math` tests only local adapter plumbing.
 
-For a reproducible small verification catalog (not automatic textbook import):
+For the historical v1 fixture (emulator compatibility tests only):
 
 ```bash
 (cd backend && npx tsx scripts/math-verify-fixture.ts)
 # Creates backend/data/math-verification, which is ignored by Git.
 # With the compose stack running and local boot config present:
 (cd backend && FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npx tsx scripts/math-smoke.ts)
+# The current Docker smoke validates the nine-chapter v2 JSON catalog.
 ```
 
-The verification catalog includes three concepts and one objective about the
-subspace criterion. It does not represent all nine chapters as imported or
-reviewed. Real LLM checks, Cloud Run deployment checks and device checks are
-reported separately in the [implementation verification record](math-verification.md).
+The historical fixture includes three concepts and one objective about the
+subspace criterion. V2 publishes the complete nine-chapter JSON allowlist instead.
+The [original verification record](math-verification.md) remains unchanged history;
+new release/model/device results belong in the v2 verification record.
 
 Cloud verification is an explicit operation via `scripts/math-cloud-smoke.ts`
 with `--production --project vocab-trainer-490014 --database vocab-database
