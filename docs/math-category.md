@@ -8,27 +8,27 @@ also applies here. The English study-language pause remains in place.
 
 ## Study workflow
 
-1. Open **Mathematics**, select a subject, and select any depth of its curriculum.
-2. Set difficulty (1–5), count (1–20), answer format and question language
-   (English/Japanese/Korean). Difficulty is an application guideline.
-3. Preview **assessed objectives** separately from prerequisites, foundation
-   profiles and knowledge supplied in the question. Accept the displayed scope.
-   A prerequisite's use is permission for this test, not a claim of mastery.
-4. Generation runs in a durable background job. Each candidate must pass structural
-   checks, an independent solve without the candidate answer, and comparison checks.
-   Three rejected candidates stop that slot. Retry the remaining slots, cancel, or
-   explicitly accept a nonempty partial test; partial success never starts silently.
-5. Start the test. Text/LaTeX drafts save through the serial answer outbox; the
-   page indicates unsynced work. Submit, solve on paper and self-assess, or skip.
-   Hints and solution viewing before submission record assistance.
-6. End a sitting to review a fixed set of attempts. Resume unanswered questions in
-   a new sitting. Natural exhaustion completes the test even while grading is
-   pending; review and late grades cannot reopen it. Wrong answers are not
-   automatically reinserted. A new test starts with a fresh scope preview.
-7. Review criterion scores and evidence, correct a grade, or report a bad question.
-   Explicit invalidation excludes its score and learning evidence while retaining
-   the original answer. Concept pages separate self-declared readiness from
-   version-specific objective evidence.
+1. Open **Mathematics**, select a subject, then check a curriculum range.
+   Parent checkboxes select eligible leaves; partial selection is indeterminate.
+   Reference-only headings do not count as targets.
+2. Choose difficulty (1–5). The optional count accepts integers 1–20. Leave it
+   blank for continuous study until **Finish test**. The current UI language is
+   frozen for questions. Preview and creation occur within the Start action.
+3. The server derives prerequisite chapter closure and explicit item requirements;
+   only selected objectives are assessed. There is no title search or selectable
+   knowledge policy. Prerequisite permission does not record learner mastery.
+4. A durable job generates one question, independently solves it and validates it.
+   Subsequent questions require an explicit **Next question** action. A test has
+   at most one unanswered question and one active generation job. Failed slots
+   retain their budget and ordinal for retry.
+5. Save drafts and submit, self-assess on paper, or skip through the serial outbox.
+   End session pauses for fixed-boundary review; resume continues the test.
+6. Finite tests finish at their valid answered question limit. Continuous tests
+   require **Finish test**. Finish flushes drafts and cancels/fences generation;
+   asynchronous grades and review cannot reopen a finished test.
+7. Review criterion scores, correct a grade or report an invalid question.
+   Invalidation retains answers but removes score/evidence; finite tests may
+   replace invalid questions on the next request.
 
 Solutions show the knowledge used **before** the explanation. Each step then
 shows citations, applicability conditions and the mathematical explanation.
@@ -51,72 +51,50 @@ priority and stable IDs, with a bounded search that fails instead of truncating.
 Objective-specific prerequisites do not alter canonical concept prerequisites.
 Recommended/related edges grant no permission. `apply` never grants `prove`.
 
-`math-scope.ts` expands node → unit → assessed objective, deduplicates targets,
-resolves prerequisites and foundation closures, and freezes T/P/B/G and question
-plans. Strict mode excludes objectives with missing prerequisites. Provided mode
-uses only declared provideable knowledge, including its conditions and use
-requirements; the answer to an assessed objective cannot be supplied as a given.
-Proof plans separate must-establish from may-assume, and candidates cannot assume
-the proposition being proved. Unknown IDs, unreviewed concepts, unsupported proofs,
-size overflows and unsupported difficulty are explicit failures.
+`math-scope.ts` expands selected leaves to assessed objectives and derives chapter
+and item prerequisites. Chapter dependencies use explicit `requires-all` edges;
+Part dependencies expand to chapters. Same-chapter siblings are not automatically
+allowed. Apply never grants prove, and a proof target cannot be assumed.
+Unsupported scope/difficulty fails explicitly rather than silently expanding it.
 
-Scope previews expire in 30 minutes. Starting requires the exact preview hash and
-acceptance set and rechecks the active catalog in the creation transaction.
-Catalog changes return 409. Started tests retain their original catalog and
-citation snapshots. Semantic concept revisions exclude physical file locations;
-catalogs retain the artifact/block/source bindings. Old catalogs and revisions
-are retained; there is no bulk rewrite or historical-data garbage collection.
+V2 creation uses strict `schemaVersion: 2` requests. Preview expires in 30 minutes;
+creation rechecks its exact hash and active catalog. A catalog conflict preserves
+settings and requires another Start action. Started tests retain immutable scope,
+source and dependency snapshots. V1 snapshots remain supported only for existing
+test continuation; their policy is not converted to a v2 user setting.
+
+`POST /api/math/tests/:id/next-question` and `/finish` use operation IDs and
+expected revisions. Receipts precede CAS checks. GETs never generate questions.
+V2 question plans are stored separately; histories are cursor-paginated and the
+view contains the current question plus aggregates, not all past questions.
 
 ## Local authoring
 
-Original PDFs remain local. Reviewed Markdown/YAML is the editable original;
-Firestore catalogs are immutable published runtime versions. The deploy scripts
-never scan or upload `textbook`. All paths below are relative to the backend
-package's working directory when invoked with `--prefix backend`.
+Original PDFs remain local. The v2 editable source is chapter JSON, using the
+single-source schemas and complete example in `prompt/`. `textbook/catalog.json`
+is the publication allowlist; only each listed manifest and its explicit chapter
+files are read. Unregistered folders, including Engineering Math, are untouched.
 
 ```bash
-npm run math:manifest --prefix backend -- --root ../textbook
 npm run math:validate --prefix backend -- --root ../textbook
-
-npm run math:extract --prefix backend -- --root ../textbook \
-  --subject subject-id --source-id book-id --pdf /local/source.pdf \
-  --pages 1-3 --plan-only --output data/math-authoring/example
-
-npm run math:extract --prefix backend -- --root ../textbook \
-  --subject subject-id --source-id book-id --pdf /local/source.pdf \
-  --pages 1-3 --adapter local --semantic-policy local-only \
-  --local-endpoint http://127.0.0.1:1234/v1/chat/completions \
-  --local-model LOCAL_VISION_MODEL --output data/math-authoring/example
-# Add --resume to continue a matching checkpoint.
-
-npm run math:extract:import --prefix backend -- --root ../textbook \
-  --package data/math-authoring/incoming/package.json --output data/math-authoring/review
-npm run math:author-review --prefix backend -- --run data/math-authoring/review
-npm run math:author-accept --prefix backend -- --run data/math-authoring/review \
-  --units unit-id --expected-review-hash HASH --reviewed-by AUTHOR
+(cd backend && npx tsx scripts/math-release.ts validate)
 ```
 
-Without `math.catalog.yaml`, validate reports `W_NO_CATALOG_METADATA` and an empty
-catalog; manifest prints proposals without creating files. Existing Markdown notes
-are not silently interpreted as approved learning units. Register a subject with
-`subject.yaml`, `curriculum.yaml`, source metadata, unit references and profile
-references. See `math-content.ts` for the strict schema and
-`scripts/tests/math-fixtures.ts` for a small, source-backed example.
+Subject manifests define display parent/order and explicit chapter dependencies.
+Chapter JSON contains recursive sections, items, Markdown/LaTeX blocks, learning
+capabilities and reviewed objectives. Untitled items use kind/label fallbacks.
+Defaults admit only conservative recognize/apply difficulty 1–2 objectives. Missing
+proof support never grants proof questions. Canonical JSON hashes preserve body
+whitespace; compiler-version/content/dependency review receipts invalidate on edits.
+Duplicate keys, unknown fields, escaping paths, symlinks, dependency cycles and
+invalid math fail before publication. Schemas are copied into backend build output
+for cwd-independent runtime validation.
 
-Authoring packages contain `schemaVersion`, `subject`, `units` (Markdown and
-provenance), `sources` (metadata and flat source outlines), `coverage`, and
-`unresolved`. YAML aliases, duplicate keys, unknown fields, symlinks, escaping
-paths and normalized path collisions are rejected. Blocks use explicit heading
-anchors; headings inside fenced code are ignored. Conditions, proof support,
-source hierarchy, formula validation and content/provenance-bound review receipts
-are checked. Partial units expose only ready objectives; blocked concepts cannot
-enter a question context. Content edits invalidate their review receipts.
-
-Review/accept creates a staged tree, compiles it, checks every expected old hash,
-then uses a recoverable journal to install the selected units, provenance,
-receipts, curriculum and source metadata. A changed original stops acceptance.
-Replaying the same journal is safe. Review receipts are a local authoring audit,
-not a cryptographic trust boundary against the local author.
+See [JSON authoring instructions](../prompt/math-textbook-json-authoring.md) and
+[the conversion reports](math-v2-conversion/) for all nine Linear Algebra chapters.
+Legacy Markdown/YAML adapters exist for historical fixtures and migration. They
+are not production textbook publishers. OCR remains local-only; its drafts must
+pass JSON review/accept before publication.
 
 The built-in adapter requires local Poppler (`pdfinfo`, `pdftoppm`)
 and a configured loopback vision/model endpoint. `pdftotext` is optional: if it is absent, the adapter records an image-only OCR warning. It renders and OCRs explicitly
@@ -132,29 +110,41 @@ establish that quality.
 
 ## Publish and rollback
 
-```bash
-FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIRESTORE_DATABASE_ID='(default)' \
-  npm run math:sync --prefix backend -- --root data/math-verification --dry-run
-FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIRESTORE_DATABASE_ID='(default)' \
-  npm run math:sync --prefix backend -- --root data/math-verification --publish
+Normal `./deploy.sh` (or `deploy.ps1`) validates JSON before building, stages an
+immutable catalog with chunk/hash/read-back checks, deploys the compatible backend,
+checks `/health`, switches the active pointer with CAS, then deploys the frontend.
+The same content hash is a no-op. A failed stage/backend cannot activate a catalog;
+CAS conflicts fail rather than overwriting another release.
 
-npm run math:sync --prefix backend -- --root data/math-verification --production \
-  --project vocab-trainer-490014 --database vocab-database --dry-run
-npm run math:sync --prefix backend -- --root data/math-verification --production \
-  --project vocab-trainer-490014 --database vocab-database --publish \
-  --manifest-hash HASH --expected-active-catalog-id none
-# Use the returned previous catalog ID instead of "none" when one exists.
-# Rollback uses --rollback CATALOG_ID --expected-active-catalog-id CURRENT_ID
-# with the same explicit project/database/production flags.
+Release reports store previous/current catalog IDs in ignored
+`backend/data/math-release.json`. After a frontend failure, explicitly roll back
+using that report (this changes only the catalog pointer):
+
+```bash
+(cd backend && npx tsx scripts/math-release.ts rollback --production \
+  --project vocab-trainer-490014 --database vocab-database)
 ```
 
-Publication writes bounded content-addressed documents and chunks, reads them back,
-and exchanges the active pointer in a short CAS transaction only after staging is
-complete. A failed staging write cannot replace the active catalog. No PDF bytes,
-page images, raw OCR or absolute local paths go into Firestore. The CLI refuses
-mixed emulator/production settings. Staging older than seven days and expired
-previews are cleaned up in bounded passes; operation receipts and historical
-learning data are retained.
+`math-release.ts stage` and `activate` accept the same explicit target flags and
+`--report PATH`, making them independently resumable. No config upload flag is
+required for textbook publishing. Historical immutable catalogs remain available.
+
+One-time raw source migration is separate from deployment:
+
+```bash
+(cd backend && npx tsx scripts/math-migrate-json.ts --production \
+  --project vocab-trainer-490014 --database vocab-database --dry-run)
+```
+
+Inventory logs counts/hashes/reference counts only. Applying requires the returned
+`--manifest-hash`, `--expected-active-catalog-id`, restricted `--backup` directory
+and `--checkpoint` file. `--resume` reuses verified backups/checkpoints. Historical
+bodies are preserved exactly in JSON; aliases resolve old hashes without replacing
+old snapshots with current chapters. Optional `--delete-legacy` additionally
+requires `--compatible-backend-url`, compatible-reader health and drained leases.
+Checksum/read-back/reference mismatches block deletion. Backups and checkpoints
+must never be committed. Rollback after deletion requires a JSON/alias-compatible
+backend; raw-MD-only code is no longer a valid rollback target.
 
 The generic `seed:load` wipes the emulator database and therefore also removes
 mathematics, but its old downloaded snapshots do not contain mathematics. Reload
@@ -220,12 +210,11 @@ npm run test:browser --prefix frontend -- --grep math
 npm run build --prefix frontend
 ```
 
-Math tests read a small portion of `textbook/Linear Algebra/1. Vector Spaces.md`
-without altering it. Compiler, external package review/accept, scope, independent
+Math tests use independent legacy fixtures and validated JSON chapters. Compiler, external package review/accept, scope, independent
 quality gates, DTO secrecy, idempotent attempts, drafts, grading, invalidation,
 review, catalog changes/rollback, cancellation, lease recovery and persistent
-budgets are exercised. Browser tests cover failure-independent entry, scope
-consent, mobile math rendering and serial draft/submission. The original synthetic
+budgets are exercised. Browser tests cover failure-independent entry, v2 range selection, continuous next/finish, mobile rendering, translations and serial
+draft/submission. The original synthetic
 PDF under `src/test-fixtures/math` tests only local adapter plumbing.
 
 For a reproducible small verification catalog (not automatic textbook import):

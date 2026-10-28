@@ -48,9 +48,12 @@ const backendUrl = service.status.url,
   frontendUrl =
     "https://vocab-trainer-frontend-839843597381.asia-northeast1.run.app";
 const { mathRoutes } = await import("../src/routes/math.js");
-const { activeCatalogId, testView, collection, requiredDoc, mathDb } =
+const { activeCatalogId, testView, collection, requiredDoc, mathDb, loadCatalog } =
   await import("../src/math-store.js");
-const { request } = await import("./tests/math-fixtures.js");
+const snapshot = await loadCatalog(values["catalog-id"]!);
+const chosen = snapshot.nodes.find(n => n.unitIds.length && snapshot.objectives.some(o =>
+  n.unitIds.includes(o.unitId) && o.readiness === "ready" && o.difficultyRange[0] <= 2 && o.difficultyRange[1] >= 2));
+assert(chosen, "No ready JSON objective for cloud verification");
 assert.equal(await activeCatalogId(), values["catalog-id"]);
 const report: any = {
   startedAt: new Date().toISOString(),
@@ -97,13 +100,16 @@ async function api(
   assert.equal(response.statusCode, status, response.body);
   return response.json();
 }
-const preview = await api("POST", "/scope-previews", request());
-assert.equal(preview.targetObjectiveIds.length, 1);
-assert.equal(preview.prerequisites.length, 2);
+const preview = await api("POST", "/scope-previews", {
+  schemaVersion: 2, subjectId: chosen.subjectId, selectedNodeIds: [chosen.id],
+  difficulty: 2, questionCount: 1, responseLanguage: "en",
+});
+assert.equal(preview.schemaVersion, 2);
+assert(preview.eligibleObjectiveCount > 0);
 const body = {
-  previewId: preview.id,
+  schemaVersion: 2,
+  previewId: preview.previewId,
   scopeHash: preview.scopeHash,
-  acceptance: preview.requiredAcceptance,
   purpose: "verification",
   operationId: randomUUID(),
 };
@@ -156,7 +162,7 @@ try {
     operationId: randomUUID(),
   });
   view = await testView(view.id);
-  const questionId = view.questionIds[0],
+  const questionId = view.currentQuestionId!,
     revealed = await api("POST", `/tests/${view.id}/reveal`, {
       questionId,
       expectedRevision: view.revision,
@@ -213,12 +219,11 @@ try {
   report.checks.push(
     "Cloud Run real-model grading, natural completion and idempotent attempt replay succeeded",
   );
-  const evidence = await collection("learning_states")
-    .doc("subspace-test")
-    .collection("evidence")
-    .where("testId", "==", view.id)
-    .get();
-  assert(evidence.docs.every((d) => d.data().valid === false));
+  for (const concept of snapshot.concepts.filter(c => chosen.unitIds.includes(c.ownerUnitId))) {
+    const evidence = await collection("learning_states").doc(concept.id)
+      .collection("evidence").where("testId", "==", view.id).get();
+    assert(evidence.docs.every(d => d.data().valid === false));
+  }
   report.checks.push(
     "Verification test contributes no valid learning evidence",
   );

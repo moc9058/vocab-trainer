@@ -585,6 +585,19 @@ conflict handling and verification commands. Mathematics uses `/api/math` and
 `/math/*`, independently of language/A/B logic. Local entrypoints start a separate
 math worker. Public APIs share existing auth; exact internal math POST routes use
 Google OIDC. Normal deploy validates enabled math infrastructure and preserves its
-environment; it does not publish textbooks. The initial verification uses a small
-source-backed subset of the local Linear Algebra Markdown notes. Actual textbook
-extraction/approval and iOS device installation remain separate operations.
+environment. Mathematics v2 additionally validates `textbook/catalog.json`, stages
+only allowlisted JSON, checks the deployed v1/v2 reader health, and activates the
+catalog with CAS before deploying the frontend. Release/rollback metadata is in
+ignored `backend/data/math-release.json`. Raw historical source deletion remains
+an explicit maintenance operation. The nine Linear Algebra chapters are converted
+losslessly to JSON with reports in `docs/math-v2-conversion/`; initial v1 subset
+verification remains historical. Device installation remains a separate operation.
+
+V2 creation accepts only range, difficulty, optional count and UI response language.
+The server derives prerequisites from the reviewed chapter graph, freezes the
+catalog/graph/scope and generates one question per explicit request. Blank count
+is continuous; finite counts use the same path. `Finish test` fences generation
+with an epoch while asynchronous grading may finish. Existing v1 snapshots remain
+readable for continuation; new v1 creation is rejected. V2 uses question plans and
+bounded paginated histories rather than growing parent arrays. See the math guide
+and v2 verification record for exact tested boundaries.

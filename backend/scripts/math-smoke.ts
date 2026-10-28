@@ -11,7 +11,7 @@ const { buildCatalog } = await import("../src/math-content.js");
 const { publishCatalog, activeCatalogId, mathDb } =
   await import("../src/math-store.js");
 const { loadAuthConfig, signSession } = await import("../src/auth-config.js");
-const fixture = await buildCatalog(resolve("data/math-verification"));
+const fixture = await buildCatalog(resolve("../textbook"));
 await publishCatalog(
   fixture.catalog,
   fixture.sources,
@@ -49,19 +49,21 @@ const preview = await fetch(new URL("/api/math/scope-previews", origin), {
   method: "POST",
   headers: { ...headers, "Content-Type": "application/json" },
   body: JSON.stringify({
+    schemaVersion: 2,
     subjectId: "linear-algebra",
-    selectedNodeIds: ["chapter-1"],
+    selectedNodeIds: [fixture.catalog.nodes.find(n => n.unitIds.length && fixture.catalog.objectives.some(o => n.unitIds.includes(o.unitId) && o.readiness === "ready"))!.id],
     difficulty: 2,
     questionCount: 1,
     responseLanguage: "en",
-    answerFormats: ["text"],
   }),
 });
 assert.equal(preview.status, 200);
 const scope = (await preview.json()) as any;
-assert.equal(scope.targetObjectiveIds.length, 1);
-assert.equal(scope.prerequisites.length, 2);
+assert.equal(scope.schemaVersion, 2);
+assert(scope.eligibleObjectiveCount > 0);
+assert.equal(fixture.catalog.subjects.length, 1);
+assert.equal(fixture.catalog.nodes.filter(n => n.kind === "chapter").length, 9);
 console.log(
-  "Docker smoke passed: frontend assets, catalog with existing auth posture, Linear Algebra scope, worker cookie refusal. No real LLM calls.",
+  "Docker smoke passed: frontend assets, catalog with existing auth posture, nine-chapter JSON Linear Algebra v2 scope, worker cookie refusal. No real LLM calls.",
 );
 await mathDb.terminate();

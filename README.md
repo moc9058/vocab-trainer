@@ -22,10 +22,13 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 ## Mathematics
 
 The **Mathematics** card opens independent subjects and a curriculum tree at `/math`.
-Confirm assessed objectives and permitted prerequisites before generating a test.
+Select a curriculum range and difficulty. Leave the optional question count blank
+to continue until **Finish test**, or choose 1–20 questions. Prerequisites follow
+the reviewed chapter dependency graph automatically.
 Math answers, drafts, grading jobs and review positions are saved in Firestore.
-Solutions show original source hierarchies before explaining the steps. Textbook
-publication is an explicit local authoring operation, separate from deployment.
+Solutions show original source hierarchies before explaining the steps. Normal deployment validates and stages the Git-managed JSON textbook allowlist,
+then activates it after the compatible backend is healthy. Historical source
+migration and raw Markdown deletion are separate maintenance operations.
 See the [mathematics guide](docs/math-category.md) for commands and verification.
 
 ## Group A and Group B
