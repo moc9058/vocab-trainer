@@ -1,7 +1,7 @@
 # 線形代数JSON変換の検証記録（2026-10-28）
 
 9章をMarkdown ASTの見出し位置から順序付きJSONへ変換した。
-各章reportのmappingsは全バイト範囲をheading/bodyへ対応付け、装飾タグの位置を保存する。
+各章reportのmappingsは原文の全範囲をheading/bodyへ対応付け、装飾タグの位置を保存する。
 その逆写像から元のMarkdownを再構成し、元SHA-256との完全一致を確認した。
 inline/display mathのAST token列・個数も元と完全一致した。
 原文の不均一な見出し深度とProperties、章共通仮定、URL、韓国語の補足も保持した。

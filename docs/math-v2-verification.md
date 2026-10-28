@@ -61,7 +61,7 @@ The initial read-only production inventory found one raw Markdown source (6,716
 bytes, two immutable references) and no unresolved source references. The old
 active catalog was `2e1e2c20ee379a476e9f3ab3a3df9ce367f4d9f9378e4276c3bf74e3dcade63f`.
 
-`git push origin master` and `./deploy.sh` completed successfully from release
+The initial `git push origin master` and `./deploy.sh` completed successfully from release
 commit `9fefee9`. Cloud Run revisions:
 
 - Backend: `vocab-trainer-backend-00514-j8c` (100% traffic).
@@ -109,5 +109,24 @@ maxima, count and AI grade source. The prompt explicitly requires their preserva
 and an arithmetic total. Strict aggregate/evidence validation remains unchanged;
 invalid grades are not normalized into accepted scores. Three new regression tests
 cover the serialized schema and invalid metadata/awards/duplicates/arithmetic.
-The new contract passed a controlled real-model diagnostic. Final deployed retry
-results are recorded after release of this follow-up.
+The new contract passed a controlled real-model diagnostic. The follow-up was
+pushed and deployed from `f9c933c` with the same catalog hash. Final revisions:
+
+- Backend: `vocab-trainer-backend-00515-tmd` (100% traffic).
+- Frontend: `vocab-trainer-frontend-00497-lp5` (100% traffic).
+
+The failed verification attempt was retried through the application route and
+Cloud Tasks/OIDC worker. It was graded successfully by `gpt-6.1-sol` at 100/100;
+its test stayed completed. The retry receipt replay succeeded, and the same grade
+job retained two calls / 10,641 tokens across the initial failure and retry.
+One verification evidence record was present and marked invalid for learning
+aggregation; no valid learning evidence was contributed. The final source check
+found ten JSON artifacts and zero raw Markdown artifacts.
+
+The real-model verification used one generated question plus two diagnostic grading
+calls. Time-window usage for this workflow was seven calls, 25,133 prompt tokens
+and 6,776 completion tokens. The model has no configured nonzero cost rate in the
+existing metrics configuration, so a dollar estimate is unavailable; no pricing or
+config was invented or uploaded. These few calls verify the pipeline/retry contract,
+not general mathematical quality. Local detailed reports remain under ignored
+`backend/data/math-cloud-verification/` and `backend/data/math-json-migration/`.
