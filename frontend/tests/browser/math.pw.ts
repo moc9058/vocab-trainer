@@ -371,3 +371,67 @@ for (const ui of [
   await expect(page.getByText(ui.continuous, { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test("math v2 review uses fixed sitting boundaries after earlier answers", async ({ page }) => {
+  await base(page);
+  const view: any = {
+    id: "review-boundary-v2", schemaVersion: 2, catalogId: f.catalog.id, scopeHash: "scope",
+    config: { schemaVersion: 2, subjectId: "linear-algebra", selectedNodeIds: [], difficulty: 2, responseLanguage: "en" },
+    state: "in_progress", revision: 9, generationMode: "continuous", questionLimit: null, generationState: "idle",
+    generatedCount: 22, answeredCount: 22, invalidCount: 0, currentQuestionId: null, pendingGenerationJobId: null,
+    generationJobId: "job", currentSittingId: "second-sitting", questionIds: [], answeredQuestionIds: [],
+    invalidQuestionIds: [], revealedQuestionIds: [], createdAt: Date.now(), updatedAt: Date.now(),
+    questions: [], attempts: [], drafts: [], score: 0, maxScore: 0, pendingGrades: 0,
+    scopeSummary: { targets: 1, prerequisites: 0, baseline: 0 }, coverage: [],
+    sitting: { id: "second-sitting", state: "ended", startedAt: Date.now(), endedAt: Date.now(),
+      startSequence: 21, endSequence: 22, attemptIds: [], review: { state: "active", revision: 1,
+        startSequence: 21, endSequence: 22, cursor: 21, currentAttemptId: null, attemptIds: [] } },
+  };
+  await page.route("**/api/math/tests/review-boundary-v2**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === "GET") return route.fulfill({ json: path.endsWith("/attempts") ? { items: [], nextCursor: null } : view });
+    if (path.endsWith("/review")) {
+      const body = route.request().postDataJSON();
+      expect(body.action).toBe("next"); expect(body.reviewRevision).toBe(1);
+      view.sitting.review.cursor = 22; view.sitting.review.revision++;
+      return route.fulfill({ json: { revision: view.revision, review: view.sitting.review } });
+    }
+    return route.fulfill({ status: 404, json: { error: "unexpected mutation" } });
+  });
+  await page.goto("/math/tests/review-boundary-v2");
+  await expect(page.getByText("1 / 2", { exact: true })).toBeVisible();
+  await expect(page.getByText("22 / 0", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByText("2 / 2", { exact: true })).toBeVisible();
+});
+
+test("math v2 actual nine-chapter catalog fits a 360px viewport", async ({ page }, testInfo) => {
+  await base(page);
+  const catalog = JSON.parse(execFileSync(process.execPath, ["--import", "tsx", "--input-type=module", "-e",
+    "import { buildCatalog } from './src/math-content.ts'; const {catalog} = await buildCatalog('../textbook'); console.log(JSON.stringify(catalog));"],
+    { cwd: resolve(process.cwd(), "../backend"), encoding: "utf8", maxBuffer: 20_000_000 }));
+  expect(catalog.nodes.filter((node: any) => node.kind === "chapter")).toHaveLength(9);
+  const failedFonts: string[] = [];
+  page.on("response", (response) => { if (/\.(woff2?|ttf)(\?|$)/.test(response.url()) && response.status() >= 400) failedFonts.push(response.url()); });
+  await page.route("**/api/math/catalog", (route) => route.fulfill({ json: { activeCatalogId: catalog.id, subjects: catalog.subjects, capabilities: { generate: true } } }));
+  await page.route("**/api/math/catalogs/**/nodes?**", (route) => route.fulfill({ json: { items: catalog.nodes, nextCursor: null } }));
+  await page.route("**/api/math/catalogs/**/units/*", (route) => route.fulfill({ json: catalog.units.find((unit: any) => new URL(route.request().url()).pathname.endsWith(`/units/${unit.id}`)) }));
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto("/math/subjects/linear-algebra");
+  await page.getByRole("button", { name: "Select all", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Start test", exact: true })).toBeEnabled();
+  const chapters = catalog.nodes.filter((node: any) => node.kind === "chapter");
+  // Inspect chapter navigation, then a deep branch with long item titles.
+  for (const chapter of chapters) await page.getByRole("button", { name: `Collapse ${chapter.title}`, exact: true }).click();
+  await page.screenshot({ path: testInfo.outputPath("math-v2-nine-chapters-360.png"), fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole("button", { name: `Expand ${chapters[8].title}`, exact: true }).click();
+  const leaf = catalog.nodes.find((node: any) => node.ancestorIds.includes(chapters[8].id) && node.unitIds.length > 0);
+  await page.getByRole("button", { name: `Read unit ${leaf.title}`, exact: true }).first().click();
+  await expect(page.locator(".math-markdown .katex").first()).toBeVisible();
+  await page.evaluate(() => document.fonts.ready);
+  await page.getByRole("button", { name: "Start test", exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("math-v2-deep-branch-360.png"), fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(failedFonts).toEqual([]);
+});
