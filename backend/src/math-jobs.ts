@@ -7,6 +7,7 @@ import type {
   StoredSolution,
   PublicQuestion,
   Assessment,
+  QuestionPlan,
 } from "./math-types.js";
 import {
   collection,
@@ -36,6 +37,7 @@ import {
 import { callLLM, recordUsage } from "./llm.js";
 import { enqueueMathJob, localMathJobs } from "./math-task-dispatch.js";
 import { withLLMBudget } from "./llm-budget.js";
+import { aggregateAssessment } from "./math-v2-operations.js";
 import { writeLearningEvidence } from "./math-learning.js";
 export interface MathTaskPayload {
   jobId: string;
@@ -43,6 +45,8 @@ export interface MathTaskPayload {
   sequence: number;
 }
 export const MATH_LEASE_MS = 660_000;
+const fingerprint = (prompt: string) =>
+  prompt.normalize("NFKC").toLowerCase().replace(/\s+/g, " ").trim();
 const TERMINAL = ["succeeded", "failed", "cancelled"];
 export async function claimMathJob(
   payload: MathTaskPayload,
@@ -66,6 +70,17 @@ export async function claimMathJob(
       lease: { token: randomUUID(), expiresAt: now + MATH_LEASE_MS },
       updatedAt: now,
     };
+    if (job.type === "generate" && job.generationEpoch !== undefined) {
+      const testRef = collection("tests").doc(job.testId);
+      const test = await requiredDoc<MathTest>(testRef, tx);
+      if (
+        test.generationEpoch !== job.generationEpoch ||
+        ["completed", "cancelled"].includes(test.state) ||
+        test.pendingGenerationJobId !== job.id
+      )
+        return null;
+      tx.update(testRef, { generationState: "running" });
+    }
     tx.set(ref, bounded(claimed));
     return claimed;
   });
@@ -158,11 +173,21 @@ export async function runMathTask(
       if (job.type === "generate") {
         const scope = await getScope(job.testId),
           catalog = await loadCatalog(scope.catalogId, scope.request.subjectId),
-          plan = scope.plans[job.cursor];
+          plan = job.planId
+            ? await requiredDoc<QuestionPlan>(
+                testRef.collection("question_plans").doc(job.planId),
+              )
+            : scope.plans[job.cursor];
         invariant(plan, "MATH_PLAN_MISSING", 422);
         if (job.stage === "generate") {
           const previousQuestions = (
-            await testRef.collection("questions").get()
+            await (job.planId
+              ? testRef
+                  .collection("questions")
+                  .orderBy("ordinal", "desc")
+                  .limit(20)
+                  .get()
+              : testRef.collection("questions").get())
           ).docs.map((d) => d.data() as PublicQuestion);
           const candidate = await generateCandidate(
             llm,
@@ -221,7 +246,11 @@ export async function runMathTask(
           question = await requiredDoc<PublicQuestion>(
             testRef.collection("questions").doc(attempt.questionId),
           );
-        const plan = scope.plans[question.ordinal - 1];
+        const plan = question.planId
+          ? await requiredDoc<QuestionPlan>(
+              testRef.collection("question_plans").doc(question.planId),
+            )
+          : scope.plans[question.ordinal - 1];
         invariant(plan, "MATH_PLAN_MISSING", 422);
         grade = await gradeAttempt(
           llm,
@@ -239,14 +268,36 @@ export async function runMathTask(
           current = await requiredDoc<MathJob>(ref, tx),
           test = await requiredDoc<MathTest>(testRef, tx);
         if (!holds(current, job) || test.state === "cancelled") return null;
+        if (
+          job.type === "generate" &&
+          test.schemaVersion === 2 &&
+          (test.generationEpoch !== job.generationEpoch ||
+            test.pendingGenerationJobId !== job.id ||
+            test.state === "completed")
+        )
+          return null;
         const attempt = job.attemptId
           ? await requiredDoc<Attempt>(
               testRef.collection("attempts").doc(job.attemptId),
               tx,
             )
           : null;
+        const gradedQuestion =
+          job.attemptId && test.schemaVersion === 2 && attempt
+            ? await requiredDoc<PublicQuestion>(
+                testRef.collection("questions").doc(attempt.questionId),
+                tx,
+              )
+            : null;
         const existingQuestions = accepted
-          ? await tx.get(testRef.collection("questions"))
+          ? await tx.get(
+              test.schemaVersion === 2
+                ? testRef
+                    .collection("questions")
+                    .orderBy("ordinal", "desc")
+                    .limit(20)
+                : testRef.collection("questions"),
+            )
           : null;
         const changed: MathJob = {
           ...current,
@@ -265,20 +316,34 @@ export async function runMathTask(
           );
         if (accepted) {
           const scopeCount = test.config.questionCount,
-            id = `q-${job.cursor + 1}`;
+            id = `q-${job.ordinal ?? job.cursor + 1}`;
           const candidate = accepted.candidate,
             hash = contentHash({
               prompt: candidate.promptMarkdown,
               answerFormat: candidate.answerFormat,
             });
           invariant(
-            !existingQuestions?.docs.some((d) => d.data().contentHash === hash),
+            !existingQuestions?.docs.some(
+              (d) =>
+                d.data().contentHash === hash ||
+                (test.schemaVersion === 2 &&
+                  fingerprint(d.data().promptMarkdown) ===
+                    fingerprint(candidate.promptMarkdown)),
+            ),
             "MATH_DUPLICATE_QUESTION",
             422,
           );
           const question: PublicQuestion = {
             id,
-            ordinal: job.cursor + 1,
+            ordinal: job.ordinal ?? job.cursor + 1,
+            ...(job.planId
+              ? {
+                  planId: job.planId,
+                  answered: false,
+                  revealed: false,
+                  invalid: false,
+                }
+              : {}),
             promptMarkdown: candidate.promptMarkdown,
             answerFormat: candidate.answerFormat,
             targetObjectiveIds: candidate.targetObjectiveIds,
@@ -288,10 +353,17 @@ export async function runMathTask(
           };
           tx.create(testRef.collection("questions").doc(id), bounded(question));
           tx.create(testRef.collection("solutions").doc(id), bounded(accepted));
-          test.questionIds.push(id);
+          if (test.schemaVersion === 2) {
+            test.generatedCount = (test.generatedCount ?? 0) + 1;
+            test.currentQuestionId = id;
+            test.pendingGenerationJobId = null;
+            test.generationState = "idle";
+            if (test.state === "generating") test.state = "ready";
+            changed.state = "succeeded";
+          } else test.questionIds.push(id);
           test.revision++;
           test.updatedAt = Date.now();
-          if (changed.cursor >= scopeCount) {
+          if (test.schemaVersion === 1 && changed.cursor >= scopeCount) {
             test.state = "ready";
             changed.state = "succeeded";
           }
@@ -303,6 +375,7 @@ export async function runMathTask(
             "MATH_GRADE_CONFLICT",
             409,
           );
+          const before = structuredClone(attempt);
           attempt.assessment = grade;
           attempt.assessmentState = grade.state;
           attempt.gradeVersion++;
@@ -310,8 +383,20 @@ export async function runMathTask(
             testRef.collection("attempts").doc(attempt.id),
             bounded(attempt),
           );
+          if (test.schemaVersion === 2) {
+            if (!gradedQuestion?.invalid)
+              aggregateAssessment(test, before, attempt);
+            tx.set(testRef, bounded(test));
+          }
           if (gradingCatalog)
-            writeLearningEvidence(tx, test, attempt, gradingCatalog);
+            writeLearningEvidence(
+              tx,
+              gradedQuestion?.invalid
+                ? { ...test, invalidQuestionIds: [attempt.questionId] }
+                : test,
+              attempt,
+              gradingCatalog,
+            );
         }
         tx.set(ref, bounded(changed));
         return changed;
@@ -338,6 +423,14 @@ export async function runMathTask(
             )
           : null;
       if (!holds(current, job)) return;
+      if (
+        job.type === "generate" &&
+        test.schemaVersion === 2 &&
+        (test.generationEpoch !== job.generationEpoch ||
+          test.state === "completed" ||
+          test.pendingGenerationJobId !== job.id)
+      )
+        return;
       const status = (error as any)?.status,
         transport =
           !(error instanceof MathError) &&
@@ -380,8 +473,12 @@ export async function runMathTask(
       };
       tx.set(ref, bounded(next));
       if (!retry) {
-        if (job.type === "generate" && test.state === "generating") {
-          test.state = "generation_failed";
+        if (
+          job.type === "generate" &&
+          (test.state === "generating" || test.schemaVersion === 2)
+        ) {
+          if (test.state === "generating") test.state = "generation_failed";
+          if (test.schemaVersion === 2) test.generationState = "failed";
           test.revision++;
           test.updatedAt = Date.now();
           tx.set(collection("tests").doc(test.id), bounded(test));

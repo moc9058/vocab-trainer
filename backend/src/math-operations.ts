@@ -85,6 +85,8 @@ export function makeJob(
   };
 }
 export type TestAction =
+  | "next-question"
+  | "finish"
   | "start"
   | "resume"
   | "end-sitting"
@@ -108,6 +110,12 @@ export async function applyTestOperation(
     operationRef = testRef.collection("operations").doc(body.operationId),
     hash = contentHash({ action, body });
   const metadata = await requiredDoc<MathTest>(testRef);
+  if (metadata.schemaVersion === 2)
+    return (await import("./math-v2-operations.js")).applyV2Operation(
+      testId,
+      action,
+      body,
+    );
   invariant(metadata.schemaVersion === 1, "MATH_SCHEMA_UNSUPPORTED", 503);
   const catalog =
     action === "assessment" || action === "invalidate"
@@ -191,7 +199,11 @@ export async function applyTestOperation(
         "MATH_QUESTION_NOT_FOUND",
         404,
       );
-    const output: Record<string, unknown> = { testId, revision: test.revision };
+    const output: Record<string, unknown> = {
+      testId,
+      schemaVersion: 1,
+      revision: test.revision,
+    };
     const active = () =>
       invariant(
         test.state === "in_progress" && sitting?.state === "active",

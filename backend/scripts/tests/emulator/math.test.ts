@@ -45,10 +45,14 @@ const {
   getScope,
   requiredDoc,
   readDoc,
+  writeChunks,
 } = await import("../../../src/math-store.js");
-const { runMathTask, claimMathJob, reconcileMathJobs } =
-  await import("../../../src/math-jobs.js");
-const { applyTestOperation } = await import("../../../src/math-operations.js");
+const { runMathTask, claimMathJob, reconcileMathJobs } = await import(
+  "../../../src/math-jobs.js"
+);
+const { makeJob, applyTestOperation } = await import(
+  "../../../src/math-operations.js"
+);
 const { buildCatalog } = await import("../../../src/math-content.js");
 const fixture = await linearAlgebraFixture();
 const app = Fastify();
@@ -98,20 +102,51 @@ async function api(
   assert.equal(r.statusCode, status, r.body);
   return r.json();
 }
+/** Old sessions are fixtures, never newly created through the retired v1 API. */
 async function createTest() {
-  const preview = await api("POST", "/scope-previews", request());
-  return api(
-    "POST",
-    "/tests",
-    {
-      previewId: preview.id,
-      scopeHash: preview.scopeHash,
-      acceptance: preview.requiredAcceptance,
-      operationId: randomUUID(),
-    },
-    202,
-  );
+  const testId = randomUUID(),
+    jobId = randomUUID(),
+    now = Date.now();
+  const ref = collection("tests").doc(testId),
+    scope = resolveScope(request(), fixture.catalog);
+  const scopeChunks = await writeChunks(ref, "scope_chunks", scope);
+  await ref.create({
+    id: testId,
+    schemaVersion: 1,
+    catalogId: fixture.catalog.id,
+    scopeHash: contentHash(scope),
+    config: scope.request,
+    state: "generating",
+    revision: 0,
+    generationJobId: jobId,
+    currentSittingId: null,
+    questionIds: [],
+    answeredQuestionIds: [],
+    invalidQuestionIds: [],
+    revealedQuestionIds: [],
+    createdAt: now,
+    updatedAt: now,
+    scopeChunks,
+  });
+  await collection("jobs")
+    .doc(jobId)
+    .create(
+      makeJob(jobId, testId, "generate", {
+        generate: "fixture-model",
+        validate: "fixture-model",
+        grade: "fixture-model",
+      }),
+    );
+  return { testId, jobId, revision: 0 };
 }
+const requestV2 = () => ({
+  schemaVersion: 2,
+  subjectId: "linear-algebra",
+  selectedNodeIds: ["chapter-1"],
+  difficulty: 2,
+  questionCount: 1,
+  responseLanguage: "en",
+});
 const llm = async (feature: string, system: string, input: any) => {
   if (feature === "generate") {
     const scope = resolveScope(request(), fixture.catalog);
@@ -213,24 +248,19 @@ test("strict Fastify schemas reject extra properties, bad IDs, sizes and cookie 
     assert.equal(r.statusCode, 401);
   }
 });
-test("scope confirmation and creation receipts are atomic and reject changed operation payloads", async () => {
-  const preview = await api("POST", "/scope-previews", request()),
-    operationId = randomUUID(),
-    body = {
-      previewId: preview.id,
-      scopeHash: preview.scopeHash,
-      acceptance: preview.requiredAcceptance,
-      operationId,
-    };
-  await api("POST", "/tests", { ...body, acceptance: [] }, 422);
+test("v2 creation receipts are atomic; retired v1 and policy inputs are rejected", async () => {
+  await api("POST", "/scope-previews", request(), 400);
+  await api("POST", "/scope-previews", { ...requestV2(), mode: "strict" }, 400);
+  const preview = await api("POST", "/scope-previews", requestV2());
+  const body = {
+    schemaVersion: 2,
+    previewId: preview.id,
+    scopeHash: preview.scopeHash,
+    operationId: randomUUID(),
+  };
   const created = await api("POST", "/tests", body, 202);
   assert.deepEqual(await api("POST", "/tests", body, 202), created);
-  await api(
-    "POST",
-    "/tests",
-    { ...body, acceptance: [...body.acceptance, "outside:foo"] },
-    409,
-  );
+  await api("POST", "/tests", { ...body, purpose: "verification" }, 409);
   await applyTestOperation(created.testId, "cancel", {
     expectedRevision: 0,
     operationId: randomUUID(),
@@ -434,7 +464,7 @@ test("known bad candidates exhaust exactly three candidates and retain failure w
 });
 
 test("catalog changes after preview return 409, retained catalogs and tests survive a tree move and rollback", async () => {
-  const preview = await api("POST", "/scope-previews", request()),
+  const preview = await api("POST", "/scope-previews", requestV2()),
     oldTest = await createTest();
   await runJob(oldTest.jobId);
   const moved = structuredClone(fixture.catalog);
@@ -454,7 +484,7 @@ test("catalog changes after preview return 409, retained catalogs and tests surv
     {
       previewId: preview.id,
       scopeHash: preview.scopeHash,
-      acceptance: preview.requiredAcceptance,
+      schemaVersion: 2,
       operationId: randomUUID(),
     },
     409,
@@ -647,4 +677,182 @@ test("subject-scoped catalog reads follow foreign prerequisite and foundation re
   } finally {
     await db.recursiveDelete(ref);
   }
+});
+
+test("v2 continuous generation passes 21 questions, stays bounded, replays next and fences finish against a worker", async () => {
+  const { questionCount, ...input } = requestV2();
+  const preview = await api("POST", "/scope-previews", input);
+  const created = await api(
+    "POST",
+    "/tests",
+    {
+      schemaVersion: 2,
+      previewId: preview.previewId,
+      scopeHash: preview.scopeHash,
+      operationId: randomUUID(),
+    },
+    202,
+  );
+  let promptNumber = 0;
+  const uniqueLLM = async (feature: string, system: string, input: any) => {
+    const result: any = await llm(feature, system, input);
+    if (feature === "generate")
+      result.result.promptMarkdown += ` Question instance ${++promptNumber}.`;
+    return result;
+  };
+  const generate = async (id: string) => {
+    for (let i = 0; i < 10; i++) {
+      const job = await requiredDoc<MathJob>(collection("jobs").doc(id));
+      if (["succeeded", "failed", "cancelled"].includes(job.state)) {
+        assert.equal(job.state, "succeeded", job.lastError ?? "");
+        return;
+      }
+      await runMathTask(
+        { jobId: id, generation: job.generation, sequence: job.sequence },
+        uniqueLLM as any,
+      );
+    }
+    assert.fail("unfinished");
+  };
+  await generate(created.jobId);
+  let view = await testView(created.testId);
+  await applyTestOperation(created.testId, "start", {
+    operationId: randomUUID(),
+    expectedRevision: view.revision,
+  });
+  for (let i = 0; i < 21; i++) {
+    view = await testView(created.testId);
+    assert.equal(view.questions.length, 1);
+    await applyTestOperation(created.testId, "skip", {
+      operationId: randomUUID(),
+      expectedRevision: view.revision,
+      questionId: view.questions[0].id,
+    });
+    view = await testView(created.testId);
+    assert.equal(view.state, "in_progress");
+    assert.equal(view.answeredCount, i + 1);
+    const body = { operationId: randomUUID(), expectedRevision: view.revision };
+    const next = await applyTestOperation(
+      created.testId,
+      "next-question",
+      body,
+    );
+    assert.deepEqual(
+      await applyTestOperation(created.testId, "next-question", body),
+      next,
+    );
+    if (i < 20) await generate(next.jobId as string);
+  }
+  const stored = await requiredDoc<MathTest>(
+    collection("tests").doc(created.testId),
+  );
+  assert.deepEqual(stored.questionIds, []);
+  assert.deepEqual(stored.answeredQuestionIds, []);
+  assert.equal(stored.generatedCount, 21);
+  assert.equal(stored.currentQuestionId, null);
+  const lastJob = await requiredDoc<MathJob>(
+    collection("jobs").doc(stored.pendingGenerationJobId!),
+  );
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const started = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const inFlight = runMathTask(
+    {
+      jobId: lastJob.id,
+      generation: lastJob.generation,
+      sequence: lastJob.sequence,
+    },
+    (async (feature: any, system: any, input: any) => {
+      entered();
+      await gate;
+      return uniqueLLM(feature, system, input);
+    }) as any,
+  );
+  await started;
+  const finish = {
+    operationId: randomUUID(),
+    expectedRevision: stored.revision,
+  };
+  await applyTestOperation(created.testId, "finish", finish);
+  assert.deepEqual(await applyTestOperation(created.testId, "finish", finish), {
+    testId: created.testId,
+    schemaVersion: 2,
+    revision: stored.revision + 1,
+  });
+  release();
+  await inFlight;
+  view = await testView(created.testId);
+  assert.equal(view.state, "completed");
+  assert.equal(view.generatedCount, 21);
+  await assert.rejects(
+    () =>
+      applyTestOperation(created.testId, "next-question", {
+        operationId: randomUUID(),
+        expectedRevision: view.revision,
+      }),
+    /MATH_SITTING_NOT_ACTIVE|MATH_TEST_FINISHED/,
+  );
+  const page = await api("GET", `/tests/${created.testId}/questions?limit=3`);
+  assert.equal(page.items.length, 3);
+  assert(page.nextCursor);
+  assert(!JSON.stringify(view).includes("finalAnswerMarkdown"));
+  // Ten thousand historical attempts do not enter parent documents or view payloads.
+  const ref = collection("tests").doc(created.testId);
+  const beforeBytes = Buffer.byteLength(
+    JSON.stringify(await testView(created.testId)),
+  );
+  const batch = db.bulkWriter();
+  for (let i = 100; i < 10100; i++)
+    batch.create(ref.collection("attempts").doc(`synthetic-${i}`), {
+      id: `synthetic-${i}`,
+      sequence: i,
+      answerText: "synthetic",
+    });
+  await batch.close();
+  const afterView = await testView(created.testId);
+  assert.equal(Buffer.byteLength(JSON.stringify(afterView)), beforeBytes);
+  assert(afterView.attempts.length <= 2);
+});
+
+test("v2 finite completes at limit and grade jobs reference persisted question plans", async () => {
+  const preview = await api("POST", "/scope-previews", requestV2());
+  const created = await api(
+    "POST",
+    "/tests",
+    {
+      schemaVersion: 2,
+      previewId: preview.id,
+      scopeHash: preview.scopeHash,
+      operationId: randomUUID(),
+    },
+    202,
+  );
+  await runJob(created.jobId);
+  let view = await testView(created.testId);
+  assert.equal(view.state, "ready");
+  assert.equal(view.questions[0].planId, "plan-1");
+  await applyTestOperation(created.testId, "start", {
+    operationId: randomUUID(),
+    expectedRevision: view.revision,
+  });
+  view = await testView(created.testId);
+  const result = await applyTestOperation(created.testId, "attempts", {
+    operationId: randomUUID(),
+    expectedRevision: view.revision,
+    questionId: view.questions[0].id,
+    sittingId: view.currentSittingId,
+    answerText: "yes",
+  });
+  view = await testView(created.testId);
+  assert.equal(view.state, "completed");
+  assert.equal(view.pendingGrades, 1);
+  await runJob(result.jobId as string);
+  view = await testView(created.testId);
+  assert.equal(view.state, "completed");
+  assert.equal(view.score, 100);
+  assert.equal(view.pendingGrades, 0);
 });

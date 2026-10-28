@@ -16,7 +16,7 @@ export const MATH_LIMITS = {
   markdownBytes: 512 * 1024,
   documentBytes: 700 * 1024,
   chunkBytes: 200 * 1024,
-  objectives: 200,
+  objectives: 1000,
   capabilities: 1000,
   questions: 20,
   answerBytes: 32 * 1024,
@@ -59,7 +59,7 @@ export const formatSchema = z.enum([
 ]);
 export const scopeRequestSchema = z.strictObject({
   subjectId: idSchema,
-  selectedNodeIds: z.array(idSchema).min(1).max(200),
+  selectedNodeIds: z.array(idSchema).min(1).max(2000),
   excludedConceptIds: z.array(idSchema).max(1000).default([]),
   excludedObjectiveIds: z.array(idSchema).max(200).default([]),
   objectiveCapabilities: z
@@ -79,6 +79,14 @@ export const scopeRequestSchema = z.strictObject({
     .min(1)
     .max(5)
     .default(["numeric", "expression", "text", "proof", "choice"]),
+});
+export const scopeRequestV2Schema = z.strictObject({
+  schemaVersion: z.literal(2),
+  subjectId: idSchema,
+  selectedNodeIds: z.array(idSchema).min(1).max(2000),
+  difficulty: z.number().int().min(1).max(5),
+  questionCount: z.number().int().min(1).max(20).optional(),
+  responseLanguage: z.enum(["en", "ja", "ko"]),
 });
 export const candidateSchema = z.strictObject({
   status: z.literal("candidate"),

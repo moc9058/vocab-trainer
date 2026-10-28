@@ -8,7 +8,7 @@ import {
   operationIdSchema,
   hashSchema,
   jsonSchema,
-  scopeRequestSchema,
+  scopeRequestV2Schema,
   invariant,
   MathError,
   contentHash,
@@ -27,6 +27,7 @@ import {
   requiredDoc,
   testView,
   publicTest,
+  publicQuestion,
   page,
   globalOperation,
   bounded,
@@ -38,7 +39,8 @@ import type {
   Attempt,
 } from "../math-types.js";
 import {
-  resolveScope,
+  resolveScopeV2,
+  planNextQuestion,
   makePreview,
   foundationAcceptanceHash,
 } from "../math-scope.js";
@@ -57,6 +59,11 @@ const params = (fields: Record<string, z.ZodType>) =>
   jsonSchema(z.strictObject(fields));
 export const mathRoutes: FastifyPluginAsync = async (app) => {
   installMathValidator(app);
+  app.get("/health", async () => ({
+    schemaVersion: 2,
+    sourceFormats: ["textbook-json", "legacy-markdown"],
+    sourceAliasVersion: 2,
+  }));
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof MathError)
       return reply.code(error.statusCode).send({
@@ -281,71 +288,39 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
       );
     },
   );
-  app.post(
-    "/scope-previews",
-    { schema: { body: jsonSchema(scopeRequestSchema) } },
-    async (r) => {
-      const body = scopeRequestSchema.parse(r.body),
-        id = await activeCatalogId();
-      invariant(id, "MATH_EMPTY_CATALOG", 422);
-      const catalog = await loadCatalog(id, body.subjectId);
-      const acceptances: Record<string, string> = {};
-      for (const profileId of body.profileIds) {
-        const saved = await readDoc<any>(
-          collection("foundation_acceptances").doc(profileId),
-        );
-        if (saved?.acceptedCapabilitiesHash)
-          acceptances[profileId] = saved.acceptedCapabilitiesHash;
-      }
-      const preview = makePreview(
-        resolveScope(body, catalog, acceptances),
-        randomUUID(),
-      );
-      await savePreview(preview);
-      const missing = [
-        ...preview.prerequisites,
-        ...preview.excluded.flatMap((o) => o.missing),
-      ];
-      const practiceObjectives = catalog.objectives.filter(
-        (o) =>
-          o.readiness === "ready" &&
-          o.assessedCapabilities.some((r) =>
-            missing.some(
-              (m) =>
-                m.conceptId === r.conceptId && m.capability === r.capability,
-            ),
-          ),
-      );
-      const practiceUnits = new Set(practiceObjectives.map((o) => o.unitId));
-      const prerequisitePracticeRequest = practiceObjectives.length
-        ? {
-            ...body,
-            selectedNodeIds: catalog.nodes
-              .filter((n) => n.unitIds.some((id) => practiceUnits.has(id)))
-              .map((n) => n.id),
-            excludedObjectiveIds: catalog.objectives
-              .filter((o) => !practiceObjectives.includes(o))
-              .map((o) => o.id),
-            excludedConceptIds: [],
-            objectiveCapabilities: ["recognize", "apply", "prove"],
-          }
-        : null;
-      return {
-        ...preview,
-        prerequisitePracticeRequest,
-        labels: Object.fromEntries([
-          ...catalog.concepts.map((c) => [c.id, c.title]),
-          ...catalog.objectives.map((o) => [o.id, o.description]),
-        ]),
-      };
-    },
-  );
+  app.post("/scope-previews", async (r) => {
+    invariant(
+      (r.body as any)?.schemaVersion === 2,
+      "MATH_V1_CREATION_UNSUPPORTED",
+      400,
+    );
+    const body = scopeRequestV2Schema.parse(r.body),
+      id = await activeCatalogId();
+    invariant(id, "MATH_EMPTY_CATALOG", 422);
+    const catalog = await loadCatalog(id, body.subjectId);
+    const preview = makePreview(resolveScopeV2(body, catalog), randomUUID());
+    await savePreview(preview);
+    return {
+      schemaVersion: 2,
+      id: preview.id,
+      previewId: preview.id,
+      scopeHash: preview.scopeHash,
+      catalogId: id,
+      curriculumHash: preview.curriculumHash,
+      eligibleObjectiveCount: preview.targetObjectiveIds.length,
+      compactSummary: {
+        targets: preview.targetObjectiveIds.length,
+        prerequisites: preview.prerequisites.length,
+      },
+      expiresAt: preview.expiresAt,
+    };
+  });
   const createSchema = z.strictObject({
     ...op,
+    schemaVersion: z.literal(2),
     purpose: z.enum(["study", "verification"]).default("study"),
     previewId: anyId,
     scopeHash: hashSchema,
-    acceptance: z.array(z.string().max(200)).max(1000),
   });
   app.post(
     "/tests",
@@ -359,7 +334,7 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
         purpose: body.purpose,
         previewId: body.previewId,
         scopeHash: body.scopeHash,
-        acceptance: body.acceptance,
+        schemaVersion: body.schemaVersion,
       };
       if (existing) {
         invariant(
@@ -378,11 +353,9 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
         "MATH_SCOPE_CHANGED",
         409,
       );
-      invariant(preview.plans.length > 0, "MATH_SCOPE_BLOCKED", 422);
       invariant(
-        preview.requiredAcceptance.every((a) => body.acceptance.includes(a)) &&
-          body.acceptance.every((a) => preview.requiredAcceptance.includes(a)),
-        "MATH_ACCEPTANCE_REQUIRED",
+        preview.schemaVersion === 2 && preview.targetObjectiveIds.length > 0,
+        "MATH_SCOPE_BLOCKED",
         422,
       );
       let models: MathJob["frozenConfig"]["models"];
@@ -401,9 +374,6 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
         preview.catalogId,
         preview.request.subjectId,
       );
-      const acceptedProfiles = profileCatalog.profiles.filter((p) =>
-        preview.request.profileIds.includes(p.id),
-      );
       const {
         id: _previewId,
         scopeHash: _previewHash,
@@ -411,10 +381,16 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
         ...frozenScope
       } = preview;
       const testId = randomUUID(),
-        jobId = randomUUID(),
+        jobId = `${testId}-e0-q1`,
         testRef = collection("tests").doc(testId),
         scopeChunks = await writeChunks(testRef, "scope_chunks", frozenScope),
-        job = makeJob(jobId, testId, "generate", models);
+        plan = planNextQuestion(preview, profileCatalog, 1),
+        job = {
+          ...makeJob(jobId, testId, "generate", models),
+          planId: plan.id,
+          ordinal: 1,
+          generationEpoch: 0,
+        };
       const result = await globalOperation(
         "create-test",
         body.operationId,
@@ -441,27 +417,27 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
           );
           invariant(meta.expiresAt > Date.now(), "MATH_PREVIEW_EXPIRED", 409);
           invariant(activeJobs.size < 3, "MATH_JOB_LIMIT", 429);
-          for (const profile of acceptedProfiles) {
-            const saved = await readDoc<any>(
-              collection("foundation_acceptances").doc(profile.id),
-              tx,
-            );
-            const expected = foundationAcceptanceHash(profileCatalog, profile);
-            for (const capability of profile.acceptedCapabilities) {
-              const key = `baseline:${capability.conceptId}:${capability.capability}`;
-              invariant(
-                preview.requiredAcceptance.includes(key) ||
-                  saved?.acceptedCapabilitiesHash === expected,
-                "MATH_PROFILE_CHANGED",
-                409,
-              );
-            }
-          }
           const now = Date.now(),
             test: MathTest = {
               purpose: body.purpose,
               id: testId,
-              schemaVersion: 1,
+              schemaVersion: 2,
+              generationMode:
+                preview.request.questionLimit === null
+                  ? "continuous"
+                  : "finite",
+              questionLimit: preview.request.questionLimit ?? null,
+              generationState: "queued",
+              nextOrdinal: 2,
+              generatedCount: 0,
+              answeredCount: 0,
+              invalidCount: 0,
+              currentQuestionId: null,
+              pendingGenerationJobId: jobId,
+              generationEpoch: 0,
+              score: 0,
+              maxScore: 0,
+              pendingGrades: 0,
               catalogId: preview.catalogId,
               scopeHash: preview.scopeHash,
               config: preview.request,
@@ -477,17 +453,16 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
               updatedAt: now,
             };
           tx.create(testRef, bounded({ ...test, scopeChunks }));
-          for (const profile of acceptedProfiles)
-            tx.set(collection("foundation_acceptances").doc(profile.id), {
-              profileRevision: profile.revision,
-              acceptedCapabilitiesHash: foundationAcceptanceHash(
-                profileCatalog,
-                profile,
-              ),
-              acceptedAt: now,
+          tx.create(
+            testRef.collection("question_plans").doc(plan.id),
+            bounded(plan),
+          );
+          for (const id of plan.targetObjectiveIds)
+            tx.create(testRef.collection("objective_counts").doc(id), {
+              count: 1,
             });
           tx.create(collection("jobs").doc(jobId), bounded(job));
-          return { testId, jobId, revision: 0 };
+          return { schemaVersion: 2, testId, jobId, revision: 0 };
         },
       );
       await enqueueMathJob(job).catch(() => {});
@@ -580,6 +555,7 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
         offset = Number(r.query.cursor ?? 0),
         limit = r.query.limit ?? 50;
       return {
+        schemaVersion: scope.schemaVersion ?? 1,
         catalogId: scope.catalogId,
         items: items.slice(offset, offset + limit),
         nextCursor:
@@ -587,18 +563,80 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
       };
     },
   );
+  for (const kind of ["questions", "attempts"] as const)
+    app.get<{
+      Params: { id: string };
+      Querystring: { cursor?: string; limit?: number };
+    }>(
+      `/tests/:id/${kind}`,
+      {
+        schema: {
+          params: params({ id: anyId }),
+          querystring: jsonSchema(
+            z.strictObject({
+              cursor: anyId.optional(),
+              limit: z.coerce.number().int().min(1).max(100).default(20),
+            }),
+          ),
+        },
+      },
+      async (r) => {
+        const ref = collection("tests").doc(r.params.id);
+        const test = await requiredDoc<MathTest>(ref);
+        let result: {
+          items: FirebaseFirestore.DocumentData[];
+          nextCursor: string | null;
+        };
+        if (test.schemaVersion === 2) {
+          const field = kind === "questions" ? "ordinal" : "sequence";
+          let query: FirebaseFirestore.Query = ref
+            .collection(kind)
+            .orderBy(field);
+          if (r.query.cursor) {
+            const cursor = await requiredDoc<any>(
+              ref.collection(kind).doc(r.query.cursor),
+            );
+            query = query.startAfter(cursor[field]);
+          }
+          const limit = r.query.limit ?? 20,
+            snapshot = await query.limit(limit + 1).get(),
+            rows = snapshot.docs.slice(0, limit);
+          result = {
+            items: rows.map((d) => d.data()),
+            nextCursor: snapshot.size > limit ? rows.at(-1)!.id : null,
+          };
+        } else
+          result = await page(
+            ref.collection(kind),
+            r.query.cursor,
+            r.query.limit,
+          );
+        return kind === "questions"
+          ? {
+              ...result,
+              items: result.items.map((q) => publicQuestion(q as any)),
+            }
+          : result;
+      },
+    );
   app.get<{ Params: { id: string; questionId: string } }>(
     "/tests/:id/questions/:questionId",
     { schema: { params: params({ id: anyId, questionId: idSchema }) } },
     async (r) => {
-      const view = await testView(r.params.id),
-        question = view.questions.find((q) => q.id === r.params.questionId);
-      invariant(question, "MATH_QUESTION_NOT_FOUND", 404);
+      const ref = collection("tests").doc(r.params.id);
+      await requiredDoc<MathTest>(ref);
+      const question = await requiredDoc<any>(
+        ref.collection("questions").doc(r.params.questionId),
+      );
+      const attempts = await ref
+        .collection("attempts")
+        .where("questionId", "==", question.id)
+        .limit(1)
+        .get();
       return {
-        question,
-        draft: view.drafts.find((d) => d.questionId === question.id) ?? null,
-        attempt:
-          view.attempts.find((a) => a.questionId === question.id) ?? null,
+        question: publicQuestion(question),
+        draft: await readDoc(ref.collection("drafts").doc(question.id)),
+        attempt: attempts.docs[0]?.data() ?? null,
       };
     },
   );
@@ -615,7 +653,15 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
   );
   const operations: [string, TestAction, z.ZodType, "POST" | "PUT"][] = [
     ...(
-      ["start", "resume", "end-sitting", "cancel", "retry-generation"] as const
+      [
+        "start",
+        "resume",
+        "end-sitting",
+        "cancel",
+        "retry-generation",
+        "next-question",
+        "finish",
+      ] as const
     ).map(
       (a) =>
         [`/tests/:id/${a}`, a, z.strictObject(revision), "POST"] as [
@@ -753,7 +799,14 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
           );
           await enqueueMathJob(job).catch(() => {});
         }
-        return reply.code(action === "attempts" ? 202 : 200).send(result);
+        return reply
+          .code(
+            action === "attempts" ||
+              (action === "next-question" && result.jobId)
+              ? 202
+              : 200,
+          )
+          .send(result);
       },
     });
   app.get<{ Params: { jobId: string } }>(
@@ -764,6 +817,7 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
         collection("jobs").doc(r.params.jobId),
       );
       return {
+        schemaVersion: j.planId ? 2 : 1,
         id: j.id,
         type: j.type,
         state: j.state,
@@ -799,8 +853,17 @@ export const mathRoutes: FastifyPluginAsync = async (app) => {
           collection("tests").doc(body.testId),
           tx,
         );
+        const question = await readDoc(
+          collection("tests")
+            .doc(body.testId)
+            .collection("questions")
+            .doc(body.questionId),
+          tx,
+        );
         invariant(
-          test.questionIds.includes(body.questionId),
+          test.schemaVersion === 2
+            ? !!question
+            : test.questionIds.includes(body.questionId),
           "MATH_QUESTION_NOT_FOUND",
           404,
         );

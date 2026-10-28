@@ -12,6 +12,7 @@ import {
   invariant,
   MATH_LIMITS,
   scopeRequestSchema,
+  scopeRequestV2Schema,
 } from "./math-schema.js";
 import { refKey, resolveDependencies, uniqueRefs } from "./math-graph.js";
 /** Consent is bound to semantic concept revisions, not just stable capability IDs. */
@@ -317,5 +318,127 @@ export function makePreview(
     id,
     scopeHash: contentHash(scope),
     expiresAt: now + 30 * 60_000,
+  };
+}
+
+/** V2 fixes targets independently of the server-owned chapter prerequisite DAG. */
+export function resolveScopeV2(
+  input: import("./math-types.js").ScopeRequestV2,
+  catalog: Catalog,
+): Scope {
+  const request = scopeRequestV2Schema.parse(input);
+  const legacy = {
+    subjectId: request.subjectId,
+    selectedNodeIds: request.selectedNodeIds,
+    excludedConceptIds: [],
+    excludedObjectiveIds: [],
+    objectiveCapabilities: ["recognize", "apply", "prove"] as const,
+    mode: "prerequisites" as const,
+    profileIds: [],
+    difficulty: request.difficulty,
+    questionCount: 1,
+    responseLanguage: request.responseLanguage,
+    answerFormats: ["text", "proof"] as const,
+  };
+  const scope = resolveScope(legacy as unknown as ScopeRequest, catalog);
+  const chapterIds = new Set(
+    scope.targets
+      .map((r) => catalog.conceptChapterIds?.[r.conceptId])
+      .filter((v): v is string => !!v),
+  );
+  const required = new Set<string>();
+  const visit = (id: string, stack = new Set<string>()) => {
+    invariant(!stack.has(id), "MATH_CHAPTER_DEPENDENCY_CYCLE");
+    for (const dep of catalog.chapterDependencies?.[id] ?? []) {
+      invariant(
+        catalog.nodes.some(
+          (n) => n.id === dep && n.subjectId === request.subjectId,
+        ),
+        "MATH_CHAPTER_NOT_FOUND",
+      );
+      invariant(!stack.has(dep) && dep !== id, "MATH_CHAPTER_DEPENDENCY_CYCLE");
+      if (!required.has(dep)) {
+        required.add(dep);
+        visit(dep, new Set([...stack, id]));
+      }
+    }
+  };
+  for (const id of chapterIds) visit(id);
+  const chapterRefs = catalog.concepts
+    .filter(
+      (c) =>
+        c.subjectId === request.subjectId &&
+        required.has(catalog.conceptChapterIds?.[c.id] ?? ""),
+    )
+    .flatMap((c) =>
+      (["recognize", "apply"] as const)
+        .filter((cap) => !!c.capabilities[cap])
+        .map((capability) => ({ conceptId: c.id, capability })),
+    );
+  const foundations = (catalog.foundationRefs ?? []).map((ref) => {
+    const concept = catalog.concepts.find((c) => c.id === ref.conceptId);
+    invariant(
+      concept?.revisionId === ref.revisionId &&
+        concept.capabilities[ref.capability],
+      "MATH_FOUNDATION_REVISION_MISMATCH",
+    );
+    return { conceptId: ref.conceptId, capability: ref.capability };
+  });
+  return {
+    ...scope,
+    schemaVersion: 2,
+    curriculumHash: catalog.curriculumHash ?? catalog.id,
+    prerequisiteChapterIds: [...required].sort(),
+    request: {
+      ...scope.request,
+      schemaVersion: 2,
+      questionLimit: request.questionCount ?? null,
+    },
+    prerequisites: uniqueRefs([...scope.prerequisites, ...chapterRefs]),
+    baseline: foundations,
+    requiredAcceptance: [],
+    plans: [],
+    coverage: scope.coverage.map((c) => ({ ...c, plannedQuestions: 0 })),
+  };
+}
+
+/** Each immutable plan includes only the objective's required source context. */
+export function planNextQuestion(
+  scope: Scope,
+  catalog: Catalog,
+  ordinal: number,
+  counts: Record<string, number> = {},
+): import("./math-types.js").QuestionPlan {
+  const objectiveIds = [...scope.targetObjectiveIds].sort(
+    (a, b) =>
+      (counts[a] ?? 0) - (counts[b] ?? 0) ||
+      contentHash({ seed: scope.curriculumHash, ordinal, id: a }).localeCompare(
+        contentHash({ seed: scope.curriculumHash, ordinal, id: b }),
+      ),
+  );
+  const objective = catalog.objectives.find((o) => o.id === objectiveIds[0]);
+  invariant(objective, "MATH_SCOPE_BLOCKED", 422);
+  const refs = resolveDependencies(
+    catalog,
+    objective.assessedCapabilities,
+    [{ owner: objective.id, dependencies: objective.additionalPrerequisites }],
+    new Set(objective.assessedCapabilities.map(refKey)),
+  );
+  const mustEstablish = objective.assessedCapabilities.filter(
+    (r) => r.capability === "prove",
+  );
+  const allowed = uniqueRefs([...objective.assessedCapabilities, ...refs.refs]);
+  return {
+    id: `plan-${ordinal}`,
+    seed: contentHash({ catalogId: scope.catalogId, scope, ordinal }),
+    targetObjectiveIds: [objective.id],
+    allowedCapabilities: allowed,
+    providedCapabilities: [],
+    mustEstablish,
+    mayAssume: allowed.filter(
+      (r) => !mustEstablish.some((p) => p.conceptId === r.conceptId),
+    ),
+    difficulty: scope.request.difficulty,
+    answerFormat: mustEstablish.length ? "proof" : "text",
   };
 }

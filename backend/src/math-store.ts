@@ -347,6 +347,14 @@ export async function loadCatalog(
     id,
     schemaVersion: 1,
     parserVersion: meta.parserVersion,
+    ...(meta.curriculumHash ? { curriculumHash: meta.curriculumHash } : {}),
+    ...(meta.chapterDependencies
+      ? { chapterDependencies: meta.chapterDependencies }
+      : {}),
+    ...(meta.conceptChapterIds
+      ? { conceptChapterIds: meta.conceptChapterIds }
+      : {}),
+    ...(meta.foundationRefs ? { foundationRefs: meta.foundationRefs } : {}),
     ...Object.fromEntries(names.map((name, i) => [name, rows[i]])),
   } as Catalog;
   if (subjectId) {
@@ -438,6 +446,19 @@ export async function getScope(id: string): Promise<Scope> {
 }
 export function publicTest(test: MathTest): MathTest {
   const keys = [
+    "generationMode",
+    "questionLimit",
+    "generationState",
+    "nextOrdinal",
+    "generatedCount",
+    "answeredCount",
+    "invalidCount",
+    "currentQuestionId",
+    "pendingGenerationJobId",
+    "generationEpoch",
+    "score",
+    "maxScore",
+    "pendingGrades",
     "purpose",
     "id",
     "schemaVersion",
@@ -455,13 +476,35 @@ export function publicTest(test: MathTest): MathTest {
     "createdAt",
     "updatedAt",
   ] as const;
-  return Object.fromEntries(
-    keys.map((key) => [key, test[key]]),
-  ) as unknown as MathTest;
+  const result: Record<string, unknown> = Object.fromEntries(
+    keys
+      .filter((key) => test[key] !== undefined)
+      .map((key) => [key, test[key]]),
+  );
+  if (test.schemaVersion === 2)
+    result.config = {
+      schemaVersion: 2,
+      subjectId: test.config.subjectId,
+      selectedNodeIds: test.config.selectedNodeIds,
+      difficulty: test.config.difficulty,
+      responseLanguage: test.config.responseLanguage,
+      ...(test.questionLimit !== null
+        ? { questionCount: test.questionLimit }
+        : {}),
+    };
+  return result as unknown as MathTest;
 }
 export function publicQuestion(q: PublicQuestion): PublicQuestion {
   return {
     id: q.id,
+    ...(q.planId
+      ? {
+          planId: q.planId,
+          answered: !!q.answered,
+          revealed: !!q.revealed,
+          invalid: !!q.invalid,
+        }
+      : {}),
     ordinal: q.ordinal,
     promptMarkdown: q.promptMarkdown,
     answerFormat: q.answerFormat,
@@ -475,6 +518,7 @@ export async function testView(id: string): Promise<TestView> {
   const ref = collection("tests").doc(id),
     test = await requiredDoc<MathTest>(ref),
     scope = await getScope(id);
+  if (test.schemaVersion === 2) return testViewV2(test, scope);
   invariant(test.schemaVersion === 1, "MATH_SCHEMA_UNSUPPORTED", 503);
   const [questions, attempts, drafts, sitting] = await Promise.all([
     ref.collection("questions").get(),
@@ -571,4 +615,55 @@ export async function globalOperation(
     );
     return result;
   });
+}
+
+/** The view is bounded regardless of how long a continuous test has run. */
+async function testViewV2(test: MathTest, scope: Scope): Promise<TestView> {
+  const ref = collection("tests").doc(test.id);
+  const sitting = test.currentSittingId
+    ? await readDoc<Sitting>(
+        ref.collection("sittings").doc(test.currentSittingId),
+      )
+    : null;
+  const question = test.currentQuestionId
+    ? await readDoc<PublicQuestion>(
+        ref.collection("questions").doc(test.currentQuestionId),
+      )
+    : null;
+  const draft = test.currentQuestionId
+    ? await readDoc<Draft>(ref.collection("drafts").doc(test.currentQuestionId))
+    : null;
+  const ids = new Set<string>();
+  if (sitting?.review.currentAttemptId)
+    ids.add(sitting.review.currentAttemptId);
+  // The most recent submitted answer is useful while its asynchronous grade arrives.
+  if (test.answeredCount)
+    ids.add(`${test.id}-a-${String(test.answeredCount).padStart(12, "0")}`);
+  const attempts = (
+    await Promise.all(
+      [...ids].map((id) =>
+        readDoc<Attempt>(ref.collection("attempts").doc(id)),
+      ),
+    )
+  ).filter((a): a is Attempt => !!a);
+  return {
+    ...publicTest(test),
+    questions: question ? [publicQuestion(question)] : [],
+    attempts,
+    drafts: draft ? [draft] : [],
+    sitting,
+    questionIds: question ? [question.id] : [],
+    answeredQuestionIds: attempts.map((a) => a.questionId),
+    invalidQuestionIds: [],
+    revealedQuestionIds: question?.revealed ? [question.id] : [],
+    score: test.score ?? 0,
+    maxScore: test.maxScore ?? 0,
+    pendingGrades: test.pendingGrades ?? 0,
+    scopeSummary: {
+      targets: scope.targetObjectiveIds.length,
+      prerequisites: scope.prerequisites.length,
+      baseline: scope.baseline.length,
+    },
+    coverage: scope.coverage,
+  };
 }

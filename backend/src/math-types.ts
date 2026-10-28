@@ -120,6 +120,13 @@ export interface FoundationProfile {
   sourceDescription: string;
 }
 export interface Catalog {
+  curriculumHash?: string;
+  chapterDependencies?: Record<string, string[]>;
+  conceptChapterIds?: Record<string, string>;
+  foundationRefs?: (CapabilityRef & {
+    subjectId: string;
+    revisionId: string;
+  })[];
   authoringPaths?: Record<string, string>;
   id: string;
   schemaVersion: 1;
@@ -131,7 +138,17 @@ export interface Catalog {
   objectives: Objective[];
   profiles: FoundationProfile[];
 }
+export interface ScopeRequestV2 {
+  schemaVersion: 2;
+  subjectId: string;
+  selectedNodeIds: string[];
+  difficulty: number;
+  questionCount?: number;
+  responseLanguage: "en" | "ja" | "ko";
+}
 export interface ScopeRequest {
+  schemaVersion?: 2;
+  questionLimit?: number | null;
   subjectId: string;
   selectedNodeIds: string[];
   excludedConceptIds: string[];
@@ -145,7 +162,11 @@ export interface ScopeRequest {
   answerFormats: AnswerFormat[];
 }
 export type AnswerFormat =
-  "numeric" | "expression" | "text" | "proof" | "choice";
+  | "numeric"
+  | "expression"
+  | "text"
+  | "proof"
+  | "choice";
 export interface QuestionPlan {
   seed: string;
   id: string;
@@ -158,6 +179,9 @@ export interface QuestionPlan {
   answerFormat: AnswerFormat;
 }
 export interface Scope {
+  schemaVersion?: 2;
+  curriculumHash?: string;
+  prerequisiteChapterIds?: string[];
   catalogId: string;
   request: ScopeRequest;
   targetObjectiveIds: string[];
@@ -233,6 +257,10 @@ export interface Candidate {
   } | null;
 }
 export interface PublicQuestion {
+  planId?: string;
+  answered?: boolean;
+  revealed?: boolean;
+  invalid?: boolean;
   id: string;
   ordinal: number;
   promptMarkdown: string;
@@ -267,6 +295,9 @@ export interface Assessment {
   feedback: string;
 }
 export interface Attempt {
+  maxPoints?: number;
+  sequence?: number;
+  planId?: string;
   id: string;
   questionId: string;
   sittingId: string;
@@ -275,7 +306,11 @@ export interface Attempt {
   skipped: boolean;
   assistanceUsed: boolean;
   assessmentState:
-    "submitted" | "grading" | "graded" | "needs_review" | "grading_failed";
+    | "submitted"
+    | "grading"
+    | "graded"
+    | "needs_review"
+    | "grading_failed";
   gradeVersion: number;
   assessment: Assessment | null;
   history: Assessment[];
@@ -289,12 +324,17 @@ export interface Draft {
   savedAt: number;
 }
 export interface Sitting {
+  startSequence?: number;
+  endSequence?: number;
   id: string;
   state: "active" | "ended";
   startedAt: number;
   endedAt: number | null;
   attemptIds: string[];
   review: {
+    currentAttemptId?: string | null;
+    startSequence?: number;
+    endSequence?: number;
     state: "idle" | "active" | "completed";
     revision: number;
     cursor: number;
@@ -304,7 +344,20 @@ export interface Sitting {
 export interface MathTest {
   purpose?: "study" | "verification";
   id: string;
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
+  generationMode?: "finite" | "continuous";
+  questionLimit?: number | null;
+  generationState?: "idle" | "queued" | "running" | "failed";
+  nextOrdinal?: number;
+  generatedCount?: number;
+  answeredCount?: number;
+  invalidCount?: number;
+  currentQuestionId?: string | null;
+  pendingGenerationJobId?: string | null;
+  generationEpoch?: number;
+  score?: number;
+  maxScore?: number;
+  pendingGrades?: number;
   catalogId: string;
   scopeHash: string;
   config: ScopeRequest;
@@ -337,12 +390,20 @@ export interface TestView extends MathTest {
   coverage: Scope["coverage"];
 }
 export interface MathJob {
+  planId?: string;
+  ordinal?: number;
+  generationEpoch?: number;
   id: string;
   type: "generate" | "grade";
   testId: string;
   attemptId: string | null;
   state:
-    "queued" | "running" | "retry_wait" | "succeeded" | "failed" | "cancelled";
+    | "queued"
+    | "running"
+    | "retry_wait"
+    | "succeeded"
+    | "failed"
+    | "cancelled";
   sequence: number;
   generation: number;
   cursor: number;
