@@ -86,6 +86,7 @@ fastify.addHook("onRequest", async (request, reply) => {
   if (!cfg) return;
 
   const path = request.url.split("?")[0];
+  if (request.method === "GET" && path === "/health") return;
   if (PUBLIC_PATH_PREFIXES.some((p) => path.startsWith(p))) return;
 
   const user = await authenticatedUser(request);
@@ -123,6 +124,10 @@ await fastify.register(importWorkerRoutes, { prefix: "/internal/import-analysis"
 await fastify.register(mathRoutes, { prefix: "/api/math" });
 await fastify.register(mathWorkerRoutes, { prefix: "/internal/math" });
 await fastify.register(llmConfigRoutes, { prefix: "/api/llm-config" });
+
+// Capability metadata only: deployment/migration can verify the compatible reader.
+fastify.get("/health", async () => ({ status: "ok", mathSchemaVersions: [1, 2],
+  sourceFormats: ["textbook-json", "legacy-markdown"], sourceAliasVersion: 2 }));
 
 const port = parseInt(process.env.PORT ?? "3000", 10);
 const host = process.env.HOST ?? "0.0.0.0";

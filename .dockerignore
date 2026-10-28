@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/dist-ios
+.git
+.env
+**/.env
+**/data
+**/logs
+textbook
+frontend
+plan
+docs
+*.pdf
+**/*.pdf

@@ -14,8 +14,8 @@ services:
 
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     # An EMPTY emulator kills the backend at boot (routes/vocab.ts requires
     # config/vocabulary at registration). on-failure keeps retrying, so the
     # backend comes up by itself once `npm run seed:load` has run.
@@ -45,8 +45,8 @@ services:
 
   import-worker:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     command: ["node", "dist/import-local-worker.js"]
     restart: on-failure
     environment:
@@ -62,8 +62,8 @@ services:
 
   math-worker:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     command: ["node", "dist/math-local-worker.js"]
     restart: on-failure
     environment:

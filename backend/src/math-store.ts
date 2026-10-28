@@ -113,6 +113,7 @@ export async function publishCatalog(
   artifacts: Record<string, string>,
   provenances: Record<string, unknown>,
   expectedActiveCatalogId: string | null,
+  stageOnly = false,
 ) {
   invariant(catalog.schemaVersion === 1, "MATH_SCHEMA_UNSUPPORTED", 503);
   const ref = collection("catalogs").doc(catalog.id),
@@ -123,6 +124,8 @@ export async function publishCatalog(
       schemaVersion: 1,
       manifestHash: catalog.id,
       parserVersion: catalog.parserVersion,
+      ...Object.fromEntries(["curriculumHash", "chapterDependencies", "conceptChapterIds", "foundationRefs"]
+        .filter(key => (catalog as any)[key] !== undefined).map(key => [key, (catalog as any)[key]])),
       createdAt: Date.now(),
       complete: false,
     });
@@ -172,8 +175,18 @@ export async function publishCatalog(
         parserVersion: catalog.parserVersion,
       },
     );
-  for (const [hash, markdown] of Object.entries(artifacts))
-    await immutableSet(collection("source_revisions").doc(hash), { markdown });
+  for (const [hash, serialized] of Object.entries(artifacts)) {
+    let value: any;
+    try { value = JSON.parse(serialized); } catch { /* legacy migration adapter */ }
+    if (value?.schemaVersion === 2) {
+      const { saveJsonSource } = await import("./math-source-store.js");
+      invariant(await saveJsonSource(value) === hash, "MATH_SOURCE_HASH_MISMATCH");
+    } else {
+      // Legacy publishing remains available solely to isolated v1 fixtures.
+      invariant(process.env.FIRESTORE_EMULATOR_HOST, "MATH_LEGACY_PUBLISH_REMOVED", 410);
+      await immutableSet(collection("source_revisions").doc(hash), { markdown: serialized });
+    }
+  }
   for (const [hash, data] of Object.entries(provenances)) {
     if ((data as any)?.sourceRevisionId) {
       const { outline, ...metadata } = data as Record<string, unknown>;
@@ -247,25 +260,24 @@ export async function publishCatalog(
     },
     { merge: true },
   );
+  if (!stageOnly) await activateCatalog(catalog.id, expectedActiveCatalogId);
+  return catalog.id;
+}
+export async function activateCatalog(id: string, expectedActiveCatalogId: string | null) {
+  const ref = collection("catalogs").doc(id);
   await db.runTransaction(async (tx) => {
     const settingsRef = collection("settings").doc("main"),
       current = await readDoc<any>(settingsRef, tx),
       staged = await requiredDoc<any>(ref, tx);
-    invariant(
-      (current?.activeCatalogId ?? null) === expectedActiveCatalogId,
-      "CATALOG_CHANGED",
-      409,
-    );
+    if (current?.activeCatalogId === id) return;
+    invariant((current?.activeCatalogId ?? null) === expectedActiveCatalogId, "CATALOG_CHANGED", 409);
     invariant(staged.complete, "MATH_CATALOG_INCOMPLETE", 409);
-    tx.set(
-      ref,
-      { state: "published", publishedAt: Date.now() },
-      { merge: true },
-    );
-    tx.set(settingsRef, { activeCatalogId: catalog.id, schemaVersion: 1 });
+    tx.set(ref, { state: "published", publishedAt: Date.now() }, { merge: true });
+    tx.set(settingsRef, { activeCatalogId: id, schemaVersion: 1 });
   });
-  return catalog.id;
+  return id;
 }
+
 async function immutableSet(ref: DocumentReference, value: unknown) {
   const current = await readDoc(ref);
   if (current)

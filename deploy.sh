@@ -148,6 +148,10 @@ prune_revisions() {
     done
 }
 
+# Validate Git-managed JSON before any build or cloud write. Stage without activating.
+(cd backend && npx tsx scripts/math-release.ts validate)
+(cd backend && npx tsx scripts/math-release.ts stage --production --project "$PROJECT_ID" --database vocab-database)
+
 # Configure Docker auth for Artifact Registry
 gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
@@ -156,7 +160,7 @@ echo "==> Building and pushing backend..."
 PREV_BACKEND_ID="$(current_image_id "${BACKEND_IMAGE}")"
 # --provenance=false: see prune_registry. Without it every push writes an index plus
 # two untagged children, tripling the registry and making "untagged" unsafe to sweep.
-docker build --platform linux/amd64 --provenance=false -t "${BACKEND_IMAGE}" ./backend
+docker build --platform linux/amd64 --provenance=false -t "${BACKEND_IMAGE}" -f backend/Dockerfile .
 docker push "${BACKEND_IMAGE}"
 drop_superseded_image "${PREV_BACKEND_ID}" "$(current_image_id "${BACKEND_IMAGE}")"
 
@@ -218,6 +222,13 @@ BACKEND_URL=$(gcloud run services describe vocab-trainer-backend \
   --region="${REGION}" \
   --format="value(status.url)")
 echo "==> Backend deployed at: ${BACKEND_URL}"
+
+# An authenticated data endpoint is not a health probe. This endpoint exposes only
+# reader capabilities; activation remains an explicit Firestore CAS.
+node backend/scripts/check-math-release-health.mjs "$BACKEND_URL"
+(cd backend && npx tsx scripts/math-release.ts activate --production --project "$PROJECT_ID" --database vocab-database)
+echo "==> Catalog activated; rollback metadata: backend/data/math-release.json"
+
 
 # Build and push frontend
 echo "==> Building and pushing frontend..."

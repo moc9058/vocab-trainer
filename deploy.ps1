@@ -145,6 +145,15 @@ $FrontendImage = "$Region-docker.pkg.dev/$ProjectId/$FrontendRepo/frontend"
 
 Write-Host "==> Project: $ProjectId, Region: $Region"
 
+# Validate/stage before builds; activation follows backend health.
+Push-Location backend
+try {
+    npx tsx scripts/math-release.ts validate
+    Invoke-Checked "math JSON validation"
+    npx tsx scripts/math-release.ts stage --production --project $ProjectId --database vocab-database
+    Invoke-Checked "math catalog staging"
+} finally { Pop-Location }
+
 # Configure Docker auth for Artifact Registry
 gcloud auth configure-docker "$Region-docker.pkg.dev" --quiet
 Invoke-Checked "gcloud auth configure-docker"
@@ -154,7 +163,7 @@ Write-Host "==> Building and pushing backend..."
 $PrevBackendId = Get-ImageId $BackendImage
 # --provenance=false: see Invoke-PruneRegistry. Without it every push writes an index
 # plus two untagged children, tripling the registry and making "untagged" unsafe to sweep.
-docker build --platform linux/amd64 --provenance=false -t "$BackendImage" ./backend
+docker build --platform linux/amd64 --provenance=false -t "$BackendImage" -f backend/Dockerfile .
 Invoke-Checked "docker build (backend)"
 docker push "$BackendImage"
 Invoke-Checked "docker push (backend)"
@@ -224,6 +233,15 @@ $BackendUrl = gcloud run services describe vocab-trainer-backend `
   --format="value(status.url)"
 Invoke-Checked "gcloud run services describe vocab-trainer-backend"
 Write-Host "==> Backend deployed at: $BackendUrl"
+node backend/scripts/check-math-release-health.mjs $BackendUrl
+Invoke-Checked "math backend reader health"
+Push-Location backend
+try {
+    npx tsx scripts/math-release.ts activate --production --project $ProjectId --database vocab-database
+    Invoke-Checked "math catalog CAS activation"
+} finally { Pop-Location }
+Write-Host "==> Catalog activated; rollback metadata: backend/data/math-release.json"
+
 
 # Build and push frontend
 Write-Host "==> Building and pushing frontend..."

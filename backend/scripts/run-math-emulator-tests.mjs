@@ -23,7 +23,9 @@ const result = spawnSync(
     "--import",
     "tsx",
     "--test",
+    "--test-concurrency=1",
     "scripts/tests/emulator/math.test.ts",
+    "scripts/tests/emulator/math-source.test.ts",
   ],
   {
     stdio: "inherit",
