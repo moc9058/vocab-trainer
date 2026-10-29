@@ -32,6 +32,7 @@ import type {
 } from "../math-types.js";
 import { db } from "../firestore.js";
 import { loadMathCurriculum } from "../math-publication.js";
+import { ensureMathPromptVersion } from "../math-prompt-store.js";
 import { mathPromptVersion } from "../math-prompt-loader.js";
 import { resolveModel } from "../llm.js";
 const id = { type: "string", pattern: "^[a-zA-Z0-9_-]{1,100}$" };
@@ -182,7 +183,10 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
       const v2 = !!book.publicationId;
       if (!v2 && (input.assessmentVersion === 2 || input.taskKinds))
         throw new MathError(422, "MATH_CURRICULUM_UNAVAILABLE");
-      if (v2) await loadMathCurriculum(db, book);
+      if (v2) {
+        await loadMathCurriculum(db, book);
+        await ensureMathPromptVersion();
+      }
       const kindMap: Record<MathKind, TaskKind> = {
         definition: "determine",
         calculation: "compute",

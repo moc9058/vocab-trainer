@@ -9,3 +9,7 @@ objective:boolean,difficulty:boolean,taskKind:boolean,rubric:boolean},
 issues:[{code:string,repair:string}]}. Repair instructions must be specific and English.
 
 Return valid JSON only, with no surrounding prose or code fences.
+
+When a rational mechanicalCheck is supplied, verify that its typed parameters and
+expression encode the actual task and its expected answer. Arithmetic consistency
+alone does not establish problem correctness or a general proof.

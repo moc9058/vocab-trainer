@@ -6,9 +6,9 @@ was removed after its contracts were moved into code and the maintained guide.
 
 ## Automated and local checks
 
-- Backend TypeScript build, 135 unit tests, 7 math LLM contract tests and 4 mixed-quiz
+- Backend TypeScript build, 136 unit tests, 7 math LLM contract tests and 4 mixed-quiz
   regression tests passed.
-- Nine emulator tests passed against explicit project `vocab-trainer-490014`,
+- Ten emulator tests passed against explicit project `vocab-trainer-490014`,
   database `vocab-database`, host `127.0.0.1:8080`. Fixtures clean their own documents.
   Coverage includes v1/v2 sessions, failure/retry receipts, plan reuse, item privacy,
   assistance, skip, frozen publications, concurrent publication and fencing.
@@ -45,7 +45,51 @@ The physics source makes constant acceleration and SI units explicit without cal
 the economics source states exogenous parameters, nonnegative feasibility and static
 model assumptions. Their catalogs prepare deterministically and preserve independent IDs.
 
-The complete release evaluation and production publication/smoke outcomes are appended
-below after their commands finish. Model verification does not provide formal proof
-or empirical difficulty calibration. Reference-solution grading tests internal consistency;
-independent inspection of admitted questions remains necessary.
+The complete 54-case run (`assessment-eval-8ad9d6ba-54d0-4bc7-8d56-c4a39992c6b9`)
+covered all nine chapters, all three difficulties and all four forms. 53/54 cases
+passed G/V1/V2 and reference-solution grading; one was safely rejected for literal
+heading transcription. This was the specific defect replaced by server-issued
+reference IDs. Three successful cases regenerated/replanned. Median successful
+case time including grading was 40.9 seconds; the maximum was 126.0 seconds.
+The agent inspected all 53 admitted prompts/solutions, including all 18 hard tasks;
+no material mathematical error was found. This is an AI review, not independent
+human review, formal verification or empirical difficulty calibration.
+
+After reference-ID normalization, the production-backed all-chapter smoke
+(`assessment-eval-37187db5-920f-4da5-a8e5-bb7d6b42f2bb`) passed 9/9 generation,
+independent solve, structured comparison, grading, receipt replay and pause/resume
+cases. It used isolated server-owned evidence and cleaned its sessions and evidence.
+These tests run the route handlers against production Firestore and live models;
+they do not assert authenticated browser interaction with the deployed endpoint.
+The complete 54-case run preceded the final reference-ID and arithmetic prompt
+adjustments; final prompt assets receive separate smoke/fixture checks.
+
+Prompt assets are now archived by hash before new v2 session creation, preserving
+old instructions across subsequent code updates. The currently published prompt
+bundle was archived before changing assets. Emulator coverage verifies loading an
+archived version and refusing a missing version. Bounded rational-expression trees
+receive exact BigInt checks without evaluating generated code.
+
+## Production release
+
+`./deploy.sh` completed successfully for backend revision `vocab-trainer-backend-00528-vcz`
+and frontend revision `vocab-trainer-frontend-00510-km4` for the main implementation.
+The final prompt-archive/arithmetic follow-up is recorded after deployment below.
+The backend /health returned status=ok and the frontend /math HTML shell returned 200.
+Authenticated native browser inspection was unavailable: the Mac was locked and
+local browser access disabled in Work settings. Local Playwright's eight flow tests
+passed; no production browser verification is claimed.
+
+`math:sync --target=production --dry-run` and publication both completed, separately
+from deployment. The complete publication is
+`4dce138dd5062aa5766deada83caf6c6f42e8689e7714adf54464c9a9e7dc868`, with nine
+chapters and 63 objectives. All chapter content versions were unchanged. Three
+existing production v1 sessions were fingerprinted before publication and compared
+afterwards: book snapshots, source versions, current/history payloads and answers
+remained unchanged. No bulk session rewrite or configuration upload was performed.
+The evaluation CLI now pins the same project/database defaults as math:sync before
+initializing Firestore, instead of inheriting an unrelated active gcloud project.
+
+Stage token counts and configured cost estimates are retained in the ignored
+summary artifacts. Missing/zero pricing rates mean unavailable billing estimates;
+no zero-cost or mathematical completeness claim is made.

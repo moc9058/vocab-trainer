@@ -21,3 +21,12 @@ Write problems, solutions and criteria in outputLanguage. Internal demand descri
 repair instructions are English. If infeasible return {status:"infeasible",reason:string}.
 
 Return valid JSON only, with no surrounding prose or code fences.
+
+For an exact rational-number computation, also provide mechanicalCheck:
+{kind:"rational",expression,expected:{numerator:string,denominator:string}}.
+An expression is either {value:{numerator:string,denominator:string}} or
+{op:"add"|"subtract"|"multiply"|"divide",left:expression,right:expression}.
+Use integers of at most 64 digits in leaves, at most 100 nodes and depth 16.
+The expression must encode the stated numerical task and expected its exact result.
+Omit this check for non-rational, symbolic, matrix, proof and determination tasks.
+Never supply executable code or substitute sampled numbers for a general proof.

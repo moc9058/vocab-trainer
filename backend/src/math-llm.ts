@@ -11,13 +11,7 @@ import type {
   MathQuestion,
   MathGrade,
 } from "./math-types.js";
-import {
-  mathPromptVersion,
-  mathPrompts,
-  difficultyPolicy,
-  anchors,
-  subjectProfiles,
-} from "./math-prompt-loader.js";
+import { loadMathPromptVersion } from "./math-prompt-store.js";
 import {
   sourceReferenceCatalog,
   validateAssessmentQuestions,
@@ -154,12 +148,9 @@ async function assessmentCall(
   data: unknown,
   metrics?: AssessmentCallMetric[],
 ): Promise<string> {
-  if (test.promptVersion !== mathPromptVersion)
-    throw Object.assign(new Error("MATH_PROMPT_VERSION_UNAVAILABLE"), {
-      statusCode: 409,
-    });
+  const bundle = await loadMathPromptVersion(test.promptVersion);
   const user = JSON.stringify(data),
-    instruction = mathPrompts[stage];
+    instruction = bundle.prompts[stage];
   if (
     Buffer.byteLength(user) + Buffer.byteLength(instruction) >
     MATH_INPUT_BYTES
@@ -214,6 +205,7 @@ async function generateAssessment(
       statusCode: 409,
     });
   return withLLMBudget(180000, getLLMRequestSignal(), async () => {
+    const bundle = await loadMathPromptVersion(test.promptVersion);
     const metrics: AssessmentCallMetric[] = [];
     const started = Date.now();
     let repair: unknown = [];
@@ -251,10 +243,10 @@ async function generateAssessment(
         ),
         subjectProfile: {
           ...test.book.subjectProfile,
-          guidance: subjectProfiles[test.book.subjectProfile!.subject],
+          guidance: bundle.subjectProfiles[test.book.subjectProfile!.subject],
         },
-        difficultyPolicy,
-        calibrationAnchors: anchors.filter((a) =>
+        difficultyPolicy: bundle.difficultyPolicy,
+        calibrationAnchors: bundle.anchors.filter((a) =>
           objectives.some((o) => o.id === a.objectiveId),
         ),
         taskContract: {

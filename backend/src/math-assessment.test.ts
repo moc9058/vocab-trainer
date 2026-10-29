@@ -456,3 +456,38 @@ test("server-issued source references resolve exact headings and reject unknown 
     ),
   );
 });
+
+test("typed rational checks use exact arithmetic and reject incorrect results or executable input", async () => {
+  const { verifyArithmeticCheck } = await import("./math-mechanical-check.js");
+  const fraction = (numerator: string, denominator = "1") => ({
+    value: { numerator, denominator },
+  });
+  const check = {
+    kind: "rational",
+    expression: {
+      op: "add",
+      left: fraction("1", "3"),
+      right: fraction("1", "6"),
+    },
+    expected: { numerator: "1", denominator: "2" },
+  };
+  assert.deepEqual(verifyArithmeticCheck(check), check);
+  assert.throws(() =>
+    verifyArithmeticCheck({
+      ...check,
+      expected: { numerator: "1", denominator: "3" },
+    }),
+  );
+  assert.throws(() =>
+    verifyArithmeticCheck({
+      ...check,
+      expression: { op: "divide", left: fraction("1"), right: fraction("0") },
+    }),
+  );
+  assert.throws(() =>
+    verifyArithmeticCheck({ ...check, expression: "process.exit()" }),
+  );
+  assert.throws(() =>
+    verifyArithmeticCheck({ ...check, expression: fraction("9".repeat(65)) }),
+  );
+});

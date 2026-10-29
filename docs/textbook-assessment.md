@@ -51,6 +51,8 @@ books before writes and creates immutable content-addressed documents:
 - `math_curriculum_versions/{revision}/objectives/{id}`: objectives, at most 64KB each.
 - `math_publications/{publicationId}`: complete frozen book/catalog/profile references,
   with an 800KB publication limit.
+- `math_prompt_versions/{promptVersion}`: immutable English prompt/policy/anchor assets,
+  archived before creating a v2 session so later code updates preserve its instructions.
 - `math_books/{bookId}`: current publication pointer and display metadata.
 
 Every existing immutable document must match exactly. After all referenced writes
@@ -65,8 +67,9 @@ promptVersion and modelSelections. Creation validates the complete publication a
 source hashes. Generation, grading, resume and history use that frozen book rather
 than the current pointer. Missing/inconsistent catalog or source versions return
 409; there is no generic-knowledge fallback. Prompt assets are shipped in dist with
-a content hash; unavailable older prompt assets fail explicitly rather than claiming
-to use a different version. No old publication or session garbage collection runs.
+a content hash and archived immutably in Firestore on v2 creation. Runtime loads the
+version fixed by the test, including its difficulty rules, anchors and subject guidance.
+Missing/corrupt archived assets fail explicitly rather than switching instructions. No old publication or session garbage collection runs.
 
 Deployment and publication are distinct. `./deploy.sh` ships code and prompt assets;
 it does not publish textbooks. No --prompts config upload or bulk session migration
@@ -107,7 +110,10 @@ schema/ID/reference checks), V1
 (blind independent solving without candidate solution or rubric), then V2 (structured
 comparison checking well-posedness, correctness, scope, objective, difficulty, task
 kind and rubric). Specific English repair issues feed one regeneration. Unresolved
-checks, invalid JSON and duplicate output never admit unverified questions. Existing
+checks, invalid JSON and duplicate output never admit unverified questions. Optional typed rational arithmetic trees are checked exactly using bounded BigInt
+fractions; invalid calculations and zero denominators are rejected without eval. V2
+still verifies that the typed parameters represent the actual task; sampled values
+never establish a general proof. Existing
 180-second request cancellation and four-minute fenced leases remain; stage calls
 are capped at 60 seconds and late regenerations are not started. The complete prompt,
 including sources, goals, policy, schema, history and validation output, stays within

@@ -1,3 +1,4 @@
+import type { ArithmeticCheck } from "./math-mechanical-check.js";
 export type MathKind = "definition" | "calculation" | "proof";
 export type MathDifficulty = "easy" | "standard" | "hard";
 export interface MathChapter {
@@ -89,6 +90,7 @@ export interface AssessmentCallMetric {
   cachedTokens?: number;
 }
 export interface MathQuestion {
+  mechanicalCheck?: ArithmeticCheck;
   generationMetrics?: AssessmentCallMetric[];
   schemaVersion?: 2;
   primaryObjectiveId?: string;

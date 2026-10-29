@@ -342,6 +342,34 @@ try {
     assert.equal(shared.get("submitted"), 3);
     assert.equal(shared.get("partial"), 3);
   });
+
+  await test("archived prompt assets retain their exact version after a code asset update", async () => {
+    const { mathPromptFiles, parseMathPromptFiles } = await import(
+      "../../../src/math-prompt-loader.js"
+    );
+    const { loadMathPromptVersion } = await import(
+      "../../../src/math-prompt-store.js"
+    );
+    const files = {
+      ...mathPromptFiles,
+      "generate.md":
+        mathPromptFiles["generate.md"] + "\nArchived fixture instruction.\n",
+    };
+    const bundle = parseMathPromptFiles(files);
+    const ref = db.collection("math_prompt_versions").doc(bundle.version);
+    try {
+      await ref.set({ version: bundle.version, files });
+      const loaded = await loadMathPromptVersion(bundle.version);
+      assert.match(loaded.prompts.generate, /Archived fixture instruction/);
+      assert.equal(loaded.version, bundle.version);
+      await assert.rejects(
+        () => loadMathPromptVersion("f".repeat(64)),
+        /MATH_PROMPT_VERSION_UNAVAILABLE/,
+      );
+    } finally {
+      await ref.delete();
+    }
+  });
   await test("concurrent publications compare the old revision instead of overwriting another publisher", async () => {
     const candidates = [1, 2].map((n) => ({
       ...book,

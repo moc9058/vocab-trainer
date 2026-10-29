@@ -31,3 +31,21 @@ export const anchors = JSON.parse(files["anchors.json"]).anchors as {
   prompt: string;
 }[];
 export const subjectProfiles = JSON.parse(files["subject-profiles.json"]);
+
+export const mathPromptFiles = files;
+export function parseMathPromptFiles(raw: Record<string, string>) {
+  if (names.some((n) => typeof raw[n] !== "string" || !raw[n].trim()))
+    throw new Error("MATH_PROMPT_VERSION_UNAVAILABLE");
+  return {
+    version: mathHash(names.map((n) => raw[n]).join("\n")),
+    prompts: {
+      generate: raw["generate.md"],
+      solve: raw["solve.md"],
+      validate: raw["validate.md"],
+      grade: raw["grade.md"],
+    },
+    difficultyPolicy: JSON.parse(raw["difficulty-policy.json"]),
+    anchors: JSON.parse(raw["anchors.json"]).anchors as typeof anchors,
+    subjectProfiles: JSON.parse(raw["subject-profiles.json"]),
+  };
+}

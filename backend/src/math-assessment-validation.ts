@@ -1,3 +1,4 @@
+import { verifyArithmeticCheck } from "./math-mechanical-check.js";
 import { mathText, sourceHeadings } from "./math-core.js";
 import type {
   Curriculum,
@@ -151,10 +152,15 @@ export function validateAssessmentQuestions(
       )
     )
       return fail("demand_profile");
+    if (q.mechanicalCheck !== undefined) {
+      if (q.taskKind !== "compute") return fail("mechanical_check_task");
+      verifyArithmeticCheck(q.mechanicalCheck);
+    }
     const total = q.rubricItems.reduce((n, r) => n + r.weight, 0);
     if (!Number.isFinite(total)) return fail("rubric_weight_total");
     return {
       id: `q${i + 1}`,
+      ...(q.mechanicalCheck ? { mechanicalCheck: q.mechanicalCheck } : {}),
       schemaVersion: 2,
       chapterId: q.chapterId,
       primaryObjectiveId: objective.id,

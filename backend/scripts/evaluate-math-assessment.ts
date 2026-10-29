@@ -1,3 +1,4 @@
+import "./math-evaluation-target.js";
 // Explicitly invoked, paid live-model evaluation. Never part of build, deploy or dry-run.
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
