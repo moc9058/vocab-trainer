@@ -577,11 +577,15 @@ changes still require a separate Xcode install, followed by shortcut configurati
 No backend schema/config upload or production migration is needed.
 
 
-## Mathematics reset (2026-10-28)
+## Mathematics (2026-10-29)
 
-The `/math/*` category entry remains as a translated, static placeholder. The
-previous textbook/LLM input contract and all mathematics runtime APIs, workers,
-authoring, persistence and publication machinery have been removed for redesign.
-Normal deployment does not upload textbooks or require mathematics infrastructure.
-See [the mathematics guide](math-category.md). The earlier verification records
-are historical and do not describe the current application.
+The `/math/*` category provides a textbook library, chapter-scope tests, written
+answers with LLM grading, pause/resume and historical review. Textbook Markdown
+is published by a separate explicit-target sync command; deployment does not
+publish textbooks. Firestore stores immutable chapter revisions and versioned
+sessions with operation receipts. Three math LLM features share the existing
+model settings, usage accounting and request budgets. UI is translated into
+English/Japanese/Korean; problems and feedback follow textbook language.
+See [the mathematics guide](math-category.md) for commands, APIs, size limits,
+concurrency and failure behavior. The old runtime was removed on 2026-10-28;
+earlier mathematics verification reports remain historical.

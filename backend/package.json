@@ -18,7 +18,10 @@
     "test:import": "node --experimental-test-module-mocks --import tsx --test scripts/tests/import-*.test.ts",
     "test:import:emulator": "node scripts/run-import-job-emulator-tests.mjs",
     "test:mobile:emulator": "node --import tsx --test scripts/tests/emulator/mobile-auth.test.ts",
-    "ios:smoke": "node --experimental-test-module-mocks --import tsx scripts/ios-smoke-server.ts"
+    "ios:smoke": "node --experimental-test-module-mocks --import tsx scripts/ios-smoke-server.ts",
+    "math:sync": "tsx scripts/sync-math-textbooks.ts",
+    "test:math:emulator": "node --experimental-test-module-mocks --import tsx --test scripts/tests/emulator/math.test.ts",
+    "test:math": "node --experimental-test-module-mocks --import tsx --test scripts/tests/math-*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",

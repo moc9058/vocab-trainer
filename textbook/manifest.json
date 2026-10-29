@@ -1,0 +1,49 @@
+{
+  "books": [
+    {
+      "id": "linear-algebra",
+      "subjectId": "linear-algebra",
+      "subjectTitle": "Linear Algebra",
+      "title": "Linear Algebra",
+      "language": "en",
+      "chapters": [
+        {
+          "id": "linear-algebra-ch1",
+          "file": "Linear Algebra/MD/1. Vector Spaces.md"
+        },
+        {
+          "id": "linear-algebra-ch2",
+          "file": "Linear Algebra/MD/2. Finite-Dimensional Vector Spaces.md"
+        },
+        {
+          "id": "linear-algebra-ch3",
+          "file": "Linear Algebra/MD/3. Linear Maps.md"
+        },
+        {
+          "id": "linear-algebra-ch4",
+          "file": "Linear Algebra/MD/4. Polynomials.md"
+        },
+        {
+          "id": "linear-algebra-ch5",
+          "file": "Linear Algebra/MD/5. Eigenvalues and Eigenvectors.md"
+        },
+        {
+          "id": "linear-algebra-ch6",
+          "file": "Linear Algebra/MD/6. Inner Product Spaces.md"
+        },
+        {
+          "id": "linear-algebra-ch7",
+          "file": "Linear Algebra/MD/7. Operators on Inner Product Spaces.md"
+        },
+        {
+          "id": "linear-algebra-ch8",
+          "file": "Linear Algebra/MD/8. Operators on Complex Vector Spaces.md"
+        },
+        {
+          "id": "linear-algebra-ch9",
+          "file": "Linear Algebra/MD/9. Multilinear Algebra and Determinants.md"
+        }
+      ]
+    }
+  ]
+}

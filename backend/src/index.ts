@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import mathRoutes from "./routes/math.js";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import sensible from "@fastify/sensible";
@@ -95,6 +96,7 @@ fastify.addHook("onRequest", async (request, reply) => {
   }
 });
 
+await fastify.register(mathRoutes, { prefix: "/api/math" });
 await fastify.register(authRoutes, { prefix: "/api/auth" });
 await fastify.register(mobileAuthRoutes, { prefix: "/api/auth/mobile" });
 await fastify.register(languagesRoutes, { prefix: "/api/languages" });

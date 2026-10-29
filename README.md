@@ -7,7 +7,7 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 - [AGENTS.md](AGENTS.md): shared instructions for coding agents.
 - [CLAUDE.md](CLAUDE.md): Claude Code entry point to the shared instructions.
 - [Development reference](docs/development-reference.md): detailed architecture and operations.
-- [Mathematics category](docs/math-category.md): current minimal shell and reset scope.
+- [Mathematics category](docs/math-category.md): textbook publishing and mathematics tests.
 - [Live Group B quiz](docs/live-group-b-quiz.md): current A+B behavior and session migration.
 - [Source revisions](docs/source-revisions.md): correction proposals, grammar-to-word conversion and reading assistance.
 - [Cloud Run cost controls](docs/cloud-run-cost-controls.md): deployment settings and durable import infrastructure.
@@ -21,11 +21,25 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 
 ## Mathematics
 
-The **Mathematics** card and `/math/*` entry point remain as a minimal shell.
-The mode is being redesigned; tests are currently unavailable. The previous
-textbook JSON, authoring prompts/schemas, LLM input contract, generation, grading
-and persistence implementation have been removed. Deployment no longer publishes
-textbooks or activates catalogs. See the [mathematics guide](docs/math-category.md).
+The **Mathematics** card opens a textbook library with chapter selection. Tests
+use published chapter Markdown to generate definition, calculation and proof
+questions, independently check them, and grade written answers. Questions and
+feedback follow the textbook language; earlier chapters are prerequisite
+references only. Tests, drafts saved on pause, answers and source revisions live
+in Firestore, so tests can be resumed and reviewed after textbook updates.
+
+Publish local MD changes separately from deployment:
+
+```bash
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm run math:sync --prefix backend -- --target=emulator --dry-run
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 npm run math:sync --prefix backend -- --target=emulator
+npm run math:sync --prefix backend -- --target=production --dry-run
+npm run math:sync --prefix backend -- --target=production
+```
+
+See the [mathematics guide](docs/math-category.md) for manifests, limits, API,
+verification and retry behavior. No PDF extraction or automatic textbook publication
+runs during deployment.
 
 ## Group A and Group B
 
