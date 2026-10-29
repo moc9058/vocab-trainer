@@ -43,8 +43,11 @@ Select a book and one or more chapters; a single available book is selected
 automatically. New sessions use **continuous** mode: there is no question count.
 Start creates and independently checks the first question. After submitting an
 answer, read the feedback and example solution, then choose **Next question**.
-Questions continue until explicit **Save and pause** or **End test**. No question
-is generated ahead of that action. Difficulty defaults to standard and all three
+You can also choose **Skip without answering** while a question is open; any
+draft is saved as an unsubmitted answer in history. Skipped questions do not
+count toward grading statistics and are not shown again. Questions continue
+until explicit **Save and pause** or **End test**. No question is generated ahead
+of that action. Difficulty defaults to standard and all three
 types (definition, calculation, proof) are enabled; both are under Question
 settings. Chapter/type assignment rotates using the cumulative question number,
 so each generation request continues the plan rather than restarting it.
@@ -57,7 +60,8 @@ language. The continuous progress indicator shows answers completed, without a
 planned total or completion percentage.
 
 Existing tests without `mode` remain **fixed** mode, including their original
-question count (1–10), automatic completion, resume and review behavior. Old
+question count (1–10), automatic completion, resume and review behavior. Skipped
+fixed questions are recorded as unsubmitted and are not repeated. Old
 clients that send `count` can still create fixed tests; new clients send
 `mode: "continuous"` without `count`. No bulk migration or textbook sync is needed.
 
@@ -130,9 +134,9 @@ All routes use existing authentication under `/api/math`:
 - `GET /tests`: latest test summaries; `GET /tests/:id`: saved public test state (only the current question for continuous tests).
 - `POST /tests`: `{operationId, bookId, chapterIds, mode: "continuous", kinds,
   difficulty}`. Legacy fixed requests use `count` instead (or `mode: "fixed"`).
-- `POST /tests/:id/next`: `{operationId, version}`; creates the first/next
-  continuous question, or advances a fixed session from feedback to its next
-  existing question.
+- `POST /tests/:id/next`: `{operationId, version, draft?}`; records the current
+  question as unsubmitted when skipped, creates the next continuous question,
+  or advances a fixed session to its next unvisited question.
 - `GET /tests/:id/questions?after=0`: `{items, nextCursor}`; 20 questions per
   page. Each item contains `question`, optional `answer` and numeric `number`.
   Pass the returned numeric cursor as `after` for the next page.

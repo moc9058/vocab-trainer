@@ -35,8 +35,12 @@ export default function MathTestPage() {
   const current =
     test?.phase === "feedback"
       ? test.questions.find((q) => q.id === test.currentQuestionId)
-      : test?.questions.find((q) => !test.answers[q.id]?.grade);
-  const feedback = !!current && !!test?.answers[current.id]?.grade;
+      : test?.questions.find(
+          (q) =>
+            !test.answers[q.id]?.grade &&
+            test.answers[q.id]?.submitted !== false,
+        );
+  const feedback = !!current && test?.phase === "feedback";
   const saved = current && !feedback ? (test?.draft ?? "") : "";
   const dirty = text !== saved;
   const continuous = test?.mode === "continuous";
@@ -124,7 +128,8 @@ export default function MathTestPage() {
               (action === "answer" &&
                 next.answers[String(body.questionId)]?.grade) ||
               (action === "next" &&
-                next.currentQuestionId !== snapshot.currentQuestionId) ||
+                (next.currentQuestionId !== snapshot.currentQuestionId ||
+                  next.status === "completed")) ||
               (action === "generate" && next.status === "active")
             ) {
               install(next);
@@ -395,20 +400,29 @@ export default function MathTestPage() {
                     <button
                       className="math-button-primary"
                       disabled={busy}
-                      onClick={() => act("next")}
+                      onClick={() => act("next", { draft: text })}
                     >
                       {t("mathNextQuestion")} →
                     </button>
                   ) : current ? (
-                    <button
-                      className="math-button-primary"
-                      disabled={busy || !text.trim()}
-                      onClick={() =>
-                        act("answer", { questionId: current.id, text })
-                      }
-                    >
-                      {t("mathSubmitAnswer")}
-                    </button>
+                    <>
+                      <button
+                        className="math-button-secondary"
+                        disabled={busy}
+                        onClick={() => act("next", { draft: text })}
+                      >
+                        {t("mathSkipQuestion")} →
+                      </button>
+                      <button
+                        className="math-button-primary"
+                        disabled={busy || !text.trim()}
+                        onClick={() =>
+                          act("answer", { questionId: current.id, text })
+                        }
+                      >
+                        {t("mathSubmitAnswer")}
+                      </button>
+                    </>
                   ) : (
                     <button
                       className="math-button-primary"

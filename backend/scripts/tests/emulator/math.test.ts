@@ -123,7 +123,7 @@ try {
     assert.equal(response.status, 200);
     let active = response.data;
     assert.equal(active.book.revision, "r1");
-    assert.equal(active.questions[0].solution, undefined);
+    assert.ok(active.questions[0].solution);
     assert.equal(active.requestHash, undefined);
     const replay = await post(`/tests/${testId}/generate`, generation);
     assert.equal(replay.status, 200);
@@ -167,7 +167,7 @@ try {
     const ungraded = (await app.inject(`/api/math/tests/${testId}`)).json();
     assert.equal(ungraded.status, "active");
     assert.equal(ungraded.answers.q1.text, answer.text);
-    assert.equal(ungraded.questions[0].solution, undefined);
+    assert.ok(ungraded.questions[0].solution);
     assert.equal(ungraded.draft, answer.text);
     failGrade = false;
     response = await post(`/tests/${testId}/answer`, answer);
@@ -268,16 +268,7 @@ try {
     let state = response.data;
     assert.equal(state.generatedCount, 1);
     assert.equal(state.phase, "question");
-    assert.equal(state.questions[0].solution, undefined);
-    assert.equal(
-      (
-        await post(`/tests/${id}/next`, {
-          operationId: randomUUID(),
-          version: state.version,
-        })
-      ).status,
-      409,
-    );
+    assert.ok(state.questions[0].solution);
     const gradeOp = {
       operationId: randomUUID(),
       version: state.version,
@@ -289,7 +280,7 @@ try {
     failGrade = false;
     const saved = (await app.inject(`/api/math/tests/${id}`)).json();
     assert.equal(saved.answers.q1.text, "first answer");
-    assert.equal(saved.questions[0].solution, undefined);
+    assert.ok(saved.questions[0].solution);
     response = await post(`/tests/${id}/answer`, gradeOp);
     state = response.data;
     assert.equal(response.status, 200);
@@ -335,12 +326,22 @@ try {
     state = response.data;
     assert.equal(response.status, 200);
     assert.equal(state.currentQuestionId, "q2");
+    response = await post(`/tests/${id}/next`, {
+      operationId: randomUUID(),
+      version: state.version,
+      draft: "unfinished notes",
+    });
+    state = response.data;
+    assert.equal(state.currentQuestionId, "q3");
+    assert.equal(state.answers.q3, undefined);
     assert.equal(
       (await post(`/tests/${id}/next`, nextOp)).data.generatedCount,
-      2,
+      3,
     );
     const early = (await app.inject(`/api/math/tests/${id}/questions`)).json();
-    assert.equal(early.items[1].question.solution, undefined);
+    assert.ok(early.items[1].question.solution);
+    assert.equal(early.items[1].answer.text, "unfinished notes");
+    assert.equal(early.items[1].answer.submitted, false);
     assert.ok(early.items[0].question.solution);
     // More than a page of large answers must not enlarge the parent document.
     while (state.generatedCount <= 21) {
@@ -361,7 +362,7 @@ try {
       assert.equal(response.status, 200);
       state = response.data;
     }
-    assert.equal(state.stats.answered, 21);
+    assert.equal(state.stats.answered, 20);
     assert.equal(state.status, "active");
     const parent = (await db.collection("math_tests").doc(id).get()).data()!;
     assert.deepEqual(parent.questions, []);
@@ -443,7 +444,11 @@ try {
       .doc(id)
       .update({
         status: "active",
-        questions: [q, { ...q, id: "q2", prompt: "Second?" }],
+        questions: [
+          q,
+          { ...q, id: "q2", prompt: "Second?" },
+          { ...q, id: "q3", prompt: "Third?" },
+        ],
       });
     let response = await post(`/tests/${id}/answer`, {
       operationId: randomUUID(),
@@ -454,7 +459,7 @@ try {
     assert.equal(response.status, 200);
     assert.equal(response.data.phase, "feedback");
     assert.equal(response.data.status, "active");
-    assert.equal(response.data.questions[1].solution, undefined);
+    assert.ok(response.data.questions[1].solution);
     response = await post(`/tests/${id}/next`, {
       operationId: randomUUID(),
       version: response.data.version,
@@ -462,18 +467,29 @@ try {
     assert.equal(response.status, 200);
     assert.equal(response.data.currentQuestionId, "q2");
     assert.equal(response.data.phase, "question");
+    response = await post(`/tests/${id}/next`, {
+      operationId: randomUUID(),
+      version: response.data.version,
+      draft: "some unfinished work",
+    });
+    assert.equal(response.status, 200);
+    assert.equal(response.data.currentQuestionId, "q3");
+    assert.equal(response.data.answers.q2.submitted, false);
+    assert.equal(response.data.answers.q2.text, "some unfinished work");
     response = await post(`/tests/${id}/answer`, {
       operationId: randomUUID(),
       version: response.data.version,
-      questionId: "q2",
+      questionId: "q3",
       text: "A",
     });
     assert.equal(response.data.status, "completed");
     const history = (
       await app.inject(`/api/math/tests/${id}/questions`)
     ).json();
-    assert.equal(history.items.length, 2);
+    assert.equal(history.items.length, 3);
     assert.ok(history.items[1].question.solution);
+    assert.equal(history.items[1].answer.submitted, false);
+    assert.equal(history.items[1].answer.text, "some unfinished work");
   });
   await test("expired generation cannot overwrite a newer question or its prompt marker", async () => {
     const id = `${prefix}-lease`;

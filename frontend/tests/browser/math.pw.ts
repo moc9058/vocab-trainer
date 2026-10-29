@@ -114,6 +114,16 @@ async function mockMath(
             json: { code: "MATH_OPERATION_FAILED" },
           });
         }
+        if (state.phase === "question" && records.length) {
+          records[records.length - 1] = {
+            ...records[records.length - 1],
+            answer: {
+              text: body.draft ?? "",
+              submitted: false,
+              operationId: body.operationId,
+            },
+          };
+        }
         const number = state.generatedCount + 1;
         const q = question(number);
         state = {
@@ -293,6 +303,23 @@ test("feedback stays until next; pause and reload restore draft; explicit finish
       .last()
       .getByText("Example solution", { exact: true }),
   ).toBeVisible();
+});
+test("skip moves to the next question and keeps its draft in history", async ({
+  page,
+}) => {
+  await mockMath(page);
+  await page.goto("/math");
+  await page.getByRole("button", { name: "Select all", exact: true }).click();
+  await page.getByRole("button", { name: "Start learning" }).click();
+  await page.getByLabel("Your answer", { exact: true }).fill("Partial work");
+  await page
+    .getByRole("button", { name: "Skip without answering", exact: false })
+    .click();
+  await expect(page.getByText("Question 2:", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Answer history", exact: false }).click();
+  await page.locator(".math-review-item summary").first().click();
+  await expect(page.getByText("Partial work", { exact: true })).toBeVisible();
+  await expect(page.getByText("Not submitted", { exact: false })).toBeVisible();
 });
 test("failed initial generation retries without another session or an input count", async ({
   page,

@@ -249,7 +249,9 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
           { action: "answer", questionId, text },
           (test) => {
             const current = test.questions.find(
-              (q) => !test.answers[q.id]?.grade,
+              (q) =>
+                !test.answers[q.id]?.grade &&
+                test.answers[q.id]?.submitted !== false,
             );
             if (test.status !== "active" || current?.id !== questionId)
               throw new MathError(409, "MATH_INVALID_STATE");
@@ -274,7 +276,13 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
             } else {
               test.phase = "feedback";
               test.currentQuestionId = questionId;
-              if (test.questions.every((q) => test.answers[q.id]?.grade))
+              if (
+                test.questions.every(
+                  (q) =>
+                    test.answers[q.id]?.grade ||
+                    test.answers[q.id]?.submitted === false,
+                )
+              )
                 test.status = "completed";
             }
             return test;
@@ -372,12 +380,22 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
   );
   app.post<{
     Params: { id: string };
-    Body: { operationId: string; version: number };
+    Body: { operationId: string; version: number; draft?: string };
   }>(
     "/tests/:id/next",
-    { schema: { ...bodySchema(operation), params: paramSchema } },
+    {
+      schema: {
+        ...bodySchema({
+          ...operation,
+          draft: { type: "string", maxLength: 5000 },
+        }, ["operationId", "version"]),
+        params: paramSchema,
+      },
+    },
     async (req) => {
-      const { operationId, version } = req.body;
+      const { operationId, version, draft = "" } = req.body;
+      if (draft && !mathText(draft, 20000))
+        throw new MathError(400, "MATH_INVALID_ANSWER");
       return publicMathTest(
         await runMathOperation(
           req.params.id,
@@ -386,24 +404,59 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
           { action: "next" },
           (test) => {
             if (test.mode !== "continuous") {
-              if (test.status !== "active" || test.phase !== "feedback")
+              if (
+                test.status !== "active" ||
+                !["question", "feedback"].includes(test.phase ?? "")
+              )
                 throw new MathError(409, "MATH_INVALID_STATE");
+              if (test.phase === "question") {
+                const q = test.questions.find(
+                  (item) => item.id === test.currentQuestionId,
+                );
+                if (!q || test.answers[q.id]?.grade)
+                  throw new MathError(409, "MATH_INVALID_STATE");
+                test.answers[q.id] = {
+                  ...test.answers[q.id],
+                  text: draft,
+                    operationId,
+                    submitted: false,
+                };
+                test.draft = "";
+                test.phase = "feedback";
+              }
               return test;
             }
             if (
               !["created", "active"].includes(test.status) ||
-              !["ready", "feedback"].includes(test.phase ?? "")
+              !["ready", "question", "feedback"].includes(test.phase ?? "")
             )
               throw new MathError(409, "MATH_INVALID_STATE");
+            if (test.phase === "question") {
+              const q = test.questions[0];
+              if (!q || q.id !== test.currentQuestionId)
+                throw new MathError(409, "MATH_INVALID_STATE");
+              if (!test.answers[q.id])
+                test.answers[q.id] = {
+                  text: draft,
+                  operationId,
+                  submitted: false,
+                };
+              test.draft = "";
+            }
             test.status = "active";
             return test;
           },
           async (test) => {
             if (test.mode !== "continuous") {
               const next = test.questions.find(
-                (q) => !test.answers[q.id]?.grade,
+                (q) =>
+                  !test.answers[q.id]?.grade &&
+                  test.answers[q.id]?.submitted !== false,
               );
-              if (!next) throw new MathError(409, "MATH_INVALID_STATE");
+              if (!next) {
+                test.status = "completed";
+                return test;
+              }
               test.currentQuestionId = next.id;
               test.phase = "question";
               return test;
