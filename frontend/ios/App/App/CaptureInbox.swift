@@ -20,6 +20,7 @@ struct CaptureOperation: Codable {
     var sessionId: String?
 }
 struct CaptureDraft: Codable {
+    var automaticAnalysisStarted: Bool?
     var text: String
     var selected: [String]
     var sourceLabel: String

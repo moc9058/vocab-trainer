@@ -39,4 +39,18 @@ test('source validation rejects unconfirmed metadata and malformed meaning range
   const invalid = await app.inject({ method: 'PUT', url: `${base}/${legacy.json().id}`, payload: { paragraphs: [{ sentences: [{ index: 0, text: '测试。', readingAnalysis: { version: 1, sourceText: '测试。', comprehension: { meaningUnits: { version: 1, units: [{ text: '测试。', range: { start: 0, end: 1 }, meaning: 'test', role: 'statement' }], flow: 'x' } } } }] }] } });
   assert.equal(invalid.statusCode, 400);
 });
+test('automatic OCR metadata survives creation, receipt replay and list hydration', async () => {
+  const sourceOrigin = { ...origin, method: 'screenshot-shortcut', textConfirmed: false, analysisMode: 'automatic-ocr' };
+  const request = { ...payload(), sourceOrigin };
+  const created = await app.inject({ method: 'POST', url: base, payload: request });
+  assert.equal(created.statusCode, 201, created.body);
+  const replay = await app.inject({ method: 'POST', url: base, payload: request });
+  assert.equal(replay.statusCode, 200, replay.body);
+  assert.equal(replay.json().id, created.json().id);
+  assert.deepEqual(replay.json().sourceOrigin, sourceOrigin);
+  const list = await app.inject(base);
+  assert.deepEqual(list.json().sessions.find((s: any) => s.id === created.json().id).sourceOrigin, sourceOrigin);
+  const invalid = await app.inject({ method: 'POST', url: base, payload: { ...payload(), sourceOrigin: { ...sourceOrigin, method: 'shared-text' } } });
+  assert.equal(invalid.statusCode, 400);
+});
 after(async () => { await app.close(); await db.recursiveDelete(db.collection('import_sessions')); await db.recursiveDelete(db.collection('import_ingestion_receipts')); await db.terminate(); });

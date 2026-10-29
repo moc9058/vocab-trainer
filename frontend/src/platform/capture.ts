@@ -6,6 +6,7 @@ export interface CaptureBlock { id: string; text: string; rects: CaptureRect[]; 
 export type CaptureRequest = Omit<ImportSession, 'id' | 'language' | 'createdAt' | 'updatedAt'> & { analyzeAsJob: true; ingestionId: string };
 export interface CaptureOperation { request: string; createdAt: string; sessionId?: string }
 export interface CaptureDraft {
+  automaticAnalysisStarted?: boolean;
   text: string; selected: string[]; sourceLabel: string; sourceKind: ImportSourceOrigin['sourceKind']; sourceUrl: string;
   blockId?: string; wordGroupId?: string; grammarGroupId?: string; groupBNames: string[]; descriptionLanguage: string;
 }

@@ -717,7 +717,8 @@ export interface ImportSourceOrigin {
   sourceUrl?: string;
   capturedAt?: string;
   sourceKind: 'post' | 'comment' | 'article' | 'unknown';
-  textConfirmed: true;
+  textConfirmed: boolean;
+  analysisMode?: 'automatic-ocr';
 }
 
 export interface ImportReadingAnalysis {

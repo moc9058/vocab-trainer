@@ -245,7 +245,8 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
       const input = pendingCaptureRequest(operation);
       const saved = operation.sessionId ? await getImportSession(language, operation.sessionId) : await create(input);
       if (!operation.sessionId) await source.recordOperation({ id: capture.id, blockId, request: operation.request, sessionId: saved.id });
-      setCaptureImage({ ...capture, blocks: capture.blocks?.filter(b => blockId.split(':')[0].split('_').includes(b.id)) });
+      const selected = capture.draft?.blockId === blockId ? capture.draft.selected : blockId.split(':')[0].split('_');
+      setCaptureImage({ ...capture, blocks: capture.blocks?.filter(b => selected.includes(b.id)) });
       await handleResume(saved.id);
       setOpenSentence({ index: saved.paragraphs[0]?.sentences[0]?.index ?? 0, sequence: Date.now() });
       // Creation may have succeeded immediately before the app was terminated.

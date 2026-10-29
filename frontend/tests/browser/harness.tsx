@@ -43,12 +43,13 @@ function CaptureHarness() {
   const sample: LocalCapture = { id: 'capture', inputKind: 'image', method: 'shared-image', receivedAt: new Date().toISOString(), acknowledged: false, operations: {},
     imageUrl: 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="360" height="600"><rect width="360" height="600" fill="#111827"/><text x="20" y="100" fill="white">虽然很忙，但我还是来了。</text><text x="20" y="300" fill="white">确实如此。</text></svg>'),
     blocks: [{ id: 'post', text: '虽然很忙，但我还是来了。', rects: [{ left: .05, top: .1, width: .8, height: .12 }], confidence: .95 }, { id: 'comment', text: '确实如此。', rects: [{ left: .05, top: .45, width: .6, height: .12 }], confidence: .6 }] };
-  const store = useRef<Record<string, LocalCapture>>({ capture: sample, second: { ...sample, id: 'second', inputKind: 'text', method: 'shared-text', text: '臺灣的經濟與发展。', blocks: undefined, imageUrl: undefined, ...((window as any).captureFixture ?? {}) } });
+  const store = useRef<Record<string, LocalCapture>>({ capture: { ...sample, ...((window as any).captureImageFixture ?? {}) }, second: { ...sample, id: 'second', inputKind: 'text', method: 'shared-text', text: '臺灣的經濟與发展。', blocks: undefined, imageUrl: undefined, ...((window as any).captureFixture ?? {}) } });
   const [id, setId] = useState<string | undefined>((window as any).captureEmpty ? undefined : (window as any).captureText ? 'second' : 'capture');
   const [saved, setSaved] = useState<unknown>();
+  const [mount, setMount] = useState(0);
   const source = {
     load: async ({ id }: { id: string }) => structuredClone(store.current[id]),
-    recognize: async ({ id }: { id: string }) => structuredClone(store.current[id]),
+    recognize: async ({ id }: { id: string }) => { if ((window as any).captureFailOCR) throw new Error('OCR failed'); return structuredClone(store.current[id]); },
     acknowledge: async () => {}, acknowledgeLaunch: async () => {},
     receiveText: async ({ text }: { text: string }) => {
       (window as any).captureCreates = ((window as any).captureCreates ?? 0) + 1;
@@ -57,9 +58,9 @@ function CaptureHarness() {
       store.current.pasted = value; return value;
     },
     saveDraft: async ({ id, draft }: any) => { if ((window as any).captureFailSave) throw new Error('disk full'); store.current[id].draft = draft; setSaved({ id, draft }); },
-    pickImage: async () => ({ cancelled: true }), discard: async () => {},
+    pickImage: async () => { if (!(window as any).capturePick) return { cancelled: true }; store.current.picked = { ...sample, id: 'picked', method: 'image-picker' }; return { id: 'picked' }; }, discard: async () => {},
   } as unknown as NativeCapturePlugin;
-  return <><button onClick={() => setId('second')}>Switch capture</button><button onClick={() => setId('capture')}>Original capture</button><CaptureWorkspace captureId={id} source={source} onConfirm={value => { setSelection(value); }} onResume={() => {}} onClose={() => {}} /><pre className="whitespace-pre-wrap break-all" data-testid="capture-selection">{JSON.stringify(selection)}</pre><pre className="whitespace-pre-wrap break-all" data-testid="capture-draft">{JSON.stringify(saved)}</pre></>;
+  return <><button onClick={() => setId('second')}>Switch capture</button><button onClick={() => setId('capture')}>Original capture</button><button onClick={() => setMount(v => v + 1)}>Remount capture</button><CaptureWorkspace key={mount} captureId={id} source={source} onConfirm={value => { (window as any).captureSubmissions = ((window as any).captureSubmissions ?? 0) + 1; setSelection(value); }} onResume={() => { (window as any).captureResumes = ((window as any).captureResumes ?? 0) + 1; }} onClose={() => {}} /><pre className="whitespace-pre-wrap break-all" data-testid="capture-selection">{JSON.stringify(selection)}</pre><pre className="whitespace-pre-wrap break-all" data-testid="capture-draft">{JSON.stringify(saved)}</pre></>;
 }
 function MeaningHarness() {
   const [value, setValue] = useState(fixture as ImportSession);
@@ -73,10 +74,10 @@ function ImportViewHarness() {
 function CaptureImportHarness() {
   const words = useWordQueue(); const grammar = useGrammarQueue();
   const source = useMemo(() => {
-    const capture: LocalCapture = { id: 'capture-import', inputKind: 'text', method: 'shared-text', text: '雖然很忙，但我还是来了。', receivedAt: new Date().toISOString(), acknowledged: false, operations: {} };
+    const capture: LocalCapture = { id: 'capture-import', inputKind: 'text', method: 'shared-text', text: '雖然很忙，但我还是来了。', receivedAt: new Date().toISOString(), acknowledged: false, operations: {}, ...((window as any).captureImportFixture ?? {}) };
     (window as any).captureOperations = capture.operations;
     return {
-      list: async () => ({ captures: [capture], launches: [] }), load: async () => structuredClone(capture),
+      list: async () => ({ captures: [capture], launches: [] }), load: async () => structuredClone(capture), recognize: async () => structuredClone(capture),
       saveDraft: async ({ draft }: any) => { capture.draft = draft; }, acknowledge: async () => { capture.acknowledged = true; },
       recordOperation: async ({ blockId, request, sessionId }: any) => {
         const previous = capture.operations[blockId];

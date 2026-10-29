@@ -163,3 +163,28 @@ Viteはnative生成物・dist-ios・test-resultsをwatch対象から除外した
 production assetsのsync、Debug Simulator build-for-testing、署名なしRelease arm64 buildが成功した。
 アプリとUIテストのコンパイル確認であり、今回XCUITestの実行、実機install、Google実認証、実画面撮影、実LLM品質の確認は行っていない。
 過去の未確認事項を完了へ変更せず、[残る受け入れ確認](ios-meaning-units-implementation-audit.md#残る受け入れ確認)で追跡する。
+
+## 画像OCR全文の自動解析（2026-10-29）
+
+画像の3入口（撮影ショートカット・共有画像・画像選択）は、認識した全ブロックを
+画面順に結合して、範囲選択や「解析」の操作なしで既存ジョブへ進む。
+自動送信前に端末内の開始記録を保存し、通信断後は固定した要求と取り込みIDを再利用する。
+共有・貼り付けテキストの確認、作業中の画面と未同期回答の保護は維持した。
+
+- backend build / frontend型検査・build / production・local iOS syncが成功。
+- backend単体136件、frontend単体118件、importルート9件、captureブラウザ21件が成功。
+- Firestore emulatorのimport試験17件が成功。自動OCR metadataの作成・receipt再送・一覧読込を追加。
+- Docker Node 24 / nginx / 隔離emulator (`demo-vocab-auto-docker`) でHTML 200、
+  自動OCRソース作成201、同一要求再送200、metadataの一覧読込を確認。
+- 署名付きDebug arm64ビルド、MOON_iPhone（iPhone 16 Plus / iOS 26.6.2）へのinstall・起動に成功。
+- MacのDevice Hubは実機画面共有にiOS 27以降を要求し、実機画面を表示・操作できなかった。
+  Control Centerから小红书・财新の画面を撮る試験、既存ショートカットの設定・撮影待機時間の確認は未完了。
+
+XCUITestの合成画像は複数文を含むため、試験用LLM応答を`sentenceTexts`ごとの出力へ修正。
+実API・実LLM・実画面の品質確認としては扱わない。今回の詳細ログとxcresultは
+`/tmp/vocab-auto-*` に保存し、Gitへ含めない。
+
+最終XCUITest (`/tmp/vocab-auto-simulator-verified.xcresult`) では、自動OCR→解析→
+意味のまとまりの表示、全文内の繁体字、backgroundからの復帰のアプリassertionは通過。
+ただし `AppIntentsLiveEntityService` のOSプロセスクラッシュ1件により、コマンド全体は
+失敗（exit 65）として記録する。正常完了した試験とは扱わない。

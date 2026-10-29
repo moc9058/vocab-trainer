@@ -522,8 +522,8 @@ revision transaction/worker tests under `demo-import-revisions`.
 See [screen reading](screen-reading-import.md) for the user workflow and device
 verification boundary. `CaptureIntents.swift`, `CaptureInbox.swift` and
 `NativeCapture.swift` receive images/text in the main app, protect a temporary inbox
-and run Vision OCR locally. `CaptureWorkspace` confirms a passage before forwarding
-it to the existing import pipeline. No extension, shared credential container or
+and run Vision OCR locally. `CaptureWorkspace` automatically forwards the full OCR text of images to the
+existing import pipeline; shared/pasted text retains explicit confirmation. No extension, shared credential container or
 cloud image store is required.
 
 `sourceOrigin` is optional, validated creation metadata on import sessions and their
@@ -629,3 +629,24 @@ metadata and ingestion receipts. New connection creation performs bounded expire
 metadata cleanup; read-time expiry remains authoritative. No config upload or data
 migration is required. Signing/installation and Safari runtime verification remain
 separate from Web/backend deployment.
+
+## Automatic image reading (2026-10-29)
+
+All image entrances (screenshot shortcut, shared image, picker) combine every OCR
+block in native reading order and start the existing durable analysis without
+confirmation. New inputs default to Japanese explanations, unknown source and no
+destination groups. Saved draft settings remain intact. Empty, link-only and
+8,000 UTF-16-unit-exceeding OCR stops for manual selection/correction; no silent
+truncation or main-article inference is performed. Text entrances remain manual.
+
+The protected native draft includes optional `automaticAnalysisStarted`, saved
+before submission to prevent repeated automatic attempts on reload. Existing
+operation requests and ingestion receipts still own retry identity. A saved
+session can reopen through the existing resume path; failed or interrupted
+creation requires an explicit retry using the same frozen request. The optional
+`sourceOrigin.analysisMode: 'automatic-ocr'` requires `textConfirmed: false` and
+an image method. Old `textConfirmed: true` metadata without that mode remains
+valid. Backend accepts this extension before the new iPhone app is installed;
+no bulk migration or config upload is required. Active-work navigation protection
+is unchanged. Cloud deployment does not install the native app or configure the
+system shortcut; Control Center timing requires separate physical-device checks.

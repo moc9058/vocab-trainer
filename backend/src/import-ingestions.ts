@@ -7,8 +7,11 @@ export function parseSourceOrigin(value: unknown): ImportSourceOrigin | undefine
   const fail = (): never => { throw new ImportCheckpointError(400, 'Invalid source details.'); };
   if (!value || typeof value !== 'object' || Array.isArray(value)) return fail();
   const v = value as Record<string, unknown>;
-  if (Object.keys(v).some(k => !['version', 'method', 'sourceLabel', 'sourceUrl', 'capturedAt', 'sourceKind', 'textConfirmed'].includes(k))) return fail();
-  if (v.version !== 1 || v.textConfirmed !== true || !['screenshot-shortcut', 'shared-image', 'image-picker', 'shared-text', 'paste', 'safari-selection'].includes(String(v.method))
+  if (Object.keys(v).some(k => !['version', 'method', 'sourceLabel', 'sourceUrl', 'capturedAt', 'sourceKind', 'textConfirmed', 'analysisMode'].includes(k))) return fail();
+  const automatic = v.analysisMode === 'automatic-ocr';
+  if (automatic ? v.textConfirmed !== false || !['screenshot-shortcut', 'shared-image', 'image-picker'].includes(String(v.method))
+    : v.analysisMode !== undefined || v.textConfirmed !== true) return fail();
+  if (v.version !== 1 || !['screenshot-shortcut', 'shared-image', 'image-picker', 'shared-text', 'paste', 'safari-selection'].includes(String(v.method))
     || !['post', 'comment', 'article', 'unknown'].includes(String(v.sourceKind))) return fail();
   for (const [key, max] of [['sourceLabel', 100], ['sourceUrl', 2048], ['capturedAt', 40]] as const) {
     const item = v[key];

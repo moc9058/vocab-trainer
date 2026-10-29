@@ -29,6 +29,7 @@ export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onCon
   const writes = useRef<Promise<unknown>>(Promise.resolve());
   const latest = useRef<{ draft: CaptureDraft; capture: Promise<LocalCapture> | null; generation: number } | null>(null);
   const discarded = useRef(false);
+  const automaticAttempts = useRef(new Set<string>());
   const blockId = draft.blockId ?? (draft.selected.join('_') || 'text');
   const previous = capture?.operations[blockId];
   const update = (patch: Partial<CaptureDraft>) => setDraft(value => ({ ...value, ...patch }));
@@ -90,7 +91,29 @@ export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onCon
         let restored = value.draft ?? { ...emptyCaptureDraft(), text: value.text ?? '' };
         const key = restored.blockId ?? (restored.selected.join('_') || 'text');
         if (value.operations[key]) restored = draftFromOperation(value.operations[key], restored, pendingCaptureRequest);
+        if (value.inputKind === 'image' && !restored.automaticAnalysisStarted && !Object.keys(value.operations).length) {
+          restored = { ...restored, automaticAnalysisStarted: true, blockId: 'automatic-ocr', selected: (value.blocks ?? []).map(b => b.id),
+            text: (value.blocks ?? []).map(b => b.text).join('\n') };
+          setDraft(restored);
+          // Persist the attempt before any network request. Reloading must never
+          // start another automatic submission after failure or interruption.
+          latest.current = { draft: restored, capture: currentCapture.current, generation: current };
+          await persist(latest.current);
+          if (current !== generation.current) return;
+          automaticAttempts.current.add(id);
+          if (captureTextKind(restored.text) === 'text' && validCaptureUrl(restored.sourceUrl) && restored.selected.length) {
+            await submit(value, restored, true);
+            if (current !== generation.current) return;
+            value = { ...value, ...(await source.load({ id })) };
+            if (current !== generation.current) return;
+          } else setError(t('captureAutomaticStopped'));
+        } else if (value.inputKind === 'image' && !value.acknowledged && value.operations[key]?.sessionId && !automaticAttempts.current.has(id)) {
+          automaticAttempts.current.add(id);
+          await onResume(value, key);
+          if (current !== generation.current) return;
+        }
         setDraft(restored);
+        setCapture(value);
         await source.acknowledge({ id });
       } else if (launchId) await source.acknowledgeLaunch({ id: launchId });
       if (current === generation.current) setReady(true);
@@ -141,14 +164,19 @@ export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onCon
     try {
       const value = await persist({ draft, capture: currentCapture.current, generation: generation.current });
       if (!value) return;
-      const selection: CaptureSelection = { capture: value, blockId, blockIds: draft.selected, text: draft.text, draft,
-        origin: { version: 1, method: value.method, sourceKind: draft.sourceKind, textConfirmed: true, capturedAt: value.receivedAt,
-          ...(draft.sourceLabel.trim() ? { sourceLabel: draft.sourceLabel.trim() } : {}), ...(draft.sourceUrl ? { sourceUrl: draft.sourceUrl } : {}) } };
-      await onConfirm(selection);
+      await submit(value, draft, false);
       // A lost response may have frozen a request even though analysis did not open.
       if (mounted.current) await load(value.id);
     } catch (err) { if (mounted.current) report(err); }
     finally { if (mounted.current) setBusy(false); }
+  }
+  async function submit(value: LocalCapture, input: CaptureDraft, automatic: boolean) {
+    const selection: CaptureSelection = { capture: value, blockId: input.blockId ?? (input.selected.join('_') || 'text'),
+      blockIds: input.selected, text: input.text, draft: input,
+      origin: { version: 1, method: value.method, sourceKind: input.sourceKind, textConfirmed: !automatic,
+        ...(automatic ? { analysisMode: 'automatic-ocr' as const } : {}), capturedAt: value.receivedAt,
+        ...(input.sourceLabel.trim() ? { sourceLabel: input.sourceLabel.trim() } : {}), ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}) } };
+    await onConfirm(selection);
   }
   useCaptureNavigationBlocker(busy || saveError);
   const kind = captureTextKind(draft.text);

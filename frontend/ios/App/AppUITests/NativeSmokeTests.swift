@@ -1,29 +1,17 @@
 import XCTest
 final class NativeSmokeTests: XCTestCase {
-    func testCaptureOCRAndTextConfirmation() throws {
+    func testCaptureOCRAutomaticallyStartsAnalysis() throws {
         let app = XCUIApplication()
         app.launchArguments = ["--vocab-local-smoke", "--vocab-capture-smoke"]
         app.launch()
-        let title = app.staticTexts["Read from a screen"]
-        XCTAssertTrue(title.waitForExistence(timeout: 30), "Synthetic input must survive delivery before the WebView is ready")
-        let block = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@ OR label == %@", "Choose passage 1:", "1 ↗")).firstMatch
-        XCTAssertTrue(block.waitForExistence(timeout: 30), "Vision must recognize text and return aligned image buttons")
-        let traditional = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS '臺灣的經濟與发展。'")).firstMatch
-        XCTAssertTrue(traditional.waitForExistence(timeout: 10), "Traditional glyphs must survive OCR alongside simplified Chinese")
-        block.tap()
-        app.swipeUp()
-        let text = app.textViews.firstMatch
-        XCTAssertTrue(text.waitForExistence(timeout: 10))
-        XCTAssertTrue((text.value as? String)?.contains("虽然很忙") == true)
-        let picture = XCTAttachment(screenshot: app.screenshot()); picture.name = "On-device OCR and confirmation"; picture.lifetime = .keepAlways; add(picture)
-        let analyze = app.buttons["Analyze"]
-        for _ in 0..<5 { if analyze.isHittable { break }; app.swipeUp() }
-        XCTAssertTrue(analyze.waitForExistence(timeout: 10)); analyze.tap()
         let parts = app.staticTexts["Meaningful parts"]
-        XCTAssertTrue(parts.waitForExistence(timeout: 30), "Synthetic API job and detailed explanation must be saved and displayed")
-        let detail = XCTAttachment(screenshot: app.screenshot()); detail.name = "Native source meaning units"; detail.lifetime = .keepAlways; add(detail)
+        XCTAssertTrue(parts.waitForExistence(timeout: 60), "Vision OCR must start source analysis without selecting a block or tapping Analyze")
+        app.buttons["Close full text"].tap()
+        let traditional = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS '臺灣的經濟與发展'")).firstMatch
+        XCTAssertTrue(traditional.waitForExistence(timeout: 10), "The full recognized image, including traditional Chinese, must reach the reader")
+        let detail = XCTAttachment(screenshot: app.screenshot()); detail.name = "Automatic image analysis"; detail.lifetime = .keepAlways; add(detail)
         XCUIDevice.shared.press(.home); app.activate()
-        XCTAssertTrue(parts.waitForExistence(timeout: 20))
+        XCTAssertTrue(traditional.waitForExistence(timeout: 20))
     }
 
     func testMissingReadingInputAcceptsPasteAndRestoresDraft() throws {

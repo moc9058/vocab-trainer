@@ -27,13 +27,16 @@ mock.module('../src/llm.js', { namedExports: { ...actual, createOpenAIClient: bl
   resolveModel: async (_tier: string, route: string) => { if (route.startsWith('import/')) return 'mock-model'; return blocked(); }, segmentBatch: blocked, fillGrammarTransliteration: blocked, fillSegmentPinyin: blocked,
   callLLM: async (options: { route?: string; user?: string; onChunk?: (chunk: string) => void }) => {
     if (options.route?.startsWith('import/')) {
-      const { target } = JSON.parse(options.user!);
+      const { target, sentenceTexts } = JSON.parse(options.user!);
       const detailed = options.route === 'import/sentence-explanation';
-      const dictionary = [['虽然', 'suī rán', '〜だけれど'], ['很忙', 'hěn máng', 'とても忙しい'], ['但', 'dàn', 'しかし'], ['我', 'wǒ', '私'], ['还是', 'hái shì', 'それでも'], ['来', 'lái', '来る'], ['了', 'le', '完了']];
-      const words = dictionary.filter(([term]) => target.includes(term)).map(([term, transliteration, meaning]) => ({ term, surface: term, occurrence: 0, transliteration, meaning }));
-      const split = target.indexOf('，') + 1;
-      const texts = split > 0 && split < target.length ? [target.slice(0, split), target.slice(split)] : [target];
-      return JSON.stringify({ paragraphs: [{ sentences: [{ text: target, explanationLanguage: 'ja', words, grammar: [], ...(detailed ? { overview: '忙しいけれど、それでも来たことを伝えています。', ambiguityNotes: [], comprehension: { meaning: '忙しいけれど、それでも来た。', skeleton: '私が来た', connection: '前後の文脈は不明。', nuances: [], meaningUnits: { units: texts.map((text, i) => ({ text, meaning: i === 0 && texts.length > 1 ? '忙しいけれど' : 'それでも来た', role: i === 0 && texts.length > 1 ? '譲歩' : '結論' })), flow: '忙しいという事情から、それでも来たという結論につながります。' } } } : {}) }] }] });
+      const sentence = (target: string) => {
+        const dictionary = [['虽然', 'suī rán', '〜だけれど'], ['很忙', 'hěn máng', 'とても忙しい'], ['但', 'dàn', 'しかし'], ['我', 'wǒ', '私'], ['还是', 'hái shì', 'それでも'], ['来', 'lái', '来る'], ['了', 'le', '完了']];
+        const words = dictionary.filter(([term]) => target.includes(term)).map(([term, transliteration, meaning]) => ({ term, surface: term, occurrence: 0, transliteration, meaning }));
+        const split = target.indexOf('，') + 1;
+        const texts = split > 0 && split < target.length ? [target.slice(0, split), target.slice(split)] : [target];
+        return { text: target, explanationLanguage: 'ja', words, grammar: [], ...(detailed ? { overview: '忙しいけれど、それでも来たことを伝えています。', ambiguityNotes: [], comprehension: { meaning: '忙しいけれど、それでも来た。', skeleton: '私が来た', connection: '前後の文脈は不明。', nuances: [], meaningUnits: { units: texts.map((text, i) => ({ text, meaning: i === 0 && texts.length > 1 ? '忙しいけれど' : 'それでも来た', role: i === 0 && texts.length > 1 ? '譲歩' : '結論' })), flow: '忙しいという事情から、それでも来たという結論につながります。' } } } : {}) };
+      };
+      return JSON.stringify({ paragraphs: [{ sentences: (detailed ? [target] : sentenceTexts ?? [target]).map(sentence) }] });
     }
     const data = options.route?.includes('decompose') ? { sentences: [{ text: 'Hello world.', chunks: [{ surface: 'Hello world.', components: [] }] }] }
       : { passages: [{ sentenceIds: ['s1'], translation: 'こんにちは。' }], chunks: [{ chunkId: 's1c1', meaning: '挨拶' }], components: [] };
