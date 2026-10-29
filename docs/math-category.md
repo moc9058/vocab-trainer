@@ -3,18 +3,17 @@
 Implemented on 2026-10-29 after the reset below. The previous runtime and old
 verification reports are not reused.
 
-## Difficulty and learning-objective proposal
+## Assessment and curriculum
 
-See [the assessment design proposal](math-assessment-design.md) for three difficulty
-levels, worked anchor problems, and 63 authored learning objectives covering the
-nine Linear Algebra chapters. The catalog is a separate textbook-side artifact;
-current prompts, question selection, history and publication do not consume it.
-Runtime integration and versioned publication are proposed next steps.
+See [the assessment guide](textbook-assessment.md) for curriculum schema v2,
+versioned publication, four task kinds, objective planning, independent solving,
+itemized grading and textbook authoring. The original
+[assessment proposal](math-assessment-design.md) remains a dated design record.
 
 ## Textbooks and publication
 
 `textbook/manifest.json` assigns stable subject, book and chapter IDs, titles,
-languages and relative MD paths. Current Linear Algebra contains nine English
+languages and relative Markdown paths and curriculumFile/subjectProfile. Current Linear Algebra contains nine English
 chapters. Engineering Math has only an original PDF and is not published.
 Filenames supply numeric chapter order and chapter titles; headings inside each
 file remain content headings. Rename a file by updating its manifest path while
@@ -28,7 +27,9 @@ and database default to `vocab-trainer-490014` / `vocab-database`; override with
 persist emulator settings. Production refuses an emulator environment; emulator
 mode requires one.
 
-`math_books` contains the published catalog. `math_chapter_versions` holds
+`math_books` points to the complete publication; `math_publications` freezes
+book metadata, source versions and curriculumRevision. `math_curriculum_versions`
+stores catalog metadata with an objectives subcollection. `math_chapter_versions` holds
 immutable, content-addressed chapter revisions. Changed sources are written
 before an atomic book publication; a failed/concurrent publication leaves the
 old book usable. Unreferenced revisions may remain after a failed publication.
@@ -47,10 +48,10 @@ You can also choose **Skip without answering** while a question is open; any
 draft is saved as an unsubmitted answer in history. Skipped questions do not
 count toward grading statistics and are not shown again. Questions continue
 until explicit **Save and pause** or **End test**. No question is generated ahead
-of that action. Difficulty defaults to standard and all three
-types (definition, calculation, proof) are enabled; both are under Question
-settings. Chapter/type assignment rotates using the cumulative question number,
-so each generation request continues the plan rather than restarting it.
+of that action. Difficulty defaults to standard; prove, determine, compute and derive are enabled
+under the closed Question settings panel. Supported forms are normalized per objective.
+V2 plans balance chapter practice and use unseen/review/ordinary weights of 50/30/20;
+v1 sessions retain their rotating chapter/type plan.
 
 The current question is the focus of the test page. Previous answers are in a
 separate history dialog, 20 per page. Book text opens in a scrollable accessible
@@ -75,8 +76,8 @@ is required in this version.
 The `math/generate`, `math/validate`, and `math/grade` model features use the
 existing full-tier default unless changed in LLM Models. Usage accounting and
 request cancellation share existing infrastructure. Generation includes example
-solutions, rubrics and exact chapter-heading citations. A separate model call
-checks mathematical validity. Invalid output is regenerated once; failed
+solutions, rubrics and exact chapter-heading citations. A blind independent-solve call followed by structured comparison
+checks well-posedness, correctness, scope, objective, difficulty, task and rubric. Invalid output is regenerated once; failed
 validation never starts a partial test. This is AI verification, not a formal
 proof or a guarantee of correctness.
 
@@ -105,9 +106,10 @@ question on the same concept is allowed. Duplicate candidates are retried once,
 then fail without discarding feedback or ending the session. Model checks cannot
 guarantee semantic uniqueness.
 
-Solutions/rubrics are omitted from current-question and paginated-history
-responses until that question is graded or the test is ended. Completion exposes
-solutions for unanswered questions too. Wrong answers do not automatically repeat.
+Example solutions may be opened at any time, including in history. Rubrics and
+internal verification data remain private. Solution views of the active question
+are reported by the assistance endpoint; unreported views do not prove independence.
+Wrong answers become spaced objective review candidates, rather than immediate repeats.
 
 Generation and grading share
 the existing 180-second request budget. Processing is synchronous; there is no
@@ -132,7 +134,7 @@ All routes use existing authentication under `/api/math`:
 - `GET /books`: published book/chapter metadata.
 - `GET /chapters/:id`: immutable chapter revision and MD body (`id` is version ID).
 - `GET /tests`: latest test summaries; `GET /tests/:id`: saved public test state (only the current question for continuous tests).
-- `POST /tests`: `{operationId, bookId, chapterIds, mode: "continuous", kinds,
+- `POST /tests`: `{operationId, bookId, chapterIds, mode: "continuous", assessmentVersion: 2, taskKinds,
   difficulty}`. Legacy fixed requests use `count` instead (or `mode: "fixed"`).
 - `POST /tests/:id/next`: `{operationId, version, draft?}`; records the current
   question as unsubmitted when skipped, creates the next continuous question,
@@ -142,6 +144,8 @@ All routes use existing authentication under `/api/math`:
   Pass the returned numeric cursor as `after` for the next page.
 - `POST /tests/:id/generate`: `{operationId, version}`; legacy fixed tests only.
 - `POST /tests/:id/answer`: `{operationId, version, questionId, text}`.
+- `GET /tests/:id/objectives`: this session’s objective practice records.
+- `POST /tests/:id/assistance`: `{operationId, version, questionId, kind: "solution_view"}`.
 - `POST /tests/:id/state`: `{operationId, version, action, draft?}`; action is
   `pause`, `resume`, or `finish`.
 

@@ -8,7 +8,12 @@ import type {
   MathTest,
   MathHistoryPage,
   MathHistoryItem,
+  Curriculum,
+  ObjectiveProgress,
+  AssessmentPlan,
 } from "./math-types.js";
+import { loadMathCurriculum } from "./math-publication.js";
+import { selectAssessmentPlan } from "./math-assessment-plan.js";
 export class MathError extends Error {
   constructor(
     public statusCode: number,
@@ -34,7 +39,9 @@ export async function mathSources(ids: string[]): Promise<MathSource[]> {
 export async function getMathTest(id: string): Promise<MathTest> {
   const doc = await testsCollection().doc(id).get();
   if (!doc.exists) throw new MathError(404, "MATH_TEST_NOT_FOUND");
-  return hydrateMathTest(doc.data() as MathTest);
+  const test = await hydrateMathTest(doc.data() as MathTest);
+  if (test.assessmentVersion === 2) await frozenCurriculum(test);
+  return test;
 }
 export async function createMathTest(
   test: MathTest,
@@ -83,11 +90,15 @@ export async function runMathOperation(
       saved.get("claimedVersion") !== test.version
     )
       throw new MathError(409, "MATH_STALE_VERSION");
+    if (test.assessmentVersion === 2) await frozenCurriculum(test);
+    const before = structuredClone(test);
     const next = prepare(test);
+    await updateEvidence(tx, ref, before, next);
     next.lock = { token, until: Date.now() + 240_000 };
     next.version = test.version + 1;
     next.updatedAt = new Date().toISOString();
     delete next.error;
+    delete next.assessmentFailure;
     writeMathTest(tx, ref, next);
     tx.set(receipt, { fingerprint, done: false, claimedVersion: next.version });
     return { done: false, test: next };
@@ -104,6 +115,7 @@ export async function runMathOperation(
       delete next.lock;
       next.version = claim.test.version + 1;
       next.updatedAt = new Date().toISOString();
+      let promptMarker: DocumentReference | undefined;
       if (
         next.mode === "continuous" &&
         next.currentQuestionId !== claim.test.currentQuestionId
@@ -112,8 +124,11 @@ export async function runMathOperation(
         const marker = ref.collection("prompts").doc(mathPromptHash(q.prompt));
         if ((await tx.get(marker)).exists)
           throw new MathError(409, "MATH_DUPLICATE_QUESTION");
-        tx.create(marker, { questionId: q.id });
+        promptMarker = marker;
       }
+      await updateEvidence(tx, ref, claim.test, next);
+      if (promptMarker)
+        tx.create(promptMarker, { questionId: next.currentQuestionId });
       writeMathTest(tx, ref, next);
       tx.set(receipt, { fingerprint, done: true });
       return next;
@@ -126,6 +141,11 @@ export async function runMathOperation(
       delete failed.lock;
       if (failed.status === "generating") failed.status = "generation_failed";
       failed.error = "MATH_OPERATION_FAILED";
+      const diagnostics = (
+        err as { assessmentDiagnostics?: MathTest["assessmentFailure"] }
+      )?.assessmentDiagnostics;
+      if (diagnostics && Buffer.byteLength(JSON.stringify(diagnostics)) < 25000)
+        failed.assessmentFailure = diagnostics;
       failed.version++;
       failed.updatedAt = new Date().toISOString();
       tx.set(ref, failed);
@@ -185,7 +205,7 @@ export async function mathQuestionHistory(
     const items = visible.questions
       .map((q, i) => ({
         question: q,
-        answer: test.answers[q.id],
+        answer: visible.answers[q.id],
         number: i + 1,
       }))
       .filter((q) => q.number > after);
@@ -203,14 +223,15 @@ export async function mathQuestionHistory(
     .get();
   const items: MathHistoryItem[] = snapshot.docs.slice(0, 20).map((doc) => {
     const data = doc.data();
-    const question = publicMathTest({
+    const visible = publicMathTest({
       ...test,
       questions: [data.question],
       answers: data.answer ? { [data.question.id]: data.answer } : {},
-    }).questions[0];
+    });
+    const question = visible.questions[0];
     return {
       question,
-      ...(data.answer ? { answer: data.answer } : {}),
+      ...(data.answer ? { answer: visible.answers[data.question.id] } : {}),
       number: data.number,
     };
   });
@@ -242,4 +263,171 @@ export async function duplicateMathPrompt(
       .doc(mathPromptHash(prompt))
       .get()
   ).exists;
+}
+
+export async function frozenCurriculum(test: MathTest): Promise<Curriculum> {
+  if (
+    test.publicationId !== test.book.publicationId ||
+    test.curriculumRevision !== test.book.curriculumRevision
+  )
+    throw new MathError(409, "MATH_CURRICULUM_MISSING");
+  return loadMathCurriculum(db, test.book);
+}
+function evidenceCollection(test: MathTest) {
+  return db
+    .collection("math_learning_evidence")
+    .doc(test.evidenceNamespace ?? test.book.id)
+    .collection("objectives");
+}
+export async function ensureAssessmentPlans(
+  test: MathTest,
+  excluded: string[] = [],
+): Promise<AssessmentPlan[]> {
+  if (test.pendingPlans?.length && !excluded.length) return test.pendingPlans;
+  const curriculum = await frozenCurriculum(test);
+  const snapshot = await evidenceCollection(test).get();
+  const evidence = snapshot.docs.map((d) => d.data() as ObjectiveProgress);
+  const count = test.mode === "continuous" ? 1 : test.count;
+  const plans: AssessmentPlan[] = [];
+  for (let i = 0; i < count; i++) {
+    const seed = `${test.id}:${(test.generatedCount ?? 0) + i}:${test.lock!.token}`;
+    const plan = selectAssessmentPlan(
+      { ...test, generatedCount: (test.generatedCount ?? 0) + i },
+      curriculum,
+      evidence,
+      seed,
+      excluded,
+    );
+    if (excluded.length)
+      plan.reason =
+        "INFEASIBLE_PLAN: previous objective could not satisfy the unchanged task contract";
+    plans.push(plan);
+    // Reserve exposure in memory so a fixed batch also balances its own chapters.
+    const prior = evidence.find(
+      (e) => e.objectiveId === plan.primaryObjectiveId,
+    );
+    if (prior) {
+      prior.presented++;
+      prior.lastTestId = test.id;
+      prior.lastNumber = (test.generatedCount ?? 0) + i + 1;
+    } else
+      evidence.push({
+        schemaVersion: 2,
+        objectiveId: plan.primaryObjectiveId,
+        presented: 1,
+        submitted: 0,
+        correct: 0,
+        partial: 0,
+        incorrect: 0,
+        skipped: 0,
+        lastTestId: test.id,
+        lastNumber: (test.generatedCount ?? 0) + i + 1,
+        assistanceStatus: "unknown",
+      });
+  }
+  const ref = testsCollection().doc(test.id);
+  await db.runTransaction(async (tx) => {
+    const doc = await tx.get(ref);
+    if (doc.get("lock.token") !== test.lock?.token)
+      throw new MathError(409, "MATH_STALE_VERSION");
+    tx.update(ref, { pendingPlans: plans });
+    tx.set(
+      ref
+        .collection("plans")
+        .doc(
+          `${test.generatedCount ?? 0}_${excluded.length ? "replacement" : "initial"}`,
+        ),
+      { plans, excluded },
+    );
+  });
+  test.pendingPlans = plans;
+  return plans;
+}
+async function updateEvidence(
+  tx: Transaction,
+  ref: DocumentReference,
+  before: MathTest,
+  after: MathTest,
+): Promise<void> {
+  if (after.assessmentVersion !== 2) return;
+  const changes: {
+    q: MathTest["questions"][number];
+    event: "presented" | "skipped" | "graded" | "assistance";
+  }[] = [];
+  for (const q of after.questions) {
+    if (!q.primaryObjectiveId) continue;
+    const old = before.questions.find((p) => p.id === q.id),
+      answer = after.answers[q.id],
+      prior = before.answers[q.id];
+    if (!old) changes.push({ q, event: "presented" });
+    if (answer?.submitted === false && prior?.submitted !== false)
+      changes.push({ q, event: "skipped" });
+    if (answer?.grade && !prior?.grade) changes.push({ q, event: "graded" });
+    if (q.assistanceStatus === "viewed" && old?.assistanceStatus !== "viewed")
+      changes.push({ q, event: "assistance" });
+  }
+  // Read every affected document before writing any, including multi-question fixed tests.
+  const ids = [...new Set(changes.map((c) => c.q.primaryObjectiveId!))];
+  const rows = await Promise.all(
+    ids.map(async (id) => {
+      const local = ref.collection("objectiveProgress").doc(id),
+        shared = evidenceCollection(after).doc(id);
+      const [a, b] = await Promise.all([tx.get(local), tx.get(shared)]);
+      return {
+        id,
+        local,
+        shared,
+        a: a.data() as ObjectiveProgress | undefined,
+        b: b.data() as ObjectiveProgress | undefined,
+      };
+    }),
+  );
+  for (const row of rows) {
+    for (const [target, previous] of [
+      [row.local, row.a],
+      [row.shared, row.b],
+    ] as const) {
+      const e: ObjectiveProgress = previous ?? {
+        schemaVersion: 2,
+        objectiveId: row.id,
+        presented: 0,
+        submitted: 0,
+        correct: 0,
+        partial: 0,
+        incorrect: 0,
+        skipped: 0,
+        assistanceStatus: "unknown",
+      };
+      for (const { q, event } of changes.filter(
+        (c) => c.q.primaryObjectiveId === row.id,
+      )) {
+        if (event === "presented") {
+          e.presented++;
+          e.lastPresentedAt = new Date().toISOString();
+          e.lastQuestionId = q.id;
+          e.lastTestId = after.id;
+          e.lastNumber = q.number ?? after.questions.indexOf(q) + 1;
+          e.assistanceStatus = q.assistanceStatus ?? "unknown";
+        }
+        if (event === "skipped") e.skipped++;
+        if (event === "graded") {
+          const g = after.answers[q.id].grade!;
+          e.submitted++;
+          e[g.verdict]++;
+          e.lastVerdict = g.verdict;
+          e.lastGradedAt = new Date().toISOString();
+          e.assistanceStatus = q.assistanceStatus ?? "unknown";
+        }
+        if (event === "assistance") e.assistanceStatus = "viewed";
+      }
+      tx.set(target, e);
+    }
+  }
+}
+export async function mathObjectiveProgress(
+  test: MathTest,
+): Promise<ObjectiveProgress[]> {
+  return (
+    await testsCollection().doc(test.id).collection("objectiveProgress").get()
+  ).docs.map((d) => d.data() as ObjectiveProgress);
 }

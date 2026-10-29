@@ -265,6 +265,8 @@ export async function recordUsage(
  *              unregistered route just falls through to the tier default).
  */
 export interface LLMCallOptions {
+  onUsage?: (usage: CompletionUsage | undefined, model: string) => void;
+  model?: string; // Optional frozen model selection for versioned assessment sessions.
   system: string;
   user: string;
   route: string;
@@ -295,7 +297,7 @@ async function callLLMWithSignal(opts: LLMCallOptions, signal: AbortSignal): Pro
   const { system, user, route, tier = "mini", schema, onChunk } = opts;
   if (opts.maxInputBytes && Buffer.byteLength(system + user) > opts.maxInputBytes) throw new Error("LLM_INPUT_LIMIT");
   const cl = await awaitWithLLMSignal(createOpenAIClient(), signal);
-  const model = opts.worker?.model ?? await awaitWithLLMSignal(resolveModel(tier, route), signal);
+  const model = opts.model ?? opts.worker?.model ?? await awaitWithLLMSignal(resolveModel(tier, route), signal);
   signal.throwIfAborted();
   const messages = [
     { role: "system" as const, content: system },
@@ -340,7 +342,9 @@ async function callLLMWithSignal(opts: LLMCallOptions, signal: AbortSignal): Pro
         { model: activeModel, messages, response_format, ...(opts.maxOutputTokens ? { max_completion_tokens: opts.maxOutputTokens } : {}) }, { signal, ...(opts.worker ? { timeout: IMPORT_WORKER_BUDGET_MS, maxRetries: 0 } : {}) },
       );
       signal.throwIfAborted();
+      opts.onUsage?.(response.usage, activeModel);
       if (opts.worker) await opts.worker.onUsage(response.usage, activeModel);
+      else if (opts.model) await recordUsage(response.usage, activeModel, "callLLM", route);
       else recordUsage(response.usage, activeModel, "callLLM", route);
       if (opts.worker && response.choices[0]?.finish_reason !== "stop") throw new Error("IMPORT_OUTPUT_LIMIT");
       return response.choices[0]?.message?.content ?? "";
@@ -388,7 +392,9 @@ async function callLLMWithSignal(opts: LLMCallOptions, signal: AbortSignal): Pro
       clearTimeout(idleTimer);
     }
     signal.throwIfAborted();
+    opts.onUsage?.(usage, activeModel);
     if (opts.worker) await opts.worker.onUsage(usage, activeModel);
+    else if (opts.model) await recordUsage(usage, activeModel, "callLLM", route);
     else recordUsage(usage, activeModel, "callLLM", route);
     if (opts.worker && finishReason !== "stop") throw new Error("IMPORT_OUTPUT_LIMIT");
     return full;

@@ -598,11 +598,14 @@ earlier mathematics verification reports remain historical.
 
 ### Mathematics assessment proposal (2026-10-29)
 
-[Assessment design](math-assessment-design.md) specifies proposed difficulty rules,
-worked anchors and the 63-goal Linear Algebra catalog under
-`textbook/Linear Algebra/curriculum/`. These are authoring artifacts, not runtime
-configuration. `math:sync` still publishes only manifest chapter Markdown; no
-objective-based scheduling, grading or history migration is implemented.
+[Textbook assessment](textbook-assessment.md) documents the implemented v2 contract.
+`math:sync` publishes chapter text and curriculum as an immutable complete publication.
+New tests freeze publication, catalog, prompt and difficulty versions plus model
+selections. Server plans use shared objective evidence; G/V1/V2 verification precedes
+presentation and rubric-item grading computes verdicts on the server. Legacy fixed
+and continuous v1 sessions remain readable without invented objective mappings.
+The repository textbook-curriculum skill and local prepare/validate commands support
+source changes. Publishing and deployment remain separate operations.
 
 
 ## Safari selection intake (2026-10-29)

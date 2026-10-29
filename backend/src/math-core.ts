@@ -113,20 +113,138 @@ export function validateGrade(raw: unknown): MathGrade {
   return { verdict: g.verdict, feedback: g.feedback };
 }
 export function publicMathTest(test: MathTest): MathPublicTest {
+  // Explicit public allowlists keep rubrics, demand reasoning, plan seeds and model internals private.
   const {
-    lock: _lock,
-    questions,
-    requestHash: _requestHash,
-    ...rest
-  } = test as MathTest & { requestHash?: string };
+    id,
+    book,
+    chapterIds,
+    sourceVersionIds,
+    count,
+    kinds,
+    difficulty,
+    status,
+    answers,
+    draft,
+    version,
+    createdAt,
+    updatedAt,
+    mode,
+    phase,
+    currentQuestionId,
+    generatedCount,
+    stats,
+    error,
+    assessmentVersion,
+    taskKinds,
+    publicationId,
+    curriculumRevision,
+    difficultyPolicyVersion,
+    promptVersion,
+  } = test;
   return {
-    ...rest,
-    questions: questions.map((q) => {
-      // The learner may reveal the example solution at any time. Keep the
-      // grading rubric private until grading has completed.
-      const { rubric: _rubric, ...visible } = q;
-      if (test.answers[q.id]?.grade || test.status === "completed") return visible;
-      return visible;
+    id,
+    book,
+    chapterIds,
+    sourceVersionIds,
+    count,
+    kinds,
+    difficulty,
+    status,
+    answers: Object.fromEntries(
+      Object.entries(answers).map(([id, a]) => [
+        id,
+        {
+          text: a.text,
+          operationId: a.operationId,
+          ...(a.submitted !== undefined ? { submitted: a.submitted } : {}),
+          ...(a.grade
+            ? {
+                grade: {
+                  verdict: a.grade.verdict,
+                  feedback: a.grade.feedback,
+                  ...(a.grade.score !== undefined
+                    ? { score: a.grade.score }
+                    : {}),
+                  ...(a.grade.items ? { items: a.grade.items } : {}),
+                },
+              }
+            : {}),
+        },
+      ]),
+    ),
+    draft,
+    version,
+    createdAt,
+    updatedAt,
+    ...(mode ? { mode } : {}),
+    ...(phase ? { phase } : {}),
+    ...(currentQuestionId ? { currentQuestionId } : {}),
+    ...(generatedCount !== undefined ? { generatedCount } : {}),
+    ...(stats ? { stats } : {}),
+    ...(error ? { error } : {}),
+    ...(assessmentVersion
+      ? {
+          assessmentVersion,
+          taskKinds,
+          publicationId,
+          curriculumRevision,
+          difficultyPolicyVersion,
+          promptVersion,
+        }
+      : {}),
+    questions: test.questions.map((q) => {
+      const {
+        id,
+        number,
+        chapterId,
+        heading,
+        kind,
+        prompt,
+        solution,
+        schemaVersion,
+        primaryObjectiveId,
+        objectiveStatement,
+        supportingObjectiveIds,
+        publicationId,
+        curriculumRevision,
+        difficulty,
+        difficultyPolicyVersion,
+        promptVersion,
+        taskKind,
+        ability,
+        responseFormat,
+        sourceRefs,
+        answerSpec,
+        assistanceStatus,
+      } = q;
+      return {
+        id,
+        chapterId,
+        heading,
+        kind,
+        prompt,
+        solution,
+        ...(number ? { number } : {}),
+        ...(schemaVersion
+          ? {
+              schemaVersion,
+              primaryObjectiveId,
+              objectiveStatement,
+              supportingObjectiveIds,
+              publicationId,
+              curriculumRevision,
+              difficulty,
+              difficultyPolicyVersion,
+              promptVersion,
+              taskKind,
+              ability,
+              responseFormat,
+              sourceRefs,
+              answerSpec,
+              assistanceStatus,
+            }
+          : {}),
+      };
     }),
   };
 }

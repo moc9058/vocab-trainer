@@ -1,7 +1,13 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { resolve, relative } from "node:path";
 import { mathHash, mathText } from "./math-core.js";
-import type { MathBook, MathSource } from "./math-types.js";
+import { validateCurriculum, canonical } from "./math-curriculum.js";
+import type {
+  Curriculum,
+  SubjectProfile,
+  MathBook,
+  MathSource,
+} from "./math-types.js";
 export interface MathManifest {
   books: {
     id: string;
@@ -9,13 +15,17 @@ export interface MathManifest {
     subjectTitle: string;
     title: string;
     language: string;
+    curriculumFile?: string;
+    subjectProfile?: SubjectProfile;
     chapters: { id: string; file: string }[];
   }[];
 }
 export async function prepareMathBooks(
   root: string,
   manifest: MathManifest,
-): Promise<{ book: MathBook; sources: MathSource[] }[]> {
+): Promise<
+  { book: MathBook; sources: MathSource[]; curriculum?: Curriculum }[]
+> {
   const seen = new Set<string>();
   const output = [];
   if (!manifest || !Array.isArray(manifest.books))
@@ -31,6 +41,14 @@ export async function prepareMathBooks(
     )
       throw new Error("Invalid book metadata");
     seen.add(entry.id);
+    const directories = new Set(
+      entry.chapters.map((c) => resolve(root, c.file, "..", "..")),
+    );
+    for (const directory of directories) {
+      const names = await readdir(directory);
+      if (names.includes("MD") && names.includes("md"))
+        throw new Error("Both MD and md exist in one book");
+    }
     const ids = new Set<string>();
     const numbers = new Set<number>();
     const sources: MathSource[] = [];
@@ -77,8 +95,57 @@ export async function prepareMathBooks(
       language: entry.language,
       chapters,
     };
+    let curriculum: Curriculum | undefined;
+    if (entry.curriculumFile) {
+      const path = resolve(root, entry.curriculumFile);
+      if (relative(root, path).startsWith(".."))
+        throw new Error("Invalid curriculum path");
+      curriculum = validateCurriculum(
+        JSON.parse(await readFile(path, "utf8")),
+        entry.id,
+        sources,
+        entry.chapters,
+        entry.language,
+      );
+      if (
+        !entry.subjectProfile ||
+        !["mathematics", "physics", "economics"].includes(
+          entry.subjectProfile.subject,
+        ) ||
+        !mathText(entry.subjectProfile.version, 100) ||
+        !Array.isArray(entry.subjectProfile.constraints) ||
+        entry.subjectProfile.constraints.some((c) => !mathText(c, 4000))
+      )
+        throw new Error("Invalid subject profile");
+    } else if (entry.subjectProfile)
+      throw new Error("Curriculum required for subject profile");
+    const revision = mathHash(
+      canonical({
+        ...metadata,
+        ...(curriculum
+          ? {
+              curriculumRevision: curriculum.revision,
+              subjectProfile: entry.subjectProfile,
+            }
+          : {}),
+      }),
+    );
+    const book: MathBook = {
+      ...metadata,
+      revision,
+      ...(curriculum
+        ? {
+            curriculumRevision: curriculum.revision,
+            subjectProfile: entry.subjectProfile!,
+            publicationId: revision,
+          }
+        : {}),
+    };
+    if (Buffer.byteLength(canonical(book)) > 800000)
+      throw new Error("Publication exceeds 800KB");
     output.push({
-      book: { ...metadata, revision: mathHash(JSON.stringify(metadata)) },
+      book,
+      ...(curriculum ? { curriculum } : {}),
       sources,
     });
   }

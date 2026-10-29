@@ -18,6 +18,9 @@ import {
   mathQuestionHistory,
   recentMathPrompts,
   duplicateMathPrompt,
+  frozenCurriculum,
+  ensureAssessmentPlans,
+  mathObjectiveProgress,
 } from "../math-store.js";
 import { generateMathQuestions, gradeMathAnswer } from "../math-llm.js";
 import type {
@@ -25,7 +28,12 @@ import type {
   MathTest,
   MathKind,
   MathDifficulty,
+  TaskKind,
 } from "../math-types.js";
+import { db } from "../firestore.js";
+import { loadMathCurriculum } from "../math-publication.js";
+import { mathPromptVersion } from "../math-prompt-loader.js";
+import { resolveModel } from "../llm.js";
 const id = { type: "string", pattern: "^[a-zA-Z0-9_-]{1,100}$" };
 const operation = { operationId: id, version: { type: "integer", minimum: 0 } };
 const bodySchema = (
@@ -44,7 +52,16 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
           ? error.message
           : "MATH_INVALID_REQUEST",
       });
-    req.log.error({ err }, "Math operation failed");
+    req.log.error(
+      {
+        errorType: error.name,
+        code: /^(MATH_|INVALID_)/.test(error.message)
+          ? error.message
+          : "MATH_MODEL_OR_STORAGE_FAILED",
+        statusCode: error.statusCode,
+      },
+      "Math operation failed",
+    );
     return reply
       .code(error.message === "MATH_SCOPE_TOO_LARGE" ? 413 : 503)
       .send({
@@ -74,6 +91,15 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
         createdAt: t.createdAt,
         count: t.count,
         mode: t.mode ?? "fixed",
+        assessmentVersion: t.assessmentVersion ?? 1,
+        ...(t.assessmentVersion === 2
+          ? {
+              publicationId: t.publicationId,
+              curriculumRevision: t.curriculumRevision,
+              taskKinds: t.taskKinds,
+            }
+          : {}),
+        difficulty: t.difficulty,
         answered:
           t.stats?.answered ??
           Object.values(t.answers).filter((a) => a.grade).length,
@@ -92,7 +118,9 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
       chapterIds: string[];
       count?: number;
       mode?: "fixed" | "continuous";
-      kinds: MathKind[];
+      kinds?: MathKind[];
+      assessmentVersion?: 2;
+      taskKinds?: TaskKind[];
       difficulty: MathDifficulty;
     };
   }>(
@@ -118,13 +146,29 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
             uniqueItems: true,
             items: { enum: ["definition", "calculation", "proof"] },
           },
+          assessmentVersion: { const: 2 },
+          taskKinds: {
+            type: "array",
+            minItems: 1,
+            maxItems: 4,
+            uniqueItems: true,
+            items: { enum: ["prove", "determine", "compute", "derive"] },
+          },
           difficulty: { enum: ["easy", "standard", "hard"] },
         },
-        ["operationId", "bookId", "chapterIds", "kinds", "difficulty"],
+        ["operationId", "bookId", "chapterIds", "difficulty"],
       ),
     },
     async (req) => {
       const input = req.body;
+      const existing = await testsCollection().doc(input.operationId).get();
+      if (existing.exists) {
+        if (existing.get("requestHash") !== mathHash(JSON.stringify(input)))
+          throw new MathError(409, "MATH_OPERATION_CONFLICT");
+        return publicMathTest(await getMathTest(input.operationId));
+      }
+      if ((input.assessmentVersion === 2 || input.taskKinds) && input.kinds)
+        throw new MathError(400, "MATH_INVALID_REQUEST");
       const mode =
         input.mode ?? (input.count === undefined ? "continuous" : "fixed");
       if (
@@ -135,6 +179,20 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
       const bookDoc = await booksCollection().doc(input.bookId).get();
       if (!bookDoc.exists) throw new MathError(404, "MATH_BOOK_NOT_FOUND");
       const book = bookDoc.data() as MathBook;
+      const v2 = !!book.publicationId;
+      if (!v2 && (input.assessmentVersion === 2 || input.taskKinds))
+        throw new MathError(422, "MATH_CURRICULUM_UNAVAILABLE");
+      if (v2) await loadMathCurriculum(db, book);
+      const kindMap: Record<MathKind, TaskKind> = {
+        definition: "determine",
+        calculation: "compute",
+        proof: "prove",
+      };
+      const taskKinds =
+        input.taskKinds ??
+        (input.kinds
+          ? input.kinds.map((k) => kindMap[k])
+          : (["prove", "determine", "compute", "derive"] as TaskKind[]));
       let sourceVersionIds: string[];
       try {
         sourceVersionIds = sourceScope(book, input.chapterIds);
@@ -164,7 +222,26 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
               stats: { answered: 0, correct: 0, partial: 0, incorrect: 0 },
             }
           : {}),
-        kinds: input.kinds,
+        ...(v2
+          ? {
+              assessmentVersion: 2 as const,
+              assistanceReporting:
+                input.assessmentVersion === 2 || !!input.taskKinds,
+              taskKinds,
+              publicationId: book.publicationId!,
+              curriculumRevision: book.curriculumRevision!,
+              difficultyPolicyVersion: "assessment-v1",
+              promptVersion: mathPromptVersion,
+              modelSelections: Object.fromEntries(
+                await Promise.all(
+                  ["math/generate", "math/validate", "math/grade"].map(
+                    async (route) => [route, await resolveModel("full", route)],
+                  ),
+                ),
+              ),
+            }
+          : {}),
+        kinds: input.kinds ?? ["definition", "calculation", "proof"],
         difficulty: input.difficulty,
         status: "created",
         questions: [],
@@ -178,6 +255,53 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
         await createMathTest(test, mathHash(JSON.stringify(input))),
       );
     },
+  );
+  app.get<{ Params: { id: string } }>(
+    "/tests/:id/objectives",
+    { schema: { params: paramSchema } },
+    async (req) => mathObjectiveProgress(await getMathTest(req.params.id)),
+  );
+  app.post<{
+    Params: { id: string };
+    Body: {
+      operationId: string;
+      version: number;
+      questionId: string;
+      kind: "solution_view";
+    };
+  }>(
+    "/tests/:id/assistance",
+    {
+      schema: {
+        ...bodySchema({
+          ...operation,
+          questionId: id,
+          kind: { const: "solution_view" },
+        }),
+        params: paramSchema,
+      },
+    },
+    async (req) =>
+      publicMathTest(
+        await runMathOperation(
+          req.params.id,
+          req.body.version,
+          req.body.operationId,
+          {
+            action: "assistance",
+            questionId: req.body.questionId,
+            kind: req.body.kind,
+          },
+          (test) => {
+            const q = test.questions.find((q) => q.id === req.body.questionId);
+            if (!q || test.status !== "active")
+              throw new MathError(409, "MATH_INVALID_STATE");
+            q.assistanceStatus = "viewed";
+            return test;
+          },
+          async (test) => test,
+        ),
+      ),
   );
   app.post<{
     Params: { id: string };
@@ -206,10 +330,28 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
             return test;
           },
           async (test) => {
+            const curriculum =
+              test.assessmentVersion === 2
+                ? await frozenCurriculum(test)
+                : undefined;
+            if (curriculum) await ensureAssessmentPlans(test);
             test.questions = await generateMathQuestions(
               test,
               await mathSources(test.sourceVersionIds),
+              curriculum
+                ? {
+                    curriculum,
+                    recent: [],
+                    isDuplicate: async () => false,
+                    replan: async (excluded) => {
+                      await ensureAssessmentPlans(test, excluded);
+                    },
+                  }
+                : undefined,
             );
+            delete test.pendingPlans;
+            test.phase = "question";
+            test.currentQuestionId = test.questions[0]?.id;
             test.status = "active";
             return test;
           },
@@ -255,7 +397,11 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
             );
             if (test.status !== "active" || current?.id !== questionId)
               throw new MathError(409, "MATH_INVALID_STATE");
-            test.answers[questionId] = { text, operationId };
+            test.answers[questionId] = {
+              ...test.answers[questionId],
+              text,
+              operationId,
+            };
             test.draft = text;
             return test;
           },
@@ -334,7 +480,7 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
               test.phase === "question"
             ) {
               const q = test.questions[0];
-              if (q && draft)
+              if (q)
                 test.answers[q.id] = {
                   text: draft,
                   operationId,
@@ -385,10 +531,13 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
     "/tests/:id/next",
     {
       schema: {
-        ...bodySchema({
-          ...operation,
-          draft: { type: "string", maxLength: 5000 },
-        }, ["operationId", "version"]),
+        ...bodySchema(
+          {
+            ...operation,
+            draft: { type: "string", maxLength: 5000 },
+          },
+          ["operationId", "version"],
+        ),
         params: paramSchema,
       },
     },
@@ -401,7 +550,7 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
           req.params.id,
           version,
           operationId,
-          { action: "next" },
+          { action: "next", draft },
           (test) => {
             if (test.mode !== "continuous") {
               if (
@@ -418,8 +567,8 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
                 test.answers[q.id] = {
                   ...test.answers[q.id],
                   text: draft,
-                    operationId,
-                    submitted: false,
+                  operationId,
+                  submitted: false,
                 };
                 test.draft = "";
                 test.phase = "feedback";
@@ -435,7 +584,7 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
               const q = test.questions[0];
               if (!q || q.id !== test.currentQuestionId)
                 throw new MathError(409, "MATH_INVALID_STATE");
-              if (!test.answers[q.id])
+              if (!test.answers[q.id]?.grade)
                 test.answers[q.id] = {
                   text: draft,
                   operationId,
@@ -463,14 +612,28 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
             }
             const sources = await mathSources(test.sourceVersionIds);
             const recent = await recentMathPrompts(test.id);
+            const curriculum =
+              test.assessmentVersion === 2
+                ? await frozenCurriculum(test)
+                : undefined;
+            if (curriculum) await ensureAssessmentPlans(test);
             const [q] = await generateMathQuestions(
               { ...test, count: 1 },
               sources,
               {
                 recent,
+                ...(curriculum
+                  ? {
+                      curriculum,
+                      replan: async (excluded: string[]) => {
+                        await ensureAssessmentPlans(test, excluded);
+                      },
+                    }
+                  : {}),
                 isDuplicate: (prompt) => duplicateMathPrompt(test.id, prompt),
               },
             );
+            delete test.pendingPlans;
             const number = (test.generatedCount ?? 0) + 1;
             q.id = `q${number}`;
             q.number = number;

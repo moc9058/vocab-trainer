@@ -9,41 +9,51 @@
       "chapters": [
         {
           "id": "linear-algebra-ch1",
-          "file": "Linear Algebra/MD/1. Vector Spaces.md"
+          "file": "Linear Algebra/md/1. Vector Spaces.md"
         },
         {
           "id": "linear-algebra-ch2",
-          "file": "Linear Algebra/MD/2. Finite-Dimensional Vector Spaces.md"
+          "file": "Linear Algebra/md/2. Finite-Dimensional Vector Spaces.md"
         },
         {
           "id": "linear-algebra-ch3",
-          "file": "Linear Algebra/MD/3. Linear Maps.md"
+          "file": "Linear Algebra/md/3. Linear Maps.md"
         },
         {
           "id": "linear-algebra-ch4",
-          "file": "Linear Algebra/MD/4. Polynomials.md"
+          "file": "Linear Algebra/md/4. Polynomials.md"
         },
         {
           "id": "linear-algebra-ch5",
-          "file": "Linear Algebra/MD/5. Eigenvalues and Eigenvectors.md"
+          "file": "Linear Algebra/md/5. Eigenvalues and Eigenvectors.md"
         },
         {
           "id": "linear-algebra-ch6",
-          "file": "Linear Algebra/MD/6. Inner Product Spaces.md"
+          "file": "Linear Algebra/md/6. Inner Product Spaces.md"
         },
         {
           "id": "linear-algebra-ch7",
-          "file": "Linear Algebra/MD/7. Operators on Inner Product Spaces.md"
+          "file": "Linear Algebra/md/7. Operators on Inner Product Spaces.md"
         },
         {
           "id": "linear-algebra-ch8",
-          "file": "Linear Algebra/MD/8. Operators on Complex Vector Spaces.md"
+          "file": "Linear Algebra/md/8. Operators on Complex Vector Spaces.md"
         },
         {
           "id": "linear-algebra-ch9",
-          "file": "Linear Algebra/MD/9. Multilinear Algebra and Determinants.md"
+          "file": "Linear Algebra/md/9. Multilinear Algebra and Determinants.md"
         }
-      ]
+      ],
+      "curriculumFile": "Linear Algebra/curriculum/learning-objectives.json",
+      "subjectProfile": {
+        "version": "mathematics-v1",
+        "subject": "mathematics",
+        "constraints": [
+          "Use F = R or C as specified in the source.",
+          "Preserve finite-dimensional hypotheses.",
+          "Inner products are linear in the first variable."
+        ]
+      }
     }
   ]
 }

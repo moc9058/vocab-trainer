@@ -1,5 +1,17 @@
 const translations = {
   en: {
+    mathFrozenMissing: "The saved textbook or curriculum revision is unavailable. Restore the published revision before continuing.",
+    mathPromptUnavailable: "This session’s prompt version is unavailable on this server.",
+
+    math_prove: "Proof",
+    math_determine: "Justified determination",
+    math_compute: "Computation",
+    math_derive: "Derivation",
+    mathObjective: "Learning objective",
+    mathObjectiveRecords: "Practice records by objective",
+    mathSharedEvidence: "These are shared workspace practice records, not a certification of individual mastery.",
+    mathNoFeasibleObjective: "No published objective supports this request. Check the textbook publication, scope and task settings.",
+
     safariServerUpdate: "The server needs an update to support this extension.",
     safariAutomatic: "After the first confirmation, analyze when I press Analyze on a page.",
     safariAnalyze: "Analyze",
@@ -788,6 +800,18 @@ const translations = {
     grade: "How did you do?",
   },
   ja: {
+    mathFrozenMissing: "保存された教材・学習目標の版を読み込めません。公開版の復元が必要です。",
+    mathPromptUnavailable: "このテストで使用するプロンプトの版をサーバーで読み込めません。",
+
+    math_prove: "証明",
+    math_determine: "理由付き判定",
+    math_compute: "計算",
+    math_derive: "導出",
+    mathObjective: "学習目標",
+    mathObjectiveRecords: "目標別の練習記録",
+    mathSharedEvidence: "共有ワークスペースの練習記録です。個人の習熟認定ではありません。",
+    mathNoFeasibleObjective: "この条件に対応する公開済み目標がありません。教材の公開状態・範囲・出題形式を確認してください。",
+
     safariServerUpdate: "この拡張に対応するサーバー更新が必要です。",
     safariAutomatic: "初回確認後は、ページ上の「分析」で解析を開始する。",
     safariAnalyze: "分析",
@@ -1573,6 +1597,18 @@ const translations = {
     grade: "できましたか？",
   },
   ko: {
+    mathFrozenMissing: "저장된 교재 또는 학습 목표 버전을 불러올 수 없습니다. 공개 버전을 복원해야 합니다.",
+    mathPromptUnavailable: "이 시험의 프롬프트 버전을 서버에서 사용할 수 없습니다.",
+
+    math_prove: "증명",
+    math_determine: "근거 있는 판정",
+    math_compute: "계산",
+    math_derive: "유도",
+    mathObjective: "학습 목표",
+    mathObjectiveRecords: "목표별 연습 기록",
+    mathSharedEvidence: "공유 작업 공간의 연습 기록이며 개인의 숙련도 인증이 아닙니다.",
+    mathNoFeasibleObjective: "이 요청에 맞는 공개 목표가 없습니다. 교재 공개 상태, 범위 및 과제 설정을 확인하세요.",
+
     safariServerUpdate: "이 확장 프로그램을 지원하려면 서버를 업데이트해야 합니다.",
     safariAutomatic: "처음 확인한 뒤에는 페이지에서 분석을 누르면 바로 분석합니다.",
     safariAnalyze: "분석",

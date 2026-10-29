@@ -5,7 +5,7 @@ import { useI18n } from "../i18n/context";
 import type { MathPublicTest, MathHistoryPage } from "./types";
 import { MathDialog, QuestionReview, useMathError } from "./ui";
 import MathText from "./MathText";
-type Action = "generate" | "next" | "answer" | "state";
+type Action = "generate" | "next" | "answer" | "state" | "assistance";
 export default function MathTestPage() {
   const { id } = useParams();
   const location = useLocation();
@@ -105,7 +105,8 @@ export default function MathTestPage() {
         },
       );
       if (live.current) {
-        install(next);
+        if (action === "assistance") setTest(next);
+        else install(next);
         pending.current = null;
         if (action === "next" || action === "answer" || action === "generate")
           requestAnimationFrame(() => {
@@ -234,7 +235,9 @@ export default function MathTestPage() {
         </Link>
         <div>
           <div>
-            <p className="math-eyebrow">{t("mathTitle")}</p>
+            <p className="math-eyebrow">
+              {test?.book.subjectTitle ?? t("mathTitle")}
+            </p>
             <h1>{test?.book.title ?? t("mathTitle")}</h1>
           </div>
           {test && (
@@ -335,7 +338,7 @@ export default function MathTestPage() {
                       {t("mathQuestion")}{" "}
                       {current.number ?? test.questions.indexOf(current) + 1}
                     </span>
-                    <span>{t(`math_${current.kind}`)}</span>
+                    <span>{t(`math_${current.taskKind ?? current.kind}`)}</span>
                     <span>
                       {
                         test.book.chapters.find(
@@ -344,6 +347,23 @@ export default function MathTestPage() {
                       }
                     </span>
                   </div>
+                  {current.primaryObjectiveId && (
+                    <div className="math-help">
+                      <p>
+                        {t("mathObjective")}:{" "}
+                        {current.objectiveStatement ??
+                          current.primaryObjectiveId}
+                      </p>
+                      <p>
+                        {t("mathDifficulty")}:{" "}
+                        {t(`math_${current.difficulty ?? test.difficulty}`)}
+                      </p>
+                      <p>
+                        {t("mathSource")}:{" "}
+                        {current.sourceRefs?.map((r) => r.heading).join(" · ")}
+                      </p>
+                    </div>
+                  )}
                   {feedback ? (
                     <QuestionReview
                       item={{
@@ -373,7 +393,20 @@ export default function MathTestPage() {
                       </label>
                       <p className="math-help">{t("mathDraftHelp")}</p>
                       {current.solution && (
-                        <details className="math-example-solution">
+                        <details
+                          key={current.id}
+                          className="math-example-solution"
+                          onToggle={(e) => {
+                            if (
+                              e.currentTarget.open &&
+                              current.assistanceStatus !== "viewed"
+                            )
+                              act("assistance", {
+                                questionId: current.id,
+                                kind: "solution_view",
+                              });
+                          }}
+                        >
                           <summary>{t("mathSolution")}</summary>
                           <MathText text={current.solution} />
                           <p className="math-source">
@@ -483,6 +516,7 @@ export default function MathTestPage() {
               </button>
             </div>
           )}
+          {test.assessmentVersion === 2 && <ObjectiveRecords test={test} />}
           <p className="math-ai-note">{t("mathAiNotice")}</p>
         </>
       )}
@@ -509,7 +543,9 @@ export default function MathTestPage() {
                     <summary>
                       <span>
                         {t("mathQuestion")} {item.number} ·{" "}
-                        {t(`math_${item.question.kind}`)}
+                        {t(
+                          `math_${item.question.taskKind ?? item.question.kind}`,
+                        )}
                       </span>
                       <span
                         className={
@@ -554,5 +590,42 @@ export default function MathTestPage() {
         </MathDialog>
       )}
     </>
+  );
+}
+
+function ObjectiveRecords({ test }: { test: MathPublicTest }) {
+  const { t } = useI18n();
+  const [rows, setRows] = useState<import("./types").ObjectiveProgress[]>([]);
+  const [error, setError] = useState("");
+  const describe = useMathError();
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetchJson<import("./types").ObjectiveProgress[]>(
+      `/api/math/tests/${test.id}/objectives`,
+      controller.signal,
+    )
+      .then((data) => {
+        setRows(data);
+        setError("");
+      })
+      .catch((e) => {
+        if (!controller.signal.aborted) setError(describe(e));
+      });
+    return () => controller.abort();
+  }, [test.id, test.version]);
+  return (
+    <details className="math-settings">
+      <summary>{t("mathObjectiveRecords")}</summary>
+      <p className="math-help">{t("mathSharedEvidence")}</p>
+      {error && <p role="alert">{error}</p>}
+      {rows.map((row) => (
+        <p key={row.objectiveId}>
+          {row.objectiveId}: {t("mathAnsweredCount")} {row.submitted} ·{" "}
+          {t("math_correct")} {row.correct} · {t("math_partial")} {row.partial}{" "}
+          · {t("math_incorrect")} {row.incorrect} · {t("mathUnsubmitted")}{" "}
+          {row.skipped}
+        </p>
+      ))}
+    </details>
   );
 }

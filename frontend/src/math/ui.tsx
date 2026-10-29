@@ -11,6 +11,12 @@ export function useMathError() {
       if (err.message.includes("MATH_SCOPE_TOO_LARGE"))
         return t("mathScopeLarge");
       if (err.message.includes("MATH_BUSY")) return t("mathBusy");
+      if (/MATH_(CURRICULUM|SOURCE|QUESTION)_MISSING/.test(err.message))
+        return t("mathFrozenMissing");
+      if (err.message.includes("MATH_PROMPT_VERSION_UNAVAILABLE"))
+        return t("mathPromptUnavailable");
+      if (err.status === 422) return t("mathNoFeasibleObjective");
+      if (err.status === 413) return t("mathScopeLarge");
       if (err.status === 409) return t("mathConflict");
     }
     return t("mathFailure");
@@ -75,9 +81,15 @@ export function QuestionReview({
         <span>
           {t("mathQuestion")} {item.number}
         </span>
-        <span>{t(`math_${q.kind}`)}</span>
+        <span>{t(`math_${q.taskKind ?? q.kind}`)}</span>
         <span>{book.chapters.find((c) => c.id === q.chapterId)?.title}</span>
       </div>
+      {q.primaryObjectiveId && (
+        <p className="math-help">
+          {t("mathObjective")}: {q.objectiveStatement ?? q.primaryObjectiveId} ·{" "}
+          {t(`math_${q.difficulty ?? "standard"}`)}
+        </p>
+      )}
       <MathText text={q.prompt} />
       <section>
         <h3>

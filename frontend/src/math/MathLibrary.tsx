@@ -5,7 +5,7 @@ import { useI18n } from "../i18n/context";
 import type {
   MathBook,
   MathDifficulty,
-  MathKind,
+  TaskKind,
   MathPublicTest,
   MathSource,
 } from "./types";
@@ -29,10 +29,11 @@ export default function MathLibrary() {
   const [bookId, setBookId] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [difficulty, setDifficulty] = useState<MathDifficulty>("standard");
-  const [kinds, setKinds] = useState<MathKind[]>([
-    "definition",
-    "calculation",
-    "proof",
+  const [kinds, setKinds] = useState<TaskKind[]>([
+    "prove",
+    "determine",
+    "compute",
+    "derive",
   ]);
   const [preview, setPreview] = useState<{
     title: string;
@@ -82,7 +83,21 @@ export default function MathLibrary() {
         bookId: book.id,
         chapterIds: selected,
         difficulty,
-        kinds,
+        ...(book.publicationId
+          ? { assessmentVersion: 2, taskKinds: kinds }
+          : {
+              kinds: [
+                ...new Set(
+                  kinds.map((k) =>
+                    k === "prove"
+                      ? "proof"
+                      : k === "determine"
+                        ? "definition"
+                        : "calculation",
+                  ),
+                ),
+              ],
+            }),
       };
       const key = JSON.stringify(body);
       if (createOperation.current?.body !== key)
@@ -303,24 +318,24 @@ export default function MathLibrary() {
                       </label>
                       <fieldset disabled={busy} className="math-kind-choices">
                         <legend>{t("mathKinds")}</legend>
-                        {(["definition", "calculation", "proof"] as const).map(
-                          (k) => (
-                            <label key={k}>
-                              <input
-                                type="checkbox"
-                                checked={kinds.includes(k)}
-                                onChange={(e) =>
-                                  setKinds(
-                                    e.target.checked
-                                      ? [...kinds, k]
-                                      : kinds.filter((x) => x !== k),
-                                  )
-                                }
-                              />
-                              {t(`math_${k}`)}
-                            </label>
-                          ),
-                        )}
+                        {(
+                          ["prove", "determine", "compute", "derive"] as const
+                        ).map((k) => (
+                          <label key={k}>
+                            <input
+                              type="checkbox"
+                              checked={kinds.includes(k)}
+                              onChange={(e) =>
+                                setKinds(
+                                  e.target.checked
+                                    ? [...kinds, k]
+                                    : kinds.filter((x) => x !== k),
+                                )
+                              }
+                            />
+                            {t(`math_${k}`)}
+                          </label>
+                        ))}
                       </fieldset>
                     </div>
                   </details>

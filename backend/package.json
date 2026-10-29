@@ -9,7 +9,7 @@
     "dev:local": "tsx watch scripts/dev-local.ts",
     "seed:download": "tsx scripts/seed-download.ts",
     "seed:load": "tsx scripts/seed-load.ts",
-    "build": "tsc",
+    "build": "tsc && node -e \"require('node:fs').cpSync('src/math-prompts','dist/math-prompts',{recursive:true})\"",
     "test": "tsx --test src/*.test.ts",
     "test:mixed": "node --experimental-test-module-mocks --import tsx --test scripts/tests/mixed-*.test.ts",
     "start": "node dist/index.js",
@@ -20,9 +20,13 @@
     "test:mobile:emulator": "node --import tsx --test scripts/tests/emulator/mobile-auth.test.ts",
     "ios:smoke": "node --experimental-test-module-mocks --import tsx scripts/ios-smoke-server.ts",
     "math:sync": "tsx scripts/sync-math-textbooks.ts",
-    "test:math:emulator": "node --experimental-test-module-mocks --import tsx --test scripts/tests/emulator/math.test.ts",
+    "test:math:emulator": "node --experimental-test-module-mocks --import tsx --test scripts/tests/emulator/math*.test.ts",
     "test:math": "node --experimental-test-module-mocks --import tsx --test scripts/tests/math-*.test.ts",
-    "test:extension:emulator": "node --import tsx --test scripts/tests/emulator/extension-auth.test.ts"
+    "test:extension:emulator": "node --import tsx --test scripts/tests/emulator/extension-auth.test.ts",
+    "textbook:validate": "tsx scripts/validate-textbook-curriculum.ts",
+    "textbook:prepare": "tsx scripts/prepare-textbook-curriculum.ts",
+    "math:evaluate": "tsx scripts/evaluate-math-assessment.ts",
+    "math:evaluate:subjects": "tsx scripts/evaluate-math-subjects.ts"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",

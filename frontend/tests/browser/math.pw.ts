@@ -46,9 +46,18 @@ function initial() {
 }
 async function mockMath(
   page: Page,
-  options: { failNext?: boolean; legacy?: boolean } = {},
+  options: { failNext?: boolean; legacy?: boolean; v2?: boolean } = {},
 ) {
   let state: any = initial();
+  if (options.v2)
+    state = {
+      ...state,
+      assessmentVersion: 2,
+      taskKinds: ["prove", "determine", "compute", "derive"],
+      publicationId: "pub",
+      curriculumRevision: "rev",
+      book: { ...book, publicationId: "pub" },
+    };
   let nextRequests = 0;
   let failNext = options.failNext ?? false;
   let records: any[] = [];
@@ -66,7 +75,7 @@ async function mockMath(
     const req = route.request();
     const url = new URL(req.url());
     const path = url.pathname;
-    if (path.endsWith("/books")) return route.fulfill({ json: [book] });
+    if (path.endsWith("/books")) return route.fulfill({ json: [state.book] });
     if (path.endsWith("/chapters/v1"))
       return route.fulfill({
         json: {
@@ -80,11 +89,34 @@ async function mockMath(
       return route.fulfill({ json: [] });
     if (path.endsWith("/tests") && req.method() === "POST") {
       const body = req.postDataJSON();
+      if (options.v2) {
+        expect(body.assessmentVersion).toBe(2);
+        expect(body.taskKinds).toEqual([
+          "prove",
+          "determine",
+          "compute",
+          "derive",
+        ]);
+        expect(body.kinds).toBeUndefined();
+      }
       expect(body.mode).toBe("continuous");
       expect(body.count).toBeUndefined();
       expect(body.chapterIds).toEqual(["c1"]);
       return route.fulfill({ json: state });
     }
+    if (path.endsWith("/objectives"))
+      return route.fulfill({
+        json: [
+          {
+            objectiveId: "la-vector-space-axioms",
+            submitted: 0,
+            correct: 0,
+            partial: 0,
+            incorrect: 0,
+            skipped: 0,
+          },
+        ],
+      });
     if (path.endsWith("/questions"))
       return route.fulfill({
         json: {
@@ -125,7 +157,21 @@ async function mockMath(
           };
         }
         const number = state.generatedCount + 1;
-        const q = question(number);
+        const q = {
+          ...question(number),
+          ...(options.v2
+            ? {
+                schemaVersion: 2,
+                primaryObjectiveId: "la-vector-space-axioms",
+                objectiveStatement: "Determine vector-space conditions.",
+                taskKind: "determine",
+                difficulty: "standard",
+                sourceRefs: [{ chapterId: "c1", heading: "Vector space" }],
+                solution: "A vector space satisfies the axioms.",
+                assistanceStatus: "notReported",
+              }
+            : {}),
+        };
         state = {
           ...state,
           status: "active",
@@ -175,6 +221,16 @@ async function mockMath(
             answer,
             number: q.number,
           };
+      }
+      if (path.endsWith("/assistance")) {
+        state = {
+          ...state,
+          questions: state.questions.map((q: any) => ({
+            ...q,
+            assistanceStatus: "viewed",
+          })),
+          version: state.version + 2,
+        };
       }
       if (path.endsWith("/state")) {
         state = {
@@ -316,7 +372,9 @@ test("skip moves to the next question and keeps its draft in history", async ({
     .getByRole("button", { name: "Skip without answering", exact: false })
     .click();
   await expect(page.getByText("Question 2:", { exact: false })).toBeVisible();
-  await page.getByRole("button", { name: "Answer history", exact: false }).click();
+  await page
+    .getByRole("button", { name: "Answer history", exact: false })
+    .click();
   await page.locator(".math-review-item summary").first().click();
   await expect(page.getByText("Partial work", { exact: true })).toBeVisible();
   await expect(page.getByText("Not submitted", { exact: false })).toBeVisible();
@@ -394,4 +452,45 @@ test("mobile layout has no horizontal overflow and actions remain usable", async
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+});
+
+test("v2 displays objectives and four task settings; solution assistance keeps the unsaved answer", async ({
+  page,
+}) => {
+  await mockMath(page, { v2: true });
+  await page.goto("/math");
+  await page.getByText("Question settings", { exact: true }).click();
+  for (const label of [
+    "Proof",
+    "Justified determination",
+    "Computation",
+    "Derivation",
+  ])
+    await expect(
+      page.getByRole("checkbox", { name: label, exact: true }),
+    ).toBeChecked();
+  await page.getByRole("button", { name: "Select all", exact: true }).click();
+  await page.getByRole("button", { name: "Start learning" }).click();
+  await expect(
+    page.getByText("Learning objective: Determine vector-space conditions."),
+  ).toBeVisible();
+  await page
+    .getByLabel("Your answer", { exact: true })
+    .fill("My unsaved reasoning");
+  const assistance = page.waitForRequest((r) =>
+    r.url().endsWith("/assistance"),
+  );
+  await page.getByText("Example solution", { exact: true }).click();
+  expect((await assistance).postDataJSON().kind).toBe("solution_view");
+  await expect(page.getByLabel("Your answer", { exact: true })).toHaveValue(
+    "My unsaved reasoning",
+  );
+  await page
+    .getByText("Practice records by objective", { exact: true })
+    .click();
+  await expect(
+    page.getByText(
+      "These are shared workspace practice records, not a certification of individual mastery.",
+    ),
+  ).toBeVisible();
 });

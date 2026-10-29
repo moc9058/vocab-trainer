@@ -45,11 +45,9 @@ Read the relevant reference before changing its feature:
   `curriculum/` learning-objective catalog as part of that work without waiting for
   a separate user request. Preserve stable book/chapter/objective IDs, ground goals
   in exact source sections, and validate prerequisites and source hashes.
-- Read [the implementation plan](plan/textbook-assessment-implementation.md) for the
-  schema, publication contract and authoring prompt. Once implemented, use the
-  repository skill at `.agents/skills/textbook-curriculum/SKILL.md`; until it exists,
-  use the plan's authoring procedure and clearly report that runtime integration
-  remains pending. Do not describe a planned command or skill as installed.
+- Use the repository skill at `.agents/skills/textbook-curriculum/SKILL.md` when
+  handling textbook sources. See [the assessment guide](docs/textbook-assessment.md)
+  for schema v2, versioned publication, validation and the authoring workflow.
 - Use English for all textbook-assessment and curriculum-authoring prompts,
   including repair instructions. Source quotations retain their original language;
   problem/feedback output follows the book's declared language.
@@ -58,9 +56,8 @@ Read the relevant reference before changing its feature:
   definition recall the sole task. Exact symbolic answers are supported by design.
 - This automatic authoring convention applies when an agent is working on textbook
   changes; it is not a background file watcher. Curriculum authoring, textbook
-  publication and application deployment remain distinct operations. Current
-  `math:sync` does not yet publish curriculum; follow the plan to implement that
-  capability before claiming a catalog is used by the live LLM.
+  publication and application deployment remain distinct operations. `math:sync` publishes
+  validated source and curriculum together; deployment does not publish textbook data.
 
 ## Group A/B and quiz invariants
 
