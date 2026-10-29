@@ -389,6 +389,24 @@
   resize: vertical;
   margin-bottom: 10px;
 }
+.math-example-solution {
+  margin-top: 24px;
+  padding: 18px 20px;
+  border: 1px solid var(--math-border);
+  border-radius: 12px;
+  background: #101827;
+}
+.math-example-solution summary {
+  color: #bcd5fc;
+  font-weight: 650;
+  cursor: pointer;
+}
+.math-example-solution[open] summary {
+  margin-bottom: 18px;
+}
+.math-example-solution .math-source {
+  margin-top: 16px;
+}
 .math-tags {
   display: flex;
   align-items: center;

@@ -367,6 +367,15 @@ export default function MathTestPage() {
                         />
                       </label>
                       <p className="math-help">{t("mathDraftHelp")}</p>
+                      {current.solution && (
+                        <details className="math-example-solution">
+                          <summary>{t("mathSolution")}</summary>
+                          <MathText text={current.solution} />
+                          <p className="math-source">
+                            {t("mathSource")}: {current.heading}
+                          </p>
+                        </details>
+                      )}
                     </>
                   )}
                 </section>

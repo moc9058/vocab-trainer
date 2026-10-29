@@ -122,8 +122,10 @@ export function publicMathTest(test: MathTest): MathPublicTest {
   return {
     ...rest,
     questions: questions.map((q) => {
-      if (test.answers[q.id]?.grade || test.status === "completed") return q;
-      const { solution: _solution, rubric: _rubric, ...visible } = q;
+      // The learner may reveal the example solution at any time. Keep the
+      // grading rubric private until grading has completed.
+      const { rubric: _rubric, ...visible } = q;
+      if (test.answers[q.id]?.grade || test.status === "completed") return visible;
       return visible;
     }),
   };

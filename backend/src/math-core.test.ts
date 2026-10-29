@@ -93,13 +93,13 @@ test("question validation rejects invented sources, prerequisite-only scope, wro
     ),
   );
 });
-test("answers never expose solution or rubric before grading; completion exposes unanswered solutions", () => {
+test("example solutions are visible before grading while rubrics stay private", () => {
   const test = {
     ...fixture,
     questions: validateQuestions({ questions: [question] }, fixture, [source]),
     requestHash: "private",
   };
-  assert.equal(publicMathTest(test).questions[0].solution, undefined);
+  assert.equal(publicMathTest(test).questions[0].solution, question.solution);
   assert.equal("requestHash" in publicMathTest(test), false);
   test.answers.q1 = { operationId: "op", text: "answer" };
   assert.equal(publicMathTest(test).questions[0].rubric, undefined);
