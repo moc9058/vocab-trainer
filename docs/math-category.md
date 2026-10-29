@@ -3,6 +3,14 @@
 Implemented on 2026-10-29 after the reset below. The previous runtime and old
 verification reports are not reused.
 
+## Difficulty and learning-objective proposal
+
+See [the assessment design proposal](math-assessment-design.md) for three difficulty
+levels, worked anchor problems, and 63 authored learning objectives covering the
+nine Linear Algebra chapters. The catalog is a separate textbook-side artifact;
+current prompts, question selection, history and publication do not consume it.
+Runtime integration and versioned publication are proposed next steps.
+
 ## Textbooks and publication
 
 `textbook/manifest.json` assigns stable subject, book and chapter IDs, titles,

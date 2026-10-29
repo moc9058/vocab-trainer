@@ -8,6 +8,7 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 - [CLAUDE.md](CLAUDE.md): Claude Code entry point to the shared instructions.
 - [Development reference](docs/development-reference.md): detailed architecture and operations.
 - [Mathematics category](docs/math-category.md): textbook publishing and mathematics tests.
+- [Mathematics assessment proposal](docs/math-assessment-design.md): difficulty anchors and the authored linear algebra learning-objective catalog (not yet used at runtime).
 - [Live Group B quiz](docs/live-group-b-quiz.md): current A+B behavior and session migration.
 - [Source revisions](docs/source-revisions.md): correction proposals, grammar-to-word conversion and reading assistance.
 - [Cloud Run cost controls](docs/cloud-run-cost-controls.md): deployment settings and durable import infrastructure.

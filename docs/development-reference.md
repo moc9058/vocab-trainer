@@ -593,3 +593,12 @@ English/Japanese/Korean; problems and feedback follow textbook language.
 See [the mathematics guide](math-category.md) for commands, APIs, size limits,
 concurrency and failure behavior. The old runtime was removed on 2026-10-28;
 earlier mathematics verification reports remain historical.
+
+
+### Mathematics assessment proposal (2026-10-29)
+
+[Assessment design](math-assessment-design.md) specifies proposed difficulty rules,
+worked anchors and the 63-goal Linear Algebra catalog under
+`textbook/Linear Algebra/curriculum/`. These are authoring artifacts, not runtime
+configuration. `math:sync` still publishes only manifest chapter Markdown; no
+objective-based scheduling, grading or history migration is implemented.

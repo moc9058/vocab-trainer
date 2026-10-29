@@ -1,0 +1,1575 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": "2026-10-29.1",
+  "bookId": "linear-algebra",
+  "status": "authored-proposal",
+  "language": "ja",
+  "sourceLanguage": "en",
+  "scope": "Initial major-topic coverage; not a claim of exhaustive theorem or proof coverage. No runtime integration.",
+  "assumptions": [
+    "Use F = R or C unless an item explicitly justifies a broader field.",
+    "Chapters 7–9 goals default to finite-dimensional spaces; preserve each referenced theorem's hypotheses.",
+    "Inner products are linear in the first variable.",
+    "prerequisiteObjectiveIds lists immediate curricular dependencies, not all permitted facts.",
+    "Source references support the goal; they do not certify that every proof of a cited theorem is available."
+  ],
+  "sources": [
+    {
+      "chapterId": "linear-algebra-ch1",
+      "file": "Linear Algebra/MD/1. Vector Spaces.md",
+      "sha256": "cb559bd1a7d8fb9030b961ebfae2a0187a340221943f37828132ae8eea7eb6ca"
+    },
+    {
+      "chapterId": "linear-algebra-ch2",
+      "file": "Linear Algebra/MD/2. Finite-Dimensional Vector Spaces.md",
+      "sha256": "f036f8f6f83f37a5c952e1437f365bbc87109d91136c16dfbe77dcbf8701da30"
+    },
+    {
+      "chapterId": "linear-algebra-ch3",
+      "file": "Linear Algebra/MD/3. Linear Maps.md",
+      "sha256": "995e3d7ce96448d1c2d66def8a9ad26595794d1dfc15ce784e61411242e9d36b"
+    },
+    {
+      "chapterId": "linear-algebra-ch4",
+      "file": "Linear Algebra/MD/4. Polynomials.md",
+      "sha256": "187eae3e49e57eb59ae2284e7680ec68edb9d5e82811e54a77e63632c034c75b"
+    },
+    {
+      "chapterId": "linear-algebra-ch5",
+      "file": "Linear Algebra/MD/5. Eigenvalues and Eigenvectors.md",
+      "sha256": "feef975dee10d3af3ef01e2598bd8e84ec7946fac4a93e41eac0e17b242956fc"
+    },
+    {
+      "chapterId": "linear-algebra-ch6",
+      "file": "Linear Algebra/MD/6. Inner Product Spaces.md",
+      "sha256": "4d02df06160d58081b6ecc67c023ec83cf0ccbd146827b97675a196578bd9ddf"
+    },
+    {
+      "chapterId": "linear-algebra-ch7",
+      "file": "Linear Algebra/MD/7. Operators on Inner Product Spaces.md",
+      "sha256": "378bffc439a4f399e3b7a8d44a6fd7e1c27ddce0c30c8850c30898d8c98ee59d"
+    },
+    {
+      "chapterId": "linear-algebra-ch8",
+      "file": "Linear Algebra/MD/8. Operators on Complex Vector Spaces.md",
+      "sha256": "ad56bb8c2fb43ce0068c224b28ccea2309a1879aec9785ea423646a312e80aef"
+    },
+    {
+      "chapterId": "linear-algebra-ch9",
+      "file": "Linear Algebra/MD/9. Multilinear Algebra and Determinants.md",
+      "sha256": "0a4b894961e8722d16310d84997cb019f695b62196e5fbe6888271401e395a15"
+    }
+  ],
+  "objectives": [
+    {
+      "id": "la-vector-space-axioms",
+      "chapterId": "linear-algebra-ch1",
+      "statement": "ベクトル空間の公理を具体的な演算に照らして説明できる",
+      "ability": "概念",
+      "sourceRefs": [
+        {
+          "section": "1.1",
+          "heading": "1.1. Vector space"
+        }
+      ],
+      "prerequisiteObjectiveIds": [],
+      "successCriteria": "各公理が対象とする演算と量化を説明し、反例では破れる公理を特定する"
+    },
+    {
+      "id": "la-subspace-criteria",
+      "chapterId": "linear-algebra-ch1",
+      "statement": "部分空間判定の三条件の意味を説明できる",
+      "ability": "概念",
+      "sourceRefs": [
+        {
+          "section": "1.2",
+          "heading": "1.2. Subspace"
+        },
+        {
+          "section": "2.1",
+          "heading": "2.1. A subset $U\\subseteq V$ is a subspace of $V$ if and only if $U$ satisfies the following three conditions:"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-vector-space-axioms"
+      ],
+      "successCriteria": "零ベクトル・加法・スカラー倍の条件を区別する"
+    },
+    {
+      "id": "la-subspace-decision",
+      "chapterId": "linear-algebra-ch1",
+      "statement": "具体的な集合が部分空間か理由付きで判定できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.2",
+          "heading": "1.2. Subspace"
+        },
+        {
+          "section": "2.1",
+          "heading": "2.1. A subset $U\\subseteq V$ is a subspace of $V$ if and only if $U$ satisfies the following three conditions:"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-subspace-criteria"
+      ],
+      "successCriteria": "成立時は全条件を示し、不成立時は具体的な反例を一つ示す"
+    },
+    {
+      "id": "la-sum-smallest",
+      "chapterId": "linear-algebra-ch1",
+      "statement": "部分空間の和が各部分空間を含む最小の部分空間であることを示せる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "2.2",
+          "heading": "2.2. For subspaces $V_1,\\ldots,V_n$ of a vector space, their sum, defined below, is the smallest subspace that contains each $V_k$."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-subspace-decision"
+      ],
+      "successCriteria": "閉性、各部分空間の包含、任意の共通上位部分空間への包含を示す"
+    },
+    {
+      "id": "la-direct-sum",
+      "chapterId": "linear-algebra-ch1",
+      "statement": "分解の一意性または共通部分を使って直和を判定できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.3",
+          "heading": "1.3. Direct sum"
+        },
+        {
+          "section": "2.3",
+          "heading": "2.3. Let $V_1,\\ldots,V_m$ be subspaces of $V$. Then $V_1+\\ldots+V_m$ is a direct sum if and only if the only way to write $0$ as a sum $v_1+\\ldots+v_m$ is by taking all $v_k=0$."
+        },
+        {
+          "section": "2.4",
+          "heading": "2.4. Suppose $U,W$ are subspaces of $V$. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-sum-smallest"
+      ],
+      "successCriteria": "二つの部分空間では共通部分が零であることを確認し、和の分解と結び付ける"
+    },
+    {
+      "id": "la-direct-sum-conditions",
+      "chapterId": "linear-algebra-ch1",
+      "statement": "三つ以上の部分空間で二つずつの共通部分が零でも直和とは限らないことを説明できる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "1.3",
+          "heading": "1.3. Direct sum"
+        },
+        {
+          "section": "2.3",
+          "heading": "2.3. Let $V_1,\\ldots,V_m$ be subspaces of $V$. Then $V_1+\\ldots+V_m$ is a direct sum if and only if the only way to write $0$ as a sum $v_1+\\ldots+v_m$ is by taking all $v_k=0$."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-direct-sum"
+      ],
+      "successCriteria": "具体的な反例と零ベクトルの非自明な分解を示す"
+    },
+    {
+      "id": "la-span-membership",
+      "chapterId": "linear-algebra-ch2",
+      "statement": "ベクトルが与えられたリストの張る空間に属するか判定できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.1",
+          "heading": "1.1. Span"
+        },
+        {
+          "section": "2.1",
+          "heading": "2.1. The span of a list is the smallest subspace containing every vector in that list."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-subspace-decision"
+      ],
+      "successCriteria": "線形結合の係数を示すか存在しない理由を示す"
+    },
+    {
+      "id": "la-linear-independence",
+      "chapterId": "linear-algebra-ch2",
+      "statement": "線形独立性を判定し、従属の場合は非自明な関係を示せる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.4",
+          "heading": "1.4. Linear independence and dependence"
+        },
+        {
+          "section": "2.2",
+          "heading": "2.2. Suppose $v_1,\\ldots,v_m$ is a linearly dependent list in $V$. Then there exists $k\\in\\{1,\\ldots,m\\}$ such that"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-span-membership"
+      ],
+      "successCriteria": "零への線形結合の係数を検討し、ベクトル数だけで結論しない"
+    },
+    {
+      "id": "la-basis-coordinates",
+      "chapterId": "linear-algebra-ch2",
+      "statement": "基底を判定し、その基底に関する座標を求められる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.5",
+          "heading": "1.5. Basis"
+        },
+        {
+          "section": "2.4",
+          "heading": "2.4. A list $v_1,\\ldots,v_n$ of vectors in $V$ is a basis if and only if every $v \\in V$ can be written uniquely in the form"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-linear-independence"
+      ],
+      "successCriteria": "独立性と生成性を確認し、座標の存在と一意性を説明する"
+    },
+    {
+      "id": "la-basis-extension",
+      "chapterId": "linear-algebra-ch2",
+      "statement": "生成リストの縮約または独立リストの拡張により基底を構成できる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "2.5",
+          "heading": "2.5. Every finite-dimensional vector space has a basis."
+        },
+        {
+          "section": "2.6",
+          "heading": "2.6. Every linearly independent set can be extended to a basis of a finite-dimensional vector space."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-basis-coordinates"
+      ],
+      "successCriteria": "操作後の生成性・独立性を説明し、有限次元性を確認する"
+    },
+    {
+      "id": "la-dimension-sum",
+      "chapterId": "linear-algebra-ch2",
+      "statement": "部分空間の和と共通部分の次元を関係付けて求められる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "2.8",
+          "heading": "2.8. The length of any basis of a finite-dimensional vector space $V$ is always the same."
+        },
+        {
+          "section": "2.9",
+          "heading": "2.9. If $V_1$ and $V_2$ are subspaces of a finite-dimensional vector space, then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-basis-coordinates",
+        "la-direct-sum"
+      ],
+      "successCriteria": "共通部分を数え落とさず次元公式の各項を対応付ける"
+    },
+    {
+      "id": "la-complement-construction",
+      "chapterId": "linear-algebra-ch2",
+      "statement": "有限次元空間で部分空間の補空間を構成できる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "2.6",
+          "heading": "2.6. Every linearly independent set can be extended to a basis of a finite-dimensional vector space."
+        },
+        {
+          "section": "2.7",
+          "heading": "2.7. For every subspace $U$ of a finite-dimensional $V$, there is a subspace $W$ such that $U \\oplus W=V$."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-basis-extension",
+        "la-direct-sum"
+      ],
+      "successCriteria": "基底を延長して和が全空間かつ共通部分が零であることを示す"
+    },
+    {
+      "id": "la-linear-map",
+      "chapterId": "linear-algebra-ch3",
+      "statement": "写像の線形性を判定し、基底上の値から写像を定められる",
+      "ability": "概念",
+      "sourceRefs": [
+        {
+          "section": "1.1",
+          "heading": "1.1. Linear maps and their algebraic operations"
+        },
+        {
+          "section": "2.1.1",
+          "heading": "2.1.1. Suppose $v_1,\\ldots,v_n$ is a basis of $V$ and $w_1,\\ldots,w_n \\in W$. Then there exists a unique linear map $T:V \\rightarrow W$ such that"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-basis-coordinates"
+      ],
+      "successCriteria": "加法・スカラー倍の保存と基底からの線形拡張の一意性を説明する"
+    },
+    {
+      "id": "la-kernel-range",
+      "chapterId": "linear-algebra-ch3",
+      "statement": "線形写像の核と像の基底を求められる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.2",
+          "heading": "1.2. Kernel, range, nullity, and rank"
+        },
+        {
+          "section": "2.1.2",
+          "heading": "2.1.2. $T\\in\\mathcal{L}(V,W)$ is injective (one-to-one) if and only if $\\ker(T)=\\{0\\}$."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-linear-map",
+        "la-basis-coordinates"
+      ],
+      "successCriteria": "核の方程式と像の生成元を求め、独立な基底に整理する"
+    },
+    {
+      "id": "la-rank-nullity",
+      "chapterId": "linear-algebra-ch3",
+      "statement": "階数・退化次数定理を用いて単射・全射の可能性を判断できる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "2.1.3",
+          "heading": "2.1.3. Suppose $V$ is finite-dimensional and $T \\in \\mathcal{L}(V,W)$. Then"
+        },
+        {
+          "section": "2.1.4",
+          "heading": "2.1.4. Let $V,W$ be finite-dimensional vector spaces."
+        },
+        {
+          "section": "2.1.10",
+          "heading": "2.1.10. Let $V,W$ be finite-dimensional vector spaces with the same dimension, and let $T\\in\\mathcal L(V,W)$. Then either injectivity or surjectivity implies invertibility."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-kernel-range"
+      ],
+      "successCriteria": "定義域・値域の次元を区別し、有限次元仮定の下で結論する"
+    },
+    {
+      "id": "la-matrix-composition",
+      "chapterId": "linear-algebra-ch3",
+      "statement": "指定された基底で写像と合成写像を行列表示できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.3",
+          "heading": "1.3. Let $V,W$ be finite-dimensional vector spaces with bases $\\mathscr{B}=\\{v_1,\\ldots,v_n\\}, \\mathscr{C}=\\{w_1,\\ldots,w_m\\}$, respectively. The matrix representation of a linear map $T\\in \\mathcal{L}(V,W)$ is defined as follows:"
+        },
+        {
+          "section": "2.1.6",
+          "heading": "2.1.6. Suppose $S \\in \\mathcal{L}(V,W)$ and $T \\in \\mathcal{L}(U,V)$ for finite-dimensional vector spaces $U,V,W$. Then $\\mathcal{M}(ST)=\\mathcal{M}(S)\\mathcal{M}(T)$."
+        },
+        {
+          "section": "2.1.13",
+          "heading": "2.1.13. Let $V,W$ be finite-dimensional vector spaces. Suppose $T \\in \\mathcal{L}(U,V), S \\in \\mathcal{L}(V,W)$, where $\\mathscr{A}=\\{u_1,\\ldots,u_p\\},\\mathscr{B}=\\{v_1,\\ldots,v_n\\},\\mathscr{C}=\\{w_1,\\ldots,w_m\\}$ are bases of $U,V,W$, respectively. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-linear-map"
+      ],
+      "successCriteria": "列を基底ベクトルの像の座標として作り、合成の順序を守る"
+    },
+    {
+      "id": "la-change-basis",
+      "chapterId": "linear-algebra-ch3",
+      "statement": "基底変換による行列表現の変化を計算できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "2.1.15",
+          "heading": "2.1.15. Let $V, W$ be finite-dimensional vector spaces. Let $\\mathscr{A,A'}$ be bases of $V$ and $\\mathscr{B,B'}$ be bases of $W$. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-matrix-composition"
+      ],
+      "successCriteria": "座標変換の向きを明記し、作用素では相似変換を用いる"
+    },
+    {
+      "id": "la-quotient-map",
+      "chapterId": "linear-algebra-ch3",
+      "statement": "商空間の元と誘導写像の定義が代表元によらないことを示せる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "1.6",
+          "heading": "<b>1.6</b>. <span style=\"color: red\">(Quotient Space)</span> Suppose $U$ is a subspace of $V$.  Then $V/U=\\{v+U:v\\in V\\}$ is the set of all translates of $U$."
+        },
+        {
+          "section": "1.7",
+          "heading": "1.7. <span style=\"color: red\">(Quotient Map)</span> Suppose $U$ is a subspace of $V$. Then the linear map"
+        },
+        {
+          "section": "1.8",
+          "heading": "1.8. Suppose $T \\in \\mathcal{L}(V,W)$. Define"
+        },
+        {
+          "section": "2.2.3",
+          "heading": "2.2.3. Suppose $U$ is a subspace of $V$ and $v,w \\in V$. Then"
+        },
+        {
+          "section": "2.2.5",
+          "heading": "2.2.5. Suppose $T \\in \\mathcal{L}(V,W)$. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-linear-map",
+        "la-kernel-range"
+      ],
+      "successCriteria": "同じ剰余類の代表元の差を使って像の一致を示す"
+    },
+    {
+      "id": "la-quotient-dimension",
+      "chapterId": "linear-algebra-ch3",
+      "statement": "商空間の次元と第一同型定理を具体的な写像に適用できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "2.2.4",
+          "heading": "2.2.4. Suppose $V$ is a finite-dimensional vector space and $U$ is a subspace of $V$. Then"
+        },
+        {
+          "section": "2.2.5",
+          "heading": "2.2.5. Suppose $T \\in \\mathcal{L}(V,W)$. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-quotient-map",
+        "la-rank-nullity"
+      ],
+      "successCriteria": "商の対象を核と対応付け、同型先を像として特定する"
+    },
+    {
+      "id": "la-dual-basis",
+      "chapterId": "linear-algebra-ch3",
+      "statement": "指定された基底の双対基底と双対写像の行列を求められる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.9",
+          "heading": "1.9. <span style=\"color: red\">(Linear Functional)</span> Let $V$ be a vector space. Then the dual space $V'=\\mathcal{L}(V,F)$ is the vector space of all linear functionals."
+        },
+        {
+          "section": "1.10",
+          "heading": "1.10. <span style=\"color: red\">(Dual Basis)</span> Suppose $\\{v_1,\\ldots,v_n\\}$ is a basis of $V$. Then $\\{\\varphi_1,\\ldots,\\varphi_n\\}$ is called the dual basis."
+        },
+        {
+          "section": "1.11",
+          "heading": "1.11. <span style=\"color: red\">(Dual Map)</span> Suppose $T\\in\\mathcal{L}(V,W)$. Then the dual map $T'\\in\\mathcal{L}(W',V')$ is defined for each $\\varphi \\in W',$"
+        },
+        {
+          "section": "2.3.1",
+          "heading": "2.3.1. Let $v_1,\\ldots,v_n$ be a basis of $V$ and $\\varphi_1,\\ldots,\\varphi_n$ be the dual basis. Then for each $v\\in V$,"
+        },
+        {
+          "section": "2.3.6",
+          "heading": "2.3.6. Let $V,W$ be finite-dimensional vector spaces with dual spaces $V',W'$, and let $T\\in\\mathcal L(V,W)$. Let $\\mathscr{B}=\\{v_1,\\ldots,v_n\\},\\mathscr{B'}=\\{\\varphi_1,\\ldots,\\varphi_n\\}$ and $\\mathscr{C}=\\{w_1,\\ldots,w_m\\},\\mathscr{C'}=\\{\\psi_1,\\ldots,\\psi_m\\}$ be bases and dual bases of $V,W$, respectively. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-matrix-composition"
+      ],
+      "successCriteria": "双対基底の評価条件を確認し、転置と共役転置を混同しない"
+    },
+    {
+      "id": "la-annihilator",
+      "chapterId": "linear-algebra-ch3",
+      "statement": "零化空間を核・像および双対写像と関連付けられる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "1.12",
+          "heading": "1.12. <span style=\"color: red\">(Annihilator)</span> Suppose $U \\subseteq V$. The annihilator of $U$, denoted by $U^0_{V}$ is defined by"
+        },
+        {
+          "section": "2.3.3",
+          "heading": "2.3.3. Suppose $U$ is a subspace of $V$. Then $U_V^0$ is a subspace of $V'$. If $V$ is finite-dimensional, $\\dim(U_V^0)+\\dim(U)=\\dim(V)$."
+        },
+        {
+          "section": "2.3.4",
+          "heading": "2.3.4. Let $T\\in\\mathcal{L}(V,W)$. Then $\\ker(T')=(\\operatorname{range}T)^0_W$."
+        },
+        {
+          "section": "2.3.5",
+          "heading": "2.3.5. Let $V,W$ be finite-dimensional vector spaces and let $T\\in \\mathcal{L}(V,W)$. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-dual-basis",
+        "la-rank-nullity"
+      ],
+      "successCriteria": "どの空間の双対かを明記し、次元または包含で等式を示す"
+    },
+    {
+      "id": "la-polynomial-division",
+      "chapterId": "linear-algebra-ch4",
+      "statement": "多項式を除法定理に従って商と剰余に分解できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "2.1.1",
+          "heading": "2.1.1. Suppose $m$ is a positive integer and $p\\in\\mathcal{P}_m(F)$ . Suppose $\\lambda\\in F$. Then $p(\\lambda)=0$ if and only if there exists a polynomial $q\\in\\mathcal{P}_{m-1}(F)$ such that"
+        },
+        {
+          "section": "2.1.3",
+          "heading": "2.1.3. Suppose that $p,s\\in\\mathcal{P}(F)$, with $s \\neq 0$. Then there exist unique polynomials $q,r\\in\\mathcal{P}(F)$ such that"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-span-membership"
+      ],
+      "successCriteria": "恒等式と剰余の次数条件を確認し、零剰余を扱う"
+    },
+    {
+      "id": "la-root-bound",
+      "chapterId": "linear-algebra-ch4",
+      "statement": "根の個数の上限を使って多項式の同一性を示せる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "1.1",
+          "heading": "1.1. A number $\\lambda\\in F$ is called a <b>zero</b> or <b>root</b> of a polynomial $p \\in \\mathcal{P}(F)$ if $p(\\lambda)=0$."
+        },
+        {
+          "section": "2.1.1",
+          "heading": "2.1.1. Suppose $m$ is a positive integer and $p\\in\\mathcal{P}_m(F)$ . Suppose $\\lambda\\in F$. Then $p(\\lambda)=0$ if and only if there exists a polynomial $q\\in\\mathcal{P}_{m-1}(F)$ such that"
+        },
+        {
+          "section": "2.1.2",
+          "heading": "2.1.2. Suppose $m$ is a positive integer and $0\\ne p\\in\\mathcal{P}_{m}(F)$. Then $p$ has at most $m$ distinct zeros in $F$."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-polynomial-division"
+      ],
+      "successCriteria": "差の多項式の次数と相異なる根の数を比較する"
+    },
+    {
+      "id": "la-complex-factorization",
+      "chapterId": "linear-algebra-ch4",
+      "statement": "複素数上の因数分解と実係数多項式の共役根を説明できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "2.1.4",
+          "heading": "2.1.4. Every nonconstant polynomial with complex coefficients has a zero in $\\mathbb{C}$."
+        },
+        {
+          "section": "2.1.5",
+          "heading": "2.1.5. If $p\\in\\mathcal{P}(\\mathbb{C})$ is a nonconstant polynomial, then $p$ has a unique factorization (except for the order of the factors) of the form"
+        },
+        {
+          "section": "2.1.6",
+          "heading": "2.1.6. Suppose $p\\in\\mathcal{P}(\\mathbb{C})$ is a polynomial with real coefficients and $p(\\lambda)=0$. Then $\\overline{\\lambda}$ is also a zero of $p$."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-polynomial-division"
+      ],
+      "successCriteria": "重複度を数え、実数上と複素数上の分解可能性を区別する"
+    },
+    {
+      "id": "la-eigenpairs",
+      "chapterId": "linear-algebra-ch5",
+      "statement": "固有値・固有空間を定義と核から求められる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.1.3",
+          "heading": "1.1.3. Suppose $T \\in \\mathcal{L}(V)$. A number $\\lambda \\in F$ is called an <b>eigenvalue</b> of $T$ if there exists $v\\in V$ such that $v \\neq 0$ and $Tv=\\lambda v$."
+        },
+        {
+          "section": "1.1.4",
+          "heading": "1.1.4. Suppose $T \\in \\mathcal{L}(V)$ and $\\lambda\\in F$ is an eigenvalue of $T$. A vector $v\\in V$ is called an <b>eigenvector</b> of $T$ corresponding to $\\lambda$ if $v \\neq 0$ and $Tv=\\lambda v$."
+        },
+        {
+          "section": "1.4.2",
+          "heading": "1.4.2. Suppose $T\\in\\mathcal{L}(V)$ and $\\lambda\\in F$. The eigenspace of $T$ corresponding to $\\lambda$ is the subspace $E(\\lambda,T)$ of $V$ defined by"
+        },
+        {
+          "section": "2.1.1",
+          "heading": "2.1.1. Suppose $V$ is finite-dimensional, $T\\in \\mathcal{L}(V)$, and $\\lambda \\in F$. Then the following statements are equivalent."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-kernel-range"
+      ],
+      "successCriteria": "非零固有ベクトルと零を含む固有空間を区別する"
+    },
+    {
+      "id": "la-invariant-subspace",
+      "chapterId": "linear-algebra-ch5",
+      "statement": "部分空間の不変性と商作用素の定義可能性を確認できる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "1.1.2",
+          "heading": "1.1.2. Suppose $T \\in \\mathcal{L}(V)$. A subspace $U$ of $V$ is called <b>invariant</b> under $T$ if $Tu \\in U$ for every $u \\in U$."
+        },
+        {
+          "section": "1.1.6",
+          "heading": "1.1.6. Suppose $V$ is finite-dimensional, $T\\in\\mathcal{L}(V)$, and $U$ is a subspace of $V$ invariant under $T$. Then the <b>quotient operator</b> $T/U\\in\\mathcal{L}(V/U)$ is defined by"
+        },
+        {
+          "section": "2.1.3",
+          "heading": "2.1.3. Suppose $T\\in\\mathcal{L}(V)$ and $p\\in\\mathcal{P}(F)$. Then $\\ker(p(T))$ and $\\operatorname{range}(p(T))$ are invariant under $T$."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-quotient-map",
+        "la-eigenpairs"
+      ],
+      "successCriteria": "像が部分空間内に残ることと代表元によらないことを示す"
+    },
+    {
+      "id": "la-minimal-polynomial",
+      "chapterId": "linear-algebra-ch5",
+      "statement": "低次元の作用素の最小多項式を求め、その最小性を説明できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.1.5",
+          "heading": "1.1.5. Suppose $T \\in \\mathcal{L}(V)$ and $p\\in \\mathcal{P}(F)$ is a polynomial given by"
+        },
+        {
+          "section": "1.2.1",
+          "heading": "1.2.1. Suppose $V$ is finite-dimensional and $T\\in\\mathcal{L}(V)$. Then the minimal polynomial of $T$ is the unique monic polynomial $p\\in\\mathcal{P}(F)$ of smallest degree such that $p(T)=0$."
+        },
+        {
+          "section": "2.2.2",
+          "heading": "2.2.2. Suppose $V$ is a finite-dimensional vector space and $T\\in\\mathcal{L}(V)$. Then there is a unique monic polynomial $p\\in\\mathcal{P}(F)$ of smallest degree such that $p(T)=0$. Furthermore, $\\deg(p) \\leq \\dim(V)$."
+        },
+        {
+          "section": "2.2.4",
+          "heading": "2.2.4. Suppose $V$ is a finite-dimensional vector space, $T\\in\\mathcal{L}(V)$, and $q\\in\\mathcal{P}(F)$. Then $q(T)=0$ if and only if $q$ is a polynomial multiple of the minimal polynomial of $T$."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-polynomial-division",
+        "la-matrix-composition"
+      ],
+      "successCriteria": "代入して零になるだけでなく、より低次が不可能な理由を示す"
+    },
+    {
+      "id": "la-triangularization",
+      "chapterId": "linear-algebra-ch5",
+      "statement": "上三角表示と不変部分空間列・最小多項式の分解を結び付けられる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "2.3.1",
+          "heading": "2.3.1. Suppose $V$ is a finite-dimensional vector space with a basis $\\mathscr{B}=\\{v_1,\\ldots,v_n\\}$ and $T\\in\\mathcal{L}(V)$. Then"
+        },
+        {
+          "section": "2.3.2",
+          "heading": "2.3.2. Suppose $V$ is a finite-dimensional vector space with a basis with respect to which $T$ has an upper triangular matrix with diagonal entries $\\lambda_1,\\ldots,\\lambda_n$, then"
+        },
+        {
+          "section": "2.3.3",
+          "heading": "2.3.3. Suppose $V$ is finite-dimensional and $T\\in\\mathcal{L}(V)$. Then $T$ has an upper triangular matrix with respect to some basis of $V$ if and only if the minimal polynomial of $T$ equals $(z-\\lambda_1)\\cdots(z-\\lambda_m)$ for some $\\lambda_1,\\ldots,\\lambda_m\\in F$, possibly repeated."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-invariant-subspace",
+        "la-minimal-polynomial",
+        "la-complex-factorization"
+      ],
+      "successCriteria": "体上での一次因子への分解可能性と対角成分の意味を説明する"
+    },
+    {
+      "id": "la-diagonalizability",
+      "chapterId": "linear-algebra-ch5",
+      "statement": "固有空間または最小多項式を使って対角化可能性を判定できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "2.4.1",
+          "heading": "2.4.1. Suppose $T\\in\\mathcal{L}(V)$ and $\\lambda_1,\\ldots,\\lambda_m$ are distinct eigenvalues of $T$. Then"
+        },
+        {
+          "section": "2.4.2",
+          "heading": "2.4.2. Suppose $V$ is a finite-dimensional vector space and $T\\in\\mathcal{L}(V)$. Let $\\lambda_1,\\ldots,\\lambda_m$ denote the distinct eigenvalues of $T$. Then the following statements are equivalent."
+        },
+        {
+          "section": "2.4.3",
+          "heading": "2.4.3. Suppose $V$ is a finite-dimensional vector space and $T\\in\\mathcal{L}(V)$. Then $T$ is diagonalizable if and only if the minimal polynomial of $T$ equals $(z-\\lambda_1)\\cdots(z-\\lambda_m)$ for distinct $\\lambda_1,\\ldots,\\lambda_m\\in F$."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-eigenpairs",
+        "la-minimal-polynomial",
+        "la-dimension-sum"
+      ],
+      "successCriteria": "固有空間の次元和または相異なる一次因子による判定を正しく使う"
+    },
+    {
+      "id": "la-commuting-operators",
+      "chapterId": "linear-algebra-ch5",
+      "statement": "可換作用素の共通固有ベクトルや同時対角化の条件を判断できる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "2.5.2",
+          "heading": "2.5.2. Suppose $S,T\\in\\mathcal{L}(V)$ commute and $\\lambda\\in F$. Then $E(\\lambda,S)$ is invariant under $T$."
+        },
+        {
+          "section": "2.5.3",
+          "heading": "2.5.3. Two diagonalizable operators on the same finite-dimensional vector space have diagonal matrices with respect to the same basis if and only if the two operators commute."
+        },
+        {
+          "section": "2.5.4",
+          "heading": "2.5.4. Every pair of commuting operators on a finite-dimensional nonzero complex vector space has a common eigenvector."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-diagonalizability",
+        "la-invariant-subspace"
+      ],
+      "successCriteria": "可換性だけで同時対角化を断定せず、対角化可能性や体の条件を確認する"
+    },
+    {
+      "id": "la-gershgorin",
+      "chapterId": "linear-algebra-ch5",
+      "statement": "Gershgorin円板を求め、固有値の位置を制限できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.4.3",
+          "heading": "1.4.3. <span style=\"color: red\">(Gershgorin disks)</span> Suppose $T\\in\\mathcal{L}(V)$, $\\mathscr{B}=\\{v_1,\\ldots,v_n\\}$ is a basis of $V$, and $A=[T]_{\\mathscr{B}}$. A <b>Gershgorin disk</b> of $T$ with respect to the basis $\\mathscr{B}$ is a set of the form"
+        },
+        {
+          "section": "2.4.5",
+          "heading": "2.4.5. Suppose $V$ is a finite-dimensional vector space, $T\\in\\mathcal{L}(V)$ and $\\mathscr{B}$ is a basis of $V$. Then each eigenvalue of $T$ is contained in at least one Gershgorin disk of $T$ with respect to the basis $\\mathscr{B}$."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-eigenpairs"
+      ],
+      "successCriteria": "各行の中心と半径を求め、包含による推定と厳密値を区別する"
+    },
+    {
+      "id": "la-inner-product",
+      "chapterId": "linear-algebra-ch6",
+      "statement": "内積の条件と複素数上の共役の役割を説明できる",
+      "ability": "概念",
+      "sourceRefs": [
+        {
+          "section": "1.1.1",
+          "heading": "1.1.1. <span style=\"color: red\">(Inner product)</span> An inner product on $V$ is a function that takes each ordered pair $(u,v)$ of elements of $V$ to a number $\\langle u,v\\rangle\\in F$ and has the following properties."
+        },
+        {
+          "section": "1.1.2",
+          "heading": "1.1.2. <span style=\"color: red\">(Norm)</span> For $v\\in V$, the norm of $v$ is defined by"
+        },
+        {
+          "section": "1.1.3",
+          "heading": "1.1.3. Two vectors $v,w \\in V$ are called <b>orthogonal</b> if $\\langle v,w \\rangle=0$."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-vector-space-axioms"
+      ],
+      "successCriteria": "教材の第一変数線形の規約を守り、正定値性を確認する"
+    },
+    {
+      "id": "la-inner-product-inequalities",
+      "chapterId": "linear-algebra-ch6",
+      "statement": "Cauchy–Schwarzの不等式と等号条件を適用できる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "2.1.1",
+          "heading": "2.1.1. (Cauchy-Schwarz inequality) Suppose $u,v\\in V$. Then"
+        },
+        {
+          "section": "2.1.2",
+          "heading": "2.1.2. <span style=\"color: red\">(Triangle inequality)</span> Suppose $u,v\\in V$. Then"
+        },
+        {
+          "section": "2.1.3",
+          "heading": "2.1.3. <span style=\"color: red\">(Parallelogram equality)</span> Suppose $u,v\\in V$. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-inner-product"
+      ],
+      "successCriteria": "ノルムと内積を対応付け、零ベクトルを含む等号条件を扱う"
+    },
+    {
+      "id": "la-gram-schmidt",
+      "chapterId": "linear-algebra-ch6",
+      "statement": "Gram–Schmidt法で同じ部分空間を張る正規直交基底を作れる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "2.2.3",
+          "heading": "2.2.3. Suppose $e_1,\\ldots,e_n$ is an orthonormal basis of $V$ and $u,v\\in V$. Then"
+        },
+        {
+          "section": "2.2.4",
+          "heading": "2.2.4. <span style=\"color: red\">(Gram-Schmidt Procedure)</span> Suppose $v_1,\\ldots,v_m$ is a list of linearly independent vectors in $V$. Let $f_1=v_1$. For $k=2,\\ldots,m$, define"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-inner-product",
+        "la-basis-coordinates"
+      ],
+      "successCriteria": "射影成分を引き、正規化と各段階の生成空間を確認する"
+    },
+    {
+      "id": "la-orthogonal-projection",
+      "chapterId": "linear-algebra-ch6",
+      "statement": "直交補空間と直交射影を求められる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.3.1",
+          "heading": "1.3.1. If $U$ is a subset of $V$, then the orthogonal complement of $U$ is denoted by $U^{\\perp}$, defined as follows."
+        },
+        {
+          "section": "1.3.2",
+          "heading": "1.3.2. Let $V$ be an inner product space and let $U$ be a finite-dimensional subspace of $V$. Then the orthogonal projection $P_U\\in\\mathcal{L}(V)$ is defined as follows."
+        },
+        {
+          "section": "2.3.1",
+          "heading": "2.3.1. Suppose $V$ is an inner product space and let $U$ be a finite-dimensional subspace of $V$. Then"
+        },
+        {
+          "section": "2.3.3",
+          "heading": "2.3.3. Suppose $U$ is a finite-dimensional subspace. Then $P_U$ has following properties."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-gram-schmidt",
+        "la-direct-sum"
+      ],
+      "successCriteria": "分解の直交性と射影先を確認し、有限次元部分空間の条件を守る"
+    },
+    {
+      "id": "la-best-approximation",
+      "chapterId": "linear-algebra-ch6",
+      "statement": "直交射影が一意な最良近似であることを説明できる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "2.3.5",
+          "heading": "2.3.5. Suppose $U$ is a finite-dimensional subspace of $V$, $v\\in V$ and $u \\in U$. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-orthogonal-projection"
+      ],
+      "successCriteria": "誤差の直交分解と等号条件から最小性・一意性を示す"
+    },
+    {
+      "id": "la-riesz-representation",
+      "chapterId": "linear-algebra-ch6",
+      "statement": "有限次元内積空間の線形汎関数を内積で表せる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "2.2.6",
+          "heading": "2.2.6. <span style=\"color: red\">(Riesz representation theorem)</span> Suppose $V$ is finite-dimensional inner product space and $\\varphi$ is a linear functional on $V$. Then there exists a unique vector $v\\in V$ such that"
+        },
+        {
+          "section": "2.3.4",
+          "heading": "2.3.4. Suppose $V$ is finite-dimensional. For each $v\\in V$, define $\\varphi_v\\in V'$ by"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-dual-basis",
+        "la-gram-schmidt"
+      ],
+      "successCriteria": "代表ベクトルを求め、複素係数の共役と一意性を確認する"
+    },
+    {
+      "id": "la-pseudoinverse",
+      "chapterId": "linear-algebra-ch6",
+      "statement": "擬似逆を用いて最小ノルム最小二乗解を求められる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.3.3",
+          "heading": "1.3.3. <span style=\"color: red\">(Pseudoinverse)</span> Suppose $V,W$ are finite-dimensional inner product spaces and $T\\in\\mathcal{L}(V,W)$. The <b>pseudoinverse</b> $T^{\\dagger}\\in\\mathcal{L}(W,V)$ of $T$ is a linear map defined by"
+        },
+        {
+          "section": "2.3.6",
+          "heading": "2.3.6. Let $T\\in \\mathcal{L}(V,W)$ between finite-dimensional inner product spaces. Then"
+        },
+        {
+          "section": "2.3.7",
+          "heading": "2.3.7. Let $T\\in\\mathcal{L}(V,W)$ between finite-dimensional inner product spaces and $w\\in W$. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-kernel-range",
+        "la-best-approximation"
+      ],
+      "successCriteria": "残差最小と解のノルム最小を区別し、核による解の自由度を説明する"
+    },
+    {
+      "id": "la-adjoint",
+      "chapterId": "linear-algebra-ch7",
+      "statement": "随伴写像を求め、その核・像との関係を説明できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.1.1",
+          "heading": "1.1.1. <span style=\"color: red\">(Adjoint operator)</span> Suppose $T\\in\\mathcal{L}(V,W)$. The <b>adjoint</b> of $T$ is the function $T^*:W\\rightarrow V$ such that"
+        },
+        {
+          "section": "1.1.2",
+          "heading": "1.1.2. <span style=\"color: red\">(Conjugate transpose)</span> Let $A\\in F^{m\\times n}$. Then the <b>conjugate transpose</b> $A^*$ of $A$ is defined as follows."
+        },
+        {
+          "section": "2.1.2",
+          "heading": "2.1.2. Suppose $V,W$ are finite-dimensional inner product spaces and let $T\\in\\mathcal{L}(V,W)$. Then"
+        },
+        {
+          "section": "2.1.3",
+          "heading": "2.1.3. Suppose $V,W$ are finite-dimensional inner product spaces and $T\\in\\mathcal{L}(V,W)$. Suppose $\\beta=\\{e_1,\\ldots,e_n\\},\\gamma=\\{f_1,\\ldots,f_m\\}$ are orthonormal bases of $V$ and $W$. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-riesz-representation",
+        "la-matrix-composition"
+      ],
+      "successCriteria": "正規直交基底の条件を確認して共役転置を使う"
+    },
+    {
+      "id": "la-operator-classes",
+      "chapterId": "linear-algebra-ch7",
+      "statement": "自己随伴・正規・歪随伴作用素を区別できる",
+      "ability": "概念",
+      "sourceRefs": [
+        {
+          "section": "1.1.3",
+          "heading": "1.1.3. <span style=\"color: red\">(Self-adjoint) </span>An operator $T\\in\\mathcal{L}(V)$ is called <b>self-adjoint</b> if $T=T^*$."
+        },
+        {
+          "section": "1.1.4",
+          "heading": "1.1.4. <span style=\"color: red\">(Normal)</span> An operator $T\\in\\mathcal{L}(V)$ is called <b>normal</b> if $TT^*=T^*T$."
+        },
+        {
+          "section": "1.1.5",
+          "heading": "1.1.5. <span style=\"color: red\">(Skew-adjoint)</span> An operator $T\\in\\mathcal{L}(V)$ is called skew-adjoint if $T^*=-T$."
+        },
+        {
+          "section": "2.1.6",
+          "heading": "2.1.6. Suppose $T\\in\\mathcal{L}(V)$. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-adjoint"
+      ],
+      "successCriteria": "随伴との等式で判定し、実数と複素数の条件を区別する"
+    },
+    {
+      "id": "la-spectral-theorem",
+      "chapterId": "linear-algebra-ch7",
+      "statement": "実・複素スペクトル定理を使い正規直交固有基底の存在を判断できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "2.2.3",
+          "heading": "2.2.3. <span style=\"color: red\">(Real spectral theorem)</span> Suppose $F=\\mathbb{R}$ and $T\\in\\mathcal{L}(V)$. Then the following statements are equivalent."
+        },
+        {
+          "section": "2.2.4",
+          "heading": "2.2.4. <span style=\"color: red\">(Complex spectral theorem)</span> Suppose $F=\\mathbb{C}$ and $T\\in\\mathcal{L}(V)$. Then the following statements are equivalent."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-operator-classes",
+        "la-diagonalizability"
+      ],
+      "successCriteria": "実では自己随伴、複素では正規という仮定を確認する"
+    },
+    {
+      "id": "la-positive-square-root",
+      "chapterId": "linear-algebra-ch7",
+      "statement": "正値性を判定し、正値作用素の正の平方根を求められる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.3.1",
+          "heading": "1.3.1. <span style=\"color: red\">(Positive operator)</span> An operator $T\\in\\mathcal{L}(V)$ is called positive if it is self-adjoint and"
+        },
+        {
+          "section": "1.3.2",
+          "heading": "1.3.2. An operator $R$ is a square root of an operator $T$ if $R^2=T$. For a positive operator, $\\sqrt{T}$ denotes the unique positive square root of $T$."
+        },
+        {
+          "section": "2.3.1",
+          "heading": "2.3.1. Let $V$ be a finite-dimensional inner product space and let $T \\in \\mathcal{L}(V)$. Then the following statements are equivalent."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-spectral-theorem"
+      ],
+      "successCriteria": "非負固有値と自己随伴性を確認し、平方根の正値性を示す"
+    },
+    {
+      "id": "la-isometry-unitary",
+      "chapterId": "linear-algebra-ch7",
+      "statement": "等長写像とユニタリ作用素の条件を使い分けられる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "1.4.1",
+          "heading": "1.4.1. <span style=\"color: red\">(Isometry)</span> A linear map $S \\in \\mathcal{L}(V,W)$ is called an isometry if"
+        },
+        {
+          "section": "1.4.2",
+          "heading": "1.4.2. <span style=\"color: red\">(Unitary)</span> An operator $S\\in\\mathcal{L}(V)$ is called unitary if $S$ is an invertible isometry."
+        },
+        {
+          "section": "2.4.1",
+          "heading": "2.4.1. Suppose $V,W$ are finite-dimensional inner product spaces and let $S \\in \\mathcal{L}(V,W)$. Then the following statements are equivalent."
+        },
+        {
+          "section": "2.4.2",
+          "heading": "2.4.2. Suppose $V$ is a finite-dimensional inner product space with an orthonormal basis $\\beta=\\{e_1,\\ldots,e_n\\}$ and let $S\\in\\mathcal{L}(V)$. Then the following statements are equivalent."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-adjoint",
+        "la-gram-schmidt"
+      ],
+      "successCriteria": "定義域・値域の違いを確認し、片側の等式から逆を無条件に推論しない"
+    },
+    {
+      "id": "la-qr-cholesky",
+      "chapterId": "linear-algebra-ch7",
+      "statement": "条件を満たす行列にQR分解またはCholesky分解を適用できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "2.4.5",
+          "heading": "2.4.5. <span style=\"color: red\">(QR factorization)</span> Suppose $A\\in F^{n\\times n}$ has linearly independent columns. Then there exist unique matrices $Q\\text{(unitary)},R\\text{(upper triangular with positive diagonal entries)} \\in F^{n \\times n}$ such that"
+        },
+        {
+          "section": "2.4.6",
+          "heading": "2.4.6. <span style=\"color: red\">(Cholesky factorization)</span> Suppose $B$ is a positive definite matrix. Then there exists a unique upper-triangular matrix $R$ with only positive numbers on its diagonal such that"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-gram-schmidt",
+        "la-positive-square-root"
+      ],
+      "successCriteria": "独立な列または正定値性を確認し、積と対角成分の正値性を検算する"
+    },
+    {
+      "id": "la-svd",
+      "chapterId": "linear-algebra-ch7",
+      "statement": "特異値分解を構成し、階数・擬似逆を読み取れる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.5.1",
+          "heading": "1.5.1. <span style=\"color: red\">(Singular value)</span> Suppose $T \\in \\mathcal{L}(V,W)$. The singular values of $T$ are nonnegative square roots of the eigenvalues of $T^*T$, listed in decreasing order, each included as many times as the dimension of the corresponding eigenspace of $T^*T$."
+        },
+        {
+          "section": "2.5.1",
+          "heading": "2.5.1. Suppose $T \\in \\mathcal{L}(V,W)$. Then"
+        },
+        {
+          "section": "2.5.2",
+          "heading": "2.5.2. Suppose $T \\in \\mathcal{L}(V,W)$. Then"
+        },
+        {
+          "section": "2.5.3",
+          "heading": "2.5.3. <span style=\"color: red\">(Singular value decomposition)</span> Suppose $T \\in \\mathcal{L}(V,W)$ and the positive singular values of $T$ are $s_1,\\ldots,s_m$, counted with multiplicity ($m=\\operatorname{rank}T$). Then there exist orthonormal lists $e_1,\\ldots,e_m$ in $V$ and $f_1,\\ldots,f_m$ in $W$ where"
+        },
+        {
+          "section": "2.5.4",
+          "heading": "2.5.4. <span style=\"color: red\">(SVD for matrix)</span> Suppose $A \\in F^{p \\times n}$ of rank $m \\geq 1$. Then there exist $B \\in F^{p \\times m}$ with orthonormal columns, a diagonal matrix with positive entries $D \\in F^{m \\times m}$, and $C \\in F^{n \\times m}$ with orthonormal columns such that"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-positive-square-root",
+        "la-pseudoinverse"
+      ],
+      "successCriteria": "左右の正規直交ベクトルと正の特異値を対応付け、零特異値を扱う"
+    },
+    {
+      "id": "la-low-rank-approximation",
+      "chapterId": "linear-algebra-ch7",
+      "statement": "特異値から作用素ノルムと低階数近似の誤差を求められる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.6.1",
+          "heading": "1.6.1. <span style=\"color: red\">(Norm of a linear map)</span> Suppose $T \\in \\mathcal{L}(V,W)$. Then the norm of $T$, denoted by $\\|T\\|$ is defined by"
+        },
+        {
+          "section": "2.6.1",
+          "heading": "2.6.1. Suppose $T \\in \\mathcal{L}(V,W)$. Let $s_1$ be the largest singular value of $T$. Then"
+        },
+        {
+          "section": "2.6.3",
+          "heading": "2.6.3. Suppose $T \\in \\mathcal{L}(V,W)$ and $s_1 \\geq \\cdots \\geq s_m$ are the positive singular values of $T$ with corresponding orthonormal vectors $e_1,\\ldots,e_m$ in $V$ and $f_1,\\ldots,f_m$ in $W$. Suppose $1 \\leq k < m$. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-svd"
+      ],
+      "successCriteria": "最大特異値と打切り後の次の特異値をそれぞれ適切に使う"
+    },
+    {
+      "id": "la-polar-decomposition",
+      "chapterId": "linear-algebra-ch7",
+      "statement": "有限次元の作用素の極分解を構成できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "2.6.4",
+          "heading": "2.6.4. Suppose $T \\in \\mathcal{L}(V)$. Then there exists a unitary operator $S \\in \\mathcal{L}(V)$ such that"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-positive-square-root",
+        "la-isometry-unitary",
+        "la-svd"
+      ],
+      "successCriteria": "正の因子とユニタリ因子を確認し、積を検算する"
+    },
+    {
+      "id": "la-generalized-eigenvectors",
+      "chapterId": "linear-algebra-ch8",
+      "statement": "固有ベクトルと一般化固有ベクトルを区別できる",
+      "ability": "概念",
+      "sourceRefs": [
+        {
+          "section": "1.1.1",
+          "heading": "1.1.1. <span style=\"color: red\">(Generalized eigenvector)</span> Suppose $T\\in \\mathcal{L}(V)$ and <b><span style=\"color: blue\"><u>$\\lambda$</u></span></b><b><span style=\"color: blue\"><u> is an eigenvalue</u></span></b> of $T$. A vector $v \\in V$ is called a generalized eigenvector of $T$ corresponding to $\\lambda$ if $v \\neq 0$ and"
+        },
+        {
+          "section": "1.2.1",
+          "heading": "1.2.1. <span style=\"color: red\">(Generalized eigenspace)</span> Suppose $T \\in \\mathcal{L}(V), \\dim(V)=n$ and $\\lambda \\in F$. The generalized eigenspace corresponding to $\\lambda$ is defined by"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-eigenpairs"
+      ],
+      "successCriteria": "作用素の適切な冪で零になる条件と非零条件を確認する"
+    },
+    {
+      "id": "la-nilpotence",
+      "chapterId": "linear-algebra-ch8",
+      "statement": "冪零性と冪の核の安定化を調べられる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.1.2",
+          "heading": "1.1.2. <span style=\"color: red\">(Nilpotent)</span> An operator is called nilpotent if some power of it equals $0$."
+        },
+        {
+          "section": "2.1.1",
+          "heading": "2.1.1. Suppose $T\\in \\mathcal{L}(V),\\ \\dim(V)=n$. Then"
+        },
+        {
+          "section": "2.1.4",
+          "heading": "2.1.4. Suppose $T \\in \\mathcal{L}(V),\\ \\dim(V)=n$. Then the following statements hold."
+        },
+        {
+          "section": "2.1.5",
+          "heading": "2.1.5. Suppose $T \\in \\mathcal{L}(V),\\ \\dim(V)=n$. Then the following statements are equivalent."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-minimal-polynomial",
+        "la-kernel-range"
+      ],
+      "successCriteria": "冪を計算し、有限次元性と実・複素の条件を確認する"
+    },
+    {
+      "id": "la-generalized-decomposition",
+      "chapterId": "linear-algebra-ch8",
+      "statement": "複素有限次元空間を一般化固有空間の直和に分解できる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "2.2.1",
+          "heading": "2.2.1. Suppose $F=\\mathbb{C}$ and $T\\in \\mathcal{L}(V)$. Let $\\lambda_1,\\ldots,\\lambda_m$ be the distinct eigenvalues of $T$. Then"
+        },
+        {
+          "section": "2.2.3",
+          "heading": "2.2.3. Suppose $F = \\mathbb{C}, T \\in \\mathcal{L}(V)$ and $\\dim(V)=n$. Suppose $\\beta = \\{v_1,\\ldots,v_n\\}$ is a basis of $V$ such that $[T]_\\beta$ is upper triangular. Then the number of times that each eigenvalue $\\lambda$ appears on the diagonal element equals the multiplicity of it."
+        },
+        {
+          "section": "2.2.4",
+          "heading": "2.2.4. Suppose $F = \\mathbb{C}, T \\in \\mathcal{L}(V)$ and $\\dim(V)=n$. Let $\\lambda_1,\\ldots,\\lambda_m$ be the distinct eigenvalues of $T$ with multiplicities $d_1,\\ldots,d_m$. There exists a basis $\\beta$ where"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-generalized-eigenvectors",
+        "la-nilpotence",
+        "la-direct-sum"
+      ],
+      "successCriteria": "各空間の次元と全次元を確認し、通常の固有空間と区別する"
+    },
+    {
+      "id": "la-characteristic-polynomial",
+      "chapterId": "linear-algebra-ch8",
+      "statement": "一般化固有空間の次元から特性多項式を求められる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.2.2",
+          "heading": "1.2.2. <span style=\"color: red\">(Multiplicity)</span> Suppose $T \\in \\mathcal{L}(V)$ and $\\dim(V)=n$. The multiplicity of an eigenvalue $\\lambda$ of $T$ is defined as the following:"
+        },
+        {
+          "section": "1.2.3",
+          "heading": "1.2.3. <span style=\"color: red\">(Characteristic polynomial)</span> Suppose $T\\in \\mathcal{L}(V),\\ \\dim(V)=n$ and $F=\\mathbb{C}$. Let $\\lambda_1,\\ldots,\\lambda_m$ denote the distinct eigenvalues of $T$ with multiplicities $d_1,\\ldots,d_m$. Then the following polynomial is called the characteristic polynomial of $T$."
+        },
+        {
+          "section": "2.2.2",
+          "heading": "2.2.2. <span style=\"color: red\">(Cayley-Hamilton theorem)</span> Suppose $F=\\mathbb{C},\\ T \\in \\mathcal{L}(V)$ and $q$ is the characteristic polynomial of $T$. Then $q(T)=0$."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-generalized-decomposition"
+      ],
+      "successCriteria": "代数的重複度を数え、最小多項式との整除関係を説明する"
+    },
+    {
+      "id": "la-jordan-chains",
+      "chapterId": "linear-algebra-ch8",
+      "statement": "一般化固有ベクトルの鎖からJordan基底とブロックを構成できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.3.1",
+          "heading": "1.3.1. <span style=\"color: red\">(Jordan basis)</span> Suppose $T\\in\\mathcal{L}(V)$. A basis $\\beta$ of $V$ is called Jordan basis for $T$ if"
+        },
+        {
+          "section": "2.3.3",
+          "heading": "2.3.3. Suppose $T\\in\\mathcal{L}(V)$ is nilpotent. Then there is a basis of $V$ that is a Jordan basis."
+        },
+        {
+          "section": "2.2.3",
+          "heading": "2.2.3. Suppose $F = \\mathbb{C}, T \\in \\mathcal{L}(V)$ and $\\dim(V)=n$. Suppose $\\beta = \\{v_1,\\ldots,v_n\\}$ is a basis of $V$ such that $[T]_\\beta$ is upper triangular. Then the number of times that each eigenvalue $\\lambda$ appears on the diagonal element equals the multiplicity of it."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-generalized-decomposition",
+        "la-basis-coordinates"
+      ],
+      "successCriteria": "鎖の関係と基底の独立性を確認し、核の次元増分とブロックを対応付ける"
+    },
+    {
+      "id": "la-operator-square-root",
+      "chapterId": "linear-algebra-ch8",
+      "statement": "冪零作用素や可逆複素作用素の平方根を構成する方針を説明できる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "2.3.1",
+          "heading": "2.3.1. Suppose $T\\in\\mathcal{L}(V)$ is nilpotent. Then $I+T$ has a square root."
+        },
+        {
+          "section": "2.3.2",
+          "heading": "2.3.2. Suppose $V$ is a complex vector space and $T\\in \\mathcal{L}(V)$ is invertible. Then $T$ has a square root."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-nilpotence",
+        "la-generalized-decomposition"
+      ],
+      "successCriteria": "打切り多項式または一般化固有空間ごとの構成を示し、平方を検算する"
+    },
+    {
+      "id": "la-trace",
+      "chapterId": "linear-algebra-ch8",
+      "statement": "トレースの基底不変性と巡回性を用いて作用素の主張を検証できる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "1.4.1",
+          "heading": "1.4.1. <span style=\"color: red\">(Trace)</span> Suppose $A\\in F^{n \\times n}$. Then"
+        },
+        {
+          "section": "2.4.1",
+          "heading": "2.4.1. Suppose $T \\in \\mathcal{L}(V), \\dim(V)=n$ and let $\\beta,\\gamma$ are bases of $V$. Then"
+        },
+        {
+          "section": "2.4.2",
+          "heading": "2.4.2. Suppose $F=\\mathbb{C}$ and $T \\in \\mathcal{L}(V)$ with distinct eigenvalues $\\lambda_1,\\ldots,\\lambda_m$, whose multiplicities are $d_1,\\ldots,d_m$. Then"
+        },
+        {
+          "section": "2.4.3",
+          "heading": "2.4.3. The function $\\operatorname{tr}:\\mathcal{L}(V)\\rightarrow F$ is a linear functional on $\\mathcal{L}(V)$ such that"
+        },
+        {
+          "section": "2.4.4",
+          "heading": "2.4.4. There do not exist operators $S,T \\in \\mathcal{L}(V)$ such that $ST-TS=I$."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-characteristic-polynomial",
+        "la-change-basis"
+      ],
+      "successCriteria": "有限次元性を明示し、固有値の重複度や交換子のトレースを正しく扱う"
+    },
+    {
+      "id": "la-bilinear-form",
+      "chapterId": "linear-algebra-ch9",
+      "statement": "双線形形式の行列表現と基底変換を計算できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.1.1",
+          "heading": "1.1.1. <span style=\"color: red\">(Bilinear form)</span> A bilinear form is a function $\\beta : V \\times V \\rightarrow F$ such that"
+        },
+        {
+          "section": "1.1.2",
+          "heading": "1.1.2. <span style=\"color: red\">(Matrix representation of bilinear form)</span> Suppose $\\beta$ is a bilinear form and let $\\mathscr{B}=(e_1,\\ldots,e_n)$ be an ordered basis of $V$. The matrix representation is defined as $M_{\\mathscr{B}}(\\beta)_{i,j}=\\beta(e_i,e_j)$."
+        },
+        {
+          "section": "2.1.1",
+          "heading": "2.1.1. Suppose $\\beta$ is a bilinear form on $V$ and $T\\in\\mathcal{L}(V)$. Define bilinear forms $\\alpha$ and $\\gamma$ on $V$ by"
+        },
+        {
+          "section": "2.1.2",
+          "heading": "2.1.2. <span style=\"color: red\">(Change of basis formula)</span> Suppose $\\beta \\in V^{(2)}$. Suppose $\\mathscr{B}=\\{e_1,\\ldots,e_n\\},\\ \\mathscr{C}=\\{f_1,\\ldots,f_n\\}$ are bases of $V$. Let"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-dual-basis",
+        "la-change-basis"
+      ],
+      "successCriteria": "双線形性を確認し、相似変換と合同変換を区別する"
+    },
+    {
+      "id": "la-quadratic-form",
+      "chapterId": "linear-algebra-ch9",
+      "statement": "実二次形式を対称行列で表して対角化できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.1.3",
+          "heading": "1.1.3. <span style=\"color: red\">(Quadratic form)</span> For $\\beta \\in V^{(2)}$, define $q_\\beta:V \\rightarrow F$ by $q_\\beta(v)=\\beta(v,v)$. A function $q:V\\to F$ is called a quadratic form on $V$ if there exists $\\beta$ such that $q=q_\\beta$."
+        },
+        {
+          "section": "2.1.3",
+          "heading": "2.1.3. Suppose $\\rho \\in V^{(2)}$. Then the following statements are equivalent."
+        },
+        {
+          "section": "2.1.4",
+          "heading": "2.1.4. Suppose $F=\\mathbb{R}$ and $V$ is an inner product space. Let $\\rho \\in V_{\\mathrm{sym}}^{(2)}$. Then there exists an orthonormal basis $\\mathscr{B}$ where $M_{\\mathscr{B}}(\\rho)$ is diagonal."
+        },
+        {
+          "section": "2.1.7",
+          "heading": "2.1.7. Suppose $q:V\\to F$. Then $q$ is a quadratic form if and only if there exists a unique $\\rho \\in V_{\\mathrm{sym}}^{(2)}$ such that $q = q_\\rho$."
+        },
+        {
+          "section": "2.1.8",
+          "heading": "2.1.8. Suppose $q$ is a quadratic form. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-bilinear-form",
+        "la-spectral-theorem"
+      ],
+      "successCriteria": "交差項の係数を正しく対応付け、直交基底変換を確認する"
+    },
+    {
+      "id": "la-alternating-forms",
+      "chapterId": "linear-algebra-ch9",
+      "statement": "交代多重線形形式の値を置換と線形従属性から判断できる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "1.2.1",
+          "heading": "1.2.1. <span style=\"color: red\">(Multilinear form)</span> An $m$-linear form on $V$ is a function $\\alpha:V^m\\to F$ that is linear in each variable while the other variables are fixed. The vector space of these forms is denoted by $V^{(m)}$."
+        },
+        {
+          "section": "1.2.2",
+          "heading": "1.2.2. <span style=\"color: red\">(Permutation)</span> Let $S_m$ denote the permutations of $\\{1,\\ldots,m\\}$, and let $\\sigma\\in S_m$. Then"
+        },
+        {
+          "section": "2.2.1",
+          "heading": "2.2.1. Suppose $\\alpha \\in V_{\\mathrm{alt}}^{(m)}$ and $v_1,\\ldots,v_m$ are linearly dependent. Then"
+        },
+        {
+          "section": "2.2.2",
+          "heading": "2.2.2. Suppose $\\alpha \\in V_{\\mathrm{alt}}^{(m)}$. For every $\\sigma\\in S_m$ and $v_1,\\ldots,v_m\\in V$,"
+        },
+        {
+          "section": "2.2.3",
+          "heading": "2.2.3. Let $n=\\dim(V)$. Let $e_1,\\ldots,e_n$ be a basis of $V$, $\\varphi_1,\\ldots,\\varphi_n$ be the dual basis and $v_1,\\ldots,v_n \\in V$. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-linear-independence",
+        "la-dual-basis"
+      ],
+      "successCriteria": "変数ごとの線形性と置換の符号を使い、従属時の零を説明する"
+    },
+    {
+      "id": "la-determinant",
+      "chapterId": "linear-algebra-ch9",
+      "statement": "行列式の性質を用いて値と可逆性を判定できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.3.1",
+          "heading": "1.3.1. <span style=\"color: red\">(Determinant)</span> Let $n=\\dim V\\geq1$. For $\\alpha\\in V_{\\mathrm{alt}}^{(n)}$ and $T\\in\\mathcal L(V)$, define"
+        },
+        {
+          "section": "2.3.1",
+          "heading": "2.3.1. The map $(v_1,\\ldots,v_n) \\mapsto \\det(v_1,\\ldots,v_n)$ is an alternating $n$-linear form on $F^n$."
+        },
+        {
+          "section": "2.3.2",
+          "heading": "2.3.2. Let $A \\in F^{n \\times n}$. Then"
+        },
+        {
+          "section": "2.3.3",
+          "heading": "2.3.3. <span style=\"color: red\">(Properties of determinants)</span> Suppose $S,T \\in \\mathcal{L}(V)$ and $A,B \\in F^{n \\times n}$."
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-alternating-forms",
+        "la-matrix-composition"
+      ],
+      "successCriteria": "交代性・乗法性・三角行列など必要な性質を選び、符号を確認する"
+    },
+    {
+      "id": "la-determinant-characteristic",
+      "chapterId": "linear-algebra-ch9",
+      "statement": "行列式による特性多項式を固有値・トレース・Cayley–Hamiltonと結び付けられる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "1.3.2",
+          "heading": "1.3.2. <span style=\"color: red\">(Characteristic polynomial)</span> Suppose $T \\in \\mathcal{L}(V)$. The polynomial defined as follows is called the characteristic polynomial."
+        },
+        {
+          "section": "2.3.5",
+          "heading": "2.3.5. Suppose $F=\\mathbb{C}$. Let $\\lambda_1,\\ldots,\\lambda_m$ be distinct eigenvalues of $T \\in \\mathcal{L}(V)$ and let $d_1,\\ldots,d_m$ denote their multiplicities. Then"
+        },
+        {
+          "section": "2.3.6",
+          "heading": "2.3.6. <span style=\"color: red\">(Cayley-Hamilton theorem)</span> Let $q$ be the characteristic polynomial of $T \\in \\mathcal{L}(V)$. Then $q(T)=0$."
+        },
+        {
+          "section": "2.3.7",
+          "heading": "2.3.7. The characteristic polynomial of $T \\in \\mathcal{L}(V)$ can be written as"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-determinant",
+        "la-characteristic-polynomial",
+        "la-trace"
+      ],
+      "successCriteria": "det(zI−T)の符号規約と係数を確認し、作用素への代入を行う"
+    },
+    {
+      "id": "la-determinant-estimates",
+      "chapterId": "linear-algebra-ch9",
+      "statement": "Hadamardの不等式またはVandermondeの公式を適切な行列に適用できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "2.3.8",
+          "heading": "2.3.8. <span style=\"color: red\">(Hadamard’s inequality)</span> Suppose $A\\in F^{n \\times n}$. Then"
+        },
+        {
+          "section": "2.3.9",
+          "heading": "2.3.9. <span style=\"color: red\">(Vandermonde matrix)</span> Let $\\beta_1,\\ldots,\\beta_n \\in F$. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-determinant",
+        "la-inner-product-inequalities"
+      ],
+      "successCriteria": "行列の形と列ノルムまたはパラメータを対応付け、上界と厳密値を区別する"
+    },
+    {
+      "id": "la-tensor-basis",
+      "chapterId": "linear-algebra-ch9",
+      "statement": "有限次元空間のテンソル積の基底と次元を求められる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.4.1",
+          "heading": "1.4.1. Let $\\mathcal{B}(V_1,\\ldots,V_m)$ denote the set of all $m$-linear forms $\\beta:V_1 \\times \\cdots \\times V_m \\rightarrow F$."
+        },
+        {
+          "section": "1.4.2",
+          "heading": "1.4.2. <span style=\"color: red\">(Tensor product)</span> Let $V_1 \\otimes \\cdots \\otimes V_m:=\\mathcal{B}(V_1',\\ldots,V_m')$. The tensor product $v_1 \\otimes \\cdots \\otimes v_m \\in \\mathcal{B}(V_1',\\ldots,V_m')$ is defined as follows"
+        },
+        {
+          "section": "2.4.1",
+          "heading": "2.4.1. $(v_1,\\ldots,v_m)\\mapsto v_1 \\otimes \\cdots \\otimes v_m$ is $m$-linear."
+        },
+        {
+          "section": "2.4.2",
+          "heading": "2.4.2. Suppose $\\beta_i =\\{e_{i,1},\\ldots,e_{i,n_i}\\}$ is a linearly independent list in $V_i$ for each $i$, $i=1,\\ldots,m$. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-basis-coordinates",
+        "la-dual-basis"
+      ],
+      "successCriteria": "純テンソルの多重線形性を使い、基底の組合せと次元の積を対応付ける"
+    },
+    {
+      "id": "la-tensor-universal-property",
+      "chapterId": "linear-algebra-ch9",
+      "statement": "多重線形写像に対応するテンソル積上の線形写像を構成できる",
+      "ability": "論証",
+      "sourceRefs": [
+        {
+          "section": "2.4.3",
+          "heading": "2.4.3. Suppose $\\Gamma : V_1 \\times \\cdots \\times V_m \\rightarrow U$ is an $m$-linear map. Then there exists a unique linear map $\\hat{\\Gamma}:V_1 \\otimes \\cdots \\otimes V_m \\rightarrow U$ such that"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-tensor-basis",
+        "la-linear-map"
+      ],
+      "successCriteria": "純テンソル上の値から線形に拡張し、存在と一意性を説明する"
+    },
+    {
+      "id": "la-tensor-inner-product",
+      "chapterId": "linear-algebra-ch9",
+      "statement": "テンソル積の内積・ノルム・正規直交基底を計算できる",
+      "ability": "適用",
+      "sourceRefs": [
+        {
+          "section": "1.4.3",
+          "heading": "1.4.3. <span style=\"color: red\">(Inner product of tensor product)</span> Suppose $V_1,\\ldots,V_m$ are inner product spaces. Then define the inner product on $V_1 \\otimes \\cdots \\otimes V_m$ as the one that satisfies the following:"
+        },
+        {
+          "section": "2.4.4",
+          "heading": "2.4.4. Suppose $V$ and $W$ are inner product spaces, and let $e_1,\\ldots,e_m$ and $f_1,\\ldots,f_n$ be orthonormal bases of $V$ and $W$, respectively. Then"
+        }
+      ],
+      "prerequisiteObjectiveIds": [
+        "la-tensor-basis",
+        "la-gram-schmidt"
+      ],
+      "successCriteria": "純テンソル上の積の公式から和へ拡張し、共役の規約を守る"
+    }
+  ]
+}
