@@ -41,11 +41,17 @@ export function questionPlan(
   ids: string[],
   kinds: MathKind[],
   count: number,
+  offset = 0,
 ): { chapterId: string; kind: MathKind }[] {
-  return Array.from({ length: count }, (_, i) => ({
-    chapterId: ids[i % ids.length],
-    kind: kinds[(Math.floor(i / ids.length) + (i % ids.length)) % kinds.length],
-  }));
+  return Array.from({ length: count }, (_, index) => {
+    const i = index + offset;
+    return {
+      chapterId: ids[i % ids.length],
+      kind: kinds[
+        (Math.floor(i / ids.length) + (i % ids.length)) % kinds.length
+      ],
+    };
+  });
 }
 export function validateQuestions(
   raw: unknown,
@@ -60,7 +66,12 @@ export function validateQuestions(
     Buffer.byteLength(JSON.stringify(value)) > 80_000
   )
     throw new Error("INVALID_QUESTIONS");
-  const plan = questionPlan(test.chapterIds, test.kinds, test.count);
+  const plan = questionPlan(
+    test.chapterIds,
+    test.kinds,
+    test.count,
+    test.mode === "continuous" ? (test.generatedCount ?? 0) : 0,
+  );
   const seen = new Set<string>();
   return value.questions.map((item, i) => {
     const q = item as MathQuestion;
@@ -116,4 +127,10 @@ export function publicMathTest(test: MathTest): MathPublicTest {
       return visible;
     }),
   };
+}
+
+export function mathPromptHash(prompt: string): string {
+  return mathHash(
+    prompt.trim().normalize("NFKC").replace(/\s+/g, " ").toLowerCase(),
+  );
 }

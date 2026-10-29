@@ -113,3 +113,28 @@ test("grading passes source, accepts valid result and rejects malformed grading"
   );
   failGrade = false;
 });
+
+test("continuous generation supplies recent history and rejects repeats before validation", async () => {
+  calls.length = 0;
+  let checks = 0;
+  await assert.rejects(
+    () =>
+      generateMathQuestions(
+        { ...fixture, mode: "continuous", generatedCount: 3 },
+        sources,
+        {
+          recent: ["An older problem"],
+          isDuplicate: async () => {
+            checks++;
+            return true;
+          },
+        },
+      ),
+    /MATH_GENERATION_INVALID/,
+  );
+  assert.equal(checks, 2);
+  assert.equal(calls.filter((c) => c.route === "math/validate").length, 0);
+  assert.deepEqual(JSON.parse(calls[0].user).recentQuestionsToAvoid, [
+    "An older problem",
+  ]);
+});

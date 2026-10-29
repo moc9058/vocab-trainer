@@ -8,7 +8,7 @@ export default function MathText({ text }: { text: string }) {
     .replace(/\\\[([\s\S]*?)\\\]/g, "\n$$$$\n$1\n$$$$\n")
     .replace(/\\\(([\s\S]*?)\\\)/g, "$$$1$");
   return (
-    <div className="math-text space-y-3 overflow-x-auto break-words leading-relaxed">
+    <div className="math-text">
       <Markdown
         remarkPlugins={[remarkMath]}
         rehypePlugins={[[rehypeKatex, { trust: false, strict: "ignore" }]]}

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 const chapter = {
   id: "c1",
   number: 1,
@@ -14,30 +14,184 @@ const book = {
   revision: "r1",
   chapters: [chapter],
 };
-const question = {
-  id: "q1",
+const question = (n = 1) => ({
+  id: `q${n}`,
+  number: n,
   chapterId: "c1",
   heading: "Vector space",
   kind: "definition",
-  prompt: "Define a vector space over $F$.",
-};
+  prompt: `Question ${n}: Define a vector space over $F$.`,
+});
 function initial() {
   return {
     id: "test",
     book,
     chapterIds: ["c1"],
     sourceVersionIds: ["v1"],
-    count: 1,
+    count: 0,
+    mode: "continuous",
+    phase: "ready",
+    generatedCount: 0,
+    stats: { answered: 0, correct: 0, partial: 0, incorrect: 0 },
     kinds: ["definition"],
     difficulty: "standard",
-    status: "active",
-    questions: [question],
+    status: "created",
+    questions: [],
     answers: {},
     draft: "",
     version: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+}
+async function mockMath(
+  page: Page,
+  options: { failNext?: boolean; legacy?: boolean } = {},
+) {
+  let state: any = initial();
+  let nextRequests = 0;
+  let failNext = options.failNext ?? false;
+  let records: any[] = [];
+  if (options.legacy) {
+    state = {
+      ...state,
+      mode: undefined,
+      phase: undefined,
+      count: 1,
+      status: "active",
+      questions: [question()],
+    };
+  }
+  await page.route("**/api/math/**", async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    const path = url.pathname;
+    if (path.endsWith("/books")) return route.fulfill({ json: [book] });
+    if (path.endsWith("/chapters/v1"))
+      return route.fulfill({
+        json: {
+          ...chapter,
+          bookId: book.id,
+          markdown:
+            "# Vector space\n\n$u+v=v+u$\n\n- Closure\n- Zero\n<script>window.__unsafe=true</script>",
+        },
+      });
+    if (path.endsWith("/tests") && req.method() === "GET")
+      return route.fulfill({ json: [] });
+    if (path.endsWith("/tests") && req.method() === "POST") {
+      const body = req.postDataJSON();
+      expect(body.mode).toBe("continuous");
+      expect(body.count).toBeUndefined();
+      expect(body.chapterIds).toEqual(["c1"]);
+      return route.fulfill({ json: state });
+    }
+    if (path.endsWith("/questions"))
+      return route.fulfill({
+        json: {
+          items: records.map((item: any) =>
+            state.status === "completed"
+              ? {
+                  ...item,
+                  question: {
+                    ...item.question,
+                    solution: "A vector space satisfies the axioms.",
+                  },
+                }
+              : item,
+          ),
+          nextCursor: null,
+        },
+      });
+    if (req.method() === "POST") {
+      const body = req.postDataJSON();
+      if (path.endsWith("/next")) {
+        nextRequests++;
+        if (failNext) {
+          failNext = false;
+          state = { ...state, status: "active", version: state.version + 2 };
+          return route.fulfill({
+            status: 503,
+            json: { code: "MATH_OPERATION_FAILED" },
+          });
+        }
+        const number = state.generatedCount + 1;
+        const q = question(number);
+        state = {
+          ...state,
+          status: "active",
+          phase: "question",
+          currentQuestionId: q.id,
+          generatedCount: number,
+          questions: [q],
+          answers: {},
+          draft: "",
+          version: state.version + 2,
+        };
+        records.push({ question: q, number });
+      }
+      if (path.endsWith("/answer")) {
+        const q = {
+          ...state.questions[0],
+          solution: "A vector space satisfies the axioms.",
+          rubric: "Vector axioms",
+        };
+        const answer = {
+          text: body.text,
+          operationId: body.operationId,
+          grade: {
+            verdict: "partial",
+            feedback: "State the axioms explicitly.",
+          },
+        };
+        state = {
+          ...state,
+          status: options.legacy ? "completed" : "active",
+          phase: "feedback",
+          draft: "",
+          version: state.version + 2,
+          questions: [q],
+          answers: { [q.id]: answer },
+          stats: {
+            answered: state.stats.answered + 1,
+            correct: 0,
+            partial: state.stats.partial + 1,
+            incorrect: 0,
+          },
+        };
+        if (options.legacy) records = [{ question: q, answer, number: 1 }];
+        else
+          records[records.length - 1] = {
+            question: q,
+            answer,
+            number: q.number,
+          };
+      }
+      if (path.endsWith("/state")) {
+        state = {
+          ...state,
+          status:
+            body.action === "pause"
+              ? "paused"
+              : body.action === "finish"
+                ? "completed"
+                : "active",
+          draft: body.draft ?? "",
+          version: state.version + 2,
+        };
+        if (body.action === "finish" && state.phase === "question")
+          records[records.length - 1] = {
+            ...records[records.length - 1],
+            answer: {
+              text: body.draft,
+              submitted: false,
+              operationId: body.operationId,
+            },
+          };
+      }
+    }
+    return route.fulfill({ json: state });
+  });
+  return { nextRequests: () => nextRequests };
 }
 test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("uiLanguage", "en"));
@@ -51,115 +205,130 @@ test.beforeEach(async ({ page }) => {
     }),
   );
 });
-test("chapter selection previews safe math and creates a textbook-language test", async ({
+test("one textbook auto-selects, no question count, accessible safe preview and automatic first question", async ({
   page,
 }) => {
-  await page.route("**/api/math/**", async (route) => {
-    const path = new URL(route.request().url()).pathname;
-    if (path.endsWith("/books")) return route.fulfill({ json: [book] });
-    if (path.endsWith("/chapters/v1"))
-      return route.fulfill({
-        json: {
-          ...chapter,
-          bookId: book.id,
-          markdown:
-            "# Vector space\n$u+v=v+u$\n<script>window.__unsafe=true</script>",
-        },
-      });
-    if (path.endsWith("/tests") && route.request().method() === "POST") {
-      const body = route.request().postDataJSON();
-      expect(body.chapterIds).toEqual(["c1"]);
-      expect(body.kinds).toEqual(["definition", "calculation", "proof"]);
-      return route.fulfill({ json: initial() });
-    }
-    if (path.endsWith("/tests")) return route.fulfill({ json: [] });
-    return route.fulfill({ json: initial() });
-  });
+  const mock = await mockMath(page);
   await page.goto("/math");
-  await page.getByLabel("Textbook").selectOption("linear");
-  await page.getByLabel("1. Vector Spaces").check();
-  await page.getByRole("button", { name: "Preview", exact: true }).click();
+  await expect(page.getByLabel("Textbook", { exact: true })).toHaveValue(
+    "linear",
+  );
+  await expect(page.getByRole("spinbutton")).toHaveCount(0);
+  await page.getByRole("button", { name: "Select all", exact: true }).click();
+  await page.getByRole("button", { name: "Preview: Vector Spaces" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
   await expect(page.locator(".katex").first()).toBeVisible();
   expect(await page.evaluate(() => "__unsafe" in window)).toBe(false);
-  await page.getByRole("button", { name: "Create test", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Preview: Vector Spaces" }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Start learning" }).click();
   await expect(page).toHaveURL(/\/math\/tests\/test$/);
-  await expect(page.getByLabel("Your answer")).toBeVisible();
+  await expect(page.getByLabel("Your answer", { exact: true })).toBeVisible();
+  expect(mock.nextRequests()).toBe(1);
   await expect(page.getByText("Example solution", { exact: true })).toHaveCount(
     0,
   );
 });
-test("pause saves draft, resume restores it, grading completes test and review survives reload", async ({
+test("feedback stays until next; pause and reload restore draft; explicit finish opens review", async ({
   page,
 }) => {
-  let state: any = initial();
-  await page.route("**/api/math/**", async (route) => {
-    const request = route.request();
-    const path = new URL(request.url()).pathname;
-    if (request.method() === "POST") {
-      const body = request.postDataJSON();
-      if (path.endsWith("/state")) {
-        state = {
-          ...state,
-          status: body.action === "pause" ? "paused" : "active",
-          draft: body.draft,
-          version: state.version + 2,
-        };
-      } else if (path.endsWith("/answer")) {
-        state = {
-          ...state,
-          status: "completed",
-          draft: "",
-          version: state.version + 2,
-          questions: [
-            {
-              ...question,
-              solution: "A set with vector addition and scalar multiplication.",
-              rubric: "Vector axioms",
-            },
-          ],
-          answers: {
-            q1: {
-              text: body.text,
-              operationId: body.operationId,
-              grade: {
-                verdict: "partial",
-                feedback: "State the axioms explicitly.",
-              },
-            },
-          },
-        };
-      }
-    }
-    return route.fulfill({ json: state });
-  });
-  await page.goto("/math/tests/test");
-  await page.getByLabel("Your answer").fill("A set with operations");
+  const mock = await mockMath(page);
+  await page.goto("/math");
+  await page.getByRole("button", { name: "Select all", exact: true }).click();
+  await page.getByRole("button", { name: "Start learning" }).click();
   await page
-    .getByRole("button", { name: "Save and pause", exact: true })
+    .getByLabel("Your answer", { exact: true })
+    .fill("A set with operations");
+  await page
+    .getByRole("button", { name: "Submit answer", exact: true })
     .click();
   await expect(
-    page.getByRole("button", { name: "Resume", exact: true }),
+    page.getByRole("heading", { name: "Partially correct", exact: true }),
   ).toBeVisible();
-  await page.reload();
-  await page.getByRole("button", { name: "Resume", exact: true }).click();
-  await expect(page.getByLabel("Your answer")).toHaveValue(
-    "A set with operations",
-  );
-  await page
-    .getByRole("button", { name: "Submit for grading / Retry", exact: true })
-    .click();
-  await expect(
-    page.getByText("Partially correct", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Example solution", { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByLabel("Your answer", { exact: true })).toHaveCount(0);
+  expect(mock.nextRequests()).toBe(1);
   await page.reload();
   await expect(
     page.getByText("State the axioms explicitly.", { exact: true }),
   ).toBeVisible();
+  expect(mock.nextRequests()).toBe(1);
+  await page
+    .getByRole("button", { name: "Next question", exact: false })
+    .click();
+  await expect(page.getByLabel("Your answer", { exact: true })).toBeVisible();
+  expect(mock.nextRequests()).toBe(2);
+  await page
+    .getByLabel("Your answer", { exact: true })
+    .fill("An unfinished proof");
+  await page
+    .getByRole("button", { name: "Save and pause", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Resume", exact: false }),
+  ).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "Resume", exact: false }).click();
+  await expect(page.getByLabel("Your answer", { exact: true })).toHaveValue(
+    "An unfinished proof",
+  );
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "End test", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Your learning, saved." }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Review answers", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.locator(".math-review-item summary").last().click();
+  await expect(
+    page.getByText("An unfinished proof", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator(".math-review-item")
+      .last()
+      .getByText("Example solution", { exact: true }),
+  ).toBeVisible();
 });
-test("math missing session is distinct from a server failure", async ({
+test("failed initial generation retries without another session or an input count", async ({
+  page,
+}) => {
+  const mock = await mockMath(page, { failNext: true });
+  await page.goto("/math");
+  await page.getByRole("button", { name: "Select all", exact: true }).click();
+  await page.getByRole("button", { name: "Start learning" }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
+  await expect(page.getByLabel("Your answer", { exact: true })).toBeVisible();
+  expect(mock.nextRequests()).toBe(2);
+});
+test("legacy fixed-count session still finishes and supports historical review", async ({
+  page,
+}) => {
+  await mockMath(page, { legacy: true });
+  await page.goto("/math/tests/test");
+  await page
+    .getByLabel("Your answer", { exact: true })
+    .fill("A set with operations");
+  await page
+    .getByRole("button", { name: "Submit answer", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Your learning, saved." }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Review answers", exact: true })
+    .click();
+  await page.locator(".math-review-item summary").click();
+  await expect(
+    page.getByText("State the axioms explicitly.", { exact: true }),
+  ).toBeVisible();
+});
+test("math missing session is distinct from server failure", async ({
   page,
 }) => {
   await page.route("**/api/math/tests/missing", (route) =>
@@ -172,4 +341,30 @@ test("math missing session is distinct from a server failure", async ({
   );
   await page.goto("/math/tests/unavailable");
   await expect(page.getByRole("alert")).toContainText("could not be completed");
+});
+test("mobile layout has no horizontal overflow and actions remain usable", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockMath(page);
+  await page.goto("/math");
+  await page.getByRole("button", { name: "Select all", exact: true }).click();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.getByRole("button", { name: "Start learning" }).click();
+  await page.getByLabel("Your answer", { exact: true }).fill("A vector space");
+  await page
+    .getByRole("button", { name: "Submit answer", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Next question", exact: false }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
 });

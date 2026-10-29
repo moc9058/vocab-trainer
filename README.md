@@ -23,7 +23,9 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 
 The **Mathematics** card opens a textbook library with chapter selection. Tests
 use published chapter Markdown to generate definition, calculation and proof
-questions, independently check them, and grade written answers. Questions and
+questions one at a time, independently check them, and grade written answers.
+New tests need no question count: read feedback and choose **Next question** until
+you pause or end the test. Earlier fixed-count tests remain available. Questions and
 feedback follow the textbook language; earlier chapters are prerequisite
 references only. Tests, drafts saved on pause, answers and source revisions live
 in Firestore, so tests can be resumed and reviewed after textbook updates.

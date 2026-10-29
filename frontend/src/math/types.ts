@@ -20,6 +20,7 @@ export interface MathSource extends MathChapter {
   bookId: string;
 }
 export interface MathQuestion {
+  number?: number;
   id: string;
   chapterId: string;
   heading: string;
@@ -33,11 +34,22 @@ export interface MathGrade {
   feedback: string;
 }
 export interface MathAnswer {
+  submitted?: boolean;
   text: string;
   operationId: string;
   grade?: MathGrade;
 }
 export interface MathTest {
+  mode?: "fixed" | "continuous";
+  phase?: "ready" | "question" | "feedback";
+  currentQuestionId?: string;
+  generatedCount?: number;
+  stats?: {
+    answered: number;
+    correct: number;
+    partial: number;
+    incorrect: number;
+  };
   id: string;
   book: MathBook;
   chapterIds: string[];
@@ -68,3 +80,13 @@ export type MathPublicQuestion = Omit<MathQuestion, "solution" | "rubric"> & {
 export type MathPublicTest = Omit<MathTest, "questions" | "lock"> & {
   questions: MathPublicQuestion[];
 };
+
+export interface MathHistoryItem {
+  question: MathPublicQuestion;
+  answer?: MathAnswer;
+  number: number;
+}
+export interface MathHistoryPage {
+  items: MathHistoryItem[];
+  nextCursor: number | null;
+}

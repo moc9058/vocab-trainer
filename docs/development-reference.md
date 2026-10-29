@@ -580,7 +580,11 @@ No backend schema/config upload or production migration is needed.
 ## Mathematics (2026-10-29)
 
 The `/math/*` category provides a textbook library, chapter-scope tests, written
-answers with LLM grading, pause/resume and historical review. Textbook Markdown
+answers with LLM grading, pause/resume and historical review. New tests continue
+one question at a time without a planned count; feedback remains visible until
+Next question. Continuous questions/answers live in per-test subcollections with
+paginated history and bounded parent documents; old fixed tests remain compatible.
+Textbook Markdown
 is published by a separate explicit-target sync command; deployment does not
 publish textbooks. Firestore stores immutable chapter revisions and versioned
 sessions with operation receipts. Three math LLM features share the existing

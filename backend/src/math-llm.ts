@@ -16,11 +16,21 @@ const system =
 export async function generateMathQuestions(
   test: MathTest,
   sources: MathSource[],
+  options?: {
+    recent: string[];
+    isDuplicate: (prompt: string) => Promise<boolean>;
+  },
 ): Promise<MathQuestion[]> {
   const context = {
+    recentQuestionsToAvoid: options?.recent ?? [],
     language: test.book.language,
     difficulty: test.difficulty,
-    plan: questionPlan(test.chapterIds, test.kinds, test.count),
+    plan: questionPlan(
+      test.chapterIds,
+      test.kinds,
+      test.count,
+      test.mode === "continuous" ? (test.generatedCount ?? 0) : 0,
+    ),
     sources: sources.map((s) => ({
       chapterId: s.id,
       selected: test.chapterIds.includes(s.id),
@@ -28,27 +38,40 @@ export async function generateMathQuestions(
     })),
   };
   const user = JSON.stringify(context);
-  if (Buffer.byteLength(user) > MATH_INPUT_BYTES)
+  if (
+    Buffer.byteLength(JSON.stringify(context.sources)) > MATH_INPUT_BYTES ||
+    Buffer.byteLength(user) > MATH_INPUT_BYTES + (options ? 170_000 : 0)
+  )
     throw new Error("MATH_SCOPE_TOO_LARGE");
   let reason = "";
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const result = await callLLM({
-        system: `${system} Generate exactly the ordered plan. Prior unselected chapters are prerequisites only. Each question must test the selected chapter assigned to it. Output {questions:[{chapterId,heading,kind,prompt,solution,rubric}]}. heading must exactly match an existing Markdown heading in that selected chapter, without # prefix. Use the textbook language. Supply necessary assumptions. Solutions and rubrics must accept mathematically equivalent answers. ${reason}`,
+        system: `${system} Generate exactly the ordered plan. Prior unselected chapters are prerequisites only. Each question must test the selected chapter assigned to it. Output {questions:[{chapterId,heading,kind,prompt,solution,rubric}]}. heading must exactly match an existing Markdown heading in that selected chapter, without # prefix. Use the textbook language. Avoid repeating or closely paraphrasing recentQuestionsToAvoid; another task on the same concept is allowed. Supply necessary assumptions. Solutions and rubrics must accept mathematically equivalent answers. ${reason}`,
         user,
         route: "math/generate",
         tier: "full",
-        maxInputBytes: 240_000,
+        maxInputBytes: options ? 410_000 : 240_000,
         maxOutputTokens: 14000,
       });
       const questions = validateQuestions(JSON.parse(result), test, sources);
+      if (
+        options &&
+        (
+          await Promise.all(questions.map((q) => options.isDuplicate(q.prompt)))
+        ).some(Boolean)
+      ) {
+        reason =
+          "The prior candidate duplicated an earlier question. Write a different question.";
+        continue;
+      }
       const validation = JSON.parse(
         await callLLM({
           system: `${system} Independently solve and verify every supplied question, solution and rubric, their source grounding, scope and difficulty. Ensure each tests its assigned selected chapter rather than only prerequisites. Output {valid:boolean,reason:string}. valid is true only if every question is mathematically well posed and the solution is correct.`,
           user: JSON.stringify({ context, questions }),
           route: "math/validate",
           tier: "full",
-          maxInputBytes: 340_000,
+          maxInputBytes: options ? 510_000 : 340_000,
           maxOutputTokens: 2000,
         }),
       );

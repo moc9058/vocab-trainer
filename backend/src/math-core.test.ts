@@ -138,3 +138,22 @@ test("real textbook import preserves stable IDs, numeric order and deterministic
   invalid.books[0].chapters[0].file = "../README.md";
   await assert.rejects(() => prepareMathBooks(root, invalid));
 });
+
+test("continuous plans continue across requests instead of restarting chapter/type balance", () => {
+  const full = questionPlan(
+    ["c1", "c2"],
+    ["definition", "calculation", "proof"],
+    12,
+  );
+  const separate = Array.from(
+    { length: 12 },
+    (_, offset) =>
+      questionPlan(
+        ["c1", "c2"],
+        ["definition", "calculation", "proof"],
+        1,
+        offset,
+      )[0],
+  );
+  assert.deepEqual(full, separate);
+});

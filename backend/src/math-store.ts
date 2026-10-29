@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { db } from "./firestore.js";
-import { mathHash } from "./math-core.js";
-import type { MathBook, MathSource, MathTest } from "./math-types.js";
+import type { Transaction, DocumentReference } from "@google-cloud/firestore";
+import { mathHash, mathPromptHash, publicMathTest } from "./math-core.js";
+import type {
+  MathBook,
+  MathSource,
+  MathTest,
+  MathHistoryPage,
+  MathHistoryItem,
+} from "./math-types.js";
 export class MathError extends Error {
   constructor(
     public statusCode: number,
@@ -27,7 +34,7 @@ export async function mathSources(ids: string[]): Promise<MathSource[]> {
 export async function getMathTest(id: string): Promise<MathTest> {
   const doc = await testsCollection().doc(id).get();
   if (!doc.exists) throw new MathError(404, "MATH_TEST_NOT_FOUND");
-  return doc.data() as MathTest;
+  return hydrateMathTest(doc.data() as MathTest);
 }
 export async function createMathTest(
   test: MathTest,
@@ -63,7 +70,7 @@ export async function runMathOperation(
   const claim = await db.runTransaction(async (tx) => {
     const [doc, saved] = await Promise.all([tx.get(ref), tx.get(receipt)]);
     if (!doc.exists) throw new MathError(404, "MATH_TEST_NOT_FOUND");
-    const test = doc.data() as MathTest;
+    const test = await hydrateMathTest(doc.data() as MathTest, tx);
     if (saved.exists && saved.get("fingerprint") !== fingerprint)
       throw new MathError(409, "MATH_OPERATION_CONFLICT");
     if (saved.get("done") === true) return { done: true, test };
@@ -81,7 +88,7 @@ export async function runMathOperation(
     next.version = test.version + 1;
     next.updatedAt = new Date().toISOString();
     delete next.error;
-    tx.set(ref, next, { merge: false });
+    writeMathTest(tx, ref, next);
     tx.set(receipt, { fingerprint, done: false, claimedVersion: next.version });
     return { done: false, test: next };
   });
@@ -97,7 +104,17 @@ export async function runMathOperation(
       delete next.lock;
       next.version = claim.test.version + 1;
       next.updatedAt = new Date().toISOString();
-      tx.set(ref, next);
+      if (
+        next.mode === "continuous" &&
+        next.currentQuestionId !== claim.test.currentQuestionId
+      ) {
+        const q = next.questions[0];
+        const marker = ref.collection("prompts").doc(mathPromptHash(q.prompt));
+        if ((await tx.get(marker)).exists)
+          throw new MathError(409, "MATH_DUPLICATE_QUESTION");
+        tx.create(marker, { questionId: q.id });
+      }
+      writeMathTest(tx, ref, next);
       tx.set(receipt, { fingerprint, done: true });
       return next;
     });
@@ -120,4 +137,109 @@ export async function runMathOperation(
     });
     throw err;
   }
+}
+
+// Continuous parents stay bounded: only the current question is hydrated in memory.
+async function hydrateMathTest(
+  test: MathTest,
+  tx?: Transaction,
+): Promise<MathTest> {
+  if (test.mode !== "continuous" || !test.currentQuestionId) return test;
+  const ref = testsCollection()
+    .doc(test.id)
+    .collection("questions")
+    .doc(test.currentQuestionId);
+  const doc = tx ? await tx.get(ref) : await ref.get();
+  if (!doc.exists) throw new MathError(409, "MATH_QUESTION_MISSING");
+  const data = doc.data()!;
+  return {
+    ...test,
+    questions: [data.question],
+    answers: data.answer ? { [data.question.id]: data.answer } : {},
+  };
+}
+function writeMathTest(
+  tx: Transaction,
+  ref: DocumentReference,
+  test: MathTest,
+): void {
+  if (test.mode !== "continuous") {
+    tx.set(ref, test);
+    return;
+  }
+  const q = test.questions.find((q) => q.id === test.currentQuestionId);
+  if (q)
+    tx.set(ref.collection("questions").doc(q.id), {
+      question: q,
+      answer: test.answers[q.id] ?? null,
+      number: q.number,
+    });
+  tx.set(ref, { ...test, questions: [], answers: {} });
+}
+export async function mathQuestionHistory(
+  test: MathTest,
+  after: number,
+): Promise<MathHistoryPage> {
+  if (test.mode !== "continuous") {
+    const visible = publicMathTest(test);
+    const items = visible.questions
+      .map((q, i) => ({
+        question: q,
+        answer: test.answers[q.id],
+        number: i + 1,
+      }))
+      .filter((q) => q.number > after);
+    return {
+      items: items.slice(0, 20),
+      nextCursor: items.length > 20 ? items[19].number : null,
+    };
+  }
+  const snapshot = await testsCollection()
+    .doc(test.id)
+    .collection("questions")
+    .orderBy("number")
+    .startAfter(after)
+    .limit(21)
+    .get();
+  const items: MathHistoryItem[] = snapshot.docs.slice(0, 20).map((doc) => {
+    const data = doc.data();
+    const question = publicMathTest({
+      ...test,
+      questions: [data.question],
+      answers: data.answer ? { [data.question.id]: data.answer } : {},
+    }).questions[0];
+    return {
+      question,
+      ...(data.answer ? { answer: data.answer } : {}),
+      number: data.number,
+    };
+  });
+  return {
+    items,
+    nextCursor:
+      snapshot.docs.length > 20 ? items[items.length - 1].number : null,
+  };
+}
+export async function recentMathPrompts(id: string): Promise<string[]> {
+  const snapshot = await testsCollection()
+    .doc(id)
+    .collection("questions")
+    .orderBy("number", "desc")
+    .limit(20)
+    .get();
+  return snapshot.docs.map((doc) =>
+    (doc.get("question.prompt") as string).slice(0, 1000),
+  );
+}
+export async function duplicateMathPrompt(
+  id: string,
+  prompt: string,
+): Promise<boolean> {
+  return (
+    await testsCollection()
+      .doc(id)
+      .collection("prompts")
+      .doc(mathPromptHash(prompt))
+      .get()
+  ).exists;
 }

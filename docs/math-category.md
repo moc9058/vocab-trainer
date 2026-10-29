@@ -31,12 +31,27 @@ Deployment never publishes textbook data or uploads math configuration.
 
 ## Tests and model calls
 
-Select a book and one or more chapters. Defaults are five questions, standard
-difficulty and all three types: definition, calculation and proof. Counts range
-from 1–10; difficulty is easy, standard or hard. The server balances the ordered
-question plan across selected chapters/types where possible. If fewer questions
-than chapters are requested, not every selected chapter receives a question.
-All output follows the book's declared language, independently of UI language.
+Select a book and one or more chapters; a single available book is selected
+automatically. New sessions use **continuous** mode: there is no question count.
+Start creates and independently checks the first question. After submitting an
+answer, read the feedback and example solution, then choose **Next question**.
+Questions continue until explicit **Save and pause** or **End test**. No question
+is generated ahead of that action. Difficulty defaults to standard and all three
+types (definition, calculation, proof) are enabled; both are under Question
+settings. Chapter/type assignment rotates using the cumulative question number,
+so each generation request continues the plan rather than restarting it.
+
+The current question is the focus of the test page. Previous answers are in a
+separate history dialog, 20 per page. Book text opens in a scrollable accessible
+dialog, with styled headings, lists and LaTeX. Mobile controls stay at the bottom
+of the screen. Output follows the book's declared language, independently of UI
+language. The continuous progress indicator shows answers completed, without a
+planned total or completion percentage.
+
+Existing tests without `mode` remain **fixed** mode, including their original
+question count (1–10), automatic completion, resume and review behavior. Old
+clients that send `count` can still create fixed tests; new clients send
+`mode: "continuous"` without `count`. No bulk migration or textbook sync is needed.
 
 The server supplies complete selected chapter text and earlier chapters from the
 same publication as prerequisite context. Unselected prerequisites cannot be the
@@ -55,13 +70,34 @@ proof or a guarantee of correctness.
 
 ## Persistence, retries and review
 
-`math_tests` stores fixed book/source revisions, questions, written answers,
-three-way grading (correct/partial/incorrect), saved draft and lifecycle state.
-Solutions/rubrics are omitted from API responses until that question is graded
-or the test is ended. All questions become available for review after completion,
-including unanswered ones. Wrong answers do not automatically repeat.
+`math_tests` stores fixed book/source revisions, lifecycle and display phase
+(`ready`, `question`, `feedback`), current question ID, draft and aggregate totals.
+For continuous sessions, questions and answers are individual documents under
+`math_tests/{id}/questions` with sequential numeric positions; parent
+`questions` / `answers` remain empty. The parent stays bounded regardless of
+session length. Read responses hydrate only the current question. Completed
+sessions do not reopen, and textbook updates do not change their source versions.
+Fixed sessions retain their existing inline storage.
 
-Create a saved test first, then generate questions. Generation and grading share
+Each continuous answer saves its text before grading. A successful grade updates
+the question and aggregate totals atomically, and persists the feedback phase;
+refreshing or resuming does not skip that explanation. Grades are correct,
+partial or incorrect. Continuous sessions never end automatically after grading.
+Finishing during an unanswered question retains the input as an unsubmitted
+draft answer, without grading it; summary totals count it as unanswered.
+
+The last 20 prompt excerpts (up to 1,000 characters each) guide generation away
+from recent questions. A per-session prompt hash index rejects matching question
+text across the entire history (Unicode/whitespace/case normalized). A different
+question on the same concept is allowed. Duplicate candidates are retried once,
+then fail without discarding feedback or ending the session. Model checks cannot
+guarantee semantic uniqueness.
+
+Solutions/rubrics are omitted from current-question and paginated-history
+responses until that question is graded or the test is ended. Completion exposes
+solutions for unanswered questions too. Wrong answers do not automatically repeat.
+
+Generation and grading share
 the existing 180-second request budget. Processing is synchronous; there is no
 background worker. Interrupted work can be retried after its four-minute lease
 expires. A fencing token prevents expired work from committing. Errors retain
@@ -83,9 +119,16 @@ All routes use existing authentication under `/api/math`:
 
 - `GET /books`: published book/chapter metadata.
 - `GET /chapters/:id`: immutable chapter revision and MD body (`id` is version ID).
-- `GET /tests`: latest test summaries; `GET /tests/:id`: saved public test state.
-- `POST /tests`: `{operationId, bookId, chapterIds, count, kinds, difficulty}`.
-- `POST /tests/:id/generate`: `{operationId, version}`.
+- `GET /tests`: latest test summaries; `GET /tests/:id`: saved public test state (only the current question for continuous tests).
+- `POST /tests`: `{operationId, bookId, chapterIds, mode: "continuous", kinds,
+  difficulty}`. Legacy fixed requests use `count` instead (or `mode: "fixed"`).
+- `POST /tests/:id/next`: `{operationId, version}`; creates the first/next
+  continuous question, or advances a fixed session from feedback to its next
+  existing question.
+- `GET /tests/:id/questions?after=0`: `{items, nextCursor}`; 20 questions per
+  page. Each item contains `question`, optional `answer` and numeric `number`.
+  Pass the returned numeric cursor as `after` for the next page.
+- `POST /tests/:id/generate`: `{operationId, version}`; legacy fixed tests only.
 - `POST /tests/:id/answer`: `{operationId, version, questionId, text}`.
 - `POST /tests/:id/state`: `{operationId, version, action, draft?}`; action is
   `pause`, `resume`, or `finish`.
