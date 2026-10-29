@@ -9,6 +9,7 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 - [Development reference](docs/development-reference.md): detailed architecture and operations.
 - [Mathematics category](docs/math-category.md): textbook publishing and mathematics tests.
 - [Mathematics assessment proposal](docs/math-assessment-design.md): difficulty anchors and the authored linear algebra learning-objective catalog (not yet used at runtime).
+- [Textbook assessment implementation plan](plan/textbook-assessment-implementation.md): proof/calculation tasks, versioned curriculum publication, English prompts and automatic curriculum authoring.
 - [Live Group B quiz](docs/live-group-b-quiz.md): current A+B behavior and session migration.
 - [Source revisions](docs/source-revisions.md): correction proposals, grammar-to-word conversion and reading assistance.
 - [Cloud Run cost controls](docs/cloud-run-cost-controls.md): deployment settings and durable import infrastructure.

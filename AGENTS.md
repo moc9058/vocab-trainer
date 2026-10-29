@@ -36,6 +36,32 @@ Read the relevant reference before changing its feature:
 - Keep secrets, local data snapshots, credentials and build output out of commits.
   Do not print credentials while inspecting configuration.
 
+## Textbook authoring and assessment
+
+- New textbook sources belong in `textbook/<book>/md/` (lowercase `md`).
+  The existing Linear Algebra `MD/` paths remain valid until the planned explicit
+  case-only rename and manifest update; do not silently break current publication.
+- When handling textbook Markdown additions or edits, create or refresh the book's
+  `curriculum/` learning-objective catalog as part of that work without waiting for
+  a separate user request. Preserve stable book/chapter/objective IDs, ground goals
+  in exact source sections, and validate prerequisites and source hashes.
+- Read [the implementation plan](plan/textbook-assessment-implementation.md) for the
+  schema, publication contract and authoring prompt. Once implemented, use the
+  repository skill at `.agents/skills/textbook-curriculum/SKILL.md`; until it exists,
+  use the plan's authoring procedure and clearly report that runtime integration
+  remains pending. Do not describe a planned command or skill as installed.
+- Use English for all textbook-assessment and curriculum-authoring prompts,
+  including repair instructions. Source quotations retain their original language;
+  problem/feedback output follows the book's declared language.
+- Prefer tasks requiring a proof, a justified determination, a concrete value or
+  mathematical object, or a derived expression. Do not make explanation or
+  definition recall the sole task. Exact symbolic answers are supported by design.
+- This automatic authoring convention applies when an agent is working on textbook
+  changes; it is not a background file watcher. Curriculum authoring, textbook
+  publication and application deployment remain distinct operations. Current
+  `math:sync` does not yet publish curriculum; follow the plan to implement that
+  capability before claiming a catalog is used by the live LLM.
+
 ## Group A/B and quiz invariants
 
 - Group A is the main library, including Group B items. Group B adds contextual
