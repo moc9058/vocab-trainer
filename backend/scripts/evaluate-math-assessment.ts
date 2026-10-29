@@ -25,11 +25,12 @@ if (
         "--target=emulator",
         "--full",
         "--all-chapters",
+        "--exercise-skip",
       ].includes(a),
   )
 )
   throw new Error(
-    "Usage: math:evaluate -- --target=emulator|production [--full|--all-chapters]",
+    "Usage: math:evaluate -- --target=emulator|production [--full|--all-chapters|--exercise-skip]",
   );
 if ((target === "emulator") !== !!process.env.FIRESTORE_EMULATOR_HOST)
   throw new Error("Explicit target conflicts with emulator configuration");
@@ -201,6 +202,59 @@ try {
           };
           summary.cases.push(row);
           records.push({ index, question: q, grade: graded.answer.grade });
+          let expectedPhase = "feedback";
+          if (args.includes("--exercise-skip") && index === 0) {
+            state = await post(`/tests/${id}/next`, {
+              operationId: randomUUID(),
+              version: state.version,
+            });
+            const skippedId = state.currentQuestionId;
+            state = await post(`/tests/${id}/assistance`, {
+              operationId: randomUUID(),
+              version: state.version,
+              questionId: skippedId,
+              kind: "solution_view",
+            });
+            if (state.questions[0].assistanceStatus !== "viewed")
+              throw new Error("Assistance was not saved");
+            const skip = {
+              operationId: randomUUID(),
+              version: state.version,
+              draft: "Evaluation-only unsubmitted draft",
+            };
+            state = await post(`/tests/${id}/next`, skip);
+            const replay = await post(`/tests/${id}/next`, skip);
+            if (replay.version !== state.version || state.stats.answered !== 1)
+              throw new Error("Skip receipt changed grading totals");
+            const history = (
+              await app.inject(`/api/math/tests/${id}/questions`)
+            ).json();
+            const skipped = history.items.find(
+              (item: { question: { id: string } }) =>
+                item.question.id === skippedId,
+            );
+            if (
+              skipped?.answer?.submitted !== false ||
+              skipped.answer.text !== skip.draft
+            )
+              throw new Error("Skip draft was not preserved");
+            const children = await db
+              .collection("math_tests")
+              .doc(id)
+              .collection("questions")
+              .get();
+            for (const doc of children.docs) {
+              const question = doc.get("question");
+              if (question.id !== q.id) {
+                metrics.push(...(question.generationMetrics ?? []));
+                records.push({ index, lifecycleQuestion: question });
+              }
+            }
+            row.calls = metrics.length;
+            row.elapsedMs = Date.now() - started;
+            Object.assign(row, { assistanceAndSkipPassed: true });
+            expectedPhase = "question";
+          }
           // Exercise pause/resume and receipt replay against the frozen publication.
           const pause = {
             operationId: randomUUID(),
@@ -218,7 +272,7 @@ try {
           });
           if (
             state.publicationId !== book.publicationId ||
-            state.phase !== "feedback"
+            state.phase !== expectedPhase
           )
             throw new Error("Resume changed frozen publication or phase");
           await post(`/tests/${id}/state`, {

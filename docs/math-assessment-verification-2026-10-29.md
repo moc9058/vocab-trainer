@@ -85,7 +85,7 @@ from deployment. The complete publication is
 `4dce138dd5062aa5766deada83caf6c6f42e8689e7714adf54464c9a9e7dc868`, with nine
 chapters and 63 objectives. All chapter content versions were unchanged. Three
 existing production v1 sessions were fingerprinted before publication and compared
-afterwards: book snapshots, source versions, current/history payloads and answers
+afterwards: book snapshots, source versions, current question payloads and hydrated answers
 remained unchanged. No bulk session rewrite or configuration upload was performed.
 The evaluation CLI now pins the same project/database defaults as math:sync before
 initializing Firestore, instead of inheriting an unrelated active gcloud project.
@@ -93,3 +93,31 @@ initializing Firestore, instead of inheriting an unrelated active gcloud project
 Stage token counts and configured cost estimates are retained in the ignored
 summary artifacts. Missing/zero pricing rates mean unavailable billing estimates;
 no zero-cost or mathematical completeness claim is made.
+
+
+## Final follow-up checks
+
+The prompt archive and exact rational arithmetic follow-up (`9b299a6`) deployed
+successfully to backend `vocab-trainer-backend-00529-6zw` and frontend
+`vocab-trainer-frontend-00511-nzb`, each serving 100% of traffic. Health remained ok;
+an unauthenticated request to /api/math/books returned 401, preserving authentication.
+The earlier prompt hash `574db963975adf5741420298b4668a6d4147f74fa08e30b5912d343d061f8ef5`
+remains loadable from its immutable archive after the code switched to
+`4ab0941a9eb25501a932641ae12f212f06e16f9868678b0c00aa4fa7e8b8427e`.
+
+Final physics/economics live fixtures passed 4/4; both computation cases supplied
+rational expression trees and passed the exact checker. The physics calculation
+produced -3 meters from signed initial conditions; economics produced equilibrium
+quantity 42/5 and price 36/5 with feasibility checks. These results also passed
+independent solving, V2 comparison and itemized reference-solution grading.
+
+The final production lifecycle run
+`assessment-eval-7507ad34-338b-40df-b027-1cea2983d327` passed with the final prompt
+hash: generation, grading, two further generations, solution_view assistance,
+Skip with an unsubmitted draft, idempotent replay, history read, pause/resume and
+finish. It completed in 104.2 seconds across 10 model calls. The skipped draft was
+preserved and grading totals stayed at one answer. Its test/question documents and
+isolated evidence were confirmed removed; the current prompt archive exists.
+
+All runtime code is deployed. Later changes to this record and the explicitly
+invoked evaluation CLI do not alter either service's runtime image.

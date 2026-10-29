@@ -164,12 +164,15 @@ Live evaluation is explicit and uses paid real model calls:
 npm run math:evaluate --prefix backend -- --target=production
 npm run math:evaluate --prefix backend -- --target=production --full
 npm run math:evaluate --prefix backend -- --target=production --all-chapters
+npm run math:evaluate --prefix backend -- --target=production --exercise-skip
 ```
 
 `math:evaluate:subjects -- --target=emulator|production` evaluates the isolated
 physics/economics source fixtures without publishing those books.
 
-The first command exercises one question. --all-chapters checks one standard task
+The first command exercises one question. --exercise-skip adds two generated
+questions to check assistance, unsubmitted draft preservation and skip receipts.
+--all-chapters checks one standard task
 per chapter. --full evaluates 9 chapters × 3 difficulties
 × 2 questions, cycling all four task kinds, grading the reference solution and testing
 pause/resume and receipts. It records stage time, input bytes, token counts, regeneration,
