@@ -12,7 +12,8 @@
     "build:ios:local": "tsc --noEmit && vite build --mode ios-local",
     "ios:sync": "npm run build:ios && cap sync ios",
     "ios:sync:local": "npm run build:ios:local && cap sync ios",
-    "ios:open": "cap open ios"
+    "ios:open": "cap open ios",
+    "build:extension": "tsc --noEmit && vite build --config vite.extension.config.ts"
   },
   "dependencies": {
     "@capacitor/app": "8.1.2",

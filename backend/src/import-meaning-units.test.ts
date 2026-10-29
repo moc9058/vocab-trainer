@@ -36,6 +36,7 @@ test('runtime explanation schema is shared, strict and isolated from compact ini
 test('source metadata and ingestion identities reject unsafe values without fetching URLs', () => {
   const origin = { version: 1, method: 'shared-image', sourceKind: 'comment', textConfirmed: true, sourceUrl: 'https://example.org/post' };
   assert.deepEqual(parseSourceOrigin(origin), origin);
+  assert.deepEqual(parseSourceOrigin({ ...origin, method: 'safari-selection' }), { ...origin, method: 'safari-selection' });
   for (const patch of [{ sourceUrl: 'file:///secret' }, { sourceUrl: 'https://name:pass@example.org' }, { textConfirmed: false }, { sourceLabel: 'x\nheader' }, { capturedAt: 'invalid' }, { image: 'base64' }]) assert.throws(() => parseSourceOrigin({ ...origin, ...patch }));
   assert.equal(ingestionDigest({ b: 1, a: [1, 2] }), ingestionDigest({ a: [1, 2], b: 1 }));
   assert.notEqual(ingestionDigest({ text: '甲' }), ingestionDigest({ text: '乙' }));

@@ -712,7 +712,7 @@ export interface ImportMeaningUnits {
 
 export interface ImportSourceOrigin {
   version: 1;
-  method: 'screenshot-shortcut' | 'shared-image' | 'image-picker' | 'shared-text' | 'paste';
+  method: 'screenshot-shortcut' | 'shared-image' | 'image-picker' | 'shared-text' | 'paste' | 'safari-selection';
   sourceLabel?: string;
   sourceUrl?: string;
   capturedAt?: string;

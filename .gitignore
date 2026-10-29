@@ -47,3 +47,6 @@ frontend/ios/App/App/config.xml
 *.xcarchive
 frontend/ios/Personal.xcconfig
 !.env.ios.example
+
+# Safari bundles
+extensions/safari/dist/

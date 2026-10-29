@@ -1,0 +1,8 @@
+{
+  "name": "@vocab-trainer/safari", "version": "1.0.0", "private": true, "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test src/*.test.mjs",
+    "apple": "DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun safari-web-extension-converter dist --project-location apple --app-name 'Vocab Safari' --bundle-identifier app.vocabtrainer.safari --swift --no-open --no-prompt"
+  }
+}

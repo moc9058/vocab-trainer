@@ -8,7 +8,7 @@ export function parseSourceOrigin(value: unknown): ImportSourceOrigin | undefine
   if (!value || typeof value !== 'object' || Array.isArray(value)) return fail();
   const v = value as Record<string, unknown>;
   if (Object.keys(v).some(k => !['version', 'method', 'sourceLabel', 'sourceUrl', 'capturedAt', 'sourceKind', 'textConfirmed'].includes(k))) return fail();
-  if (v.version !== 1 || v.textConfirmed !== true || !['screenshot-shortcut', 'shared-image', 'image-picker', 'shared-text', 'paste'].includes(String(v.method))
+  if (v.version !== 1 || v.textConfirmed !== true || !['screenshot-shortcut', 'shared-image', 'image-picker', 'shared-text', 'paste', 'safari-selection'].includes(String(v.method))
     || !['post', 'comment', 'article', 'unknown'].includes(String(v.sourceKind))) return fail();
   for (const [key, max] of [['sourceLabel', 100], ['sourceUrl', 2048], ['capturedAt', 40]] as const) {
     const item = v[key];

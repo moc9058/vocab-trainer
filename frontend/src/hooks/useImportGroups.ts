@@ -38,7 +38,7 @@ export interface ImportGroups {
  * registration there is a single `reload()` to call, and it refreshes the chips and
  * the destination selects together rather than leaving them to disagree.
  */
-export function useImportGroups(language: string): ImportGroups {
+export function useImportGroups(language: string, enabled = true): ImportGroups {
   const [wordGroups, setWordGroups] = useState<WordGroup[]>([]);
   const [grammarGroups, setGrammarGroups] = useState<GrammarGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +66,7 @@ export function useImportGroups(language: string): ImportGroups {
   // gating on an in-flight request instead risks applying a response that predates
   // the write which asked for the reload.
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
     Promise.all([
       getGroups(language).catch(() => [] as WordGroup[]),
@@ -79,7 +80,7 @@ export function useImportGroups(language: string): ImportGroups {
     return () => {
       cancelled = true;
     };
-  }, [language, revision]);
+  }, [language, revision, enabled]);
 
   return { wordGroups, grammarGroups, loading, reload };
 }

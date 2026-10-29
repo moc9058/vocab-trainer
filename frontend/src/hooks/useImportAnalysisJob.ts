@@ -1,4 +1,4 @@
-import { apiFetch } from "../api/transport";
+import { apiFetch, apiPollingOnly } from "../api/transport";
 import type { EventConnection } from "../api/sse";
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getImportAnalysisJob, startImportAnalysisJob, pauseImportAnalysisJob, getImportSession, openImportAnalysisEvents } from '../api/import';
@@ -29,7 +29,7 @@ export function useImportAnalysisJob(language: string, onSession: (s: ImportSess
     function closeStream() { source?.close(); source = null; streamHealthy = false; }
     function failed(err: unknown, phase: string) {
       if (controller.signal.aborted || finished) return;
-      if (err instanceof ApiError && [400, 401, 403, 404, 409, 413].includes(err.status)) {
+      if (err instanceof ApiError && [400, 401, 403, 404, 409, 410, 413].includes(err.status)) {
         finished = true; closeStream(); setError(err.message); setReconnecting(false);
       } else {
         failures++; setReconnecting(true);
@@ -60,7 +60,7 @@ export function useImportAnalysisJob(language: string, onSession: (s: ImportSess
       return deliveries;
     }
     function connect() {
-      if (source || finished || controller.signal.aborted || document.hidden || Date.now() < streamRetryAt || typeof EventSource === 'undefined') return;
+      if (apiPollingOnly() || source || finished || controller.signal.aborted || document.hidden || Date.now() < streamRetryAt || typeof EventSource === 'undefined') return;
       try {
         const connection = openImportAnalysisEvents(language, target!.id); source = connection;
         connection.onopen = () => { if (source === connection) { streamHealthy = true; lastEventAt = Date.now(); } };
@@ -79,7 +79,7 @@ export function useImportAnalysisJob(language: string, onSession: (s: ImportSess
       } catch { closeStream(); streamRetryAt = Date.now() + 30_000; }
     }
     async function poll() {
-      if (busy || finished || controller.signal.aborted) return;
+      if (busy || finished || controller.signal.aborted || (apiPollingOnly() && document.hidden)) return;
       if (timer) clearTimeout(timer);
       busy = true;
       let phase = 'poll';
@@ -97,8 +97,8 @@ export function useImportAnalysisJob(language: string, onSession: (s: ImportSess
       finally {
         busy = false;
         if (!finished && !controller.signal.aborted) timer = setTimeout(() => void poll(),
-          failures ? Math.min(15_000, 3000 * 2 ** Math.min(failures, 3)) :
-            document.hidden || (streamHealthy && Date.now() - lastEventAt < 25_000) ? 10_000 : 3000);
+          (failures ? Math.min(15_000, 3000 * 2 ** Math.min(failures, 3)) :
+            document.hidden || (streamHealthy && Date.now() - lastEventAt < 25_000) ? 10_000 : 3000) + (apiPollingOnly() ? Math.floor(Math.random() * 1000) : 0));
       }
     }
     const wake = () => {

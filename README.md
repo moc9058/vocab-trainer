@@ -1696,3 +1696,7 @@ npm run test:browser
 
 On Linux, install Chromium's required OS libraries if they are not already available.
 Browser test pages are development-only and are not part of the production build.
+
+## Safari selection analysis
+
+Safariの選択テキストから中国語を取り込み、共通の読解・A/B登録画面へ進む拡張を追加しました。[ビルド・接続・制限・検証記録](docs/safari-extension.md)を参照してください。macOS/iOSのbuildは確認済みですが、署名・インストール・Safari実機受入は未完了です。Cloud Run配備は拡張の端末インストールを行いません。

@@ -103,6 +103,7 @@ export default function LanguageSelectPage() {
           >
             {t("viewLLMModels") ?? "LLM Models"}
           </button>
+          <button onClick={() => navigate('/extension/connections')} className="mt-2 w-full rounded-lg border border-gray-600 px-4 py-2.5 text-sm text-gray-300">{t('safariConnections')}</button>
           {authEnabled && (
             <>
               <p className="mt-3 truncate text-center text-xs text-gray-500">

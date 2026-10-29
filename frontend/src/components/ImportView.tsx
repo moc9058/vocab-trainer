@@ -212,6 +212,12 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
     } catch (err) { setError(err instanceof Error ? err.message : String(err)); }
   }
 
+  const initialSession = useRef(false);
+  useEffect(() => {
+    const id = searchParams.get('session');
+    if (!initialSession.current && id) { initialSession.current = true; void handleResume(id); }
+  }, [searchParams]);
+
   async function handleDelete(sessionId: string) {
     setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     try {

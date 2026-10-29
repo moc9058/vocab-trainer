@@ -602,3 +602,26 @@ worked anchors and the 63-goal Linear Algebra catalog under
 `textbook/Linear Algebra/curriculum/`. These are authoring artifacts, not runtime
 configuration. `math:sync` still publishes only manifest chapter Markdown; no
 objective-based scheduling, grading or history migration is implemented.
+
+
+## Safari selection intake (2026-10-29)
+
+`extensions/safari` is an independent npm package; `frontend/vite.extension.config.ts`
+bundles a separate extension entry that reuses ImportReview, import registration queues,
+meaning-unit projection and session autosave. `api/transport.ts` supports an explicit
+adapter; the extension uses background RPC and polling without replacing global fetch.
+The Apple project has separate macOS/iOS hosts and a shared native Keychain handler;
+the existing Capacitor app is unchanged. See [Safari extension](safari-extension.md)
+for setup, exact validation results and the outstanding Safari runtime/device gates.
+
+`extension-auth.ts` and `routes/extension-auth.ts` implement cookie-approved S256
+connections, transactional one-time exchange, hashed 30-day extension sessions and
+owner revocation. `ext_` Bearer credentials remain distinct from mobile tokens.
+`extension-routes.json` is the shared method/path capability table; background also
+validates message payloads and binds embedded panels to a source tab/frame through
+a separately delivered secret. No wildcard CORS or cookie policy changes were made.
+`sourceOrigin.method = safari-selection` reuses the existing immutable creation
+metadata and ingestion receipts. New connection creation performs bounded expired
+metadata cleanup; read-time expiry remains authoritative. No config upload or data
+migration is required. Signing/installation and Safari runtime verification remain
+separate from Web/backend deployment.

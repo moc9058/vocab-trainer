@@ -1,3 +1,4 @@
+import { extensionStore, extensionToken } from './extension-auth.js';
 import { createHash, randomBytes } from 'node:crypto';
 import { Firestore } from '@google-cloud/firestore';
 import { OAuth2Client } from 'google-auth-library';
@@ -61,7 +62,8 @@ export async function authenticatedUser(request: Pick<FastifyRequest, 'headers' 
   const cfg = getAuthConfig();
   if (!cfg) return null;
   if (request.headers.authorization !== undefined) {
-    const token = bearer(request); const session = token ? await store.read(token) : null;
+    const ext = extensionToken(request);
+    const token = bearer(request); const session = ext ? await extensionStore().read(ext) : token ? await store.read(token) : null;
     return session && isEmailAllowed(session.user.email) ? session.user : null;
   }
   const user = verifySession(request.cookies[SESSION_COOKIE], cfg.sessionSecret);

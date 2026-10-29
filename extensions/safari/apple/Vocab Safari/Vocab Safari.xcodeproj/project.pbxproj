@@ -1,0 +1,955 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 110;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		73E1DBE9309326AD00A86AEA /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E1DBE8309326AD00A86AEA /* AppDelegate.swift */; };
+		73E1DBEB309326AD00A86AEA /* SceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E1DBEA309326AD00A86AEA /* SceneDelegate.swift */; };
+		73E1DBEE309326AD00A86AEA /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DBEC309326AD00A86AEA /* LaunchScreen.storyboard */; };
+		73E1DBF1309326AD00A86AEA /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DBEF309326AD00A86AEA /* Main.storyboard */; };
+		73E1DBFA309326AD00A86AEA /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E1DBF9309326AD00A86AEA /* AppDelegate.swift */; };
+		73E1DBFD309326AD00A86AEA /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DBFB309326AD00A86AEA /* Main.storyboard */; };
+		73E1DC04309326AD00A86AEA /* Vocab Safari Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 73E1DC03309326AD00A86AEA /* Vocab Safari Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		73E1DC0E309326AD00A86AEA /* Vocab Safari Extension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 73E1DC0D309326AD00A86AEA /* Vocab Safari Extension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		73E1DC13309326AD00A86AEA /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DBD8309326AC00A86AEA /* Main.html */; };
+		73E1DC14309326AD00A86AEA /* Main.html in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DBD8309326AC00A86AEA /* Main.html */; };
+		73E1DC15309326AD00A86AEA /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DBDA309326AC00A86AEA /* Icon.png */; };
+		73E1DC16309326AD00A86AEA /* Icon.png in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DBDA309326AC00A86AEA /* Icon.png */; };
+		73E1DC17309326AD00A86AEA /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DBDB309326AC00A86AEA /* Style.css */; };
+		73E1DC18309326AD00A86AEA /* Style.css in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DBDB309326AC00A86AEA /* Style.css */; };
+		73E1DC19309326AD00A86AEA /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DBDC309326AC00A86AEA /* Script.js */; };
+		73E1DC1A309326AD00A86AEA /* Script.js in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DBDC309326AC00A86AEA /* Script.js */; };
+		73E1DC1B309326AD00A86AEA /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E1DBDD309326AC00A86AEA /* ViewController.swift */; };
+		73E1DC1C309326AD00A86AEA /* ViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E1DBDD309326AC00A86AEA /* ViewController.swift */; };
+		73E1DC1D309326AD00A86AEA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DBDE309326AD00A86AEA /* Assets.xcassets */; };
+		73E1DC1E309326AD00A86AEA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DBDE309326AD00A86AEA /* Assets.xcassets */; };
+		73E1DC1F309326AD00A86AEA /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E1DBE0309326AD00A86AEA /* SafariWebExtensionHandler.swift */; };
+		73E1DC20309326AD00A86AEA /* SafariWebExtensionHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73E1DBE0309326AD00A86AEA /* SafariWebExtensionHandler.swift */; };
+		73E1DC39309326AD00A86AEA /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DC32309326AD00A86AEA /* background.js */; };
+		73E1DC3A309326AD00A86AEA /* policy.js in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DC33309326AD00A86AEA /* policy.js */; };
+		73E1DC3B309326AD00A86AEA /* panel.html in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DC34309326AD00A86AEA /* panel.html */; };
+		73E1DC3C309326AD00A86AEA /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DC35309326AD00A86AEA /* manifest.json */; };
+		73E1DC3D309326AD00A86AEA /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DC36309326AD00A86AEA /* _locales */; };
+		73E1DC3E309326AD00A86AEA /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DC37309326AD00A86AEA /* content.js */; };
+		73E1DC3F309326AD00A86AEA /* assets in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DC38309326AD00A86AEA /* assets */; };
+		73E1DC40309326AD00A86AEA /* background.js in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DC32309326AD00A86AEA /* background.js */; };
+		73E1DC41309326AD00A86AEA /* policy.js in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DC33309326AD00A86AEA /* policy.js */; };
+		73E1DC42309326AD00A86AEA /* panel.html in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DC34309326AD00A86AEA /* panel.html */; };
+		73E1DC43309326AD00A86AEA /* manifest.json in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DC35309326AD00A86AEA /* manifest.json */; };
+		73E1DC44309326AD00A86AEA /* _locales in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DC36309326AD00A86AEA /* _locales */; };
+		73E1DC45309326AD00A86AEA /* content.js in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DC37309326AD00A86AEA /* content.js */; };
+		73E1DC46309326AD00A86AEA /* assets in Resources */ = {isa = PBXBuildFile; fileRef = 73E1DC38309326AD00A86AEA /* assets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		73E1DC05309326AD00A86AEA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 73E1DBD2309326AB00A86AEA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 73E1DC02309326AD00A86AEA;
+			remoteInfo = "Vocab Safari Extension (iOS)";
+		};
+		73E1DC0F309326AD00A86AEA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 73E1DBD2309326AB00A86AEA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 73E1DC0C309326AD00A86AEA;
+			remoteInfo = "Vocab Safari Extension (macOS)";
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		73E1DC26309326AD00A86AEA /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = PlugIns;
+			files = (
+				73E1DC04309326AD00A86AEA /* Vocab Safari Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+		};
+		73E1DC2D309326AD00A86AEA /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = PlugIns;
+			files = (
+				73E1DC0E309326AD00A86AEA /* Vocab Safari Extension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		73E1DBD9309326AC00A86AEA /* Base */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = Base; path = Base.lproj/Main.html; sourceTree = "<group>"; };
+		73E1DBDA309326AC00A86AEA /* Icon.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = Icon.png; sourceTree = "<group>"; };
+		73E1DBDB309326AC00A86AEA /* Style.css */ = {isa = PBXFileReference; lastKnownFileType = text.css; path = Style.css; sourceTree = "<group>"; };
+		73E1DBDC309326AC00A86AEA /* Script.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = Script.js; sourceTree = "<group>"; };
+		73E1DBDD309326AC00A86AEA /* ViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewController.swift; sourceTree = "<group>"; };
+		73E1DBDE309326AD00A86AEA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		73E1DBE0309326AD00A86AEA /* SafariWebExtensionHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariWebExtensionHandler.swift; sourceTree = "<group>"; };
+		73E1DBE5309326AD00A86AEA /* Vocab Safari.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Vocab Safari.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		73E1DBE8309326AD00A86AEA /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		73E1DBEA309326AD00A86AEA /* SceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SceneDelegate.swift; sourceTree = "<group>"; };
+		73E1DBED309326AD00A86AEA /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
+		73E1DBF0309326AD00A86AEA /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		73E1DBF2309326AD00A86AEA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		73E1DBF7309326AD00A86AEA /* Vocab Safari.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Vocab Safari.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		73E1DBF9309326AD00A86AEA /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		73E1DBFC309326AD00A86AEA /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
+		73E1DBFE309326AD00A86AEA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		73E1DC03309326AD00A86AEA /* Vocab Safari Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Vocab Safari Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		73E1DC08309326AD00A86AEA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		73E1DC0D309326AD00A86AEA /* Vocab Safari Extension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Vocab Safari Extension.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
+		73E1DC12309326AD00A86AEA /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		73E1DC32309326AD00A86AEA /* background.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = background.js; path = ../../../dist/background.js; sourceTree = "<group>"; };
+		73E1DC33309326AD00A86AEA /* policy.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = policy.js; path = ../../../dist/policy.js; sourceTree = "<group>"; };
+		73E1DC34309326AD00A86AEA /* panel.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; name = panel.html; path = ../../../dist/panel.html; sourceTree = "<group>"; };
+		73E1DC35309326AD00A86AEA /* manifest.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; name = manifest.json; path = ../../../dist/manifest.json; sourceTree = "<group>"; };
+		73E1DC36309326AD00A86AEA /* _locales */ = {isa = PBXFileReference; lastKnownFileType = folder; name = _locales; path = ../../../dist/_locales; sourceTree = "<group>"; };
+		73E1DC37309326AD00A86AEA /* content.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; name = content.js; path = ../../../dist/content.js; sourceTree = "<group>"; };
+		73E1DC38309326AD00A86AEA /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; name = assets; path = ../../../dist/assets; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		73E1DBE2309326AD00A86AEA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		73E1DBF4309326AD00A86AEA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		73E1DC00309326AD00A86AEA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		73E1DC0A309326AD00A86AEA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		73E1DBD1309326AB00A86AEA = {
+			isa = PBXGroup;
+			children = (
+				73E1DBD6309326AB00A86AEA /* Shared (App) */,
+				73E1DBDF309326AD00A86AEA /* Shared (Extension) */,
+				73E1DBE7309326AD00A86AEA /* iOS (App) */,
+				73E1DBF8309326AD00A86AEA /* macOS (App) */,
+				73E1DC07309326AD00A86AEA /* iOS (Extension) */,
+				73E1DC11309326AD00A86AEA /* macOS (Extension) */,
+				73E1DBE6309326AD00A86AEA /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		73E1DBD6309326AB00A86AEA /* Shared (App) */ = {
+			isa = PBXGroup;
+			children = (
+				73E1DBDD309326AC00A86AEA /* ViewController.swift */,
+				73E1DBDE309326AD00A86AEA /* Assets.xcassets */,
+				73E1DBD7309326AB00A86AEA /* Resources */,
+			);
+			path = "Shared (App)";
+			sourceTree = "<group>";
+		};
+		73E1DBD7309326AB00A86AEA /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				73E1DBD8309326AC00A86AEA /* Main.html */,
+				73E1DBDA309326AC00A86AEA /* Icon.png */,
+				73E1DBDB309326AC00A86AEA /* Style.css */,
+				73E1DBDC309326AC00A86AEA /* Script.js */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		73E1DBDF309326AD00A86AEA /* Shared (Extension) */ = {
+			isa = PBXGroup;
+			children = (
+				73E1DC31309326AD00A86AEA /* Resources */,
+				73E1DBE0309326AD00A86AEA /* SafariWebExtensionHandler.swift */,
+			);
+			path = "Shared (Extension)";
+			sourceTree = "<group>";
+		};
+		73E1DBE6309326AD00A86AEA /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				73E1DBE5309326AD00A86AEA /* Vocab Safari.app */,
+				73E1DBF7309326AD00A86AEA /* Vocab Safari.app */,
+				73E1DC03309326AD00A86AEA /* Vocab Safari Extension.appex */,
+				73E1DC0D309326AD00A86AEA /* Vocab Safari Extension.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		73E1DBE7309326AD00A86AEA /* iOS (App) */ = {
+			isa = PBXGroup;
+			children = (
+				73E1DBE8309326AD00A86AEA /* AppDelegate.swift */,
+				73E1DBEA309326AD00A86AEA /* SceneDelegate.swift */,
+				73E1DBEC309326AD00A86AEA /* LaunchScreen.storyboard */,
+				73E1DBEF309326AD00A86AEA /* Main.storyboard */,
+				73E1DBF2309326AD00A86AEA /* Info.plist */,
+			);
+			path = "iOS (App)";
+			sourceTree = "<group>";
+		};
+		73E1DBF8309326AD00A86AEA /* macOS (App) */ = {
+			isa = PBXGroup;
+			children = (
+				73E1DBF9309326AD00A86AEA /* AppDelegate.swift */,
+				73E1DBFB309326AD00A86AEA /* Main.storyboard */,
+				73E1DBFE309326AD00A86AEA /* Info.plist */,
+			);
+			path = "macOS (App)";
+			sourceTree = "<group>";
+		};
+		73E1DC07309326AD00A86AEA /* iOS (Extension) */ = {
+			isa = PBXGroup;
+			children = (
+				73E1DC08309326AD00A86AEA /* Info.plist */,
+			);
+			path = "iOS (Extension)";
+			sourceTree = "<group>";
+		};
+		73E1DC11309326AD00A86AEA /* macOS (Extension) */ = {
+			isa = PBXGroup;
+			children = (
+				73E1DC12309326AD00A86AEA /* Info.plist */,
+			);
+			path = "macOS (Extension)";
+			sourceTree = "<group>";
+		};
+		73E1DC31309326AD00A86AEA /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				73E1DC32309326AD00A86AEA /* background.js */,
+				73E1DC33309326AD00A86AEA /* policy.js */,
+				73E1DC34309326AD00A86AEA /* panel.html */,
+				73E1DC35309326AD00A86AEA /* manifest.json */,
+				73E1DC36309326AD00A86AEA /* _locales */,
+				73E1DC37309326AD00A86AEA /* content.js */,
+				73E1DC38309326AD00A86AEA /* assets */,
+			);
+			name = Resources;
+			path = "Shared (Extension)";
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		73E1DBE4309326AD00A86AEA /* Vocab Safari (iOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 73E1DC27309326AD00A86AEA /* Build configuration list for PBXNativeTarget "Vocab Safari (iOS)" */;
+			buildPhases = (
+				73E1DBE1309326AD00A86AEA /* Sources */,
+				73E1DBE2309326AD00A86AEA /* Frameworks */,
+				73E1DBE3309326AD00A86AEA /* Resources */,
+				73E1DC26309326AD00A86AEA /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				73E1DC06309326AD00A86AEA /* PBXTargetDependency */,
+			);
+			name = "Vocab Safari (iOS)";
+			productName = "Vocab Safari (iOS)";
+			productReference = 73E1DBE5309326AD00A86AEA /* Vocab Safari.app */;
+			productType = "com.apple.product-type.application";
+		};
+		73E1DBF6309326AD00A86AEA /* Vocab Safari (macOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 73E1DC2E309326AD00A86AEA /* Build configuration list for PBXNativeTarget "Vocab Safari (macOS)" */;
+			buildPhases = (
+				73E1DBF3309326AD00A86AEA /* Sources */,
+				73E1DBF4309326AD00A86AEA /* Frameworks */,
+				73E1DBF5309326AD00A86AEA /* Resources */,
+				73E1DC2D309326AD00A86AEA /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				73E1DC10309326AD00A86AEA /* PBXTargetDependency */,
+			);
+			name = "Vocab Safari (macOS)";
+			productName = "Vocab Safari (macOS)";
+			productReference = 73E1DBF7309326AD00A86AEA /* Vocab Safari.app */;
+			productType = "com.apple.product-type.application";
+		};
+		73E1DC02309326AD00A86AEA /* Vocab Safari Extension (iOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 73E1DC23309326AD00A86AEA /* Build configuration list for PBXNativeTarget "Vocab Safari Extension (iOS)" */;
+			buildPhases = (
+				73E1DBFF309326AD00A86AEA /* Sources */,
+				73E1DC00309326AD00A86AEA /* Frameworks */,
+				73E1DC01309326AD00A86AEA /* Resources */,
+			);
+			buildRules = (
+			);
+			name = "Vocab Safari Extension (iOS)";
+			productName = "Vocab Safari Extension (iOS)";
+			productReference = 73E1DC03309326AD00A86AEA /* Vocab Safari Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		73E1DC0C309326AD00A86AEA /* Vocab Safari Extension (macOS) */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 73E1DC2A309326AD00A86AEA /* Build configuration list for PBXNativeTarget "Vocab Safari Extension (macOS)" */;
+			buildPhases = (
+				73E1DC09309326AD00A86AEA /* Sources */,
+				73E1DC0A309326AD00A86AEA /* Frameworks */,
+				73E1DC0B309326AD00A86AEA /* Resources */,
+			);
+			buildRules = (
+			);
+			name = "Vocab Safari Extension (macOS)";
+			productName = "Vocab Safari Extension (macOS)";
+			productReference = 73E1DC0D309326AD00A86AEA /* Vocab Safari Extension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		73E1DBD2309326AB00A86AEA /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					73E1DBE4309326AD00A86AEA = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					73E1DBF6309326AD00A86AEA = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					73E1DC02309326AD00A86AEA = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					73E1DC0C309326AD00A86AEA = {
+						CreatedOnToolsVersion = 27.0;
+					};
+				};
+			};
+			buildConfigurationList = 73E1DBD5309326AB00A86AEA /* Build configuration list for PBXProject "Vocab Safari" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 73E1DBD1309326AB00A86AEA;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 73E1DBE6309326AD00A86AEA /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				73E1DBE4309326AD00A86AEA /* Vocab Safari (iOS) */,
+				73E1DBF6309326AD00A86AEA /* Vocab Safari (macOS) */,
+				73E1DC02309326AD00A86AEA /* Vocab Safari Extension (iOS) */,
+				73E1DC0C309326AD00A86AEA /* Vocab Safari Extension (macOS) */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		73E1DBE3309326AD00A86AEA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				73E1DC15309326AD00A86AEA /* Icon.png in Resources */,
+				73E1DBEE309326AD00A86AEA /* LaunchScreen.storyboard in Resources */,
+				73E1DC13309326AD00A86AEA /* Main.html in Resources */,
+				73E1DC19309326AD00A86AEA /* Script.js in Resources */,
+				73E1DC1D309326AD00A86AEA /* Assets.xcassets in Resources */,
+				73E1DBF1309326AD00A86AEA /* Main.storyboard in Resources */,
+				73E1DC17309326AD00A86AEA /* Style.css in Resources */,
+			);
+		};
+		73E1DBF5309326AD00A86AEA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				73E1DC16309326AD00A86AEA /* Icon.png in Resources */,
+				73E1DC18309326AD00A86AEA /* Style.css in Resources */,
+				73E1DBFD309326AD00A86AEA /* Main.storyboard in Resources */,
+				73E1DC1A309326AD00A86AEA /* Script.js in Resources */,
+				73E1DC1E309326AD00A86AEA /* Assets.xcassets in Resources */,
+				73E1DC14309326AD00A86AEA /* Main.html in Resources */,
+			);
+		};
+		73E1DC01309326AD00A86AEA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				73E1DC45309326AD00A86AEA /* content.js in Resources */,
+				73E1DC43309326AD00A86AEA /* manifest.json in Resources */,
+				73E1DC46309326AD00A86AEA /* assets in Resources */,
+				73E1DC41309326AD00A86AEA /* policy.js in Resources */,
+				73E1DC42309326AD00A86AEA /* panel.html in Resources */,
+				73E1DC44309326AD00A86AEA /* _locales in Resources */,
+				73E1DC40309326AD00A86AEA /* background.js in Resources */,
+			);
+		};
+		73E1DC0B309326AD00A86AEA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+				73E1DC3E309326AD00A86AEA /* content.js in Resources */,
+				73E1DC3C309326AD00A86AEA /* manifest.json in Resources */,
+				73E1DC3F309326AD00A86AEA /* assets in Resources */,
+				73E1DC3A309326AD00A86AEA /* policy.js in Resources */,
+				73E1DC3B309326AD00A86AEA /* panel.html in Resources */,
+				73E1DC3D309326AD00A86AEA /* _locales in Resources */,
+				73E1DC39309326AD00A86AEA /* background.js in Resources */,
+			);
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		73E1DBE1309326AD00A86AEA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+				73E1DC1B309326AD00A86AEA /* ViewController.swift in Sources */,
+				73E1DBE9309326AD00A86AEA /* AppDelegate.swift in Sources */,
+				73E1DBEB309326AD00A86AEA /* SceneDelegate.swift in Sources */,
+			);
+		};
+		73E1DBF3309326AD00A86AEA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+				73E1DC1C309326AD00A86AEA /* ViewController.swift in Sources */,
+				73E1DBFA309326AD00A86AEA /* AppDelegate.swift in Sources */,
+			);
+		};
+		73E1DBFF309326AD00A86AEA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+				73E1DC1F309326AD00A86AEA /* SafariWebExtensionHandler.swift in Sources */,
+			);
+		};
+		73E1DC09309326AD00A86AEA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+				73E1DC20309326AD00A86AEA /* SafariWebExtensionHandler.swift in Sources */,
+			);
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		73E1DC06309326AD00A86AEA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 73E1DC02309326AD00A86AEA /* Vocab Safari Extension (iOS) */;
+			targetProxy = 73E1DC05309326AD00A86AEA /* PBXContainerItemProxy */;
+		};
+		73E1DC10309326AD00A86AEA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 73E1DC0C309326AD00A86AEA /* Vocab Safari Extension (macOS) */;
+			targetProxy = 73E1DC0F309326AD00A86AEA /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		73E1DBD8309326AC00A86AEA /* Main.html */ = {
+			isa = PBXVariantGroup;
+			children = (
+				73E1DBD9309326AC00A86AEA /* Base */,
+			);
+			name = Main.html;
+			sourceTree = "<group>";
+		};
+		73E1DBEC309326AD00A86AEA /* LaunchScreen.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				73E1DBED309326AD00A86AEA /* Base */,
+			);
+			name = LaunchScreen.storyboard;
+			sourceTree = "<group>";
+		};
+		73E1DBEF309326AD00A86AEA /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				73E1DBF0309326AD00A86AEA /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+		73E1DBFB309326AD00A86AEA /* Main.storyboard */ = {
+			isa = PBXVariantGroup;
+			children = (
+				73E1DBFC309326AD00A86AEA /* Base */,
+			);
+			name = Main.storyboard;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		73E1DC21309326AD00A86AEA /* Debug configuration for PBXProject "Vocab Safari" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		73E1DC22309326AD00A86AEA /* Release configuration for PBXProject "Vocab Safari" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		73E1DC24309326AD00A86AEA /* Debug configuration for PBXNativeTarget "Vocab Safari Extension (iOS)" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS (Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Vocab Safari Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.vocabtrainer.safari.Extension;
+				PRODUCT_NAME = "Vocab Safari Extension";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		73E1DC25309326AD00A86AEA /* Release configuration for PBXNativeTarget "Vocab Safari Extension (iOS)" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS (Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Vocab Safari Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.vocabtrainer.safari.Extension;
+				PRODUCT_NAME = "Vocab Safari Extension";
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		73E1DC28309326AD00A86AEA /* Debug configuration for PBXNativeTarget "Vocab Safari (iOS)" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS (App)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Vocab Safari";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.vocabtrainer.safari;
+				PRODUCT_NAME = "Vocab Safari";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		73E1DC29309326AD00A86AEA /* Release configuration for PBXNativeTarget "Vocab Safari (iOS)" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "iOS (App)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Vocab Safari";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				INFOPLIST_KEY_UIMainStoryboardFile = Main;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.vocabtrainer.safari;
+				PRODUCT_NAME = "Vocab Safari";
+				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		73E1DC2B309326AD00A86AEA /* Debug configuration for PBXNativeTarget "Vocab Safari Extension (macOS)" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "macOS (Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Vocab Safari Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.vocabtrainer.safari.Extension;
+				PRODUCT_NAME = "Vocab Safari Extension";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		73E1DC2C309326AD00A86AEA /* Release configuration for PBXNativeTarget "Vocab Safari Extension (macOS)" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "macOS (Extension)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Vocab Safari Extension";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.vocabtrainer.safari.Extension;
+				PRODUCT_NAME = "Vocab Safari Extension";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		73E1DC2F309326AD00A86AEA /* Debug configuration for PBXNativeTarget "Vocab Safari (macOS)" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "macOS (App)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Vocab Safari";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.vocabtrainer.safari;
+				PRODUCT_NAME = "Vocab Safari";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		73E1DC30309326AD00A86AEA /* Release configuration for PBXNativeTarget "Vocab Safari (macOS)" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				ENABLE_USER_SELECTED_FILES = readonly;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "macOS (App)/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Vocab Safari";
+				INFOPLIST_KEY_NSMainStoryboardFile = Main;
+				INFOPLIST_KEY_NSPrincipalClass = NSApplication;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"-framework",
+					SafariServices,
+					"-framework",
+					WebKit,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = app.vocabtrainer.safari;
+				PRODUCT_NAME = "Vocab Safari";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		73E1DBD5309326AB00A86AEA /* Build configuration list for PBXProject "Vocab Safari" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				73E1DC21309326AD00A86AEA /* Debug configuration for PBXProject "Vocab Safari" */,
+				73E1DC22309326AD00A86AEA /* Release configuration for PBXProject "Vocab Safari" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		73E1DC23309326AD00A86AEA /* Build configuration list for PBXNativeTarget "Vocab Safari Extension (iOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				73E1DC24309326AD00A86AEA /* Debug configuration for PBXNativeTarget "Vocab Safari Extension (iOS)" */,
+				73E1DC25309326AD00A86AEA /* Release configuration for PBXNativeTarget "Vocab Safari Extension (iOS)" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		73E1DC27309326AD00A86AEA /* Build configuration list for PBXNativeTarget "Vocab Safari (iOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				73E1DC28309326AD00A86AEA /* Debug configuration for PBXNativeTarget "Vocab Safari (iOS)" */,
+				73E1DC29309326AD00A86AEA /* Release configuration for PBXNativeTarget "Vocab Safari (iOS)" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		73E1DC2A309326AD00A86AEA /* Build configuration list for PBXNativeTarget "Vocab Safari Extension (macOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				73E1DC2B309326AD00A86AEA /* Debug configuration for PBXNativeTarget "Vocab Safari Extension (macOS)" */,
+				73E1DC2C309326AD00A86AEA /* Release configuration for PBXNativeTarget "Vocab Safari Extension (macOS)" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		73E1DC2E309326AD00A86AEA /* Build configuration list for PBXNativeTarget "Vocab Safari (macOS)" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				73E1DC2F309326AD00A86AEA /* Debug configuration for PBXNativeTarget "Vocab Safari (macOS)" */,
+				73E1DC30309326AD00A86AEA /* Release configuration for PBXNativeTarget "Vocab Safari (macOS)" */,
+			);
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 73E1DBD2309326AB00A86AEA /* Project object */;
+	validationLevel = 1;
+}

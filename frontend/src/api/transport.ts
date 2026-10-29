@@ -13,8 +13,18 @@ export function resolveApiUrl(path: string, native = isNative(), origin = apiOri
   return url.href;
 }
 
+export interface ApiTransport {
+  fetch(path: string, init?: RequestInit): Promise<Response>;
+  /** Extension RPC transfers complete JSON responses, never streams. */
+  pollingOnly?: boolean;
+}
+let adapter: ApiTransport | undefined;
+export function installApiTransport(transport: ApiTransport): void { adapter = transport; }
+export function apiPollingOnly(): boolean { return adapter?.pollingOnly ?? false; }
+
 /** Native fetch stays unpatched so ReadableStream/AbortSignal work in WKWebView. No automatic POST replay. */
 export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  if (adapter) return adapter.fetch(path, init);
   const native = isNative();
   const url = resolveApiUrl(path, native);
   const headers = new Headers(init.headers);

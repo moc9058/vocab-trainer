@@ -21,7 +21,8 @@
     "ios:smoke": "node --experimental-test-module-mocks --import tsx scripts/ios-smoke-server.ts",
     "math:sync": "tsx scripts/sync-math-textbooks.ts",
     "test:math:emulator": "node --experimental-test-module-mocks --import tsx --test scripts/tests/emulator/math.test.ts",
-    "test:math": "node --experimental-test-module-mocks --import tsx --test scripts/tests/math-*.test.ts"
+    "test:math": "node --experimental-test-module-mocks --import tsx --test scripts/tests/math-*.test.ts",
+    "test:extension:emulator": "node --import tsx --test scripts/tests/emulator/extension-auth.test.ts"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",

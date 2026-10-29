@@ -1,3 +1,6 @@
+import extensionAuthRoutes from './routes/extension-auth.js';
+import { extensionToken } from './extension-auth.js';
+import { extensionAllows } from './extension-scope.js';
 import Fastify from "fastify";
 import mathRoutes from "./routes/math.js";
 import cors from "@fastify/cors";
@@ -82,10 +85,13 @@ const PUBLIC_PATH_PREFIXES = ["/api/auth/"];
 fastify.addHook("onRequest", async (request, reply) => {
   if (request.method === "POST" && ["/internal/import-analysis/run", "/internal/import-analysis/reconcile"].includes(request.url.split("?")[0])) return; // Dedicated OIDC hook, never an unauthenticated worker.
   const cfg = getAuthConfig();
+  if (!cfg && request.headers.authorization?.startsWith("Bearer ext_")) return reply.code(503).send({ error: "Extension authentication unavailable" });
   if (!cfg) return;
 
   const path = request.url.split("?")[0];
   if (request.method === "GET" && path === "/health") return;
+  // Even public auth routes must not let an extension credential escape its capabilities.
+  if (extensionToken(request) && !extensionAllows(request.method, path)) return reply.code(403).send({ error: "Extension scope denied" });
   if (PUBLIC_PATH_PREFIXES.some((p) => path.startsWith(p))) return;
 
   const user = await authenticatedUser(request);
@@ -96,8 +102,14 @@ fastify.addHook("onRequest", async (request, reply) => {
   }
 });
 
+fastify.addHook('preHandler', async (request, reply) => {
+  if (extensionToken(request) && /^\/api\/(?:vocab|grammar)\/chinese\/groups\/[^/]+\/(?:words|grammar)$/.test(request.url.split('?')[0])
+    && (request.body as { action?: string } | undefined)?.action !== 'add') return reply.code(403).send({ error: 'Extension can only add membership' });
+});
+
 await fastify.register(mathRoutes, { prefix: "/api/math" });
 await fastify.register(authRoutes, { prefix: "/api/auth" });
+await fastify.register(extensionAuthRoutes, { prefix: "/api/auth/extension" });
 await fastify.register(mobileAuthRoutes, { prefix: "/api/auth/mobile" });
 await fastify.register(languagesRoutes, { prefix: "/api/languages" });
 await fastify.register(vocabRoutes, { prefix: "/api/vocab" });
