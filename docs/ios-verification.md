@@ -188,3 +188,16 @@ XCUITestの合成画像は複数文を含むため、試験用LLM応答を`sente
 意味のまとまりの表示、全文内の繁体字、backgroundからの復帰のアプリassertionは通過。
 ただし `AppIntentsLiveEntityService` のOSプロセスクラッシュ1件により、コマンド全体は
 失敗（exit 65）として記録する。正常完了した試験とは扱わない。
+
+配備結果: 実装commit `98eaab8` をmasterへpushし、`./deploy.sh` が成功。
+backend `vocab-trainer-backend-00530-xgn` / frontend
+`vocab-trainer-frontend-00512-8tk` がそれぞれ100%のトラフィックを受信。
+公開backendの `/health` は200 / `ok`、公開frontendは200かつ配信JS内の
+自動OCR実装を確認した。production用assetsを再syncし、署名付き実機buildと
+最終版のinstallも成功した。個人の既存ショートカット設定は変更していない。
+
+Device Hubの代替として標準「iPhoneミラーリング」も試したが、
+「iPhone Microphone in Use」で接続待ちになった。ロック解除の本人確認後も、
+このマイク使用状態の解消とControl Center撮影の実機試験は未完了。
+最後のdevicectl起動再試行はCoreDeviceError 4016（device状態を確保できない）で失敗。
+install成功を撮影・OCR・実LLM解析の実機試験成功とは扱わない。
