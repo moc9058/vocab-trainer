@@ -522,8 +522,8 @@ revision transaction/worker tests under `demo-import-revisions`.
 See [screen reading](screen-reading-import.md) for the user workflow and device
 verification boundary. `CaptureIntents.swift`, `CaptureInbox.swift` and
 `NativeCapture.swift` receive images/text in the main app, protect a temporary inbox
-and run Vision OCR locally. `CaptureWorkspace` automatically forwards the full OCR text of images to the
-existing import pipeline; shared/pasted text retains explicit confirmation. No extension, shared credential container or
+and run Vision OCR locally. `CaptureWorkspace` lets the user select OCR passages and explicitly submit the
+confirmed text to the existing import pipeline. No extension, shared credential container or
 cloud image store is required.
 
 `sourceOrigin` is optional, validated creation metadata on import sessions and their
@@ -650,3 +650,16 @@ valid. Backend accepts this extension before the new iPhone app is installed;
 no bulk migration or config upload is required. Active-work navigation protection
 is unchanged. Cloud deployment does not install the native app or configure the
 system shortcut; Control Center timing requires separate physical-device checks.
+
+## Image passage selection (2026-10-30)
+
+Image OCR now stops at a passage selector. New images have no selected blocks;
+image buttons toggle multiple IDs and synchronize with list checkboxes. Per-line
+rectangles share the image zoom transform and highlight selected passages. A fixed
+safe-area-aware action bar shows selection count and explicit submission. Only
+selected, optionally corrected text is sent with `textConfirmed: true`. Destination
+and source settings are collapsed. Selection changes require confirmation before
+replacing edited text. Saved drafts/frozen operations remain readable, but image
+loads never auto-submit or auto-resume. Legacy automatic-ocr metadata and the native
+optional automaticAnalysisStarted field remain compatible; no backend migration is
+needed. Existing shortcut capture/Hide Control Center configuration is unchanged.

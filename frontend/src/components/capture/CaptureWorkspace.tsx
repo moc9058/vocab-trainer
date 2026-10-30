@@ -29,7 +29,6 @@ export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onCon
   const writes = useRef<Promise<unknown>>(Promise.resolve());
   const latest = useRef<{ draft: CaptureDraft; capture: Promise<LocalCapture> | null; generation: number } | null>(null);
   const discarded = useRef(false);
-  const automaticAttempts = useRef(new Set<string>());
   const blockId = draft.blockId ?? (draft.selected.join('_') || 'text');
   const previous = capture?.operations[blockId];
   const update = (patch: Partial<CaptureDraft>) => setDraft(value => ({ ...value, ...patch }));
@@ -91,27 +90,6 @@ export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onCon
         let restored = value.draft ?? { ...emptyCaptureDraft(), text: value.text ?? '' };
         const key = restored.blockId ?? (restored.selected.join('_') || 'text');
         if (value.operations[key]) restored = draftFromOperation(value.operations[key], restored, pendingCaptureRequest);
-        if (value.inputKind === 'image' && !restored.automaticAnalysisStarted && !Object.keys(value.operations).length) {
-          restored = { ...restored, automaticAnalysisStarted: true, blockId: 'automatic-ocr', selected: (value.blocks ?? []).map(b => b.id),
-            text: (value.blocks ?? []).map(b => b.text).join('\n') };
-          setDraft(restored);
-          // Persist the attempt before any network request. Reloading must never
-          // start another automatic submission after failure or interruption.
-          latest.current = { draft: restored, capture: currentCapture.current, generation: current };
-          await persist(latest.current);
-          if (current !== generation.current) return;
-          automaticAttempts.current.add(id);
-          if (captureTextKind(restored.text) === 'text' && validCaptureUrl(restored.sourceUrl) && restored.selected.length) {
-            await submit(value, restored, true);
-            if (current !== generation.current) return;
-            value = { ...value, ...(await source.load({ id })) };
-            if (current !== generation.current) return;
-          } else setError(t('captureAutomaticStopped'));
-        } else if (value.inputKind === 'image' && !value.acknowledged && value.operations[key]?.sessionId && !automaticAttempts.current.has(id)) {
-          automaticAttempts.current.add(id);
-          await onResume(value, key);
-          if (current !== generation.current) return;
-        }
         setDraft(restored);
         setCapture(value);
         await source.acknowledge({ id });
@@ -151,7 +129,9 @@ export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onCon
     } catch (err) { report(err); }
   }
   function choose(ids: string[]) {
-    if (!capture) return;
+    if (!capture || busy || !ready) return;
+    const original = (capture.blocks ?? []).filter(b => draft.selected.includes(b.id)).map(b => b.text).join('\n');
+    if (!previous && draft.text !== original && !window.confirm(t('captureReplaceEdited'))) return;
     const ordered = (capture.blocks ?? []).filter(b => ids.includes(b.id));
     const next = { ...draft, selected: ordered.map(b => b.id), blockId: undefined, text: ordered.map(b => b.text).join('\n') };
     const operation = capture.operations[next.selected.join('_') || 'text'];
@@ -159,28 +139,27 @@ export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onCon
     catch (err) { report(err); }
   }
   async function confirm() {
-    if (busy || !ready || captureTextKind(draft.text) !== 'text' || !validCaptureUrl(draft.sourceUrl)) return;
+    if (busy || !ready || (capture?.inputKind === 'image' && !draft.selected.length) || captureTextKind(draft.text) !== 'text' || !validCaptureUrl(draft.sourceUrl)) return;
     setBusy(true); setError('');
     try {
       const value = await persist({ draft, capture: currentCapture.current, generation: generation.current });
       if (!value) return;
-      await submit(value, draft, false);
+      await submit(value, draft);
       // A lost response may have frozen a request even though analysis did not open.
       if (mounted.current) await load(value.id);
     } catch (err) { if (mounted.current) report(err); }
     finally { if (mounted.current) setBusy(false); }
   }
-  async function submit(value: LocalCapture, input: CaptureDraft, automatic: boolean) {
+  async function submit(value: LocalCapture, input: CaptureDraft) {
     const selection: CaptureSelection = { capture: value, blockId: input.blockId ?? (input.selected.join('_') || 'text'),
       blockIds: input.selected, text: input.text, draft: input,
-      origin: { version: 1, method: value.method, sourceKind: input.sourceKind, textConfirmed: !automatic,
-        ...(automatic ? { analysisMode: 'automatic-ocr' as const } : {}), capturedAt: value.receivedAt,
+      origin: { version: 1, method: value.method, sourceKind: input.sourceKind, textConfirmed: true, capturedAt: value.receivedAt,
         ...(input.sourceLabel.trim() ? { sourceLabel: input.sourceLabel.trim() } : {}), ...(input.sourceUrl ? { sourceUrl: input.sourceUrl } : {}) } };
     await onConfirm(selection);
   }
   useCaptureNavigationBlocker(busy || saveError);
   const kind = captureTextKind(draft.text);
-  return <section className="mx-auto max-w-4xl space-y-5 px-3 py-4 text-gray-100 sm:p-6" data-testid="capture-workspace">
+  return <section className="mx-auto max-w-4xl space-y-5 px-3 pt-4 pb-36 text-gray-100 sm:p-6" data-testid="capture-workspace">
     <header className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">{t('captureTitle')}</h2><p className="mt-1 text-sm text-gray-400">{t('captureIntro')}</p></div><button type="button" disabled={busy} onClick={async () => {
       try { if (latest.current) await persist({ ...latest.current, capture: currentCapture.current }); onClose(); } catch { setSaveError(true); }
     }} className="min-h-11 shrink-0 rounded border border-gray-700 px-3">{t('cancel')}</button></header>
@@ -191,7 +170,8 @@ export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onCon
     {saveError && <p role="alert" className="text-red-300">{t('captureDraftError')} <button onClick={() => { if (latest.current) void persist({ ...latest.current, capture: currentCapture.current }).catch(() => {}); }} className="min-h-11 underline">{t('retry')}</button></p>}
     {capture && <>
       <p className="text-xs text-gray-400">{t('captureReceivedAt')}: {new Date(capture.receivedAt).toLocaleString()}</p>
-      <CaptureImage capture={capture} selected={draft.selected} onChoose={id => { if (!busy) choose([id]); }} />
+      {capture.inputKind === 'image' && <div className="flex items-center justify-between gap-3"><p className="text-sm text-indigo-200">{t('captureTapHint')}</p><button type="button" disabled={busy || !ready || !draft.selected.length} onClick={() => choose([])} className="min-h-11 shrink-0 rounded border border-gray-600 px-3 text-sm disabled:opacity-40">{t('captureClearSelection')}</button></div>}
+      <CaptureImage capture={capture} selected={draft.selected} disabled={busy || !ready} onChoose={id => choose(draft.selected.includes(id) ? draft.selected.filter(value => value !== id) : [...draft.selected, id])} />
       {!busy && capture.inputKind === 'image' && !capture.blocks?.length && <p className="text-amber-200">{t('captureNoText')}</p>}
       {!!capture.blocks?.length && <fieldset disabled={busy} className="space-y-2"><legend className="mb-2 text-sm text-gray-300">{t('captureSelectionHint')}</legend>{capture.blocks.map((block, index) => <label key={block.id} className="flex min-h-11 items-start gap-3 rounded-lg bg-gray-800 p-3 text-sm"><input type="checkbox" className="mt-1" checked={draft.selected.includes(block.id)} onChange={e => choose(e.target.checked ? [...draft.selected, block.id] : draft.selected.filter(id => id !== block.id))} /><span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{index + 1}. {block.text}{block.confidence < .7 && <span className="block text-xs text-amber-200">{t('captureLowConfidence')}</span>}</span></label>)}</fieldset>}
     </>}
@@ -200,15 +180,19 @@ export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onCon
       <label className="block text-sm">{t('captureConfirmText')}<textarea value={draft.text} onChange={e => update({ text: e.target.value })} rows={6} placeholder={t('capturePasteHint')} className="mt-2 w-full rounded-xl border border-gray-600 bg-gray-800 p-3 text-base leading-relaxed disabled:opacity-70" /></label>
       <p className={draft.text.length > 8000 ? 'text-sm text-red-300' : 'text-xs text-gray-400'}>{draft.text.length} / 8000 · {t('captureTextLimit')}</p>
       {(kind === 'url' || (!draft.text && !!sourceUrl)) && <p role="status" className="text-amber-200">{t('captureUrlOnly')}</p>}
-      <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm">{t('captureSourceLabel')}<input value={draft.sourceLabel} maxLength={100} onChange={e => update({ sourceLabel: e.target.value })} className="mt-1 w-full rounded-lg border border-gray-600 bg-gray-800 p-3 text-base" /></label>
+      <details className="rounded-xl border border-gray-700 p-3"><summary className="cursor-pointer text-sm text-gray-300">{t('captureDetails')}</summary><div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-sm">{t('captureSourceLabel')}<input value={draft.sourceLabel} maxLength={100} onChange={e => update({ sourceLabel: e.target.value })} className="mt-1 w-full rounded-lg border border-gray-600 bg-gray-800 p-3 text-base" /></label>
       <label className="text-sm">{t('captureSourceKind')}<select aria-label={t('captureSourceKind')} value={draft.sourceKind} onChange={e => update({ sourceKind: e.target.value as ImportSourceOrigin['sourceKind'] })} className="mt-1 w-full rounded-lg border border-gray-600 bg-gray-800 p-3 text-base">{(['unknown', 'post', 'comment', 'article'] as const).map(value => <option key={value} value={value}>{t(value === 'unknown' ? 'captureKindUnknown' : value === 'post' ? 'captureKindPost' : value === 'comment' ? 'captureKindComment' : 'captureKindArticle')}</option>)}</select></label></div>
       <label className="block text-sm">{t('captureSourceUrl')}<input value={draft.sourceUrl} maxLength={2048} type="url" onChange={e => update({ sourceUrl: e.target.value })} placeholder="https://" className="mt-1 w-full rounded-lg border border-gray-600 bg-gray-800 p-3 text-base" /></label>
-      {renderOptions?.(draft, update)}
+      {renderOptions?.(draft, update)}</details>
     </fieldset>
     <p className="text-sm leading-relaxed text-gray-400">{t('capturePrivacy')}</p>
     <p className="text-sm leading-relaxed text-gray-400">{t('captureSendHint')}</p>
-    {previous ? <button type="button" disabled={busy} onClick={() => void onResume(capture!, blockId)} className="min-h-11 rounded-xl bg-indigo-600 px-5 py-3">{t('captureResumeSource')}</button> : <button type="button" disabled={busy || !ready || kind !== 'text' || !validCaptureUrl(draft.sourceUrl) || (capture?.inputKind === 'image' && !draft.selected.length)} onClick={() => void confirm()} className="min-h-11 rounded-xl bg-indigo-600 px-5 py-3 font-medium disabled:opacity-40">{t('importAnalyze')}</button>}
+    <div className={`${capture?.inputKind === 'image' ? 'fixed inset-x-0 bottom-0 z-30 mx-auto max-w-4xl' : 'rounded-xl'} flex flex-wrap items-center justify-between gap-3 border-t border-indigo-800 bg-gray-950/95 px-3 pt-3 shadow-lg backdrop-blur`} style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
+      {capture?.inputKind === 'image' && <p role="status" className="text-sm text-indigo-200">{draft.selected.length} {t('captureSelectedCount')}{!draft.selected.length && <span className="block text-xs text-gray-400">{t('captureTapHint')}</span>}</p>}
+      {draft.selected.length > 0 && kind !== 'text' && <p role="status" className="w-full text-xs text-amber-200">{t(kind === 'long' ? 'captureTooLong' : kind === 'url' ? 'captureUrlOnly' : 'captureNoText')}</p>}
+    {previous ? <button type="button" disabled={busy} onClick={() => void onResume(capture!, blockId)} className="min-h-11 rounded-xl bg-indigo-600 px-5 py-3">{t('captureResumeSource')}</button> : <button type="button" disabled={busy || !ready || kind !== 'text' || !validCaptureUrl(draft.sourceUrl) || (capture?.inputKind === 'image' && !draft.selected.length)} onClick={() => void confirm()} className="min-h-11 rounded-xl bg-indigo-600 px-5 py-3 font-medium disabled:opacity-40">{t(capture?.inputKind === 'image' ? 'captureAnalyzeSelection' : 'importAnalyze')}</button>}
     {previous && <button type="button" disabled={busy} className="ml-3 min-h-11 rounded-lg border border-indigo-700 px-3 text-sm" onClick={() => update({ blockId: `${draft.selected.join('_') || 'text'}:${crypto.randomUUID()}` })}>{t('captureStartAgain')}</button>}
+    </div>
     <details className="rounded-xl border border-gray-700 p-3"><summary className="min-h-8 cursor-pointer text-indigo-200">{t('captureOtherInput')}</summary><p className="my-3 text-sm text-gray-400">{t('captureInputRequired')}</p><button type="button" disabled={busy} onClick={() => void pick()} className="min-h-11 rounded-lg border border-indigo-700 px-4">{t('capturePickImage')}</button><button type="button" disabled={busy} onClick={async () => {
       try { if (latest.current) await persist({ ...latest.current, capture: currentCapture.current }); await load(); } catch (err) { report(err); }
     }} className="ml-3 min-h-11 rounded-lg border border-indigo-700 px-4">{t('captureEnterText')}</button></details>

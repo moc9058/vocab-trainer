@@ -7,10 +7,12 @@ test('captured comments can be selected separately, corrected, and combined expl
   const text = page.getByRole('textbox', { name: 'Check and edit the original text' });
   await expect(text).toHaveValue('确实如此。');
   await text.fill('确实如此！');
+  await page.getByText('Source and destination settings', { exact: true }).click();
   await page.getByLabel('Type of passage', { exact: true }).selectOption('comment');
-  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await page.getByRole('button', { name: /^(Analyze|Analyze selected text)$/, exact: true }).click();
   let result = JSON.parse(await page.getByTestId('capture-selection').innerText());
   expect(result.text).toBe('确实如此！'); expect(result.blockId).toBe('comment'); expect(result.origin.sourceKind).toBe('comment');
+  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('checkbox').first().check();
   await expect(text).toHaveValue('虽然很忙，但我还是来了。\n确实如此。');
   await expect(page.getByText(/You selected several blocks/)).toBeVisible();
@@ -69,6 +71,7 @@ test('a captured compact reading automatically loads meaningful parts once when 
 test('a new input resets metadata and restores its own local draft', async ({ page }) => {
   await page.goto('/tests/browser/harness.html?mode=capture');
   await page.getByRole('button', { name: /^Choose passage 1/ }).click();
+  await page.getByText('Source and destination settings', { exact: true }).click();
   await page.getByRole('textbox', { name: 'Source name (optional)' }).fill('My source');
   await page.getByRole('textbox', { name: 'Check and edit the original text' }).fill('修正した原文。');
   await expect(page.getByTestId('capture-draft')).toContainText('修正した原文。');
@@ -86,13 +89,13 @@ test('missing input accepts an explicit paste and creates only one local capture
   await expect(page.getByText('No passage has been received.', { exact: false }).first()).toBeVisible();
   const text = page.getByRole('textbox', { name: 'Check and edit the original text' });
   await text.fill('https://example.com/article');
-  await expect(page.getByRole('button', { name: 'Analyze', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^(Analyze|Analyze selected text)$/, exact: true })).toBeDisabled();
   await expect(page.getByText('Only a link was received.', { exact: false })).toBeVisible();
   await text.fill('這段文章');
   await expect(page.getByTestId('capture-draft')).toContainText('這段文章');
   await text.fill('這段文章包含简体字😊。');
   await expect(page.getByTestId('capture-draft')).toContainText('這段文章包含简体字😊。');
-  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await page.getByRole('button', { name: /^(Analyze|Analyze selected text)$/, exact: true }).click();
   await expect(page.getByTestId('capture-selection')).toContainText('這段文章包含简体字😊。');
   const result = JSON.parse(await page.getByTestId('capture-selection').innerText());
   expect(result.origin.method).toBe('paste');
@@ -104,10 +107,10 @@ test('local draft failure prevents analysis and allows retry without losing the 
   await page.addInitScript(() => { (window as any).captureText = true; (window as any).captureFailSave = true; });
   await page.goto('/tests/browser/harness.html?mode=capture');
   await expect(page.getByText('The local draft could not be saved.', { exact: false })).toBeVisible();
-  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await page.getByRole('button', { name: /^(Analyze|Analyze selected text)$/, exact: true }).click();
   await expect(page.getByTestId('capture-selection')).toHaveText('null');
   await page.evaluate(() => { (window as any).captureFailSave = false; });
-  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await page.getByRole('button', { name: /^(Analyze|Analyze selected text)$/, exact: true }).click();
   await expect(page.getByTestId('capture-selection')).toContainText('臺灣的經濟與发展。');
 });
 
@@ -121,11 +124,12 @@ test('a frozen request restores source metadata and provides an explicit new-sou
   const text = page.getByRole('textbox', { name: 'Check and edit the original text' });
   await expect(text).toHaveValue('確認した文章。');
   await expect(text).toBeDisabled();
+  await page.getByText('Source and destination settings', { exact: true }).click();
   await expect(page.getByRole('textbox', { name: 'Source name (optional)' })).toHaveValue('Known source');
   await page.getByRole('button', { name: 'Create another source from this passage' }).click();
   await expect(text).toBeEnabled();
   await text.fill('別の文章。');
-  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await page.getByRole('button', { name: /^(Analyze|Analyze selected text)$/, exact: true }).click();
   await expect(page.getByTestId('capture-selection')).toContainText('別の文章。');
   expect(JSON.parse(await page.getByTestId('capture-selection').innerText()).blockId).toMatch(/^text:/);
 });
@@ -154,7 +158,7 @@ test('capture confirmation directly starts analysis and a lost creation response
   });
   await page.goto('/tests/browser/harness.html?mode=capture-import&capture=capture-import');
   await expect(page.getByRole('textbox', { name: 'Check and edit the original text' })).toHaveValue('雖然很忙，但我还是来了。');
-  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await page.getByRole('button', { name: /^(Analyze|Analyze selected text)$/, exact: true }).click();
   await expect(page.getByRole('button', { name: 'Open or retry this source' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Check and edit the original text' })).toBeDisabled();
   await page.getByRole('button', { name: 'Open or retry this source' }).click();
@@ -170,13 +174,14 @@ test('a failed local text receipt can be retried after capacity is available', a
   await page.getByRole('textbox', { name: 'Check and edit the original text' }).fill('保存する原文。');
   await expect(page.getByText('The local draft could not be saved.', { exact: false })).toBeVisible();
   await page.evaluate(() => { (window as any).captureFailReceive = false; });
-  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await page.getByRole('button', { name: /^(Analyze|Analyze selected text)$/, exact: true }).click();
   await expect(page.getByTestId('capture-selection')).toContainText('保存する原文。');
 });
 
 test('a captured image can switch to an explicitly pasted passage without reusing its metadata', async ({ page }) => {
   await page.goto('/tests/browser/harness.html?mode=capture');
   await page.getByRole('button', { name: /^Choose passage 1/ }).click();
+  await page.getByText('Source and destination settings', { exact: true }).click();
   await page.getByRole('textbox', { name: 'Source name (optional)' }).fill('Image source');
   await page.getByText('Other input methods', { exact: true }).click();
   await page.getByRole('button', { name: 'Paste another passage' }).click();
@@ -184,7 +189,7 @@ test('a captured image can switch to an explicitly pasted passage without reusin
   await expect(text).toHaveValue('');
   await expect(page.getByRole('textbox', { name: 'Source name (optional)' })).toHaveValue('');
   await text.fill('另一段原文。');
-  await page.getByRole('button', { name: 'Analyze', exact: true }).click();
+  await page.getByRole('button', { name: /^(Analyze|Analyze selected text)$/, exact: true }).click();
   await expect(page.getByTestId('capture-selection')).toContainText('另一段原文。');
   expect(JSON.parse(await page.getByTestId('capture-selection').innerText()).origin.method).toBe('paste');
 });
@@ -216,56 +221,104 @@ test('malformed saved meaning units hide only that block without regenerating th
 });
 
 for (const method of ['shared-image', 'screenshot-shortcut']) {
-  test(`${method} automatically analyzes every OCR block once without confirmation`, async ({ page }) => {
+  test(`${method} waits for selection and sends only selected text`, async ({ page }) => {
     await page.addInitScript(method => { (window as any).captureImageFixture = { method }; }, method);
     await page.goto('/tests/browser/harness.html?mode=capture');
-    await expect(page.getByTestId('capture-selection')).toContainText('automatic-ocr');
+    const analyze = page.getByRole('button', { name: 'Analyze selected text', exact: true });
+    await expect(analyze).toBeDisabled();
+    await expect(page.getByTestId('capture-selection')).toHaveText('null');
+    await page.getByRole('button', { name: /^Choose passage 2/ }).click();
+    await expect(page.getByTestId('capture-selection')).toHaveText('null');
+    await expect(page.getByRole('textbox', { name: 'Check and edit the original text' })).toHaveValue('确实如此。');
+    await analyze.click();
     const result = JSON.parse(await page.getByTestId('capture-selection').innerText());
-    expect(result.text).toBe('虽然很忙，但我还是来了。\n确实如此。');
-    expect(result.blockIds).toEqual(['post', 'comment']);
-    expect(result.origin).toMatchObject({ method, textConfirmed: false, analysisMode: 'automatic-ocr', sourceKind: 'unknown' });
-    expect(result.draft).toMatchObject({ automaticAnalysisStarted: true, descriptionLanguage: 'ja', groupBNames: [] });
-    await page.getByRole('button', { name: 'Remount capture' }).click();
-    await expect(page.getByRole('textbox', { name: 'Check and edit the original text' })).toHaveValue(result.text);
-    expect(await page.evaluate(() => (window as any).captureSubmissions)).toBe(1);
+    expect(result.text).toBe('确实如此。'); expect(result.blockIds).toEqual(['comment']);
+    expect(result.origin).toMatchObject({ method, textConfirmed: true });
+    expect(result.origin.analysisMode).toBeUndefined();
   });
 }
 
-test('an image picked inside the app also starts analysis automatically', async ({ page }) => {
+test('image selection toggles, highlights, clears and survives remount at 360px', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('/tests/browser/harness.html?mode=capture');
+  const first = page.getByRole('button', { name: /^Choose passage 1/ });
+  const second = page.getByRole('button', { name: /^Choose passage 2/ });
+  await first.click(); await second.click();
+  await expect(first).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('checkbox').first()).toBeChecked();
+  await expect(page.getByTestId('capture-text-highlight').first()).toHaveClass(/bg-indigo/);
+  await expect(page.getByRole('textbox', { name: 'Check and edit the original text' })).toHaveValue('虽然很忙，但我还是来了。\n确实如此。');
+  await expect(page.getByTestId('capture-draft')).toContainText('comment');
+  await page.getByRole('button', { name: 'Remount capture' }).click();
+  await expect(first).toHaveAttribute('aria-pressed', 'true');
+  await second.click(); await expect(second).toHaveAttribute('aria-pressed', 'false');
+  await page.getByRole('button', { name: 'Clear selection', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Analyze selected text', exact: true })).toBeDisabled();
+  await expect(page.getByTestId('capture-selection')).toHaveText('null');
+  await page.getByRole('slider').fill('2');
+  await expect(first).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Analyze selected text', exact: true })).toBeInViewport();
+  await page.screenshot({ path: '/tmp/vocab-selection-mobile.png', fullPage: true });
+});
+
+test('changing selection protects corrected text until replacement is accepted', async ({ page }) => {
+  await page.goto('/tests/browser/harness.html?mode=capture');
+  await page.getByRole('button', { name: /^Choose passage 1/ }).click();
+  const text = page.getByRole('textbox', { name: 'Check and edit the original text' });
+  await text.fill('訂正した本文。');
+  page.once('dialog', dialog => dialog.dismiss());
+  await page.getByRole('button', { name: /^Choose passage 2/ }).click();
+  await expect(text).toHaveValue('訂正した本文。');
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: /^Choose passage 2/ }).click();
+  await expect(text).toHaveValue('虽然很忙，但我还是来了。\n确实如此。');
+});
+
+test('an acknowledged image stays editable through the explicit new-source action', async ({ page }) => {
+  await page.addInitScript(() => {
+    const draft = { automaticAnalysisStarted: true, blockId: 'automatic-ocr', selected: ['post', 'comment'], text: '全文。', sourceLabel: '', sourceKind: 'unknown', sourceUrl: '', groupBNames: [], descriptionLanguage: 'ja' };
+    const request = { text: draft.text, sourceOrigin: { version: 1, method: 'shared-image', sourceKind: 'unknown', textConfirmed: false, analysisMode: 'automatic-ocr' } };
+    (window as any).captureImageFixture = { acknowledged: true, draft, operations: { 'automatic-ocr': { request: JSON.stringify(request), sessionId: 'saved', createdAt: new Date().toISOString() } } };
+  });
+  await page.goto('/tests/browser/harness.html?mode=capture');
+  await expect(page.getByRole('button', { name: 'Open or retry this source' })).toBeVisible();
+  expect(await page.evaluate(() => (window as any).captureResumes ?? 0)).toBe(0);
+  await page.getByRole('button', { name: 'Create another source from this passage' }).click();
+  await expect(page.getByRole('textbox', { name: 'Check and edit the original text' })).toBeEnabled();
+});
+
+test('image receipt failure never starts analysis', async ({ page }) => {
+  await page.addInitScript(() => { (window as any).captureFailSave = true; });
+  await page.goto('/tests/browser/harness.html?mode=capture');
+  await page.getByRole('button', { name: /^Choose passage 1/ }).click();
+  await expect(page.getByText('The local draft could not be saved.', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Analyze selected text', exact: true }).click();
+  await expect(page.getByTestId('capture-selection')).toHaveText('null');
+  await page.evaluate(() => { (window as any).captureFailSave = false; });
+  await page.getByRole('button', { name: 'Analyze selected text', exact: true }).click();
+  await expect(page.getByTestId('capture-selection')).toContainText('虽然很忙');
+});
+
+test('tapping recognized text itself selects it; oversized selected text cannot submit', async ({ page }) => {
+  await page.goto('/tests/browser/harness.html?mode=capture');
+  await page.getByTestId('capture-text-highlight').first().click();
+  await expect(page.getByRole('checkbox').first()).toBeChecked();
+  await page.getByRole('textbox', { name: 'Check and edit the original text' }).fill('字'.repeat(8001));
+  await expect(page.getByRole('button', { name: 'Analyze selected text', exact: true })).toBeDisabled();
+  await expect(page.getByText('Text is limited to 8,000 UTF-16 units.', { exact: false })).toBeVisible();
+  await expect(page.getByTestId('capture-selection')).toHaveText('null');
+});
+
+test('picker waits without submission', async ({ page }) => {
   await page.addInitScript(() => { (window as any).captureEmpty = true; (window as any).capturePick = true; });
   await page.goto('/tests/browser/harness.html?mode=capture');
   await page.getByText('Other input methods', { exact: true }).click();
   await page.getByRole('button', { name: 'Choose an image', exact: true }).click();
-  await expect(page.getByTestId('capture-selection')).toContainText('automatic-ocr');
-  expect(JSON.parse(await page.getByTestId('capture-selection').innerText()).origin.method).toBe('image-picker');
-});
-
-for (const text of ['', 'https://example.com', '字'.repeat(8001)]) {
-  test(`unusable OCR (${text.length} units) stops for manual correction`, async ({ page }) => {
-    await page.addInitScript(text => { (window as any).captureImageFixture = { blocks: text ? [{ id: 'post', text, rects: [], confidence: 1 }] : [] }; }, text);
-    await page.goto('/tests/browser/harness.html?mode=capture');
-    await expect(page.getByRole('alert')).toContainText('Automatic analysis stopped');
-    await expect(page.getByTestId('capture-selection')).toHaveText('null');
-    if (text) {
-      await page.getByRole('textbox', { name: 'Check and edit the original text' }).fill('修正した文章。');
-      await page.getByRole('button', { name: 'Analyze', exact: true }).click();
-      await expect(page.getByTestId('capture-selection')).toContainText('修正した文章。');
-      expect(JSON.parse(await page.getByTestId('capture-selection').innerText()).origin.textConfirmed).toBe(true);
-    }
-  });
-}
-
-test('OCR failure can be retried explicitly and does not submit before recognition', async ({ page }) => {
-  await page.addInitScript(() => { (window as any).captureFailOCR = true; });
-  await page.goto('/tests/browser/harness.html?mode=capture');
-  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Analyze selected text', exact: true })).toBeDisabled();
   await expect(page.getByTestId('capture-selection')).toHaveText('null');
-  await page.evaluate(() => { (window as any).captureFailOCR = false; });
-  await page.getByRole('button', { name: 'Retry', exact: true }).click();
-  await expect(page.getByTestId('capture-selection')).toContainText('automatic-ocr');
 });
 
-test('automatic image analysis stops after a lost creation response and explicitly retries the same request', async ({ page }) => {
+test('selected image text reuses the frozen request after a lost creation response', async ({ page }) => {
   let stored: any;
   const requests: any[] = [];
   await page.route(url => url.pathname.startsWith('/api/'), async route => {
@@ -289,35 +342,14 @@ test('automatic image analysis stops after a lost creation response and explicit
   });
   await page.addInitScript(() => { (window as any).captureImportFixture = { inputKind: 'image', method: 'screenshot-shortcut', text: undefined, blocks: [{ id: 'post', text: '雖然很忙，但我还是来了。', rects: [], confidence: 1 }] }; });
   await page.goto('/tests/browser/harness.html?mode=capture-import&capture=capture-import');
+  await page.getByRole('checkbox').first().check();
+  await expect(page.getByRole('textbox', { name: 'Check and edit the original text' })).toHaveValue('雖然很忙，但我还是来了。');
+  await page.getByRole('button', { name: /^(Analyze|Analyze selected text)$/, exact: true }).click();
   await expect(page.getByRole('button', { name: 'Open or retry this source' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Check and edit the original text' })).toBeDisabled();
   await page.getByRole('button', { name: 'Open or retry this source' }).click();
   await expect(page.getByRole('button', { name: 'Pause after the current part' })).toBeVisible();
   expect(requests).toHaveLength(2);
   expect(requests[1]).toEqual(requests[0]);
-  expect(requests[0]).toMatchObject({ analyzeAsJob: true, text: '雖然很忙，但我还是来了。', sourceOrigin: { method: 'screenshot-shortcut', textConfirmed: false, analysisMode: 'automatic-ocr' } });
-});
-
-
-test('an acknowledged image stays editable through the explicit new-source action', async ({ page }) => {
-  await page.addInitScript(() => {
-    const draft = { automaticAnalysisStarted: true, blockId: 'automatic-ocr', selected: ['post', 'comment'], text: '全文。', sourceLabel: '', sourceKind: 'unknown', sourceUrl: '', groupBNames: [], descriptionLanguage: 'ja' };
-    const request = { text: draft.text, sourceOrigin: { version: 1, method: 'shared-image', sourceKind: 'unknown', textConfirmed: false, analysisMode: 'automatic-ocr' } };
-    (window as any).captureImageFixture = { acknowledged: true, draft, operations: { 'automatic-ocr': { request: JSON.stringify(request), sessionId: 'saved', createdAt: new Date().toISOString() } } };
-  });
-  await page.goto('/tests/browser/harness.html?mode=capture');
-  await expect(page.getByRole('button', { name: 'Open or retry this source' })).toBeVisible();
-  expect(await page.evaluate(() => (window as any).captureResumes ?? 0)).toBe(0);
-  await page.getByRole('button', { name: 'Create another source from this passage' }).click();
-  await expect(page.getByRole('textbox', { name: 'Check and edit the original text' })).toBeEnabled();
-});
-
-test('automatic image submission waits until its local attempt is durably saved', async ({ page }) => {
-  await page.addInitScript(() => { (window as any).captureFailSave = true; });
-  await page.goto('/tests/browser/harness.html?mode=capture');
-  await expect(page.getByText('The local draft could not be saved.', { exact: false })).toBeVisible();
-  await expect(page.getByTestId('capture-selection')).toHaveText('null');
-  await page.evaluate(() => { (window as any).captureFailSave = false; });
-  await page.getByRole('alert').filter({ hasText: 'could not be opened' }).getByRole('button', { name: 'Retry' }).click();
-  await expect(page.getByTestId('capture-selection')).toContainText('automatic-ocr');
+  expect(requests[0]).toMatchObject({ analyzeAsJob: true, text: '雖然很忙，但我还是来了。', sourceOrigin: { method: 'screenshot-shortcut', textConfirmed: true } });
 });
