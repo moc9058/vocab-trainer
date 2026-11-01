@@ -36,6 +36,12 @@ Equations are explicitly permitted background without introductory explanations.
 reference specifies the boundaries and nine proof-oriented exercises, emphasizing matrix properties and using LaTeX.
 No advanced analysis or later-chapter linear algebra is implicitly authorized.
 
+Ordinary Differential Equations contains six chapters and 31 objectives under Engineering
+Mathematics. Its authored reference assumes first-year university calculus and emphasizes
+physical modeling and substantive mathematical problems. It supplies boundaries for omitted
+physics, matrix techniques, nonlinear stability and special-function theory; these are
+summarized Notion sources rather than full textbook transcriptions.
+
 Each objective has a stable ID, source chapter
 and exact section references, ability, supportedTaskKinds, observable criteria,
 prerequisite IDs, external background, constraints, common errors and active/retired

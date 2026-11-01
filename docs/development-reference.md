@@ -705,3 +705,9 @@ and is published as immutable curriculum metadata. All v2 LLM stages receive the
 frozen reference, including grading. Legacy catalogs without guidance remain valid.
 Linear Algebra permits standard first/second-year university Calculus and Differential
 Equations as background. See [the assessment guide](textbook-assessment.md).
+
+Ordinary Differential Equations is registered separately under Engineering Mathematics
+with six English chapters and 31 objectives. Its frozen guidance assumes first-year university
+calculus and favors physical models and substantive mathematical tasks within each objective.
+Source-specific boundaries prevent omitted physics, PDE theory or advanced analysis from
+becoming implicit prerequisites. Publication uses `math:sync`, separately from deployment.

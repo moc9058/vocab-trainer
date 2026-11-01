@@ -54,6 +54,50 @@
           "Inner products are linear in the first variable."
         ]
       }
+    },
+    {
+      "id": "ordinary-differential-equations",
+      "subjectId": "engineering-mathematics",
+      "subjectTitle": "Engineering Mathematics",
+      "title": "Ordinary Differential Equations",
+      "language": "en",
+      "chapters": [
+        {
+          "id": "ode-ch1",
+          "file": "Ordinary Differential Equation/md/1. First-Order ODEs.md"
+        },
+        {
+          "id": "ode-ch2",
+          "file": "Ordinary Differential Equation/md/2. Second-Order Linear ODEs.md"
+        },
+        {
+          "id": "ode-ch3",
+          "file": "Ordinary Differential Equation/md/3. Higher Order Linear ODEs.md"
+        },
+        {
+          "id": "ode-ch4",
+          "file": "Ordinary Differential Equation/md/4. Systems of ODEs. Phase Plane. Qualitative Methods.md"
+        },
+        {
+          "id": "ode-ch5",
+          "file": "Ordinary Differential Equation/md/5. Series Solutions of ODEs. Special Functions.md"
+        },
+        {
+          "id": "ode-ch6",
+          "file": "Ordinary Differential Equation/md/6. Laplace Transforms.md"
+        }
+      ],
+      "curriculumFile": "Ordinary Differential Equation/curriculum/learning-objectives.json",
+      "subjectProfile": {
+        "version": "mathematics-v1",
+        "subject": "mathematics",
+        "constraints": [
+          "Assume first-year university calculus only; source-defined linear algebra, partial derivatives and special functions are course content, not extra prerequisites.",
+          "Emphasize physical modeling and substantive mathematical problems within the selected objective; supply physical laws and parameters not present in the source.",
+          "Preserve units, initial and boundary conditions, solution intervals, singular cases and approximation assumptions.",
+          "Do not infer nonlinear stability from exceptional linearizations or require unprovided PDE or advanced analysis theory."
+        ]
+      }
     }
   ]
 }

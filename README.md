@@ -31,6 +31,11 @@ After adding a book, ask the agent to create its curriculum; the repository skil
 handles manifest registration, stable IDs and validation. `npm run textbook:prepare --prefix backend` reports new books/chapters and missing or changed catalogs without
 writing files. See [the authoring guide](docs/textbook-assessment.md).
 
+Registered textbooks include Linear Algebra (nine chapters) and Ordinary Differential
+Equations (six chapters, Engineering Mathematics). The latter assumes first-year university
+calculus and emphasizes physical models and substantive mathematical problems; see its
+[assessment reference](textbook/Ordinary%20Differential%20Equation/curriculum/README.md).
+
 The **Mathematics** card opens a library where you can select chapters across
 multiple textbooks. Books receive equal turns; each Next question generates one
 fresh problem from its frozen publication and curriculum. Reveal answer shows the

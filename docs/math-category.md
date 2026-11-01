@@ -20,8 +20,10 @@ for the complete format and how to request curriculum creation.
 
 
 `textbook/manifest.json` assigns stable subject, book and chapter IDs, titles,
-languages and relative Markdown paths and curriculumFile/subjectProfile. Current Linear Algebra contains nine English
-chapters. Engineering Math has only an original PDF and is not published.
+languages and relative Markdown paths and curriculumFile/subjectProfile. Linear Algebra contains nine English
+chapters. Ordinary Differential Equations contains six English chapters under Engineering Mathematics,
+with first-year university calculus as background and physical/mathematical application guidance
+in its [assessment reference](../textbook/Ordinary%20Differential%20Equation/curriculum/README.md).
 Filenames supply numeric chapter order and chapter titles; headings inside each
 file remain content headings. Rename a file by updating its manifest path while
 preserving its chapter ID. Add another book as a separate manifest entry.
