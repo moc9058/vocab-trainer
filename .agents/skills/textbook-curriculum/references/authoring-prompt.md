@@ -18,3 +18,10 @@ files. Return the curriculum for the sibling curriculum/ directory. For a new bo
 use the server/author-provided stable book and chapter IDs after manifest registration.
 Section references are local to their chapter; do not prepend a chapter number to
 a heading that does not contain it.
+
+Also author the sibling README.md as an English LLM reference. Specify authorized
+assumed knowledge, explicit boundaries, and representative proof, determination,
+computation and derivation exercises with objective scope, difficulty and expected
+evidence. Do not include human-facing navigation or duplicate the objective catalog.
+User-authorized background may be used without restating or teaching it in each
+question. Examples guide assessment style; they do not authorize later-chapter results.

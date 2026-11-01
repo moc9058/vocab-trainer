@@ -109,10 +109,12 @@ export async function gradeMathAnswer(
   question: MathQuestion,
   answer: string,
   sources: MathSource[],
+  curriculum?: Curriculum,
 ): Promise<MathGrade> {
   if (question.schemaVersion === 2) {
     const context = {
       outputLanguage: test.book.language,
+      curriculumGuidance: curriculum?.guidance ?? null,
       question,
       answer,
       sources,
@@ -237,6 +239,7 @@ async function generateAssessment(
           selected: test.chapterIds.includes(s.id),
           markdown: s.markdown,
         })),
+        curriculumGuidance: options.curriculum!.guidance ?? null,
         objective: objectives,
         allowedPrerequisites: options.curriculum!.objectives.filter((o) =>
           allowedIds.has(o.id),

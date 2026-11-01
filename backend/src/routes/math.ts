@@ -416,6 +416,7 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
               q,
               text,
               await mathSources(test.sourceVersionIds),
+              test.assessmentVersion === 2 ? await loadMathCurriculum(db, test.book) : undefined,
             );
             test.draft = "";
             if (test.mode === "continuous") {

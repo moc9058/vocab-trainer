@@ -51,6 +51,12 @@ Read the relevant reference before changing its feature:
 - Use the repository skill at `.agents/skills/textbook-curriculum/SKILL.md` when
   handling textbook sources. See [the assessment guide](docs/textbook-assessment.md)
   for schema v2, versioned publication, validation and the authoring workflow.
+- Author `curriculum/README.md` entirely in English for LLM use: assumed knowledge,
+  boundaries and scoped exercise examples with expected evidence. Do not generate
+  a human-oriented objective listing. `textbook:validate --write` freezes this text
+  in the catalog guidance field; publish it with `math:sync` for runtime use.
+  Linear Algebra explicitly permits standard first/second-year university Calculus
+  and Differential Equations as background, without introductory explanation.
 - Use English for all textbook-assessment and curriculum-authoring prompts,
   including repair instructions. Source quotations retain their original language;
   problem/feedback output follows the book's declared language.

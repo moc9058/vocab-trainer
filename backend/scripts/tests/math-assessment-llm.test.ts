@@ -120,6 +120,7 @@ const { generateMathQuestions, gradeMathAnswer } = await import(
 );
 const { mathPromptVersion } = await import("../../src/math-prompt-loader.js");
 const curriculum: Curriculum = {
+  guidance: "# Assumed knowledge\nFirst-year Calculus and Differential Equations.\n# Exercise examples\nProve closure of an ODE solution space.",
   schemaVersion: 2,
   bookId: "book",
   revision: "rev",
@@ -205,12 +206,14 @@ test("v2 uses frozen objective and policy, independently solves then compares an
   );
   const context = JSON.parse(calls[0].user);
   assert.equal(context.objective[0].id, "o1");
+  for (const call of calls) assert.equal(JSON.parse(call.user).curriculumGuidance, curriculum.guidance);
   assert.equal(context.difficultyPolicy.version, "assessment-v1");
   assert.equal(JSON.parse(calls[3].user).repair[0].code, "MISSING_CASE");
   assert.equal(
-    (await gradeMathAnswer(fixture, q, "Alternative proof", [source])).verdict,
+    (await gradeMathAnswer(fixture, q, "Alternative proof", [source], curriculum)).verdict,
     "correct",
   );
+  assert.equal(JSON.parse(calls.at(-1)!.user).curriculumGuidance, curriculum.guidance);
   invalidGrade = true;
   await assert.rejects(
     () => gradeMathAnswer(fixture, q, "text", [source]),

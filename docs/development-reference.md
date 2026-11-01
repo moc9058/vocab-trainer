@@ -675,3 +675,14 @@ and strict validation before publication. New local textbooks with an `md/` are
 reported even before manifest registration; original-only folders are ignored.
 Unregistered books/chapters, missing files and non-chapter contents block publication.
 See [the assessment guide](textbook-assessment.md) for the agent authoring workflow.
+
+
+## LLM curriculum reference (2026-11-01)
+
+`curriculum/README.md` is now an authored English assessment reference containing
+assumed knowledge and scoped exercise examples. `textbook:validate --write` freezes
+its exact text into optional catalog `guidance`; this field changes the catalog hash
+and is published as immutable curriculum metadata. All v2 LLM stages receive the
+frozen reference, including grading. Legacy catalogs without guidance remain valid.
+Linear Algebra permits standard first/second-year university Calculus and Differential
+Equations as background. See [the assessment guide](textbook-assessment.md).

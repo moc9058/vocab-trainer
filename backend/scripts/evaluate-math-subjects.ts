@@ -68,6 +68,7 @@ try {
           question,
           question.solution,
           sources,
+          curriculum,
         );
         results.push({
           subject: book.subjectProfile!.subject,

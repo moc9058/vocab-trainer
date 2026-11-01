@@ -14,17 +14,18 @@ const manifest: MathManifest = JSON.parse(
 if (process.argv.slice(2).some((a) => a !== "--write"))
   throw new Error("Usage: textbook:validate [--write]");
 if (process.argv.includes("--write")) {
-  // Validate in memory before writing either the catalog or its reading view.
+  // Validate in memory before writing either the catalog or its frozen reference.
   const updates = [];
   for (const book of manifest.books) {
     if (!book.curriculumFile) throw new Error(`Missing curriculum: ${book.id}`);
     const path = resolve(root, book.curriculumFile);
     if (!path.startsWith(root)) throw new Error("Invalid curriculum path");
     const c: Curriculum = JSON.parse(await readFile(path, "utf8"));
+    c.guidance = await readFile(resolve(path, "../README.md"), "utf8");
     c.revision = curriculumRevision(c);
     updates.push({ path, c });
   }
-  // Revision-only normalization is checked through the same full validator.
+  // Guidance and revision normalization is checked through the same full validator.
   const { validateCurriculum } = await import("../src/math-curriculum.js");
   const legacy = structuredClone(manifest);
   legacy.books.forEach((b) => {
@@ -53,7 +54,7 @@ for (const { book, curriculum } of await prepareMathBooks(root, manifest)) {
     "../README.md",
   );
   if ((await readFile(path, "utf8")) !== curriculumReadingView(curriculum))
-    throw new Error(`Stale reading view: ${book.id}; run with --write`);
+    throw new Error(`Stale assessment reference: ${book.id}; run with --write`);
   console.log(
     `${book.id}: ${book.chapters.length} chapters, ${curriculum.objectives.length} objectives, publication ${book.publicationId}`,
   );

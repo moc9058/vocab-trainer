@@ -188,6 +188,7 @@ test("physics and economics authoring fixtures publish deterministically and det
       assert.deepEqual(a, b);
       const changed = {
         ...curriculum,
+        guidance: "# Assumed knowledge\nElementary algebra.\n# Exercise examples\nDerive the stated motion formula.",
         objectives: [
           { ...objective, commonErrors: ["Missing initial condition."] },
         ],
@@ -197,6 +198,10 @@ test("physics and economics authoring fixtures publish deterministically and det
         join(root, "Physics/curriculum/catalog.json"),
         JSON.stringify(changed),
       );
+      await writeFile(join(root, "Physics/curriculum/README.md"), "Stale reference");
+      await assert.rejects(() => prepareMathBooks(root, manifest), /Stale curriculum guidance/);
+      await writeFile(join(root, "Physics/curriculum/README.md"), changed.guidance);
+      assert.equal((await prepareMathBooks(root, manifest))[0].curriculum!.guidance, changed.guidance);
       assert.notEqual(
         (await prepareMathBooks(root, manifest))[0].book.publicationId,
         a[0].book.publicationId,

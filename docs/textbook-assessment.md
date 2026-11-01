@@ -9,7 +9,7 @@ All subjects share `textbook/<book>/md/`, including Linear Algebra. This directo
 contains only chapter Markdown files named `<positive number>. <title>.md`, with
 unique chapter numbers and no nested directories. `.DS_Store` is ignored; README,
 images, PDFs and curriculum belong outside `md/`. The sibling `curriculum/` contains
-`learning-objectives.json` and its generated README. All chapter files must be listed
+`learning-objectives.json` and its authored English README. All chapter files must be listed
 in the manifest before validation or publication. Existing frozen cloud publications
 are unaffected by these local layout checks. Engineering Math originals are outside
 this change.
@@ -21,7 +21,22 @@ The schema is defined by `Curriculum`/`CurriculumObjective` in
 instructions are English; exact source headings retain their language. Problem
 and feedback language follows book.language, independently of the EN/JA/KO UI.
 
-The JSON catalog is authoritative. Each objective has a stable ID, source chapter
+The JSON catalog is authoritative for objectives. `curriculum/README.md` is an authored,
+English-only LLM reference with approved assumed knowledge and representative exercise
+examples, not a human-facing reading view. `textbook:validate --write` copies its exact
+text into the catalog's optional `guidance` field (maximum 32KB), so reference edits
+change the catalog and publication revisions. Validation/sync reject stale disagreement.
+The same immutable catalog metadata stores this reference in Firestore. Generation,
+independent solving, validation and grading use the session's frozen reference; the
+200KB complete-input budget still applies. Examples do not broaden the selected scope.
+Existing catalogs and sessions without guidance remain usable with their old scope.
+
+For Linear Algebra, standard first/second-year university Calculus and Differential
+Equations are explicitly permitted background without introductory explanations. The
+reference specifies the boundaries and six linear-algebra exercises using this knowledge.
+No advanced analysis or later-chapter linear algebra is implicitly authorized.
+
+Each objective has a stable ID, source chapter
 and exact section references, ability, supportedTaskKinds, observable criteria,
 prerequisite IDs, external background, constraints, common errors and active/retired
 status. Same-meaning changes preserve IDs; semantic changes allocate new IDs and
@@ -51,9 +66,8 @@ missing metadata is clarified; unsupported subject profiles require an explicit 
 extension, rather than being mislabeled. Textbook editing requests also refresh the
 associated catalog without requiring a separate instruction.
 
-Author or refresh
-objectives against the actual source before using --write; that option computes
-catalog revisions and regenerates README reading views, but does not repair stale
+Author or refresh objectives against the actual source before using --write; that option computes
+catalog revisions and freezes the authored README into `guidance`, but does not repair stale
 source hashes or invent goals. Validation rejects duplicate IDs, missing chapters,
 phantom headings, stale hashes, prerequisite cycles and later-chapter prerequisites.
 Unknown required external background must be resolved during authoring.

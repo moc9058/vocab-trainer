@@ -27,9 +27,17 @@ objectives with exact source sections, observable criteria, allowed task kinds,
 prerequisites, external background, constraints and source hashes. Preserve intentional
 manual edits and original quotations. Do not infer proof availability from theorem presence.
 
+Author curriculum/README.md entirely in English as an LLM assessment reference,
+not a human reading view or objective listing. Include explicit assumed knowledge,
+its limits and representative exercise examples with scope/objective IDs, task kinds,
+difficulty and expected results or evidence. Do not assume external background without
+source or user authorization. Examples must not authorize later-chapter facts or replace
+the assigned objective. Preserve book-specific user permissions (for Linear Algebra,
+standard first/second-year university Calculus and Differential Equations are allowed).
+
 Update curriculum/learning-objectives.json, then run
-`npm run textbook:validate --prefix backend -- --write` to compute revisions and regenerate
-the reading views. Run again without --write to verify the result. Review the goals
+`npm run textbook:validate --prefix backend -- --write` to freeze the authored README as the catalog guidance field and compute revisions.
+This command preserves the README instead of generating a human-oriented listing. Run again without --write to verify the result. Review the goals
 against the source, including field, units, model assumptions and prerequisite availability.
 Report unresolved source ambiguities instead of inventing assumptions.
 

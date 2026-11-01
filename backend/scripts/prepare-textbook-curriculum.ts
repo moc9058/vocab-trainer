@@ -20,6 +20,13 @@ for (const report of await inspectTextbookLayout(root, manifest)) {
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
   }
+  let guidanceStatus: "missing" | "unfrozen" | "stale" | "current" = "missing";
+  try {
+    const reference = await readFile(resolve(root, curriculumFile, "../README.md"), "utf8");
+    guidanceStatus = prior?.guidance === undefined ? "unfrozen" : prior.guidance === reference ? "current" : "stale";
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+  }
   const changes = [];
   for (const chapter of report.chapters) {
     const source = await readFile(resolve(root, chapter.file), "utf8");
@@ -41,6 +48,7 @@ for (const report of await inspectTextbookLayout(root, manifest)) {
     language: book?.language,
     subjectProfile: book?.subjectProfile,
     curriculumFile,
+    guidanceStatus,
     curriculumStatus: !prior ? "missing" : !book?.curriculumFile ? "unregistered" : "present",
     changes,
   }, null, 2));

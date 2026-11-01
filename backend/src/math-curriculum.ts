@@ -51,6 +51,8 @@ export function validateCurriculum(
     )
       fail(`stale source ${s.id}`);
   }
+  if (c.guidance !== undefined && !mathText(c.guidance, 32000))
+    fail("guidance must be nonempty and at most 32KB");
   const ids = new Set<string>();
   for (const o of c.objectives) {
     const source = sources.find((s) => s.id === o.chapterId);
@@ -132,14 +134,8 @@ export function validateCurriculum(
   if (c.revision !== curriculumRevision(c)) fail("revision hash");
   return c;
 }
+/** Legacy catalogs without authored guidance retain an English-only fallback. */
 export function curriculumReadingView(c: Curriculum): string {
-  return (
-    `# ${c.bookId} learning objectives\n\nGenerated from learning-objectives.json. Revision: ${c.revision}.\n\nOperational statements are English; problems follow the book language.\n\n` +
-    c.objectives
-      .map(
-        (o) =>
-          `## ${o.id}\n\n${o.statement}\n\n${o.localizedStatements?.ja ?? ""}\n\nStatus: ${o.status}. Tasks: ${o.supportedTaskKinds.join(", ")}.\n\n${o.sourceRefs.map((r) => `- ${r.chapterId}: ${r.heading}`).join("\n")}\n\n${o.successCriteria.map((s) => `- ${s.id}: ${s.criterion}`).join("\n")}\n`,
-      )
-      .join("\n")
-  );
+  if (c.guidance !== undefined) return c.guidance;
+  return `# ${c.bookId}: assessment reference\n\n## Assumed knowledge\n\n${[...new Set(c.objectives.flatMap((o) => o.requiredBackground))].map((v) => `- ${v}`).join("\n") || "Use only the supplied textbook facts and the explicit prerequisites of each objective."}\n\n## Exercise design\n\nUse the assigned objective and task contract to create proofs, justified determinations, exact computations or derivations. Do not make definition recall or explanation the sole task. Preserve domains and hypotheses. No additional example exercises or external knowledge are authorized by this fallback.\n`;
 }

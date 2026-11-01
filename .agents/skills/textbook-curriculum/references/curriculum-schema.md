@@ -25,6 +25,16 @@ therefore change the publication, while chapter version IDs remain based on cont
 
 Every subject uses textbook/<book>/md/<positive number>. <title>.md. Only chapter
 Markdown files belong in md/, without nested directories; .DS_Store is ignored.
-Keep learning-objectives.json and its generated README in the sibling curriculum/.
+Keep learning-objectives.json and its authored English README in the sibling curriculum/.
 All local chapters must be registered before publication. Section numbers identify
 headings inside the referenced chapter, not the book's chapter number.
+
+## Authored assessment reference
+
+README.md is an English LLM reference containing assumed knowledge and its limits,
+representative exercises, scope and expected evidence. `textbook:validate --write`
+copies its exact contents into optional `guidance` (32KB maximum), included in the
+catalog revision. Sync rejects disagreement between the README and frozen guidance.
+Old catalogs without guidance remain readable. The frozen reference is published
+with the catalog and supplied during generation, independent solving, validation
+and grading; examples do not expand the selected textbook scope.

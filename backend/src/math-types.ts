@@ -31,6 +31,8 @@ export interface CurriculumObjective {
   status: "active" | "retired";
 }
 export interface Curriculum {
+  /** Frozen English LLM reference, authored in curriculum/README.md. */
+  guidance?: string;
   schemaVersion: 2;
   bookId: string;
   revision: string;

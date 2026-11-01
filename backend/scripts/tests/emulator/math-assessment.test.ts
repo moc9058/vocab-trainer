@@ -78,6 +78,7 @@ const objective = {
   status: "active" as const,
 };
 const curriculum: Curriculum = {
+  guidance: "# Assumed knowledge\nElementary algebra.\n# Exercise examples\nCompute position from the supplied motion law.",
   schemaVersion: 2,
   bookId,
   revision: "",
@@ -138,6 +139,7 @@ try {
     await publishMathBook(db, book, [source], curriculum, false);
     await publishMathBook(db, book, [source], curriculum, false);
     assert.equal((await loadMathCurriculum(db, book)).objectives.length, 1);
+    assert.equal((await loadMathCurriculum(db, book)).guidance, curriculum.guidance);
     await assert.rejects(
       () =>
         publishMathBook(

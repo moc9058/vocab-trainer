@@ -103,6 +103,9 @@ export async function prepareMathBooks(
         entry.chapters,
         entry.language,
       );
+      if (curriculum.guidance !== undefined &&
+          await readFile(resolve(path, "../README.md"), "utf8") !== curriculum.guidance)
+        throw new Error("Stale curriculum guidance: run textbook:validate --write");
       if (
         !entry.subjectProfile ||
         !["mathematics", "physics", "economics"].includes(
