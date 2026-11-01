@@ -12,3 +12,9 @@ Do not infer prerequisite mastery from chapter order or invent missing source fa
 Write operational statements and criteria in English, preserving quoted headings exactly.
 Preserve meaningful manual edits. List unresolved gaps separately; do not publish a
 catalog with unresolved required references. Do not claim empirical difficulty calibration.
+
+Use the common source layout: textbook/<book>/md/ contains only chapter Markdown
+files. Return the curriculum for the sibling curriculum/ directory. For a new book,
+use the server/author-provided stable book and chapter IDs after manifest registration.
+Section references are local to their chapter; do not prepend a chapter number to
+a heading that does not contain it.

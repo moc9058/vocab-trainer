@@ -12,6 +12,13 @@ itemized grading and textbook authoring. The original
 
 ## Textbooks and publication
 
+Every subject uses `textbook/<book>/md/` containing only numbered chapter Markdown
+files. Curriculum lives in the sibling `curriculum/`. Preparation discovers new books
+and chapters; validation/publication reject unregistered chapters and invalid folder
+contents. See [the authoring guide](textbook-assessment.md#sources-authoring-and-validation)
+for the complete format and how to request curriculum creation.
+
+
 `textbook/manifest.json` assigns stable subject, book and chapter IDs, titles,
 languages and relative Markdown paths and curriculumFile/subjectProfile. Current Linear Algebra contains nine English
 chapters. Engineering Math has only an original PDF and is not published.

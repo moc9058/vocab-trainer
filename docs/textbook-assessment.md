@@ -5,9 +5,14 @@ The `/math` route remains compatible; book.subjectTitle identifies the subject.
 
 ## Sources, authoring and validation
 
-New sources belong in `textbook/<book>/md/`. Linear Algebra now uses lowercase
-`md/`; its nine chapter IDs, 63 objective IDs and chapter content versions are
-preserved. Engineering Math originals are outside this change.
+All subjects share `textbook/<book>/md/`, including Linear Algebra. This directory
+contains only chapter Markdown files named `<positive number>. <title>.md`, with
+unique chapter numbers and no nested directories. `.DS_Store` is ignored; README,
+images, PDFs and curriculum belong outside `md/`. The sibling `curriculum/` contains
+`learning-objectives.json` and its generated README. All chapter files must be listed
+in the manifest before validation or publication. Existing frozen cloud publications
+are unaffected by these local layout checks. Engineering Math originals are outside
+this change.
 
 Manifest books declare `curriculumFile` and a versioned `subjectProfile` with
 subject `mathematics`, `physics` or `economics` and explicit source constraints.
@@ -33,7 +38,20 @@ npm run textbook:validate --prefix backend -- --write
 npm run textbook:validate --prefix backend
 ```
 
-Prepare reports changed source hashes and existing objective IDs. Author or refresh
+Prepare discovers unregistered textbooks and chapters as well as changed source hashes,
+missing files, layout issues and missing/unregistered catalogs. It reports source headings
+and existing objective IDs without changing files or calling an LLM. Folders with only
+original PDFs and no `md/` are not treated as ready-to-author textbooks.
+
+After adding chapter Markdown, ask the agent to create the textbook curriculum (for
+example, "Create the curriculum for textbook/Physics"). The skill registers the book
+and chapters, determines language/subject from the material where possible, assigns
+stable IDs and authors an English schema-v2 catalog like Linear Algebra. Essential
+missing metadata is clarified; unsupported subject profiles require an explicit profile
+extension, rather than being mislabeled. Textbook editing requests also refresh the
+associated catalog without requiring a separate instruction.
+
+Author or refresh
 objectives against the actual source before using --write; that option computes
 catalog revisions and regenerates README reading views, but does not repair stale
 source hashes or invent goals. Validation rejects duplicate IDs, missing chapters,

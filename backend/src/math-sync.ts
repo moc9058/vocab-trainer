@@ -1,5 +1,6 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { resolve, relative } from "node:path";
+import { inspectTextbookLayout } from "./textbook-layout.js";
 import { mathHash, mathText } from "./math-core.js";
 import { validateCurriculum, canonical } from "./math-curriculum.js";
 import type {
@@ -30,6 +31,9 @@ export async function prepareMathBooks(
   const output = [];
   if (!manifest || !Array.isArray(manifest.books))
     throw new Error("Invalid textbook manifest");
+  const layout = await inspectTextbookLayout(root, manifest);
+  const issues = layout.flatMap((b) => b.issues);
+  if (issues.length) throw new Error(`Invalid textbook layout: ${issues.join("; ")}`);
   for (const entry of manifest.books) {
     if (
       !/^[\w-]{1,100}$/.test(entry.id) ||
@@ -41,14 +45,6 @@ export async function prepareMathBooks(
     )
       throw new Error("Invalid book metadata");
     seen.add(entry.id);
-    const directories = new Set(
-      entry.chapters.map((c) => resolve(root, c.file, "..", "..")),
-    );
-    for (const directory of directories) {
-      const names = await readdir(directory);
-      if (names.includes("MD") && names.includes("md"))
-        throw new Error("Both MD and md exist in one book");
-    }
     const ids = new Set<string>();
     const numbers = new Set<number>();
     const sources: MathSource[] = [];

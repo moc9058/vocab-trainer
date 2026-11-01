@@ -39,8 +39,11 @@ Read the relevant reference before changing its feature:
 ## Textbook authoring and assessment
 
 - New textbook sources belong in `textbook/<book>/md/` (lowercase `md`).
-  The existing Linear Algebra `MD/` paths remain valid until the planned explicit
-  case-only rename and manifest update; do not silently break current publication.
+  This is the common format for every subject, including Linear Algebra. Each
+  `md/` contains only chapter files named `<number>. <title>.md`, with positive
+  unique chapter numbers and no subdirectories. Keep PDFs, images, README files
+  and curriculum outside `md/`; `.DS_Store` is ignored. Register every chapter
+  in the manifest before publication.
 - When handling textbook Markdown additions or edits, create or refresh the book's
   `curriculum/` learning-objective catalog as part of that work without waiting for
   a separate user request. Preserve stable book/chapter/objective IDs, ground goals

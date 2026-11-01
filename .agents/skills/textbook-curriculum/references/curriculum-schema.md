@@ -20,3 +20,11 @@ References must exist verbatim. Prerequisites may be in the same or earlier chap
 with no cycles. Split or retire objectives explicitly instead of reusing an ID for a
 different capability. Source hashes enter the catalog revision; source-path case changes
 therefore change the publication, while chapter version IDs remain based on content.
+
+## Common source layout
+
+Every subject uses textbook/<book>/md/<positive number>. <title>.md. Only chapter
+Markdown files belong in md/, without nested directories; .DS_Store is ignored.
+Keep learning-objectives.json and its generated README in the sibling curriculum/.
+All local chapters must be registered before publication. Section numbers identify
+headings inside the referenced chapter, not the book's chapter number.

@@ -23,6 +23,12 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 
 ## Mathematics
 
+All subjects use `textbook/<book>/md/` with only numbered chapter Markdown files
+(`<number>. <title>.md`). Put learning objectives in the sibling `curriculum/`.
+After adding a book, ask the agent to create its curriculum; the repository skill
+handles manifest registration, stable IDs and validation. `npm run textbook:prepare --prefix backend` reports new books/chapters and missing or changed catalogs without
+writing files. See [the authoring guide](docs/textbook-assessment.md).
+
 The **Mathematics** card opens a textbook library with chapter selection. Tests
 use a fixed publication of chapter Markdown and curriculum to generate proof,
 justified determination, computation and derivation tasks one at a time. Independent

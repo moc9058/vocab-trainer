@@ -663,3 +663,15 @@ replacing edited text. Saved drafts/frozen operations remain readable, but image
 loads never auto-submit or auto-resume. Legacy automatic-ocr metadata and the native
 optional automaticAnalysisStarted field remain compatible; no backend migration is
 needed. Existing shortcut capture/Hide Control Center configuration is unchanged.
+
+
+## Common textbook source layout (2026-11-01)
+
+All subjects use lowercase `textbook/<book>/md/` containing only positively numbered
+chapter Markdown files, with unique numbers and no nested directories. `.DS_Store`
+is ignored. `curriculum/` is a sibling directory. Shared layout inspection in
+`backend/src/textbook-layout.ts` powers both read-only `textbook:prepare` discovery
+and strict validation before publication. New local textbooks with an `md/` are
+reported even before manifest registration; original-only folders are ignored.
+Unregistered books/chapters, missing files and non-chapter contents block publication.
+See [the assessment guide](textbook-assessment.md) for the agent authoring workflow.
