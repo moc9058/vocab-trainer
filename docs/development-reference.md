@@ -577,6 +577,25 @@ changes still require a separate Xcode install, followed by shortcut configurati
 No backend schema/config upload or production migration is needed.
 
 
+## Mathematics continuous study (2026-11-01)
+
+Tests select chapters across multiple books. Server selection balances successful
+presentations per book, then chapters/objectives within that book. Question IDs
+remain session-global; objective/chapter counters include book identity to avoid
+collisions. Each generation uses only its owning book's frozen publication.
+Scope revisions and first-selection publication pins are immutable subcollections.
+Changing scope preserves the current question and draft and clears obsolete pending
+plans; grading resolves the question's original scope. Revealing solutions records
+practice without a submitted answer, verdict or skipped count. The UI has one primary
+Reveal answer/Next question action and a menu for optional grading and other controls.
+
+Fixed creation and batch generation are removed. Access lazily migrates fixed tests
+to child question documents, archives the old parent, retains answered/current
+questions and discards unstarted future questions. Completed histories stay complete.
+No bulk migration or textbook publication is part of deployment. See [current guide](math-category.md)
+and [verification](math-continuous-verification-2026-11-01.md). The October descriptions
+below record the earlier implementation and are superseded where noted here.
+
 ## Mathematics (2026-10-29)
 
 The `/math/*` category provides a textbook library, chapter-scope tests, written

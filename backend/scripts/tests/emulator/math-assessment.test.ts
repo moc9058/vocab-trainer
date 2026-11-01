@@ -1,3 +1,4 @@
+import { scopeKey } from "../../../src/math-scopes.js";
 import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -78,7 +79,8 @@ const objective = {
   status: "active" as const,
 };
 const curriculum: Curriculum = {
-  guidance: "# Assumed knowledge\nElementary algebra.\n# Exercise examples\nCompute position from the supplied motion law.",
+  guidance:
+    "# Assumed knowledge\nElementary algebra.\n# Exercise examples\nCompute position from the supplied motion law.",
   schemaVersion: 2,
   bookId,
   revision: "",
@@ -139,7 +141,10 @@ try {
     await publishMathBook(db, book, [source], curriculum, false);
     await publishMathBook(db, book, [source], curriculum, false);
     assert.equal((await loadMathCurriculum(db, book)).objectives.length, 1);
-    assert.equal((await loadMathCurriculum(db, book)).guidance, curriculum.guidance);
+    assert.equal(
+      (await loadMathCurriculum(db, book)).guidance,
+      curriculum.guidance,
+    );
     await assert.rejects(
       () =>
         publishMathBook(
@@ -223,7 +228,7 @@ try {
           .collection("math_tests")
           .doc(id)
           .collection("objectiveProgress")
-          .doc("position")
+          .doc(scopeKey(bookId, "position"))
           .get()
       ).data()!;
     assert.equal((await progress()).presented, 1);

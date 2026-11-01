@@ -47,6 +47,8 @@ export interface AssessmentPlan {
   reason?: string;
 }
 export interface ObjectiveProgress {
+  bookId?: string;
+  revealed?: number;
   schemaVersion: 2;
   objectiveId: string;
   presented: number;
@@ -89,6 +91,11 @@ export interface AssessmentCallMetric {
   cachedTokens?: number;
 }
 export interface MathQuestion {
+  bookId?: string;
+  bookTitle?: string;
+  chapterTitle?: string;
+  scopeRevision?: number;
+  revealedAt?: string;
   generationMetrics?: AssessmentCallMetric[];
   schemaVersion?: 2;
   primaryObjectiveId?: string;
@@ -139,7 +146,22 @@ export interface MathAnswer {
   operationId: string;
   grade?: MathGrade;
 }
+export interface MathScopeInput {
+  bookId: string;
+  chapterIds: string[];
+}
+export interface MathScope {
+  book: MathBook;
+  chapterIds: string[];
+  sourceVersionIds: string[];
+}
 export interface MathTest {
+  scopes?: MathScope[];
+  scopeRevision?: number;
+  scopeBookCounts?: Record<string, number>;
+  scopeChapterCounts?: Record<string, number>;
+  pendingBookId?: string;
+  chapterExposure?: Record<string, number>;
   assistanceReporting?: boolean;
   assessmentVersion?: 2;
   taskKinds?: TaskKind[];
@@ -151,10 +173,11 @@ export interface MathTest {
   pendingPlans?: AssessmentPlan[];
   evidenceNamespace?: string;
   mode?: "fixed" | "continuous";
-  phase?: "ready" | "question" | "feedback";
+  phase?: "ready" | "question" | "solution" | "feedback";
   currentQuestionId?: string;
   generatedCount?: number;
   stats?: {
+    revealed?: number;
     answered: number;
     correct: number;
     partial: number;

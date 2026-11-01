@@ -8,17 +8,17 @@ import type {
   TaskKind,
   MathPublicTest,
   MathSource,
+  MathScopeInput,
 } from "./types";
 import { MathDialog, useMathError } from "./ui";
 import MathText from "./MathText";
+import MathScopePicker from "./MathScopePicker";
 type SavedTest = {
   id: string;
   title: string;
   status: MathPublicTest["status"];
   createdAt: string;
-  mode?: string;
   answered?: number;
-  count: number;
 };
 export default function MathLibrary() {
   const { t, language } = useI18n();
@@ -26,8 +26,7 @@ export default function MathLibrary() {
   const navigate = useNavigate();
   const [books, setBooks] = useState<MathBook[]>([]);
   const [history, setHistory] = useState<SavedTest[]>([]);
-  const [bookId, setBookId] = useState("");
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<MathScopeInput[]>([]);
   const [difficulty, setDifficulty] = useState<MathDifficulty>("standard");
   const [kinds, setKinds] = useState<TaskKind[]>([
     "prove",
@@ -55,13 +54,6 @@ export default function MathLibrary() {
       ]);
       setBooks(b);
       setHistory(h);
-      setBookId((previous) =>
-        b.some((book) => book.id === previous)
-          ? previous
-          : b.length === 1
-            ? b[0].id
-            : "",
-      );
     } catch (err) {
       setError(describe(err));
     } finally {
@@ -71,33 +63,22 @@ export default function MathLibrary() {
   useEffect(() => {
     void load();
   }, [load]);
-  const book = books.find((b) => b.id === bookId);
+  const selectedBooks = books.filter((b) =>
+    selected.some((s) => s.bookId === b.id),
+  );
+  const chapterCount = selected.reduce((n, s) => n + s.chapterIds.length, 0);
   const latest = history.find((h) => h.status !== "completed");
   async function start() {
-    if (!book) return;
+    if (!selected.length) return;
     setBusy(true);
     setError("");
     try {
       const body = {
         mode: "continuous",
-        bookId: book.id,
-        chapterIds: selected,
+        scopes: selected,
         difficulty,
-        ...(book.publicationId
-          ? { assessmentVersion: 2, taskKinds: kinds }
-          : {
-              kinds: [
-                ...new Set(
-                  kinds.map((k) =>
-                    k === "prove"
-                      ? "proof"
-                      : k === "determine"
-                        ? "definition"
-                        : "calculation",
-                  ),
-                ),
-              ],
-            }),
+        assessmentVersion: 2,
+        taskKinds: kinds,
       };
       const key = JSON.stringify(body);
       if (createOperation.current?.body !== key)
@@ -113,7 +94,7 @@ export default function MathLibrary() {
       setBusy(false);
     }
   }
-  async function showPreview(c: MathBook["chapters"][number]) {
+  async function showPreview(_book: MathBook, c: MathBook["chapters"][number]) {
     const request = ++previewRequest.current;
     setPreview({ title: `${c.number}. ${c.title}` });
     try {
@@ -184,114 +165,46 @@ export default function MathLibrary() {
                     <p className="math-eyebrow">01 · {t("mathScope")}</p>
                     <h2>{t("mathChapters")}</h2>
                   </div>
-                  {book && (
-                    <span className="math-count-badge">
-                      {selected.length} / {book.chapters.length}
-                    </span>
-                  )}
+                  <span className="math-count-badge">
+                    {selected.length} {t("mathBooksCount")} · {chapterCount}{" "}
+                    {t("mathSelectedChapters")}
+                  </span>
                 </div>
-                <label className="math-label">
-                  {t("mathBook")}
-                  <select
-                    className="math-field"
-                    aria-label={t("mathBook")}
-                    value={bookId}
-                    disabled={busy}
-                    onChange={(e) => {
-                      setBookId(e.target.value);
-                      setSelected([]);
-                      previewRequest.current++;
-                      setPreview(undefined);
-                    }}
-                  >
-                    <option value="">{t("mathSelectBook")}</option>
-                    {books.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {b.subjectTitle === b.title
-                          ? b.title
-                          : `${b.subjectTitle} / ${b.title}`}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                {book && (
-                  <>
-                    <div className="math-selection-tools">
-                      <p>{t("mathSelectChaptersHelp")}</p>
-                      <div>
-                        <button
-                          disabled={busy}
-                          onClick={() =>
-                            setSelected(book.chapters.map((c) => c.id))
-                          }
-                        >
-                          {t("mathSelectAll")}
-                        </button>
-                        <button
-                          disabled={busy || !selected.length}
-                          onClick={() => setSelected([])}
-                        >
-                          {t("mathClearSelection")}
-                        </button>
-                      </div>
-                    </div>
-                    <fieldset disabled={busy} className="math-chapters">
-                      <legend className="sr-only">{t("mathChapters")}</legend>
-                      {book.chapters.map((c) => (
-                        <div
-                          className={`math-chapter ${selected.includes(c.id) ? "is-selected" : ""}`}
-                          key={c.id}
-                        >
-                          <label>
-                            <input
-                              type="checkbox"
-                              checked={selected.includes(c.id)}
-                              onChange={(e) =>
-                                setSelected(
-                                  e.target.checked
-                                    ? [...selected, c.id]
-                                    : selected.filter((id) => id !== c.id),
-                                )
-                              }
-                            />
-                            <span className="math-chapter-number">
-                              {String(c.number).padStart(2, "0")}
-                            </span>
-                            <span>{c.title}</span>
-                          </label>
-                          <button
-                            type="button"
-                            aria-label={`${t("mathPreview")}: ${c.title}`}
-                            onClick={() => void showPreview(c)}
-                          >
-                            {t("mathPreview")}
-                          </button>
-                        </div>
-                      ))}
-                    </fieldset>
-                    <p className="math-help">{t("mathScopeHelp")}</p>
-                  </>
-                )}
+                <p className="math-help">{t("mathMultiScopeHelp")}</p>
+                <MathScopePicker
+                  books={books}
+                  value={selected}
+                  onChange={setSelected}
+                  disabled={busy}
+                  onPreview={(b, c) => void showPreview(b, c)}
+                />
+                <p className="math-help">{t("mathScopeHelp")}</p>
               </section>
               <aside className="math-start-rail">
                 <section className="math-panel">
                   <p className="math-eyebrow">02 · {t("mathReady")}</p>
                   <h2>{t("mathPracticeAtYourPace")}</h2>
                   <p className="math-help">{t("mathNoCountHelp")}</p>
-                  {book && (
+                  {selectedBooks.length > 0 && (
                     <dl className="math-summary-list">
                       <div>
                         <dt>{t("mathScope")}</dt>
                         <dd>
-                          {selected.length} {t("mathSelectedChapters")}
+                          {chapterCount} {t("mathSelectedChapters")}
                         </dd>
                       </div>
                       <div>
                         <dt>{t("mathOutputLanguage")}</dt>
                         <dd>
-                          {new Intl.DisplayNames([language], {
-                            type: "language",
-                          }).of(book.language) ?? book.language}
+                          {selectedBooks
+                            .map(
+                              (book) =>
+                                new Intl.DisplayNames([language], {
+                                  type: "language",
+                                }).of(book.language) ?? book.language,
+                            )
+                            .filter((v, i, a) => a.indexOf(v) === i)
+                            .join(" / ")}
                         </dd>
                       </div>
                     </dl>
@@ -343,7 +256,10 @@ export default function MathLibrary() {
                     <button
                       className="math-button-primary"
                       disabled={
-                        busy || !book || !selected.length || !kinds.length
+                        busy ||
+                        !selected.length ||
+                        chapterCount > 100 ||
+                        !kinds.length
                       }
                       onClick={() => void start()}
                     >

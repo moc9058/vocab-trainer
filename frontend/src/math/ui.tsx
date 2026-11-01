@@ -11,7 +11,7 @@ export function useMathError() {
       if (err.message.includes("MATH_SCOPE_TOO_LARGE"))
         return t("mathScopeLarge");
       if (err.message.includes("MATH_BUSY")) return t("mathBusy");
-      if (/MATH_(CURRICULUM|SOURCE|QUESTION)_MISSING/.test(err.message))
+      if (/MATH_(CURRICULUM|SOURCE|QUESTION|SCOPE)_MISSING/.test(err.message))
         return t("mathFrozenMissing");
       if (err.message.includes("MATH_PROMPT_VERSION_UNAVAILABLE"))
         return t("mathPromptUnavailable");
@@ -82,7 +82,13 @@ export function QuestionReview({
           {t("mathQuestion")} {item.number}
         </span>
         <span>{t(`math_${q.taskKind ?? q.kind}`)}</span>
-        <span>{book.chapters.find((c) => c.id === q.chapterId)?.title}</span>
+        <span>
+          {q.bookTitle ?? book.title} /{" "}
+          {q.chapterTitle ??
+            (!q.bookId
+              ? book.chapters.find((c) => c.id === q.chapterId)?.title
+              : q.chapterId)}
+        </span>
       </div>
       {q.primaryObjectiveId && (
         <p className="math-help">
@@ -91,13 +97,15 @@ export function QuestionReview({
         </p>
       )}
       <MathText text={q.prompt} />
-      <section>
-        <h3>
-          {t("mathYourAnswer")}
-          {answer?.submitted === false ? ` · ${t("mathUnsubmitted")}` : ""}
-        </h3>
-        <MathText text={answer?.text || t("mathUnanswered")} />
-      </section>
+      {(answer?.text || answer?.grade) && (
+        <section>
+          <h3>
+            {t("mathYourAnswer")}
+            {answer?.submitted === false ? ` · ${t("mathUnsubmitted")}` : ""}
+          </h3>
+          <MathText text={answer?.text || t("mathUnanswered")} />
+        </section>
+      )}
       {answer?.grade && (
         <section
           className={`math-feedback math-verdict-${answer.grade.verdict}`}

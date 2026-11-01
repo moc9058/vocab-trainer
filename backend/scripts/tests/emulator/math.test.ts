@@ -2,568 +2,572 @@ import { test, mock } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import Fastify from "fastify";
-import type { MathTest, MathSource } from "../../../src/math-types.js";
-if (!process.env.FIRESTORE_EMULATOR_HOST)
-  throw new Error("Math integration tests require the Firestore emulator");
-let failGrade = false;
-let failGenerate = false;
-let forceDuplicate = false;
-let blockedGeneration: (() => Promise<void>) | undefined;
+import type {
+  MathBook,
+  MathTest,
+  Curriculum,
+  MathSource,
+} from "../../../src/math-types.js";
+import { mathHash, mathPromptHash } from "../../../src/math-core.js";
+import { canonical, curriculumRevision } from "../../../src/math-curriculum.js";
+if (!process.env.FIRESTORE_EMULATOR_HOST) throw new Error("Emulator required");
+let failGenerate = false,
+  failGrade = false,
+  duplicate = false,
+  blocked: (() => Promise<void>) | undefined;
+const generationBooks: string[] = [],
+  gradingBooks: string[] = [];
+mock.module("../../../src/llm.ts", {
+  namedExports: { resolveModel: async () => "mock-model" },
+});
 mock.module("../../../src/math-llm.ts", {
   namedExports: {
-    generateMathQuestions: async (test: MathTest, sources: MathSource[]) => {
-      assert.deepEqual(
-        sources.map((s) => s.id),
-        ["c1", "c2"],
-      );
-      if (failGenerate) throw new Error("Mock generation failure");
-      if (blockedGeneration) {
-        const block = blockedGeneration;
-        blockedGeneration = undefined;
-        await block();
+    generateMathQuestions: async (t: MathTest, sources: MathSource[]) => {
+      generationBooks.push(t.book.id);
+      assert.equal(t.count, 1);
+      assert.ok(sources.every((s) => s.bookId === t.book.id));
+      if (blocked) {
+        const hold = blocked;
+        blocked = undefined;
+        await hold();
       }
+      if (failGenerate) throw new Error("Generation unavailable");
       return [
         {
           id: "q1",
-          chapterId: "c2",
-          heading: "Subspaces",
-          kind: "definition",
-          prompt:
-            test.mode === "continuous"
-              ? `Define a subspace variant ${forceDuplicate ? 0 : (test.generatedCount ?? 0)}.`
-              : "Define a subspace.",
-          solution: "Zero and closure.",
-          rubric: "Check both operations.",
+          schemaVersion: 2,
+          chapterId: t.chapterIds[0],
+          primaryObjectiveId: "same-objective",
+          taskKind: "compute",
+          kind: "calculation",
+          heading: "1.1 Test",
+          prompt: `${t.book.id} question ${duplicate ? 0 : (t.generatedCount ?? 0)}`,
+          solution: "1/2",
+          rubric: "private rubric",
+          rubricItems: [{ id: "r", criterion: "Private criterion", weight: 1 }],
+          publicationId: t.publicationId,
+          curriculumRevision: t.curriculumRevision,
         },
       ];
     },
-    gradeMathAnswer: async () => {
-      if (failGrade) throw new Error("Mock grading failure");
-      return { verdict: "partial", feedback: "Include zero." };
+    gradeMathAnswer: async (
+      t: MathTest,
+      q: { bookId?: string },
+      _text: string,
+      sources: MathSource[],
+    ) => {
+      gradingBooks.push(t.book.id);
+      assert.ok(sources.every((s) => s.bookId === t.book.id));
+      if (q.bookId) assert.equal(q.bookId, t.book.id);
+      if (failGrade) throw new Error("Grading unavailable");
+      return { verdict: "partial", feedback: "Check the units." };
     },
   },
 });
-const { default: mathRoutes } = await import("../../../src/routes/math.js");
 const { db } = await import("../../../src/firestore.js");
+const { publishMathBook } = await import("../../../src/math-publication.js");
+const { scopeKey } = await import("../../../src/math-scopes.js");
+const { mathPromptVersion } = await import(
+  "../../../src/math-prompt-loader.js"
+);
+const { default: routes } = await import("../../../src/routes/math.js");
 const app = Fastify();
-await app.register(mathRoutes, { prefix: "/api/math" });
-const prefix = `math-test-${randomUUID()}`;
-const bookId = prefix;
-const testId = `${prefix}-session`;
-const chapters = [1, 2].map((n) => ({
-  id: `c${n}`,
-  title: `Chapter ${n}`,
-  number: n,
-  versionId: `${prefix}-v${n}`,
-}));
-const book = {
-  id: bookId,
-  subjectId: "linear",
-  subjectTitle: "Linear",
-  title: "Linear",
-  language: "en",
-  revision: "r1",
-  chapters,
-};
-const post = async (path: string, body: unknown) => {
-  const response = await app.inject({
+await app.register(routes, { prefix: "/api/math" });
+const prefix = `multi-${randomUUID()}`;
+const fixtures: {
+  book: MathBook;
+  sources: MathSource[];
+  curriculum: Curriculum;
+}[] = [];
+const sessions: string[] = [];
+const post = async (path: string, payload: unknown) => {
+  const r = await app.inject({
     method: "POST",
     url: `/api/math${path}`,
-    payload: body,
+    payload,
   });
-  return { status: response.statusCode, data: response.json() };
+  return { status: r.statusCode, data: r.json() };
 };
+const get = async (id: string) =>
+  (await app.inject(`/api/math/tests/${id}`)).json() as MathTest;
+const op = (t: MathTest, extra: object = {}) => ({
+  operationId: randomUUID(),
+  version: t.version,
+  ...extra,
+});
+async function create(indices = [0]) {
+  const id = `${prefix}-${sessions.length}`;
+  sessions.push(id);
+  const r = await post("/tests", {
+    operationId: id,
+    scopes: indices.map((i) => ({
+      bookId: fixtures[i].book.id,
+      chapterIds: ["c1"],
+    })),
+    difficulty: "standard",
+    taskKinds: ["compute"],
+  });
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  return r.data as MathTest;
+}
+async function next(t: MathTest) {
+  const r = await post(`/tests/${t.id}/next`, op(t));
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  return r.data as MathTest;
+}
+async function reveal(t: MathTest) {
+  const r = await post(
+    `/tests/${t.id}/reveal`,
+    op(t, { questionId: t.currentQuestionId }),
+  );
+  assert.equal(r.status, 200, JSON.stringify(r.data));
+  return r.data as MathTest;
+}
 try {
-  await db.collection("math_books").doc(bookId).set(book);
-  for (const chapter of chapters)
-    await db
-      .collection("math_chapter_versions")
-      .doc(chapter.versionId)
-      .set({ ...chapter, bookId, markdown: "# Subspaces\nDefinition" });
-  await test("math lifecycle: immutable scope, failed work, replay, conflict, grading privacy and resume", async () => {
-    const create = {
-      operationId: testId,
-      bookId,
-      chapterIds: ["c2"],
-      count: 1,
-      kinds: ["definition"],
-      difficulty: "standard",
+  for (let i = 0; i < 3; i++) {
+    const id = `${prefix}-book${i}`;
+    const source: MathSource = {
+      id: "c1",
+      number: 1,
+      title: `Chapter ${i}`,
+      bookId: id,
+      markdown: "# 1.1 Test\nA half equals 1/2.",
+      versionId: `${id}-source`,
     };
-    let response = await post("/tests", create);
-    assert.equal(response.status, 200);
-    assert.deepEqual(
-      response.data.sourceVersionIds,
-      chapters.map((c) => c.versionId),
-    );
-    const original = response.data;
-    assert.equal((await post("/tests", { ...create, count: 2 })).status, 409);
-    assert.equal(
-      (
-        await post("/tests", {
-          ...create,
-          operationId: randomUUID(),
-          chapterIds: ["missing"],
-        })
-      ).status,
-      400,
-    );
-    // Publication changes never affect a running test's stored book/sources.
-    await db
-      .collection("math_books")
-      .doc(bookId)
-      .update({ revision: "r2", title: "Changed book" });
-    const generation = { operationId: randomUUID(), version: original.version };
-    failGenerate = true;
-    response = await post(`/tests/${testId}/generate`, generation);
-    assert.equal(response.status, 503);
-    const failed = (await app.inject(`/api/math/tests/${testId}`)).json();
-    assert.equal(failed.status, "generation_failed");
-    failGenerate = false;
-    response = await post(`/tests/${testId}/generate`, generation);
-    assert.equal(response.status, 200);
-    let active = response.data;
-    assert.equal(active.book.revision, "r1");
-    assert.ok(active.questions[0].solution);
-    assert.equal(active.requestHash, undefined);
-    const replay = await post(`/tests/${testId}/generate`, generation);
-    assert.equal(replay.status, 200);
-    assert.equal(replay.data.version, active.version);
-    const pause = {
-      operationId: randomUUID(),
-      version: active.version,
-      action: "pause",
-      draft: "A vector subset",
+    const curriculum: Curriculum = {
+      schemaVersion: 2,
+      bookId: id,
+      revision: "",
+      instructionLanguage: "en",
+      sourceLanguage: "en",
+      guidance: "Use exact rational arithmetic from the source.",
+      sources: [
+        {
+          chapterId: "c1",
+          file: "Example/md/1. Test.md",
+          sha256: mathHash(source.markdown),
+        },
+      ],
+      objectives: [
+        {
+          id: "same-objective",
+          chapterId: "c1",
+          statement: "Compute a rational quantity.",
+          ability: "application",
+          supportedTaskKinds: ["compute"],
+          sourceRefs: [
+            { chapterId: "c1", section: "1.1", heading: "1.1 Test" },
+          ],
+          prerequisiteObjectiveIds: [],
+          requiredBackground: [],
+          successCriteria: [
+            { id: "r", criterion: "Give an exact rational value." },
+          ],
+          scopeConstraints: [],
+          commonErrors: [],
+          status: "active",
+        },
+      ],
     };
-    response = await post(`/tests/${testId}/state`, pause);
-    assert.equal(response.status, 200);
-    assert.equal(response.data.status, "paused");
-    assert.equal(response.data.draft, pause.draft);
-    assert.equal(
-      (
-        await post(`/tests/${testId}/state`, {
-          ...pause,
-          operationId: randomUUID(),
-        })
-      ).status,
-      409,
-    );
-    response = await post(`/tests/${testId}/state`, {
-      operationId: randomUUID(),
-      version: response.data.version,
-      action: "resume",
-      draft: pause.draft,
-    });
-    assert.equal(response.status, 200);
-    active = response.data;
-    const answer = {
-      operationId: randomUUID(),
-      version: active.version,
-      questionId: "q1",
-      text: "Closed under addition and multiplication",
+    curriculum.revision = curriculumRevision(curriculum);
+    const book: MathBook = {
+      id,
+      subjectId: "math",
+      subjectTitle: "Mathematics",
+      title: `Textbook ${i}`,
+      language: i === 1 ? "ja" : "en",
+      revision: "",
+      chapters: [
+        {
+          id: "c1",
+          number: 1,
+          title: source.title,
+          versionId: source.versionId,
+        },
+      ],
+      curriculumRevision: curriculum.revision,
+      subjectProfile: {
+        version: "math-v1",
+        subject: "mathematics",
+        constraints: [],
+      },
     };
-    failGrade = true;
-    response = await post(`/tests/${testId}/answer`, answer);
-    assert.equal(response.status, 503);
-    const ungraded = (await app.inject(`/api/math/tests/${testId}`)).json();
-    assert.equal(ungraded.status, "active");
-    assert.equal(ungraded.answers.q1.text, answer.text);
-    assert.ok(ungraded.questions[0].solution);
-    assert.equal(ungraded.draft, answer.text);
-    failGrade = false;
-    response = await post(`/tests/${testId}/answer`, answer);
-    assert.equal(response.status, 200);
-    assert.equal(response.data.status, "completed");
-    assert.equal(response.data.answers.q1.grade.verdict, "partial");
-    assert.equal(response.data.questions[0].solution, "Zero and closure.");
-    const gradeReplay = await post(`/tests/${testId}/answer`, answer);
-    assert.equal(gradeReplay.status, 200);
-    assert.equal(gradeReplay.data.version, response.data.version);
-    assert.equal(
-      (await post(`/tests/${testId}/answer`, { ...answer, text: "changed" }))
-        .status,
-      409,
-    );
-    assert.equal(
-      (
-        await post(`/tests/${testId}/state`, {
-          operationId: randomUUID(),
-          version: response.data.version,
-          action: "resume",
-        })
-      ).status,
-      409,
-    );
-    assert.equal((await post("/tests", create)).status, 200);
-  });
-  await test("concurrent mutations allow one writer and finishing exposes unanswered solutions", async () => {
-    const id = `${prefix}-concurrent`;
-    const request = {
-      operationId: id,
-      bookId,
-      chapterIds: ["c2"],
-      count: 1,
-      kinds: ["definition"],
-      difficulty: "standard",
-    };
-    await post("/tests", request);
-    const generated = await post(`/tests/${id}/generate`, {
-      operationId: randomUUID(),
-      version: 0,
-    });
-    const make = () =>
-      post(`/tests/${id}/state`, {
-        operationId: randomUUID(),
-        version: generated.data.version,
-        action: "pause",
-        draft: "draft",
-      });
-    const results = await Promise.all([make(), make()]);
-    assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
-    const paused = results.find((r) => r.status === 200)!.data;
-    const done = await post(`/tests/${id}/state`, {
-      operationId: randomUUID(),
-      version: paused.version,
-      action: "finish",
-    });
-    assert.equal(done.data.status, "completed");
-    assert.ok(done.data.questions[0].solution);
-  });
-
-  await test("continuous tests persist feedback, append idempotently, paginate and keep parent storage bounded", async () => {
-    const id = `${prefix}-continuous`;
-    const created = await post("/tests", {
-      operationId: id,
-      bookId,
-      chapterIds: ["c2"],
-      mode: "continuous",
-      kinds: ["definition"],
-      difficulty: "standard",
-    });
-    assert.equal(created.status, 200);
-    assert.equal(created.data.phase, "ready");
-    assert.equal(created.data.count, 0);
+    book.revision = mathHash(canonical(book));
+    book.publicationId = book.revision;
+    fixtures.push({ book, sources: [source], curriculum });
+    await publishMathBook(db, book, [source], curriculum, false);
+  }
+  await test("new sessions are continuous; fixed count and batch generation have been removed", async () => {
+    const t = await create([0, 1]);
+    assert.equal(t.mode, "continuous");
+    assert.equal(t.phase, "ready");
+    assert.equal(t.scopes!.length, 2);
     assert.equal(
       (
         await post("/tests", {
           operationId: randomUUID(),
-          bookId,
-          chapterIds: ["c2"],
-          mode: "continuous",
-          count: 5,
-          kinds: ["definition"],
+          bookId: fixtures[0].book.id,
+          chapterIds: ["c1"],
           difficulty: "standard",
+          count: 3,
         })
       ).status,
       400,
     );
-    const firstOp = {
+    assert.equal((await post(`/tests/${t.id}/generate`, op(t))).status, 404);
+    const r = await post("/tests", {
       operationId: randomUUID(),
-      version: created.data.version,
-    };
-    failGenerate = true;
-    assert.equal((await post(`/tests/${id}/next`, firstOp)).status, 503);
-    failGenerate = false;
-    let response = await post(`/tests/${id}/next`, firstOp);
-    assert.equal(response.status, 200);
-    let state = response.data;
-    assert.equal(state.generatedCount, 1);
-    assert.equal(state.phase, "question");
-    assert.ok(state.questions[0].solution);
-    const gradeOp = {
-      operationId: randomUUID(),
-      version: state.version,
-      questionId: "q1",
-      text: "first answer",
-    };
-    failGrade = true;
-    assert.equal((await post(`/tests/${id}/answer`, gradeOp)).status, 503);
-    failGrade = false;
-    const saved = (await app.inject(`/api/math/tests/${id}`)).json();
-    assert.equal(saved.answers.q1.text, "first answer");
-    assert.ok(saved.questions[0].solution);
-    response = await post(`/tests/${id}/answer`, gradeOp);
-    state = response.data;
-    assert.equal(response.status, 200);
-    assert.equal(state.status, "active");
-    assert.equal(state.phase, "feedback");
-    assert.equal(state.stats.answered, 1);
-    assert.ok(state.questions[0].solution);
+      scopes: [{ bookId: fixtures[0].book.id, chapterIds: [] }],
+      difficulty: "standard",
+    });
+    assert.equal(r.status, 400);
+    for (const scopes of [[], [0, 0].map(() => ({ bookId: fixtures[0].book.id, chapterIds: ["c1"] }))]) {
+      assert.equal((await post("/tests", { operationId: randomUUID(), scopes, difficulty: "standard" })).status, 400);
+    }
+    assert.equal((await post("/tests", {
+      operationId: randomUUID(), scopes: [{ bookId: fixtures[0].book.id, chapterIds: ["c1"] }],
+      difficulty: "standard", taskKinds: ["prove"],
+    })).status, 422);
+  });
+  await test("reveal stays on the question, is durable and idempotent, and never grades or skips", async () => {
+    let t = await next(await create());
+    const body = op(t, {
+      questionId: t.currentQuestionId,
+      draft: "Private draft",
+    });
+    const original = t.currentQuestionId;
+    const r = await post(`/tests/${t.id}/reveal`, body);
+    assert.equal(r.status, 200);
+    t = r.data;
+    assert.equal(t.currentQuestionId, original);
+    assert.equal(t.phase, "solution");
+    assert.equal(t.stats!.revealed, 1);
+    assert.equal(t.stats!.answered, 0);
+    assert.equal(t.draft, "Private draft");
     assert.equal(
-      (await post(`/tests/${id}/answer`, gradeOp)).data.stats.answered,
+      (await post(`/tests/${t.id}/reveal`, body)).data.stats.revealed,
       1,
     );
-    let reloaded = (await app.inject(`/api/math/tests/${id}`)).json();
-    assert.equal(reloaded.phase, "feedback");
-    assert.equal(reloaded.currentQuestionId, "q1");
-    const pause = await post(`/tests/${id}/state`, {
-      operationId: randomUUID(),
-      version: state.version,
-      action: "pause",
-    });
-    response = await post(`/tests/${id}/state`, {
-      operationId: randomUUID(),
-      version: pause.data.version,
-      action: "resume",
-    });
-    state = response.data;
-    assert.equal(state.phase, "feedback");
-    forceDuplicate = true;
-    assert.equal(
-      (
-        await post(`/tests/${id}/next`, {
-          operationId: randomUUID(),
-          version: state.version,
-        })
-      ).status,
-      409,
-    );
-    forceDuplicate = false;
-    state = (await app.inject(`/api/math/tests/${id}`)).json();
-    assert.equal(state.generatedCount, 1);
-    assert.equal(state.phase, "feedback");
-    const nextOp = { operationId: randomUUID(), version: state.version };
-    response = await post(`/tests/${id}/next`, nextOp);
-    state = response.data;
-    assert.equal(response.status, 200);
-    assert.equal(state.currentQuestionId, "q2");
-    response = await post(`/tests/${id}/next`, {
-      operationId: randomUUID(),
-      version: state.version,
-      draft: "unfinished notes",
-    });
-    state = response.data;
-    assert.equal(state.currentQuestionId, "q3");
-    assert.equal(state.answers.q3, undefined);
-    assert.equal(
-      (await post(`/tests/${id}/next`, nextOp)).data.generatedCount,
-      3,
-    );
-    const early = (await app.inject(`/api/math/tests/${id}/questions`)).json();
-    assert.ok(early.items[1].question.solution);
-    assert.equal(early.items[1].answer.text, "unfinished notes");
-    assert.equal(early.items[1].answer.submitted, false);
-    assert.ok(early.items[0].question.solution);
-    // More than a page of large answers must not enlarge the parent document.
-    while (state.generatedCount <= 21) {
-      const q = state.questions[0];
-      response = await post(`/tests/${id}/answer`, {
-        operationId: randomUUID(),
-        version: state.version,
-        questionId: q.id,
-        text: "reasoning ".repeat(400),
-      });
-      assert.equal(response.status, 200);
-      state = response.data;
-      if (state.generatedCount === 21) break;
-      response = await post(`/tests/${id}/next`, {
-        operationId: randomUUID(),
-        version: state.version,
-      });
-      assert.equal(response.status, 200);
-      state = response.data;
+    assert.equal((await get(t.id)).phase, "solution");
+    assert.equal(t.questions[0].rubric, undefined);
+    t = await next(t);
+    const history = (
+      await app.inject(`/api/math/tests/${t.id}/questions`)
+    ).json();
+    assert.equal(history.items[0].question.revealedAt !== undefined, true);
+    assert.equal(history.items[0].answer.submitted, false);
+    const shared = await db
+      .collection("math_tests")
+      .doc(t.id)
+      .collection("objectiveProgress")
+      .doc(scopeKey(fixtures[0].book.id, "same-objective"))
+      .get();
+    assert.equal(shared.get("revealed"), 1);
+    assert.equal(shared.get("submitted"), 0);
+    assert.equal(shared.get("skipped"), 0);
+  });
+  await test("book draw balances presentations and colliding chapter/objective IDs stay distinct", async () => {
+    let t = await create([0, 1]);
+    const counts = new Map<string, number>();
+    for (let i = 0; i < 8; i++) {
+      t = await next(t);
+      const book = t.questions[0].bookId!;
+      counts.set(book, (counts.get(book) ?? 0) + 1);
+      assert.ok(
+        Math.abs(
+          (counts.get(fixtures[0].book.id) ?? 0) -
+            (counts.get(fixtures[1].book.id) ?? 0),
+        ) <= 1,
+      );
+      t = await reveal(t);
     }
-    assert.equal(state.stats.answered, 20);
-    assert.equal(state.status, "active");
-    const parent = (await db.collection("math_tests").doc(id).get()).data()!;
-    assert.deepEqual(parent.questions, []);
-    assert.deepEqual(parent.answers, {});
-    assert.ok(Buffer.byteLength(JSON.stringify(parent)) < 6000);
-    assert.equal(
-      (await db.collection("math_tests").doc(id).collection("questions").get())
-        .size,
-      21,
-    );
-    const page1 = (await app.inject(`/api/math/tests/${id}/questions`)).json();
-    assert.equal(page1.items.length, 20);
-    assert.equal(page1.nextCursor, 20);
-    const page2 = (
-      await app.inject(`/api/math/tests/${id}/questions?after=20`)
+    assert.deepEqual([...counts.values()], [4, 4]);
+    const progress = (
+      await app.inject(`/api/math/tests/${t.id}/objectives`)
     ).json();
-    assert.equal(page2.items.length, 1);
-    assert.equal(page2.items[0].number, 21);
-    assert.equal(page2.nextCursor, null);
-    const next = await post(`/tests/${id}/next`, {
-      operationId: randomUUID(),
-      version: state.version,
-    });
-    state = next.data;
-    const paused = await post(`/tests/${id}/state`, {
-      operationId: randomUUID(),
-      version: state.version,
-      action: "pause",
-      draft: "unfinished proof",
-    });
-    const done = await post(`/tests/${id}/state`, {
-      operationId: randomUUID(),
-      version: paused.data.version,
-      action: "finish",
-      draft: "unfinished proof",
-    });
-    assert.equal(done.status, 200);
-    assert.equal(done.data.status, "completed");
-    assert.equal(done.data.generatedCount, 22);
-    assert.equal(done.data.answers.q22.submitted, false);
-    const lastPage = (
-      await app.inject(`/api/math/tests/${id}/questions?after=21`)
-    ).json();
-    assert.ok(lastPage.items[0].question.solution);
-    assert.equal(lastPage.items[0].answer.text, "unfinished proof");
+    assert.equal(progress.length, 2);
     assert.equal(
-      (
-        await post(`/tests/${id}/next`, {
-          operationId: randomUUID(),
-          version: done.data.version,
-        })
-      ).status,
-      409,
+      new Set(progress.map((p: { bookId: string }) => p.bookId)).size,
+      2,
     );
   });
-
-  await test("legacy multi-question tests pause at feedback and advance without generating", async () => {
-    const id = `${prefix}-legacy`;
-    const created = await post("/tests", {
-      operationId: id,
-      bookId,
-      chapterIds: ["c2"],
-      count: 2,
-      kinds: ["definition"],
-      difficulty: "standard",
+  await test("scope changes affect only the next question; source versions and drafts stay frozen", async () => {
+    let t = await next(await create());
+    const old = t.questions[0];
+    const change = op(t, {
+      scopes: [{ bookId: fixtures[1].book.id, chapterIds: ["c1"] }],
+      draft: "Keep this draft",
     });
-    assert.equal(created.status, 200);
+    let r = await post(`/tests/${t.id}/scope`, change);
+    assert.equal(r.status, 200);
+    t = r.data;
+    assert.equal(t.currentQuestionId, old.id);
+    assert.equal(t.questions[0].bookId, old.bookId);
+    assert.equal(t.draft, "Keep this draft");
+    assert.equal(t.scopeRevision, 1);
+    assert.equal(
+      (await post(`/tests/${t.id}/scope`, change)).data.scopeRevision,
+      1,
+    );
+    r = await post(
+      `/tests/${t.id}/answer`,
+      op(t, { questionId: old.id, text: "1/2" }),
+    );
+    assert.equal(r.status, 200);
+    assert.equal(gradingBooks.at(-1), fixtures[0].book.id);
+    t = r.data;
+    t = await next(t);
+    assert.equal(t.questions[0].bookId, fixtures[1].book.id);
+    // Re-add a removed book after its live pointer changes: use the pinned snapshot.
+    await db
+      .collection("math_books")
+      .doc(fixtures[0].book.id)
+      .update({ revision: "changed", title: "Changed live title" });
+    r = await post(
+      `/tests/${t.id}/scope`,
+      op(t, { scopes: [{ bookId: fixtures[0].book.id, chapterIds: ["c1"] }] }),
+    );
+    assert.equal(r.status, 200);
+    t = r.data;
+    assert.equal(t.scopes![0].book.title, "Textbook 0");
+    t = await reveal(t);
+    const gradeRemoved=await post(`/tests/${t.id}/answer`,op(t,{questionId:t.currentQuestionId,text:"1/2"}));
+    assert.equal(gradeRemoved.status,200);assert.equal(gradingBooks.at(-1),fixtures[1].book.id);t=gradeRemoved.data;
+    t = await next(t);
+    assert.equal(t.questions[0].bookTitle, "Textbook 0");
+    r = await post(
+      `/tests/${t.id}/scope`,
+      op(t, {
+        scopes: [{ bookId: fixtures[0].book.id, chapterIds: ["missing"] }],
+      }),
+    );
+    assert.equal(r.status, 400);
+    assert.equal((await get(t.id)).scopeRevision, 2);
+    await db
+      .collection("math_books")
+      .doc(fixtures[0].book.id)
+      .set(fixtures[0].book);
+  });
+  await test("generation and grading failures preserve progress; persisted plans retry without a redraw", async () => {
+    let t = await reveal(await next(await create()));
+    const body = op(t);
+    failGenerate = true;
+    assert.equal((await post(`/tests/${t.id}/next`, body)).status, 503);
+    t = await get(t.id);
+    assert.equal(t.phase, "solution");
+    assert.equal(t.stats!.revealed, 1);
+    const saved = (await db.collection("math_tests").doc(t.id).get()).get(
+      "pendingPlans",
+    );
+    assert.equal(saved.length, 1);
+    failGenerate = false;
+    const r = await post(`/tests/${t.id}/next`, body);
+    assert.equal(r.status, 200);
+    t = r.data;
+    assert.equal(t.generatedCount, 2);
+    const answer = op(t, {
+      questionId: t.currentQuestionId,
+      text: "My answer",
+    });
+    failGrade = true;
+    assert.equal((await post(`/tests/${t.id}/answer`, answer)).status, 503);
+    assert.equal((await get(t.id)).draft, "My answer");
+    failGrade = false;
+    assert.equal(
+      (await post(`/tests/${t.id}/answer`, answer)).data.stats.answered,
+      1,
+    );
+    assert.equal(
+      (await post(`/tests/${t.id}/answer`, answer)).data.stats.answered,
+      1,
+    );
+  });
+  await test("an old failed plan cannot survive a successful scope edit", async () => {
+    let t = await create();
+    failGenerate = true;
+    assert.equal((await post(`/tests/${t.id}/next`, op(t))).status, 503);
+    failGenerate = false;
+    t = await get(t.id);
+    const r = await post(
+      `/tests/${t.id}/scope`,
+      op(t, { scopes: [{ bookId: fixtures[1].book.id, chapterIds: ["c1"] }] }),
+    );
+    assert.equal(r.status, 200);
+    t = await next(r.data);
+    assert.equal(t.questions[0].bookId, fixtures[1].book.id);
+  });
+  await test("lazy fixed migration keeps answered/current questions, drops future questions and generates the next", async () => {
+    const modern = await create();
+    const { scopes: _scopes, scopeRevision: _revision, ...base } = modern;
+    const q = (n: number) => ({
+      id: `q${n}`,
+      number: n,
+      chapterId: "c1",
+      kind: "calculation",
+      prompt: `Old ${n}`,
+      solution: "1/2",
+      rubric: "private",
+    });
+    await db
+      .collection("math_tests")
+      .doc(base.id)
+      .set({
+        ...base,
+        mode: "fixed",
+        status: "active",
+        phase: "question",
+        currentQuestionId: "q2",
+        count: 3,
+        questions: [q(1), q(2), q(3)],
+        answers: {
+          q1: {
+            text: "answer",
+            operationId: "old",
+            grade: { verdict: "correct", feedback: "Correct" },
+          },
+        },
+        draft: "Old draft",
+      });
+    let t = await get(base.id);
+    assert.equal(t.mode, "continuous");
+    assert.equal(t.generatedCount, 2);
+    assert.equal(t.currentQuestionId, "q2");
+    assert.equal(t.draft, "Old draft");
+    assert.equal(t.stats!.answered, 1);
+    assert.equal(t.stats!.correct, 1);
+    const history = (
+      await app.inject(`/api/math/tests/${t.id}/questions`)
+    ).json();
+    assert.equal(history.items.length, 2);
+    assert.equal(history.items[0].answer.text, "answer");
+    assert.equal(history.items[1].question.prompt, "Old 2");
+    const version = t.version;
+    assert.equal((await get(t.id)).version, version);
+    t = await reveal(t);
+    t = await next(t);
+    assert.equal(t.currentQuestionId, "q3");
+    assert.notEqual(t.questions[0].prompt, "Old 3");
+  });
+  await test("completed fixed tests keep all history and can never reopen", async () => {
+    const t = await create();
     const q = {
       id: "q1",
-      chapterId: "c2",
-      heading: "Subspaces",
-      kind: "definition",
-      prompt: "First?",
-      solution: "A",
-      rubric: "A",
+      chapterId: "c1",
+      kind: "proof",
+      prompt: "Historical",
+      solution: "Proof",
+      rubric: "private",
     };
     await db
       .collection("math_tests")
-      .doc(id)
-      .update({
-        status: "active",
-        questions: [
-          q,
-          { ...q, id: "q2", prompt: "Second?" },
-          { ...q, id: "q3", prompt: "Third?" },
-        ],
+      .doc(t.id)
+      .set({
+        ...t,
+        mode: "fixed",
+        status: "completed",
+        count: 2,
+        questions: [q, { ...q, id: "q2" }],
+        answers: {
+          q1: {
+            text: "old",
+            operationId: "old",
+            grade: { verdict: "partial", feedback: "Old feedback" },
+          },
+        },
       });
-    let response = await post(`/tests/${id}/answer`, {
-      operationId: randomUUID(),
-      version: 0,
-      questionId: "q1",
-      text: "A",
-    });
-    assert.equal(response.status, 200);
-    assert.equal(response.data.phase, "feedback");
-    assert.equal(response.data.status, "active");
-    assert.ok(response.data.questions[1].solution);
-    response = await post(`/tests/${id}/next`, {
-      operationId: randomUUID(),
-      version: response.data.version,
-    });
-    assert.equal(response.status, 200);
-    assert.equal(response.data.currentQuestionId, "q2");
-    assert.equal(response.data.phase, "question");
-    response = await post(`/tests/${id}/next`, {
-      operationId: randomUUID(),
-      version: response.data.version,
-      draft: "some unfinished work",
-    });
-    assert.equal(response.status, 200);
-    assert.equal(response.data.currentQuestionId, "q3");
-    assert.equal(response.data.answers.q2.submitted, false);
-    assert.equal(response.data.answers.q2.text, "some unfinished work");
-    response = await post(`/tests/${id}/answer`, {
-      operationId: randomUUID(),
-      version: response.data.version,
-      questionId: "q3",
-      text: "A",
-    });
-    assert.equal(response.data.status, "completed");
-    const history = (
-      await app.inject(`/api/math/tests/${id}/questions`)
-    ).json();
-    assert.equal(history.items.length, 3);
-    assert.ok(history.items[1].question.solution);
-    assert.equal(history.items[1].answer.submitted, false);
-    assert.equal(history.items[1].answer.text, "some unfinished work");
+    const old = await get(t.id);
+    assert.equal(old.status, "completed");
+    assert.equal(
+      (await app.inject(`/api/math/tests/${t.id}/questions`)).json().items
+        .length,
+      2,
+    );
+    assert.equal((await post(`/tests/${t.id}/next`, op(old))).status, 409);
   });
-  await test("expired generation cannot overwrite a newer question or its prompt marker", async () => {
-    const id = `${prefix}-lease`;
-    const created = await post("/tests", {
-      operationId: id,
-      bookId,
-      chapterIds: ["c2"],
-      mode: "continuous",
-      kinds: ["definition"],
-      difficulty: "standard",
-    });
-    let started!: () => void;
-    let release!: () => void;
-    const began = new Promise<void>((resolve) => {
-      started = resolve;
-    });
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    blockedGeneration = async () => {
-      started();
+  await test("stale tabs, in-flight scope edits and expired generation are fenced", async () => {
+    let t = await next(await create());
+    const results = await Promise.all(
+      [0, 1].map(() =>
+        post(
+          `/tests/${t.id}/reveal`,
+          op(t, { questionId: t.currentQuestionId }),
+        ),
+      ),
+    );
+    assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
+    t = await get(t.id);
+    let start!: () => void, release!: () => void;
+    const began = new Promise<void>((r) => (start = r)),
+      held = new Promise<void>((r) => (release = r));
+    blocked = async () => {
+      start();
       await held;
     };
-    const stale = post(`/tests/${id}/next`, {
-      operationId: randomUUID(),
-      version: created.data.version,
-    });
+    const stale = post(`/tests/${t.id}/next`, op(t));
     await began;
     try {
-      await db.collection("math_tests").doc(id).update({ "lock.until": 0 });
-      const snapshot = (await app.inject(`/api/math/tests/${id}`)).json();
-      const fresh = await post(`/tests/${id}/next`, {
-        operationId: randomUUID(),
-        version: snapshot.version,
-      });
+      assert.equal(
+        (
+          await post(
+            `/tests/${t.id}/scope`,
+            op(t, {
+              scopes: [{ bookId: fixtures[1].book.id, chapterIds: ["c1"] }],
+            }),
+          )
+        ).status,
+        409,
+      );
+      await db.collection("math_tests").doc(t.id).update({ "lock.until": 0 });
+      const snapshot = await get(t.id);
+      const fresh = await post(`/tests/${t.id}/next`, op(snapshot));
       assert.equal(fresh.status, 200);
       release();
       assert.equal((await stale).status, 409);
-      const saved = (await app.inject(`/api/math/tests/${id}`)).json();
-      assert.equal(saved.version, fresh.data.version);
-      assert.equal(saved.generatedCount, 1);
-      assert.equal(saved.phase, "question");
-      assert.equal(
-        (
-          await db
-            .collection("math_tests")
-            .doc(id)
-            .collection("questions")
-            .get()
-        ).size,
-        1,
-      );
-      assert.equal(
-        (await db.collection("math_tests").doc(id).collection("prompts").get())
-          .size,
-        1,
-      );
+      assert.equal((await get(t.id)).version, fresh.data.version);
     } finally {
       release();
       await stale;
     }
   });
+  await test("long history stays paginated and parent storage does not accumulate questions", async () => {
+    let t = await create();
+    for (let i = 0; i < 22; i++) {
+      t = await next(t);
+      t = await reveal(t);
+    }
+    const parent = (await db.collection("math_tests").doc(t.id).get()).data()!;
+    assert.deepEqual(parent.questions, []);
+    assert.deepEqual(parent.answers, {});
+    assert.ok(Buffer.byteLength(JSON.stringify(parent)) < 12000);
+    const first = (
+        await app.inject(`/api/math/tests/${t.id}/questions`)
+      ).json(),
+      second = (
+        await app.inject(
+          `/api/math/tests/${t.id}/questions?after=${first.nextCursor}`,
+        )
+      ).json();
+    assert.equal(first.items.length, 20);
+    assert.equal(second.items.length, 2);
+  });
 } finally {
-  for (const id of [
-    testId,
-    `${prefix}-concurrent`,
-    `${prefix}-continuous`,
-    `${prefix}-legacy`,
-    `${prefix}-lease`,
-  ])
+  for (const id of sessions)
     await db.recursiveDelete(db.collection("math_tests").doc(id));
-  await db.collection("math_books").doc(bookId).delete();
-  for (const c of chapters)
-    await db.collection("math_chapter_versions").doc(c.versionId).delete();
+  for (const f of fixtures) {
+    await db.collection("math_books").doc(f.book.id).delete();
+    await db
+      .collection("math_publications")
+      .doc(f.book.publicationId!)
+      .delete();
+    await db.recursiveDelete(
+      db.collection("math_curriculum_versions").doc(f.curriculum.revision),
+    );
+    await db.recursiveDelete(
+      db.collection("math_learning_evidence").doc(f.book.id),
+    );
+    for (const s of f.sources)
+      await db.collection("math_chapter_versions").doc(s.versionId).delete();
+  }
   await app.close();
   await db.terminate();
 }

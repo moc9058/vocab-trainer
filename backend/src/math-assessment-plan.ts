@@ -46,6 +46,7 @@ export function selectAssessmentPlan(
     });
   const progress = (id: string) => evidence.find((e) => e.objectiveId === id);
   const chapterCount = (chapterId: string) =>
+    test.chapterExposure?.[chapterId] ??
     evidence
       .filter((e) =>
         curriculum.objectives.some(

@@ -1,5 +1,19 @@
 const translations = {
   en: {
+    mathBooksCount: "textbooks",
+    mathMultiScopeHelp: "Choose chapters from one or more textbooks. Questions are balanced equally between textbooks.",
+    mathCurriculumRequired: "Publish this textbook with its curriculum before selecting it.",
+    mathTestMenu: "Test menu",
+    mathChangeScope: "Change study scope",
+    mathOptionalAnswer: "Write an answer / AI grading",
+    mathDraftAvailable: "Draft saved or in progress",
+    mathRevealedCount: "Answers revealed",
+    mathRevealAnswer: "Reveal answer",
+    mathAnswerRevealed: "Answer revealed",
+    mathQuestionDetails: "Question details",
+    mathScopeNextHelp: "The current question stays unchanged. The next question uses the new scope, balanced equally between textbooks.",
+    mathApplyScope: "Apply for next question",
+
     mathFrozenMissing: "The saved textbook or curriculum revision is unavailable. Restore the published revision before continuing.",
     mathPromptUnavailable: "This session’s prompt version is unavailable on this server.",
 
@@ -808,6 +822,20 @@ const translations = {
     grade: "How did you do?",
   },
   ja: {
+    mathBooksCount: "教材",
+    mathMultiScopeHelp: "複数教材から章を選べます。教材ごとに均等に出題します。",
+    mathCurriculumRequired: "選択するには教材とcurriculumの公開が必要です。",
+    mathTestMenu: "テストメニュー",
+    mathChangeScope: "出題範囲を変更",
+    mathOptionalAnswer: "答案入力・AI採点",
+    mathDraftAvailable: "下書きあり",
+    mathRevealedCount: "解答確認した問題",
+    mathRevealAnswer: "解答確認",
+    mathAnswerRevealed: "解答確認済み",
+    mathQuestionDetails: "問題の詳細",
+    mathScopeNextHelp: "表示中の問題は変わりません。次の問題から変更後の範囲を使い、教材ごとに均等に出題します。",
+    mathApplyScope: "次の問題から適用",
+
     mathFrozenMissing: "保存された教材・学習目標の版を読み込めません。公開版の復元が必要です。",
     mathPromptUnavailable: "このテストで使用するプロンプトの版をサーバーで読み込めません。",
 
@@ -1613,6 +1641,20 @@ const translations = {
     grade: "できましたか？",
   },
   ko: {
+    mathBooksCount: "교재",
+    mathMultiScopeHelp: "여러 교재에서 단원을 선택하세요. 교재별로 균등하게 출제합니다.",
+    mathCurriculumRequired: "선택하려면 교재와 학습 목표를 먼저 공개해야 합니다.",
+    mathTestMenu: "시험 메뉴",
+    mathChangeScope: "출제 범위 변경",
+    mathOptionalAnswer: "답안 입력 / AI 채점",
+    mathDraftAvailable: "작성 중인 답안 있음",
+    mathRevealedCount: "정답을 확인한 문제",
+    mathRevealAnswer: "정답 확인",
+    mathAnswerRevealed: "정답 확인 완료",
+    mathQuestionDetails: "문제 상세",
+    mathScopeNextHelp: "현재 문제는 유지됩니다. 다음 문제부터 변경한 범위에서 교재별로 균등하게 출제합니다.",
+    mathApplyScope: "다음 문제부터 적용",
+
     mathFrozenMissing: "저장된 교재 또는 학습 목표 버전을 불러올 수 없습니다. 공개 버전을 복원해야 합니다.",
     mathPromptUnavailable: "이 시험의 프롬프트 버전을 서버에서 사용할 수 없습니다.",
 

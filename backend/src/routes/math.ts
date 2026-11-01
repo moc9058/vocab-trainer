@@ -1,14 +1,8 @@
 import type { FastifyPluginAsync } from "fastify";
-import {
-  mathHash,
-  mathText,
-  publicMathTest,
-  sourceScope,
-  MATH_INPUT_BYTES,
-} from "../math-core.js";
+import { mathHash, mathText, publicMathTest } from "../math-core.js";
+import { db } from "../firestore.js";
 import {
   MathError,
-  booksCollection,
   testsCollection,
   listMathBooks,
   mathSources,
@@ -22,44 +16,93 @@ import {
   ensureAssessmentPlans,
   mathObjectiveProgress,
 } from "../math-store.js";
+import {
+  prepareMathScopes,
+  activeMathScopes,
+  orderedMathScopes,
+  scopeContext,
+  questionMathContext,
+  scopeKey,
+} from "../math-scopes.js";
 import { generateMathQuestions, gradeMathAnswer } from "../math-llm.js";
-import type {
-  MathBook,
-  MathTest,
-  MathKind,
-  MathDifficulty,
-  TaskKind,
-} from "../math-types.js";
-import { db } from "../firestore.js";
-import { loadMathCurriculum } from "../math-publication.js";
 import { ensureMathPromptVersion } from "../math-prompt-store.js";
 import { mathPromptVersion } from "../math-prompt-loader.js";
 import { resolveModel } from "../llm.js";
+import { loadMathCurriculum } from "../math-publication.js";
+import type {
+  MathTest,
+  MathKind,
+  TaskKind,
+  MathDifficulty,
+  MathScopeInput,
+} from "../math-types.js";
 const id = { type: "string", pattern: "^[a-zA-Z0-9_-]{1,100}$" };
 const operation = { operationId: id, version: { type: "integer", minimum: 0 } };
-const bodySchema = (
+const draftSchema = { type: "string", maxLength: 5000 };
+const chapterIds = {
+  type: "array",
+  minItems: 1,
+  maxItems: 100,
+  uniqueItems: true,
+  items: id,
+};
+const scopesSchema = {
+  type: "array",
+  minItems: 1,
+  maxItems: 100,
+  items: {
+    type: "object",
+    additionalProperties: false,
+    properties: { bookId: id, chapterIds },
+    required: ["bookId", "chapterIds"],
+  },
+};
+const params = { type: "object", properties: { id }, required: ["id"] };
+const schema = (
   properties: Record<string, unknown>,
   required = Object.keys(properties),
+  withParams = true,
 ) => ({
   body: { type: "object", additionalProperties: false, properties, required },
+  ...(withParams ? { params } : {}),
 });
-const paramSchema = { type: "object", properties: { id }, required: ["id"] };
+async function models() {
+  return Object.fromEntries(
+    await Promise.all(
+      ["math/generate", "math/validate", "math/grade"].map(async (route) => [
+        route,
+        await resolveModel("full", route),
+      ]),
+    ),
+  );
+}
+function checkDraft(draft: string) {
+  if (Buffer.byteLength(draft) > 20000)
+    throw new MathError(400, "MATH_INVALID_ANSWER");
+}
+function currentQuestion(test: MathTest, questionId: string) {
+  const q = test.questions.find((q) => q.id === questionId);
+  if (!q || test.currentQuestionId !== questionId || test.status !== "active")
+    throw new MathError(409, "MATH_INVALID_STATE");
+  return q;
+}
 const mathRoutes: FastifyPluginAsync = async (app) => {
   app.setErrorHandler((err, req, reply) => {
     const error = err as Error & { statusCode?: number };
     if (error.statusCode && error.statusCode < 500)
-      return reply.code(error.statusCode).send({
-        code: error.message.startsWith("MATH_")
-          ? error.message
-          : "MATH_INVALID_REQUEST",
-      });
+      return reply
+        .code(error.statusCode)
+        .send({
+          code: error.message.startsWith("MATH_")
+            ? error.message
+            : "MATH_INVALID_REQUEST",
+        });
     req.log.error(
       {
         errorType: error.name,
         code: /^(MATH_|INVALID_)/.test(error.message)
           ? error.message
           : "MATH_MODEL_OR_STORAGE_FAILED",
-        statusCode: error.statusCode,
       },
       "Math operation failed",
     );
@@ -75,71 +118,60 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
   app.get("/books", async () => listMathBooks());
   app.get<{ Params: { id: string } }>(
     "/chapters/:id",
-    { schema: { params: paramSchema } },
+    { schema: { params } },
     async (req) => (await mathSources([req.params.id]))[0],
   );
   app.get("/tests", async () => {
-    const snapshot = await testsCollection()
+    const docs = await testsCollection()
       .orderBy("createdAt", "desc")
       .limit(50)
       .get();
-    return snapshot.docs.map((doc) => {
+    return docs.docs.map((doc) => {
       const t = doc.data() as MathTest;
+      const scopes = activeMathScopes(t);
       return {
         id: t.id,
-        title: t.book.title,
+        title: scopes.map((s) => s.book.title).join(" · "),
         status: t.status,
         createdAt: t.createdAt,
-        count: t.count,
-        mode: t.mode ?? "fixed",
-        assessmentVersion: t.assessmentVersion ?? 1,
-        ...(t.assessmentVersion === 2
-          ? {
-              publicationId: t.publicationId,
-              curriculumRevision: t.curriculumRevision,
-              taskKinds: t.taskKinds,
-            }
-          : {}),
+        mode: "continuous",
         difficulty: t.difficulty,
         answered:
           t.stats?.answered ??
-          Object.values(t.answers).filter((a) => a.grade).length,
+          Object.values(t.answers ?? {}).filter((a) => a.grade).length,
+        revealed: t.stats?.revealed ?? 0,
       };
     });
   });
   app.get<{ Params: { id: string } }>(
     "/tests/:id",
-    { schema: { params: paramSchema } },
+    { schema: { params } },
     async (req) => publicMathTest(await getMathTest(req.params.id)),
   );
   app.post<{
     Body: {
       operationId: string;
-      bookId: string;
-      chapterIds: string[];
-      count?: number;
-      mode?: "fixed" | "continuous";
-      kinds?: MathKind[];
+      scopes?: MathScopeInput[];
+      bookId?: string;
+      chapterIds?: string[];
+      mode?: "continuous";
       assessmentVersion?: 2;
+      kinds?: MathKind[];
       taskKinds?: TaskKind[];
       difficulty: MathDifficulty;
     };
   }>(
     "/tests",
     {
-      schema: bodySchema(
+      schema: schema(
         {
           operationId: id,
+          scopes: scopesSchema,
           bookId: id,
-          chapterIds: {
-            type: "array",
-            minItems: 1,
-            maxItems: 100,
-            uniqueItems: true,
-            items: id,
-          },
-          mode: { enum: ["fixed", "continuous"] },
-          count: { type: "integer", minimum: 1, maximum: 10 },
+          chapterIds,
+          mode: { const: "continuous" },
+          count: false,
+          assessmentVersion: { const: 2 },
           kinds: {
             type: "array",
             minItems: 1,
@@ -147,7 +179,6 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
             uniqueItems: true,
             items: { enum: ["definition", "calculation", "proof"] },
           },
-          assessmentVersion: { const: 2 },
           taskKinds: {
             type: "array",
             minItems: 1,
@@ -157,94 +188,73 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
           },
           difficulty: { enum: ["easy", "standard", "hard"] },
         },
-        ["operationId", "bookId", "chapterIds", "difficulty"],
+        ["operationId", "difficulty"],
+        false,
       ),
     },
     async (req) => {
-      const input = req.body;
+      const input = req.body,
+        hash = mathHash(JSON.stringify(input));
       const existing = await testsCollection().doc(input.operationId).get();
       if (existing.exists) {
-        if (existing.get("requestHash") !== mathHash(JSON.stringify(input)))
+        if (existing.get("requestHash") !== hash)
           throw new MathError(409, "MATH_OPERATION_CONFLICT");
         return publicMathTest(await getMathTest(input.operationId));
       }
-      if ((input.assessmentVersion === 2 || input.taskKinds) && input.kinds)
-        throw new MathError(400, "MATH_INVALID_REQUEST");
-      const mode =
-        input.mode ?? (input.count === undefined ? "continuous" : "fixed");
       if (
-        (mode === "fixed" && input.count === undefined) ||
-        (mode === "continuous" && input.count !== undefined)
+        (input.scopes && (input.bookId || input.chapterIds)) ||
+        (!input.scopes && (!input.bookId || !input.chapterIds)) ||
+        ((input.assessmentVersion || input.taskKinds) && input.kinds)
       )
         throw new MathError(400, "MATH_INVALID_REQUEST");
-      const bookDoc = await booksCollection().doc(input.bookId).get();
-      if (!bookDoc.exists) throw new MathError(404, "MATH_BOOK_NOT_FOUND");
-      const book = bookDoc.data() as MathBook;
-      const v2 = !!book.publicationId;
-      if (!v2 && (input.assessmentVersion === 2 || input.taskKinds))
-        throw new MathError(422, "MATH_CURRICULUM_UNAVAILABLE");
-      if (v2) {
-        await loadMathCurriculum(db, book);
-        await ensureMathPromptVersion();
-      }
-      const kindMap: Record<MathKind, TaskKind> = {
+      const map: Record<MathKind, TaskKind> = {
         definition: "determine",
         calculation: "compute",
         proof: "prove",
       };
-      const taskKinds =
-        input.taskKinds ??
-        (input.kinds
-          ? input.kinds.map((k) => kindMap[k])
-          : (["prove", "determine", "compute", "derive"] as TaskKind[]));
-      let sourceVersionIds: string[];
-      try {
-        sourceVersionIds = sourceScope(book, input.chapterIds);
-      } catch {
-        throw new MathError(400, "MATH_INVALID_SCOPE");
-      }
-      const sources = await mathSources(sourceVersionIds);
-      if (
-        Buffer.byteLength(JSON.stringify(sources)) >
-        MATH_INPUT_BYTES - 10_000
-      )
-        throw new MathError(413, "MATH_SCOPE_TOO_LARGE");
-      const now = new Date().toISOString();
+      const scopes = await prepareMathScopes(
+        input.scopes ?? [
+          { bookId: input.bookId!, chapterIds: input.chapterIds! },
+        ],
+        undefined,
+        input.taskKinds ?? input.kinds?.map(k => map[k]) ??
+          ["prove", "determine", "compute", "derive"],
+      );
+      await ensureMathPromptVersion();
+      const first = scopes[0],
+        now = new Date().toISOString();
       const test: MathTest = {
         id: input.operationId,
-        book,
-        chapterIds: book.chapters
-          .filter((c) => input.chapterIds.includes(c.id))
-          .map((c) => c.id),
-        sourceVersionIds,
-        count: input.count ?? 0,
-        ...(mode === "continuous"
-          ? {
-              mode,
-              phase: "ready" as const,
-              generatedCount: 0,
-              stats: { answered: 0, correct: 0, partial: 0, incorrect: 0 },
-            }
-          : {}),
-        ...(v2
-          ? {
-              assessmentVersion: 2 as const,
-              assistanceReporting:
-                input.assessmentVersion === 2 || !!input.taskKinds,
-              taskKinds,
-              publicationId: book.publicationId!,
-              curriculumRevision: book.curriculumRevision!,
-              difficultyPolicyVersion: "assessment-v1",
-              promptVersion: mathPromptVersion,
-              modelSelections: Object.fromEntries(
-                await Promise.all(
-                  ["math/generate", "math/validate", "math/grade"].map(
-                    async (route) => [route, await resolveModel("full", route)],
-                  ),
-                ),
-              ),
-            }
-          : {}),
+        ...first,
+        scopes,
+        scopeRevision: 0,
+        scopeBookCounts: {},
+        scopeChapterCounts: {},
+        count: 0,
+        mode: "continuous",
+        phase: "ready",
+        generatedCount: 0,
+        stats: {
+          answered: 0,
+          correct: 0,
+          partial: 0,
+          incorrect: 0,
+          revealed: 0,
+        },
+        assessmentVersion: 2,
+        assistanceReporting: true,
+        taskKinds: input.taskKinds ??
+          input.kinds?.map((k) => map[k]) ?? [
+            "prove",
+            "determine",
+            "compute",
+            "derive",
+          ],
+        publicationId: first.book.publicationId,
+        curriculumRevision: first.book.curriculumRevision,
+        difficultyPolicyVersion: "assessment-v1",
+        promptVersion: mathPromptVersion,
+        modelSelections: await models(),
         kinds: input.kinds ?? ["definition", "calculation", "proof"],
         difficulty: input.difficulty,
         status: "created",
@@ -255,114 +265,126 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
         createdAt: now,
         updatedAt: now,
       };
-      return publicMathTest(
-        await createMathTest(test, mathHash(JSON.stringify(input))),
-      );
+      return publicMathTest(await createMathTest(test, hash));
     },
-  );
-  app.get<{ Params: { id: string } }>(
-    "/tests/:id/objectives",
-    { schema: { params: paramSchema } },
-    async (req) => mathObjectiveProgress(await getMathTest(req.params.id)),
   );
   app.post<{
     Params: { id: string };
     Body: {
       operationId: string;
       version: number;
-      questionId: string;
-      kind: "solution_view";
+      scopes: MathScopeInput[];
+      draft?: string;
     };
   }>(
-    "/tests/:id/assistance",
+    "/tests/:id/scope",
     {
-      schema: {
-        ...bodySchema({
-          ...operation,
-          questionId: id,
-          kind: { const: "solution_view" },
-        }),
-        params: paramSchema,
-      },
-    },
-    async (req) =>
-      publicMathTest(
-        await runMathOperation(
-          req.params.id,
-          req.body.version,
-          req.body.operationId,
-          {
-            action: "assistance",
-            questionId: req.body.questionId,
-            kind: req.body.kind,
-          },
-          (test) => {
-            const q = test.questions.find((q) => q.id === req.body.questionId);
-            if (!q || test.status !== "active")
-              throw new MathError(409, "MATH_INVALID_STATE");
-            q.assistanceStatus = "viewed";
-            return test;
-          },
-          async (test) => test,
-        ),
+      schema: schema(
+        { ...operation, scopes: scopesSchema, draft: draftSchema },
+        ["operationId", "version", "scopes"],
       ),
-  );
-  app.post<{
-    Params: { id: string };
-    Body: { operationId: string; version: number };
-  }>(
-    "/tests/:id/generate",
-    { schema: { ...bodySchema(operation), params: paramSchema } },
+    },
     async (req) => {
-      const { version, operationId } = req.body;
+      const { operationId, version, scopes, draft } = req.body;
+      if (draft !== undefined) checkDraft(draft);
       return publicMathTest(
         await runMathOperation(
           req.params.id,
           version,
           operationId,
-          { action: "generate" },
+          {
+            action: "scope",
+            scopes,
+            ...(draft !== undefined ? { draft } : {}),
+          },
           (test) => {
-            if (test.mode === "continuous")
+            if (test.status === "completed")
               throw new MathError(409, "MATH_INVALID_STATE");
-            if (
-              !["created", "generation_failed", "generating"].includes(
-                test.status,
-              )
-            )
-              throw new MathError(409, "MATH_INVALID_STATE");
-            test.status = "generating";
             return test;
           },
           async (test) => {
-            const curriculum =
-              test.assessmentVersion === 2
-                ? await frozenCurriculum(test)
-                : undefined;
-            if (curriculum) await ensureAssessmentPlans(test);
-            test.questions = await generateMathQuestions(
-              test,
-              await mathSources(test.sourceVersionIds),
-              curriculum
-                ? {
-                    curriculum,
-                    recent: [],
-                    isDuplicate: async () => false,
-                    replan: async (excluded) => {
-                      await ensureAssessmentPlans(test, excluded);
-                    },
-                  }
-                : undefined,
-            );
+            const prepared = await prepareMathScopes(scopes, test);
+            test.scopes = prepared;
+            test.scopeRevision = (test.scopeRevision ?? 0) + 1;
+            test.scopeBookCounts = {};
+            test.scopeChapterCounts = {};
+            if (draft !== undefined) test.draft = draft;
             delete test.pendingPlans;
-            test.phase = "question";
-            test.currentQuestionId = test.questions[0]?.id;
-            test.status = "active";
+            delete test.pendingBookId;
+            if (!test.promptVersion) {
+              await ensureMathPromptVersion();
+              test.promptVersion = mathPromptVersion;
+              test.difficultyPolicyVersion = "assessment-v1";
+              test.modelSelections = await models();
+            }
             return test;
           },
         ),
       );
     },
   );
+  app.get<{ Params: { id: string } }>(
+    "/tests/:id/objectives",
+    { schema: { params } },
+    async (req) => mathObjectiveProgress(await getMathTest(req.params.id)),
+  );
+  for (const action of ["reveal", "assistance"] as const) {
+    app.post<{
+      Params: { id: string };
+      Body: {
+        operationId: string;
+        version: number;
+        questionId: string;
+        draft?: string;
+        kind?: "solution_view";
+      };
+    }>(
+      `/tests/:id/${action}`,
+      {
+        schema: schema(
+          {
+            ...operation,
+            questionId: id,
+            ...(action === "assistance"
+              ? { kind: { const: "solution_view" } }
+              : { draft: draftSchema }),
+          },
+          [
+            "operationId",
+            "version",
+            "questionId",
+            ...(action === "assistance" ? ["kind"] : []),
+          ],
+        ),
+      },
+      async (req) => {
+        const { version, operationId, questionId, draft } = req.body;
+        if (draft !== undefined) checkDraft(draft);
+        return publicMathTest(
+          await runMathOperation(
+            req.params.id,
+            version,
+            operationId,
+            { action, questionId, ...(draft !== undefined ? { draft } : {}) },
+            (test) => {
+              const q = currentQuestion(test, questionId);
+              q.assistanceStatus = "viewed";
+              if (action === "reveal") {
+                if (!q.revealedAt) {
+                  q.revealedAt = new Date().toISOString();
+                  test.stats!.revealed = (test.stats!.revealed ?? 0) + 1;
+                }
+                if (!test.answers[q.id]?.grade) test.phase = "solution";
+                if (draft !== undefined) test.draft = draft;
+              }
+              return test;
+            },
+            async (test) => test,
+          ),
+        );
+      },
+    );
+  }
   app.post<{
     Params: { id: string };
     Body: {
@@ -374,14 +396,11 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
   }>(
     "/tests/:id/answer",
     {
-      schema: {
-        ...bodySchema({
-          ...operation,
-          questionId: id,
-          text: { type: "string", minLength: 1, maxLength: 5000 },
-        }),
-        params: paramSchema,
-      },
+      schema: schema({
+        ...operation,
+        questionId: id,
+        text: { type: "string", minLength: 1, maxLength: 5000 },
+      }),
     },
     async (req) => {
       const { version, operationId, questionId, text } = req.body;
@@ -394,48 +413,31 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
           operationId,
           { action: "answer", questionId, text },
           (test) => {
-            const current = test.questions.find(
-              (q) =>
-                !test.answers[q.id]?.grade &&
-                test.answers[q.id]?.submitted !== false,
-            );
-            if (test.status !== "active" || current?.id !== questionId)
+            const q = currentQuestion(test, questionId);
+            if (test.answers[q.id]?.grade)
               throw new MathError(409, "MATH_INVALID_STATE");
-            test.answers[questionId] = {
-              ...test.answers[questionId],
-              text,
-              operationId,
-            };
+            test.answers[q.id] = { ...test.answers[q.id], text, operationId };
             test.draft = text;
             return test;
           },
           async (test) => {
-            const q = test.questions.find((q) => q.id === questionId)!;
-            test.answers[questionId].grade = await gradeMathAnswer(
-              test,
+            const q = test.questions[0],
+              context = await questionMathContext(test, q);
+            const curriculum =
+              context.assessmentVersion === 2
+                ? await loadMathCurriculum(db, context.book)
+                : undefined;
+            test.answers[q.id].grade = await gradeMathAnswer(
+              context,
               q,
               text,
-              await mathSources(test.sourceVersionIds),
-              test.assessmentVersion === 2 ? await loadMathCurriculum(db, test.book) : undefined,
+              await mathSources(context.sourceVersionIds),
+              curriculum,
             );
             test.draft = "";
-            if (test.mode === "continuous") {
-              test.phase = "feedback";
-              const stats = test.stats!;
-              stats.answered++;
-              stats[test.answers[questionId].grade!.verdict]++;
-            } else {
-              test.phase = "feedback";
-              test.currentQuestionId = questionId;
-              if (
-                test.questions.every(
-                  (q) =>
-                    test.answers[q.id]?.grade ||
-                    test.answers[q.id]?.submitted === false,
-                )
-              )
-                test.status = "completed";
-            }
+            test.phase = "feedback";
+            test.stats!.answered++;
+            test.stats![test.answers[q.id].grade!.verdict]++;
             return test;
           },
         ),
@@ -453,22 +455,18 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
   }>(
     "/tests/:id/state",
     {
-      schema: {
-        ...bodySchema(
-          {
-            ...operation,
-            action: { enum: ["pause", "resume", "finish"] },
-            draft: { type: "string", maxLength: 5000 },
-          },
-          ["operationId", "version", "action"],
-        ),
-        params: paramSchema,
-      },
+      schema: schema(
+        {
+          ...operation,
+          action: { enum: ["pause", "resume", "finish"] },
+          draft: draftSchema,
+        },
+        ["operationId", "version", "action"],
+      ),
     },
     async (req) => {
       const { version, operationId, action, draft = "" } = req.body;
-      if (Buffer.byteLength(draft) > 20000)
-        throw new MathError(400, "MATH_INVALID_ANSWER");
+      checkDraft(draft);
       return publicMathTest(
         await runMathOperation(
           req.params.id,
@@ -476,28 +474,24 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
           operationId,
           { action, draft },
           (test) => {
-            if (!["active", "paused"].includes(test.status))
+            if (!["created", "active", "paused"].includes(test.status))
               throw new MathError(409, "MATH_INVALID_STATE");
             test.draft = draft;
-            if (
-              action === "finish" &&
-              test.mode === "continuous" &&
-              test.phase === "question"
-            ) {
-              const q = test.questions[0];
-              if (q)
-                test.answers[q.id] = {
-                  text: draft,
-                  operationId,
-                  submitted: false,
-                };
-            }
+            const q = test.questions[0];
+            if (action === "finish" && q && !test.answers[q.id]?.grade)
+              test.answers[q.id] = {
+                text: draft,
+                operationId,
+                submitted: false,
+              };
             test.status =
               action === "finish"
                 ? "completed"
                 : action === "pause"
                   ? "paused"
-                  : "active";
+                  : test.currentQuestionId
+                    ? "active"
+                    : "created";
             return test;
           },
           async (test) => test,
@@ -509,7 +503,7 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
     "/tests/:id/questions",
     {
       schema: {
-        params: paramSchema,
+        params,
         querystring: {
           type: "object",
           additionalProperties: false,
@@ -535,21 +529,14 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
   }>(
     "/tests/:id/next",
     {
-      schema: {
-        ...bodySchema(
-          {
-            ...operation,
-            draft: { type: "string", maxLength: 5000 },
-          },
-          ["operationId", "version"],
-        ),
-        params: paramSchema,
-      },
+      schema: schema({ ...operation, draft: draftSchema }, [
+        "operationId",
+        "version",
+      ]),
     },
     async (req) => {
       const { operationId, version, draft = "" } = req.body;
-      if (draft && !mathText(draft, 20000))
-        throw new MathError(400, "MATH_INVALID_ANSWER");
+      checkDraft(draft);
       return publicMathTest(
         await runMathOperation(
           req.params.id,
@@ -557,98 +544,78 @@ const mathRoutes: FastifyPluginAsync = async (app) => {
           operationId,
           { action: "next", draft },
           (test) => {
-            if (test.mode !== "continuous") {
-              if (
-                test.status !== "active" ||
-                !["question", "feedback"].includes(test.phase ?? "")
-              )
-                throw new MathError(409, "MATH_INVALID_STATE");
-              if (test.phase === "question") {
-                const q = test.questions.find(
-                  (item) => item.id === test.currentQuestionId,
-                );
-                if (!q || test.answers[q.id]?.grade)
-                  throw new MathError(409, "MATH_INVALID_STATE");
-                test.answers[q.id] = {
-                  ...test.answers[q.id],
-                  text: draft,
-                  operationId,
-                  submitted: false,
-                };
-                test.draft = "";
-                test.phase = "feedback";
-              }
-              return test;
-            }
-            if (
-              !["created", "active"].includes(test.status) ||
-              !["ready", "question", "feedback"].includes(test.phase ?? "")
-            )
+            if (!["created", "active"].includes(test.status))
               throw new MathError(409, "MATH_INVALID_STATE");
-            if (test.phase === "question") {
-              const q = test.questions[0];
-              if (!q || q.id !== test.currentQuestionId)
-                throw new MathError(409, "MATH_INVALID_STATE");
-              if (!test.answers[q.id]?.grade)
-                test.answers[q.id] = {
-                  text: draft,
-                  operationId,
-                  submitted: false,
-                };
-              test.draft = "";
-            }
+            const q = test.questions[0];
+            if (q && !test.answers[q.id]?.grade)
+              test.answers[q.id] = {
+                text: draft,
+                operationId,
+                submitted: false,
+              };
+            test.draft = "";
             test.status = "active";
             return test;
           },
           async (test) => {
-            if (test.mode !== "continuous") {
-              const next = test.questions.find(
-                (q) =>
-                  !test.answers[q.id]?.grade &&
-                  test.answers[q.id]?.submitted !== false,
-              );
-              if (!next) {
-                test.status = "completed";
-                return test;
+            let last: unknown;
+            for (const scope of orderedMathScopes(test)) {
+              const context = scopeContext(test, scope);
+              const curriculum =
+                context.assessmentVersion === 2
+                  ? await frozenCurriculum(context)
+                  : undefined;
+              try {
+                if (curriculum) await ensureAssessmentPlans(context);
+              } catch (error) {
+                if ((error as Error).message === "MATH_NO_FEASIBLE_OBJECTIVE") {
+                  last = error;
+                  continue;
+                }
+                throw error;
               }
-              test.currentQuestionId = next.id;
+              const [q] = await generateMathQuestions(
+                context,
+                await mathSources(context.sourceVersionIds),
+                {
+                  recent: await recentMathPrompts(test.id),
+                  ...(curriculum
+                    ? {
+                        curriculum,
+                        replan: async (excluded) => {
+                          await ensureAssessmentPlans(context, excluded);
+                        },
+                      }
+                    : {}),
+                  isDuplicate: (prompt) => duplicateMathPrompt(test.id, prompt),
+                },
+              );
+              q.id = `q${(test.generatedCount ?? 0) + 1}`;
+              q.number = (test.generatedCount ?? 0) + 1;
+              q.bookId = scope.book.id;
+              q.bookTitle = scope.book.title;
+              q.chapterTitle = scope.book.chapters.find(
+                (c) => c.id === q.chapterId,
+              )?.title;
+              q.scopeRevision = test.scopeRevision ?? 0;
+              test.questions = [q];
+              test.answers = {};
+              test.currentQuestionId = q.id;
+              test.generatedCount = q.number;
               test.phase = "question";
+              test.draft = "";
+              test.scopeBookCounts ??= {};
+              test.scopeChapterCounts ??= {};
+              test.scopeBookCounts[scope.book.id] =
+                (test.scopeBookCounts[scope.book.id] ?? 0) + 1;
+              const key = scopeKey(scope.book.id, q.chapterId);
+              test.scopeChapterCounts[key] =
+                (test.scopeChapterCounts[key] ?? 0) + 1;
+              delete test.pendingPlans;
+              delete test.pendingBookId;
               return test;
             }
-            const sources = await mathSources(test.sourceVersionIds);
-            const recent = await recentMathPrompts(test.id);
-            const curriculum =
-              test.assessmentVersion === 2
-                ? await frozenCurriculum(test)
-                : undefined;
-            if (curriculum) await ensureAssessmentPlans(test);
-            const [q] = await generateMathQuestions(
-              { ...test, count: 1 },
-              sources,
-              {
-                recent,
-                ...(curriculum
-                  ? {
-                      curriculum,
-                      replan: async (excluded: string[]) => {
-                        await ensureAssessmentPlans(test, excluded);
-                      },
-                    }
-                  : {}),
-                isDuplicate: (prompt) => duplicateMathPrompt(test.id, prompt),
-              },
-            );
-            delete test.pendingPlans;
-            const number = (test.generatedCount ?? 0) + 1;
-            q.id = `q${number}`;
-            q.number = number;
-            test.questions = [q];
-            test.answers = {};
-            test.currentQuestionId = q.id;
-            test.generatedCount = number;
-            test.phase = "question";
-            test.draft = "";
-            return test;
+            throw last ?? new MathError(422, "MATH_NO_FEASIBLE_OBJECTIVE");
           },
         ),
       );

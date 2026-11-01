@@ -162,10 +162,11 @@ plans and internal call metrics. Example solutions remain available before submi
 
 ## Evidence, assistance and compatibility
 
-`math_tests/{id}/objectiveProgress/{objectiveId}` stores session practice records;
+`math_tests/{id}/objectiveProgress/{hash(bookId, objectiveId)}` stores session practice records;
 `math_learning_evidence/{bookId}/objectives/{objectiveId}` stores shared workspace
 evidence. Both update transactionally with operation receipts. Generation increments
-presented once; successful grading increments submitted and verdict once. Skip adds
+presented once; reveal increments revealed once without grading; successful grading
+increments submitted and verdict once. Legacy skip adds
 unsubmitted evidence, never incorrect evidence. Failures and retries do not add
 presentations or submissions. Only the primary objective receives credit. Shared
 records are practice history, not individual mastery certification; supersedes does
@@ -178,11 +179,15 @@ The UI retains unsaved answer text when recording a solution view.
 `GET /tests/:id/objectives` exposes this session's records.
 
 Legacy kinds map definition→determine, calculation→compute, proof→prove when the
-book has v2 publication. Mixing v2 settings and kinds is rejected. Legacy-only books
-keep v1 creation; explicit v2 requests return 422. Stored v1 questions remain unchanged
-and receive no invented objective mappings; their continuation prompts also prohibit
-explanation-only tasks. Fixed and continuous sessions, feedback until Next, unsubmitted
-drafts, paginated history, idempotent receipts and source freezing remain compatible.
+book has v2 publication. Mixing v2 settings and kinds is rejected. New tests require
+v2 publication. Stored v1 questions remain unchanged and receive no invented
+objective mappings; their continuation prompts also prohibit explanation-only tasks.
+Fixed sessions migrate lazily to continuous mode, keeping answered/current questions
+and completed histories. New questions carry book/chapter ownership and scope revision;
+grading resolves the question's own frozen scope even after selection changes.
+Books are balanced equally before objective planning within the selected book.
+Per-book publication pins survive removal and reselection. See [the mathematics
+guide](math-category.md) for the reveal-first flow and scope API.
 
 ## Verification and live evaluation
 

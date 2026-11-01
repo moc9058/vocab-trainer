@@ -142,6 +142,9 @@ export function publicMathTest(test: MathTest): MathPublicTest {
     promptVersion,
   } = test;
   return {
+    ...(test.scopes
+      ? { scopes: test.scopes, scopeRevision: test.scopeRevision ?? 0 }
+      : {}),
     id,
     book,
     chapterIds,
@@ -218,6 +221,15 @@ export function publicMathTest(test: MathTest): MathPublicTest {
         assistanceStatus,
       } = q;
       return {
+        ...(q.bookId
+          ? {
+              bookId: q.bookId,
+              bookTitle: q.bookTitle,
+              chapterTitle: q.chapterTitle,
+              scopeRevision: q.scopeRevision,
+            }
+          : {}),
+        ...(q.revealedAt ? { revealedAt: q.revealedAt } : {}),
         id,
         chapterId,
         heading,

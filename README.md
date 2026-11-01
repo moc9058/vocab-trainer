@@ -31,15 +31,15 @@ After adding a book, ask the agent to create its curriculum; the repository skil
 handles manifest registration, stable IDs and validation. `npm run textbook:prepare --prefix backend` reports new books/chapters and missing or changed catalogs without
 writing files. See [the authoring guide](docs/textbook-assessment.md).
 
-The **Mathematics** card opens a textbook library with chapter selection. Tests
-use a fixed publication of chapter Markdown and curriculum to generate proof,
-justified determination, computation and derivation tasks one at a time. Independent
-solving and structured validation precede itemized grading of written answers.
-New tests need no question count: read feedback and choose **Next question** until
-you pause or end the test. Earlier fixed-count tests remain available. Questions and
-feedback follow the textbook language; earlier chapters are prerequisite
-references only. Tests, drafts saved on pause, answers and source revisions live
-in Firestore, so tests can be resumed and reviewed after textbook updates.
+The **Mathematics** card opens a library where you can select chapters across
+multiple textbooks. Books receive equal turns; each Next question generates one
+fresh problem from its frozen publication and curriculum. Reveal answer shows the
+solution without requiring input or assigning a grade. Optional written answers
+and AI grading, history, scope changes, pause and finish are in the test menu.
+Scope changes affect the next question while preserving the current problem.
+Old fixed-count tests migrate on access, retaining answered/current questions and
+completed histories. Questions and feedback follow their textbook language.
+Tests, saved drafts, answers and source revisions live in Firestore.
 
 Publish local MD changes separately from deployment:
 
