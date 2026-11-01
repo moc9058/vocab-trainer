@@ -246,11 +246,12 @@ async function mockMath(
 }
 async function start(page: Page, both = false) {
   await page.goto("/math");
-  await page.getByRole("checkbox", { name: "Textbook A", exact: true }).check();
-  if (both)
-    await page
-      .getByRole("checkbox", { name: "Textbook B", exact: true })
-      .check();
+  await page.locator(".math-scope-toggle").filter({ hasText: "Textbook A" }).click();
+  await page.getByRole("checkbox", { name: "Select all: Textbook A", exact: true }).check();
+  if (both) {
+    await page.locator(".math-scope-toggle").filter({ hasText: "Textbook B" }).click();
+    await page.getByRole("checkbox", { name: "Select all: Textbook B", exact: true }).check();
+  }
   await page
     .getByRole("button", { name: "Start learning", exact: true })
     .click();
@@ -329,11 +330,13 @@ test("scope edits preserve the current question and apply to the next", async ({
     .getByRole("button", { name: "Change study scope", exact: true })
     .click();
   const dialog = page.getByRole("dialog");
+  await dialog.locator(".math-scope-toggle").filter({ hasText: "Textbook A" }).click();
+  await dialog.locator(".math-scope-toggle").filter({ hasText: "Textbook B" }).click();
   await dialog
-    .getByRole("checkbox", { name: "Textbook A", exact: true })
+    .getByRole("checkbox", { name: "Select all: Textbook A", exact: true })
     .uncheck();
   await dialog
-    .getByRole("checkbox", { name: "Textbook B", exact: true })
+    .getByRole("checkbox", { name: "Select all: Textbook B", exact: true })
     .check();
   await dialog.getByRole("button", { name: "Apply for next question" }).click();
   await expect(dialog).toHaveCount(0);
@@ -428,7 +431,8 @@ test("failed first generation retries without another session or a question coun
 }) => {
   const mock = await mockMath(page, { failNext: true });
   await page.goto("/math");
-  await page.getByRole("checkbox", { name: "Textbook A", exact: true }).check();
+  await page.locator(".math-scope-toggle").filter({ hasText: "Textbook A" }).click();
+  await page.getByRole("checkbox", { name: "Select all: Textbook A", exact: true }).check();
   await expect(page.getByRole("spinbutton")).toHaveCount(0);
   await page.getByRole("button", { name: "Start learning" }).click();
   await expect(page.getByRole("alert")).toBeVisible();
@@ -444,13 +448,14 @@ test("safe chapter preview and mobile layout remain usable", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await mockMath(page);
   await page.goto("/math");
+  await page.locator(".math-scope-toggle").filter({ hasText: "Textbook A" }).click();
   await page
     .getByRole("button", { name: "Preview: Textbook A / Vector Spaces" })
     .click();
   await expect(page.locator(".katex").first()).toBeVisible();
   expect(await page.evaluate(() => "__unsafe" in window)).toBe(false);
   await page.keyboard.press("Escape");
-  await page.getByRole("checkbox", { name: "Textbook A", exact: true }).check();
+  await page.getByRole("checkbox", { name: "Select all: Textbook A", exact: true }).check();
   await page.getByRole("button", { name: "Start learning" }).click();
   await expect(
     page.getByRole("button", { name: "Reveal answer", exact: true }),
@@ -488,4 +493,43 @@ test("a scope version conflict keeps the local question and optional draft", asy
   await menu(page);
   await page.getByRole("button", { name: /Write an answer \/ AI grading/ }).click();
   await expect(page.getByRole("textbox")).toHaveValue("Local draft");
+});
+
+
+test("chapter panels start collapsed and retain independent partial selections", async ({ page }) => {
+  const book = {
+    ...books[0],
+    chapters: [
+      ...books[0].chapters,
+      { id: "c2", number: 2, title: "Linear Maps", versionId: "a-v2" },
+    ],
+  };
+  await mockMath(page);
+  await page.route("**/api/math/books", route => route.fulfill({ json: [book, books[1]] }));
+  await page.goto("/math");
+  const a = page.locator(".math-scope-book").filter({ hasText: "Textbook A" });
+  const b = page.locator(".math-scope-book").filter({ hasText: "Textbook B" });
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Start learning" })).toBeDisabled();
+  await a.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(a.getByRole("checkbox")).toHaveCount(3);
+  await expect(b.getByRole("checkbox")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Start learning" })).toBeDisabled();
+  await a.getByRole("checkbox", { name: "Textbook A / 1. Vector Spaces", exact: true }).check();
+  await expect(a.getByRole("checkbox", { name: "Select all: Textbook A", exact: true })).toBeChecked({ indeterminate: true });
+  await expect(a.locator("summary")).toContainText("1/2 chapters selected");
+  await a.locator("summary").click();
+  await b.locator("summary").click();
+  await b.getByRole("checkbox", { name: "Select all: Textbook B", exact: true }).check();
+  await b.locator("summary").click();
+  await expect(page.getByRole("button", { name: "Start learning" })).toBeEnabled();
+  await a.locator("summary").click();
+  await expect(a.getByRole("checkbox", { name: "Textbook A / 1. Vector Spaces", exact: true })).toBeChecked();
+  await expect(a.getByRole("checkbox", { name: "Textbook A / 2. Linear Maps", exact: true })).not.toBeChecked();
+  await a.getByRole("checkbox", { name: "Select all: Textbook A", exact: true }).check();
+  await expect(a.locator("summary")).toContainText("2/2 chapters selected");
+  await a.getByRole("checkbox", { name: "Select all: Textbook A", exact: true }).uncheck();
+  await expect(a.locator("summary")).toContainText("0/2 chapters selected");
+  await expect(b.locator("summary")).toContainText("1/1 chapters selected");
 });

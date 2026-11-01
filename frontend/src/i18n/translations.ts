@@ -1,6 +1,8 @@
 const translations = {
   en: {
     mathBooksCount: "textbooks",
+    mathExpandChapters: "Choose chapters",
+    mathCollapseChapters: "Hide chapters",
     mathMultiScopeHelp: "Choose chapters from one or more textbooks. Questions are balanced equally between textbooks.",
     mathCurriculumRequired: "Publish this textbook with its curriculum before selecting it.",
     mathTestMenu: "Test menu",
@@ -823,6 +825,8 @@ const translations = {
   },
   ja: {
     mathBooksCount: "教材",
+    mathExpandChapters: "章を選ぶ",
+    mathCollapseChapters: "章を閉じる",
     mathMultiScopeHelp: "複数教材から章を選べます。教材ごとに均等に出題します。",
     mathCurriculumRequired: "選択するには教材とcurriculumの公開が必要です。",
     mathTestMenu: "テストメニュー",
@@ -1642,6 +1646,8 @@ const translations = {
   },
   ko: {
     mathBooksCount: "교재",
+    mathExpandChapters: "챕터 펼치기",
+    mathCollapseChapters: "챕터 접기",
     mathMultiScopeHelp: "여러 교재에서 단원을 선택하세요. 교재별로 균등하게 출제합니다.",
     mathCurriculumRequired: "선택하려면 교재와 학습 목표를 먼저 공개해야 합니다.",
     mathTestMenu: "시험 메뉴",

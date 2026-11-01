@@ -25,87 +25,98 @@ export default function MathScopePicker({
         const selected =
           value.find((s) => s.bookId === book.id)?.chapterIds ?? [];
         return (
-          <fieldset
+          <details
             key={book.id}
-            disabled={disabled || !book.publicationId}
-            className="math-scope-book"
+            className={`math-scope-book ${selected.length ? "has-selection" : ""}`}
           >
-            <legend>
-              <label>
-                <input
-                  type="checkbox"
-                  disabled={disabled || !book.publicationId}
-                  checked={selected.length > 0}
-                  onChange={(e) =>
-                    update(
-                      book,
-                      e.target.checked ? book.chapters.map((c) => c.id) : [],
-                    )
-                  }
-                />{" "}
-                {book.title}
-              </label>
-            </legend>
-            {!book.publicationId && (
-              <p className="math-help">{t("mathCurriculumRequired")}</p>
-            )}
-            <p className="math-help">
-              {book.subjectTitle} · {selected.length}/{book.chapters.length}
-            </p>
-            <div className="math-selection-tools">
-              <button
-                type="button"
-                onClick={() =>
-                  update(
-                    book,
-                    book.chapters.map((c) => c.id),
-                  )
-                }
-              >
-                {t("mathSelectAll")}
-              </button>
-              <button type="button" onClick={() => update(book, [])}>
-                {t("mathClearSelection")}
-              </button>
-            </div>
-            <div className="math-chapters">
-              {book.chapters.map((c) => (
-                <div
-                  className={`math-chapter ${selected.includes(c.id) ? "is-selected" : ""}`}
-                  key={c.id}
-                >
-                  <label>
-                    <input
-                      type="checkbox"
-                      aria-label={`${book.title} / ${c.number}. ${c.title}`}
-                      checked={selected.includes(c.id)}
-                      onChange={(e) =>
-                        update(
-                          book,
-                          e.target.checked
-                            ? [...selected, c.id]
-                            : selected.filter((id) => id !== c.id),
-                        )
-                      }
-                    />
-                    <span className="math-chapter-number">
-                      {String(c.number).padStart(2, "0")}
-                    </span>
-                    <span>{c.title}</span>
-                  </label>
-                  {onPreview && (
-                    <button
-                      type="button"
-                      aria-label={`${t("mathPreview")}: ${book.title} / ${c.title}`}
-                      onClick={() => onPreview(book, c)}
-                    >
-                      {t("mathPreview")}
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          </fieldset>
+            <summary className="math-scope-toggle">
+              <span className="math-scope-heading">
+                <span className="math-scope-subject">{book.subjectTitle}</span>
+                <span className="math-scope-title">{book.title}</span>
+                <span className="math-scope-count">
+                  {selected.length}/{book.chapters.length} {t("mathSelectedChapters")}
+                </span>
+              </span>
+              <span className="math-scope-toggle-action">
+                <span className="math-scope-show">{t("mathExpandChapters")}</span>
+                <span className="math-scope-hide">{t("mathCollapseChapters")}</span>
+                <span className="math-scope-chevron" aria-hidden>⌄</span>
+              </span>
+            </summary>
+            <fieldset
+              disabled={disabled || !book.publicationId}
+              className="math-scope-content"
+              aria-label={book.title}
+            >
+              <legend className="sr-only">{book.title}</legend>
+              <p className="math-help">{t("mathSelectChaptersHelp")}</p>
+              <div className="math-scope-selection">
+                <label>
+                  <input
+                    type="checkbox"
+                    aria-label={`${t("mathSelectAll")}: ${book.title}`}
+                    ref={(input) => {
+                      if (input)
+                        input.indeterminate =
+                          selected.length > 0 &&
+                          selected.length < book.chapters.length;
+                    }}
+                    disabled={disabled || !book.publicationId}
+                    checked={
+                      selected.length > 0 && selected.length === book.chapters.length
+                    }
+                    onChange={(e) =>
+                      update(
+                        book,
+                        e.target.checked ? book.chapters.map((c) => c.id) : [],
+                      )
+                    }
+                  />{" "}
+                  {t("mathSelectAll")}
+                </label>
+              </div>
+              {!book.publicationId && (
+                <p className="math-help">{t("mathCurriculumRequired")}</p>
+              )}
+              <div className="math-chapters">
+                {book.chapters.map((c) => (
+                  <div
+                    className={`math-chapter ${selected.includes(c.id) ? "is-selected" : ""}`}
+                    key={c.id}
+                  >
+                    <label>
+                      <input
+                        type="checkbox"
+                        aria-label={`${book.title} / ${c.number}. ${c.title}`}
+                        checked={selected.includes(c.id)}
+                        onChange={(e) =>
+                          update(
+                            book,
+                            e.target.checked
+                              ? [...selected, c.id]
+                              : selected.filter((id) => id !== c.id),
+                          )
+                        }
+                      />
+                      <span className="math-chapter-number">
+                        {String(c.number).padStart(2, "0")}
+                      </span>
+                      <span>{c.title}</span>
+                    </label>
+                    {onPreview && (
+                      <button
+                        type="button"
+                        aria-label={`${t("mathPreview")}: ${book.title} / ${c.title}`}
+                        onClick={() => onPreview(book, c)}
+                      >
+                        {t("mathPreview")}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </fieldset>
+          </details>
         );
       })}
     </div>

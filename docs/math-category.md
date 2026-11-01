@@ -49,6 +49,11 @@ Deployment never publishes textbook data or uploads math configuration.
 
 ## Tests and model calls
 
+Textbook cards start collapsed and show their subject, title and selected chapter
+count. Open **Choose chapters** to select individual chapters or use **Select all**
+(the checkbox shows partial selection). Collapsing a card preserves its selection.
+The same picker is used when changing scope during a test.
+
 Select one or more textbooks and chapters within each book. New tests have no
 question count: each **Next question** generates one fresh question. Books receive
 equal turns regardless of their chapter counts; chapter practice is balanced within

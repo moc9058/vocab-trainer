@@ -898,10 +898,75 @@
   }
 }
 
-.math-scope-picker { display: grid; gap: 1.25rem; }
-.math-scope-book { min-width: 0; margin: 0; padding: 1rem; border: 1px solid var(--math-border, #d8dce5); border-radius: 16px; }
-.math-scope-book legend { font-weight: 700; padding: 0 .4rem; }
-.math-scope-book legend label { display: flex; align-items: center; gap: .6rem; }
+/* Each textbook starts collapsed; opening it never changes the study scope. */
+.math-scope-picker {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+.math-scope-book {
+  min-width: 0;
+  border: 1px solid var(--math-border);
+  border-radius: 14px;
+  background: #101827;
+}
+.math-scope-book.has-selection {
+  border-color: #5584c1;
+}
+.math-scope-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 14px;
+  cursor: pointer;
+  list-style: none;
+}
+.math-scope-toggle::-webkit-details-marker { display: none; }
+.math-scope-toggle:hover { background: #1c293d; }
+.math-scope-heading { display: grid; gap: 5px; min-width: 0; }
+.math-scope-subject { color: var(--math-muted); font-size: 0.75rem; }
+.math-scope-title { font-size: 1rem; font-weight: 650; overflow-wrap: anywhere; }
+.math-scope-count { color: var(--math-muted); font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+.has-selection .math-scope-count { color: #bfdbfe; }
+.math-scope-toggle-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  color: #bfdbfe;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.math-scope-hide { display: none; }
+.math-scope-book[open] > summary .math-scope-show { display: none; }
+.math-scope-book[open] > summary .math-scope-hide { display: inline; }
+.math-scope-book[open] > summary .math-scope-chevron { transform: rotate(180deg); }
+.math-scope-content {
+  min-width: 0;
+  margin: 0 18px;
+  padding: 16px 0 18px;
+  border: 0;
+  border-top: 1px solid var(--math-border);
+}
+.math-scope-selection { margin: 10px 0 14px; }
+.math-scope-selection label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 0.85rem;
+  color: #bfdbfe;
+  cursor: pointer;
+}
+.math-scope-selection input { width: 18px; height: 18px; accent-color: #60a5fa; }
+@media (max-width: 480px) {
+  .math-scope-toggle { padding: 14px; gap: 10px; align-items: flex-start; }
+  .math-scope-toggle-action { padding-top: 3px; font-size: 0.72rem; }
+  .math-scope-content { margin: 0 12px; }
+  .math-chapter-panel > .math-section-heading { flex-wrap: wrap; }
+}
 .math-test-menu { position: relative; flex: 0 0 auto; }
 .math-test-menu > summary { cursor: pointer; list-style: none; font-size: 1.8rem; padding: .1rem .75rem; border-radius: 12px; }
 .math-test-menu > summary::-webkit-details-marker { display: none; }
