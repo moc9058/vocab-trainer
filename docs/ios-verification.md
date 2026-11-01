@@ -246,3 +246,12 @@ Command-4でも開けなかったため、撮影の起点は本人による実�
 
 既存の「コントロールセンターを非表示→1秒待機→撮影→受信Intent」の設定は変更不要。
 backendのAPI変更・設定アップロード・データ移行はなく、合成試験は隔離emulatorとmock LLMを使用した。
+
+## 2026-11-01: 実機署名エラーの診断と更新手順
+
+- `SBMainWorkspace / Security` 起動拒否を調査。旧bundleはcodesign検証・対象UDID・権限が整合していたが、profileは2026-11-01 12:30:59 UTCに期限切れだった。
+- `npm run ios:install --prefix frontend -- --device UDID` を追加。production assets同期、自動署名build、署名/profile期限/証明書期限/権限/UDID検査、上書きinstall、独立したlaunch確認を行う。アプリ削除や証明書一括削除はしない。
+- 新profileは2026-11-08 14:57:43 UTCまで有効。production用型検査・build・sync、署名付き実機Debug build、署名検査、MOON_iPhoneへの上書きinstallは成功。
+- 起動は更新後も同じSecurityエラー。Developer ModeはEnabled。端末側の開発者信頼・検証を本人へ依頼した。起動成功や画像選択の実機確認はこの時点で未完了。
+- 旧bundleの期限切れ拒否を実確認。署名検査の回帰テスト5件（正常・期限切れ・対象端末違い・権限追加・証明書違い）が成功。
+- 手順は[個人用iOSガイド](ios-personal-app.md#署名エラーの復旧と検査付き更新)に追記。Personal Teamの7日制限は変更していない。

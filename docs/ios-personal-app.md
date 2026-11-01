@@ -91,6 +91,40 @@ XcodeのTeam選択が `project.pbxproj` に `DEVELOPMENT_TEAM` を書いた場�
 そのTeam行だけを共有projectから除く。ほかのproject変更を一括で元へ戻さない。
 署名証明書・provisioning profile・Appleログイン情報をリポジトリへ追加しない。
 
+## 署名エラーの復旧と検査付き更新
+
+`SBMainWorkspace / Security`、`invalid code signature`、`inadequate entitlements`
+という表示だけでは原因を断定できない。署名破損、profile期限切れ、端末未登録、権限不整合、
+開発者の未信頼を区別する。アプリのJavaScriptが実行される前の拒否なので、画面内の処理では修復できない。
+
+MacにXcode・Python 3・Nodeを用意し、本人のApple AccountとPersonal.xcconfigを設定したうえで、
+iPhoneを接続してロックを解除する。次のコマンドはproduction用assetsを同期し、
+自動署名を更新してビルドし、署名・証明書期限・profile期限・権限・対象UDIDを検査してから上書きインストールする。
+続けて起動も試し、インストール成功と起動失敗を区別して報告する。既存アプリを削除しない。
+
+```bash
+# UDIDはXcodeのDevices and Simulatorsなどで確認する
+npm run ios:install --prefix frontend -- --device YOUR_IPHONE_UDID
+
+# 既存bundleの検査だけを行う（再ビルドやインストールなし）
+npm run ios:install --prefix frontend -- --device YOUR_IPHONE_UDID --check-only /absolute/path/App.app
+```
+
+期限切れのprofileを再び選ぶ場合はXcodeのAccountsで本人のサインイン状態を確認し、
+AppのAutomatically manage signingと同じPersonal Teamを確認してRunする。
+証明書や全profileの一括削除は行わない。
+署名検査を通っても端末側の開発者信頼はMacから代行できない。
+Securityエラーが続く場合は、iPhoneの「設定 → 一般 → VPNとデバイス管理」で
+本人の開発者を選び信頼する。インターネットへ接続し、デベロッパモードも確認する。
+[Appleの開発者信頼手順](https://help.apple.com/xcode/mac/current/en.lproj/dev96a12fb84.html)。
+MacへのUSB接続の「信頼」と、アプリの開発者を信頼する操作は別である。
+
+検査コードの回帰テスト:
+
+```bash
+python3 -B -m unittest discover -s frontend/scripts -p test_install_ios.py
+```
+
 ## 無料署名の期限後
 
 Personal Teamのprovisioning profileは発行から7日で期限になる。
