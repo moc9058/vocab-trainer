@@ -33,7 +33,7 @@ Existing catalogs and sessions without guidance remain usable with their old sco
 
 For Linear Algebra, standard first/second-year university Calculus and Differential
 Equations are explicitly permitted background without introductory explanations. The
-reference specifies the boundaries and six linear-algebra exercises using this knowledge.
+reference specifies the boundaries and nine proof-oriented exercises, emphasizing matrix properties and using LaTeX.
 No advanced analysis or later-chapter linear algebra is implicitly authorized.
 
 Each objective has a stable ID, source chapter
