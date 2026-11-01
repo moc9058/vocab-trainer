@@ -46,4 +46,12 @@ that book; multi-book distribution is covered by emulator/browser fixtures.
 The script verified removal of its session and isolated evidence after completion.
 Publication: `1ac8c79db45a1d20fa76242d7418f2401b4a3e700df6f5deb9a8d6d6ae3d021a`.
 
-Push and deployment outcomes are recorded after their commands complete.
+Implementation commit `288ab4a` was pushed to `origin/master`. `./deploy.sh`
+completed without configuration-upload flags. Backend revision
+`vocab-trainer-backend-00537-qrz` and frontend revision
+`vocab-trainer-frontend-00519-89p` serve 100% of traffic.
+Post-deploy HTTPS checks returned health 200, `/math` 200 and unauthenticated
+`/api/math/books` 401. The deployed frontend asset contains the new reveal and
+scope controls. Authenticated production browser interaction was not exercised;
+local browser checks and production-backed injected-route smoke are separate checks.
+No textbook data was published by this release.
