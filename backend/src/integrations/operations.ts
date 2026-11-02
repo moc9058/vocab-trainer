@@ -114,6 +114,7 @@ export class IntegrationOperationStore {
       const count = (await tx.get(countRef)).data()?.count ?? 1;
       tx.set(countRef, { count: Math.max(0,count-1) });
       tx.update(ref, { status: 'failed', error: { code, retryable }, leaseUntil: 0, updatedAt: this.now() });
+      tx.delete(this.db.collection('integration_dispatch_outbox').doc(ref.id));
     });
   }
   async retry(principal: IntegrationPrincipal, operationId: string) {

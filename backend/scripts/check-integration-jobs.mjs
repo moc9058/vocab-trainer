@@ -16,4 +16,4 @@ const queue = JSON.parse(run(['tasks', 'queues', 'describe', env.INTEGRATION_TAS
 if (queue.state !== 'RUNNING' || queue.rateLimits.maxConcurrentDispatches !== 1) throw new Error('Integration queue must be running with concurrency 1');
 const scheduler = JSON.parse(run(['scheduler', 'jobs', 'describe', 'integration-operations-reconcile', `--location=${region}`, '--format=json']));
 if (scheduler.state !== 'ENABLED' || scheduler.httpTarget?.oidcToken?.serviceAccountEmail !== env.INTEGRATION_TASK_ACCOUNT || scheduler.httpTarget?.oidcToken?.audience !== env.INTEGRATION_WORKER_URL || scheduler.httpTarget?.uri !== env.INTEGRATION_WORKER_URL + '/internal/integration-operations/reconcile') throw new Error('Integration recovery scheduler/OIDC configuration is invalid');
-console.log('Durable import deployment prerequisites verified.');
+console.log('Durable integration deployment prerequisites verified.');
