@@ -803,3 +803,9 @@ preparation are shared with the existing routes; word rename/index updates now
 commit in one transaction. Existing extension/mobile capabilities are unchanged.
 The infrastructure setup and account-level ChatGPT verification are separate from
 code deployment. No textbook publication or bulk learning-data migration is needed.
+
+The original imported Vocab Trainer private package is Desktop Only; a remote
+HTTPS URL does not make that registration web/mobile compatible. The integration
+guide distinguishes imported packages from remote app registration and records
+pending native-mobile acceptance. The selected migration uses the existing server
+through the developer portal, with no separate proxy or public publication.

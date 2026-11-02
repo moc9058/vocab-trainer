@@ -35,3 +35,39 @@ Implementation decisions differing from the broad original plan:
   shared translations are preserved; the canonical sentence index remains intact.
 - The optional JWT verifier from the foundation remains a tested utility; live
   routing uses the built-in opaque OAuth token store.
+
+## Desktop Only investigation and migration (2026-11-02)
+
+The existing uploaded package has root `mcp.json` and compatibility `.mcp.json`
+server declarations, and no App binding. Its current verified registration is:
+
+- Plugin: `plugins_6ae824b0a8448191b566627d8906ee1b` (USER / PRIVATE).
+- Release: `pluginrel_6ae824b47ea48191b2d853f3a8893af6`, version 1.0.0.
+- Existing link: https://chatgpt.com/plugins/plugins_6ae824b0a8448191b566627d8906ee1b
+  (Desktop Only; not a verified web/mobile installation link).
+
+OpenAI's imported-plugin classification explains the observed label; an HTTPS
+server URL or a newly added App-reference file does not remove it. The selected
+replacement route is developer-portal remote MCP registration using the same
+server, issuer and data. The user declined a Sites bridge and reports a visible
+registration button in the developer portal. No public submission is authorized.
+
+| Check | Current result |
+| --- | --- |
+| Original private package identity | Confirmed through Plugin Creator metadata |
+| Developer portal registration | Pending; no new app/draft was created in this run |
+| Domain-verification token | Not obtained; no challenge route/token added |
+| OAuth callback compatibility with portal | Pending actual portal connection |
+| New private installation link | Not issued |
+| ChatGPT web CRUD | Not verified |
+| Native ChatGPT mobile CRUD with desktop quit | Not verified |
+| Cross-device IDs, revocation and operation replay | Not verified in ChatGPT |
+
+The implementation attempt could not access the portal: the computer-use tool
+reported a locked Mac and local browser use disabled in Work settings. The user
+has been asked to unlock the Mac and enable that access. This is an environment
+access prerequisite, not an OAuth/server failure. No runtime, OAuth policy, plugin
+package, registration, hosting or production data was changed for this attempt.
+Follow the registration and acceptance checklist in the integration guide when
+access is restored. Do not replace these pending outcomes with earlier server
+protocol/emulator test results.

@@ -5,24 +5,90 @@ Streamable HTTP MCP. It uses the existing Google login to approve a connection;
 no Auth0 account, Google client secret pasted into ChatGPT, or shared API key is
 needed. The library remains the existing shared library for allowed accounts.
 
-## Connect in ChatGPT
+## Web and native mobile registration status
 
-1. Open ChatGPT on the web and add a custom MCP server/plugin, or install the
-   private Vocab Trainer plugin when its link is supplied.
-2. Use this server URL:
+The original private package is **Desktop Only**. Its HTTPS server URL does not
+make that imported package web-compatible. OpenAI documents that imported MCP
+packages can receive this classification, and adding `.app.json` alone does not
+remove it. See [Desktop-only plugins](https://learn.chatgpt.com/docs/enterprise/plugin-management).
+Do not present the original installation link as a web/mobile connection.
+
+The selected approach preserves the existing Cloud Run backend, Firestore and
+Google-approved OAuth connection. No Sites bridge or separate proxy is authorized.
+Web and native ChatGPT mobile acceptance are still pending; server deployment and
+successful discovery responses do not establish either platform's availability.
+The user reports that ChatGPT's web plus/add-custom-MCP menu is absent, but the
+[developer portal](https://platform.openai.com/plugins) shows a registration button.
+
+### Register the existing remote server
+
+Follow the portal's [remote MCP registration procedure](https://developers.openai.com/plugins/deploy/submission):
+
+1. Inspect existing Vocab Trainer apps/drafts in the selected organization before
+   creating anything. Preserve the existing private package until a replacement
+   has passed acceptance.
+2. Use the remote **With MCP / Connect MCP server** route. The source package is
+   `integrations/chatgpt/vocab-trainer/`; its root manifest, MCP declaration and
+   skill must remain together if the portal requires a ZIP. A ZIP upload by itself
+   is not evidence of a web-capable registered app.
+3. Use this exact canonical server URL:
    `https://vocab-trainer-frontend-olncevthqa-an.a.run.app/api/integrations/mcp`.
-3. Select OAuth with dynamic client registration (DCR). Do not supply a client
-   secret. Discovery advertises the authorization, token and registration URLs.
-4. Sign in to Vocab Trainer with your usual Google account. If the approval page
-   asks you to sign in, use its Google login link, then return and reload it.
-5. Review the requested scopes and press Allow. Closing the page cancels approval.
-6. Select the installed plugin in a conversation and ask, for example:
+4. Select OAuth with dynamic client registration (DCR). Do not supply a client
+   secret. Discovery advertises authorization, token and registration endpoints.
+5. If domain verification is required, record the portal's exact challenge host
+   and token before changing the server. The expected route is
+   `/.well-known/openai-apps-challenge`, with only the token as a plain-text body.
+   The frontend already proxies `/.well-known/` to the backend; it does not serve
+   a challenge token yet. Do not substitute a placeholder or another app's token.
+6. Complete Google login and consent as described below, then inspect the tool
+   scan. Expect 17 tools covering library profile, word/grammar CRUD, groups and
+   durable operation status/list/retry. Resolve actual reported errors before
+   altering the OAuth redirect-origin allowlist or tool schemas.
+7. Use an owner-private installation/test path if the portal offers one. Record
+   the returned app ID, plugin ID and installation link exactly. Do not invent an
+   app ID or add an `.app.json` binding before the app exists.
+8. If the available path requires public publication, review submission, or does
+   not permit native mobile access, record the exact limitation and stop that
+   transition. Public submission and a new hosting service are not authorized.
+   Do not claim that a draft/scan alone resolves Desktop Only.
+
+The available Plugin Creator tools can inspect and update packages; they do not
+expose remote app registration or domain verification. Browser access to the
+signed-in developer portal is required for those steps.
+
+### Google consent and use
+
+1. Sign in to Vocab Trainer with the usual Google account. If the approval page
+   asks for sign-in, follow its Google login link, then return and reload it.
+2. Review requested scopes and press Allow. Closing the page cancels approval.
+3. Select the registered plugin in a new conversation and ask, for example:
    “Register 后悔 with the Korean meaning 후회하다” or “Show the grammar 把+O+V”.
 
-Account/workspace permissions determine whether custom MCP plugins are available.
-The server and emulator protocol tests do not establish access to a particular
-ChatGPT account. Actual installation, Google consent and conversation acceptance
-must be verified on that account.
+Account/workspace permissions determine which registration and installation
+features are available. The custom MCP plus-menu instructions apply only where
+that menu is actually available. Never equate the imported private package, a
+custom developer connection and a portal-registered remote app without checking
+the actual account and platform behavior.
+
+### Required platform acceptance
+
+Run on ChatGPT web and the native ChatGPT mobile app, with the desktop app fully
+quit. Use clearly marked test fixtures and delete only those fixtures afterward.
+Record dates, client versions, registered IDs, operation IDs and outcomes; never
+record credentials or tokens.
+
+- Install/activate without Desktop Only; complete Google consent and discover tools.
+- Create, read, update and delete one Chinese word and one grammar element on each
+  platform. Poll each mutation to terminal success and verify the saved values.
+- Read an item created on web from mobile using the same ID, then update it on
+  mobile and confirm the change on web and in the existing library UI.
+- Verify A/B membership changes preserve the main item and the established A-home
+  invariants. Confirm a repeated operation ID does not duplicate a mutation.
+- Verify insufficient scopes and a revoked connection are rejected; reconnect
+  successfully and verify the intended Google account is used.
+
+Do not mark platform support complete when only metadata, emulator tests, portal
+registration, a tool scan or Cloud Run deployment has succeeded.
 
 ## Behavior
 
