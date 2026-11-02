@@ -112,7 +112,7 @@ async function processItem(item: QueueItem): Promise<string | undefined> {
       wordId = recovered;
     }
     try {
-      const groupIds = item.payload.groupIds ?? [];
+      const groupIds = [...new Set([...(item.payload.groupIds ?? []), ...(item.payload.groupBIds ?? [])])];
       if (groupIds.length > 0) {
         await Promise.all(
           groupIds.map((groupId) =>

@@ -23,7 +23,7 @@ function allowedApi(method, path, body) {
     if (/\/check-terms$/.test(path)) return keys('terms') && Array.isArray(value.terms) && value.terms.every(t => typeof t === 'string');
     if (/\/items\/batch$/.test(path)) return keys('ids') && Array.isArray(value.ids) && value.ids.every(id => typeof id === 'string');
     if (/\/drafts$/.test(path)) return keys('drafts') && Array.isArray(value.drafts);
-    if (/\/vocab\/chinese\/smart-add$/.test(path)) return keys('term', 'sourceContext', 'transliteration', 'definitions', 'topics', 'examples', 'level', 'flag') && typeof value.term === 'string' && !!value.term.trim();
+    if (/\/vocab\/chinese\/smart-add$/.test(path)) return keys('term', 'sourceContext', 'transliteration', 'definitions', 'topics', 'examples', 'level', 'flag', 'groupIds', 'groupBIds') && typeof value.term === 'string' && !!value.term.trim() && [value.groupIds, value.groupBIds].every(ids => ids === undefined || (Array.isArray(ids) && ids.length <= 100 && ids.every(id => typeof id === 'string' && id.trim().length > 0)));
     if (/\/grammar\/chinese\/smart-add$/.test(path)) return keys('id', 'statement', 'sourceContext', 'transliteration', 'descriptions', 'examples', 'exampleIds', 'words', 'level', 'tags') && typeof value.statement === 'string' && Array.isArray(value.descriptions);
     if (/\/analysis-job(?:\/(?:pause|resume))?$/.test(path)) return keys('idempotencyKey', 'analysisRevision') && typeof value.idempotencyKey === 'string' && value.idempotencyKey.length <= 200;
     if (/\/explanation$/.test(path) || path === '/api/auth/extension/revoke') return keys();

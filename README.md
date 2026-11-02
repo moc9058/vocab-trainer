@@ -762,7 +762,14 @@ Looks up a word by its term using the word_index for fast retrieval.
 
 #### `POST /api/vocab/:language/smart-add` — Smart add word with LLM
 
-Adds a word using the LLM to fill in missing fields. For Chinese, the LLM also generates word-level pinyin segments for each example sentence (linked to existing vocab entries via `segments[].id` when the segment text matches a known word).
+Adds a word using the LLM to fill in missing fields. Registration requires one Group A
+word group: optional `groupIds` selects at most one A group (and may include B IDs),
+and optional `groupBIds` selects additional B word groups. If A is omitted, the
+server chooses the A group with the latest `createdAt`, independent of display
+priority. Invalid targets or no A group return 400. The word, index and A/B
+memberships commit together; a successful create needs no separate membership call.
+
+For Chinese, the LLM also generates word-level pinyin segments for each example sentence (linked to existing vocab entries via `segments[].id` when the segment text matches a known word).
 
 **Body:**
 ```json

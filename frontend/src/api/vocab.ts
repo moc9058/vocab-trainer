@@ -102,10 +102,10 @@ export function smartAddWord(
     examples?: { sentence: string; translation: string; userSplits?: string[]; segments?: { text: string; transliteration?: string; id?: string }[] }[];
     level?: string;
     groupIds?: string[];
+    groupBIds?: string[];
   }
 ): Promise<Word & { generatedWords?: Word[] }> {
-  const { groupIds: _groupIds, ...body } = data;
-  return postJson(`/api/vocab/${encodeURIComponent(language)}/smart-add`, body);
+  return postJson(`/api/vocab/${encodeURIComponent(language)}/smart-add`, data);
 }
 
 export function syncSegmentLinks(language: string, exampleIds: string[]): Promise<void> {

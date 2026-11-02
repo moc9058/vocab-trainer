@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vocab-trainer.local/schemas/chinese-word-create.v1.schema.json",
   "title": "Chinese word smart-add request v1",
-  "description": "Recommended external-client request profile for POST /api/vocab/chinese/smart-add. A documentation artifact, not a new runtime validator. Category and review-flag fields are not part of this contract.",
+  "description": "Recommended external-client request profile for POST /api/vocab/chinese/smart-add. A documentation artifact, not a new runtime validator. Category and review-flag fields are not part of this contract. Registration assigns exactly one Group A home (latest created A group when omitted) and any explicitly selected Group B memberships.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -130,6 +130,24 @@
           ]
         }
       }
+    },
+    "groupIds": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Existing word-group IDs from the same language. At most one A group. B IDs may also be included for compatibility. Omitted A defaults to the newest A group by createdAt, independent of display priority. Duplicates are ignored."
+    },
+    "groupBIds": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Existing category-B word-group IDs from the same language, added in addition to the A home. Duplicates are ignored. Grammar-group IDs are not accepted."
     }
   },
   "$defs": {
@@ -198,6 +216,15 @@
             "ko": "이제 후회해도 늦었다."
           }
         }
+      ]
+    },
+    {
+      "term": "后悔",
+      "groupIds": [
+        "REPLACE_WITH_A_WORD_GROUP_ID"
+      ],
+      "groupBIds": [
+        "REPLACE_WITH_B_WORD_GROUP_ID"
       ]
     }
   ]

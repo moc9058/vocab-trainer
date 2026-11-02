@@ -32,3 +32,12 @@ test('registration only adds membership and ingestion must use the durable selec
   assert.equal(allowedApi('POST', '/api/import/chinese/sessions', JSON.stringify(request)), true);
   assert.equal(allowedApi('POST', '/api/import/chinese/sessions', JSON.stringify({ ...request, text: 'x'.repeat(8001) })), false);
 });
+
+test('word registration forwards validated A/B group targets', () => {
+  const path = '/api/vocab/chinese/smart-add';
+  const request = { term: '后悔', groupIds: ['a'], groupBIds: ['b1', 'b2'] };
+  assert.equal(allowedApi('POST', path, JSON.stringify(request)), true);
+  for (const invalid of [{ ...request, groupIds: 'a' }, { ...request, groupBIds: [null] }, { ...request, groupIds: [''] }]) {
+    assert.equal(allowedApi('POST', path, JSON.stringify(invalid)), false);
+  }
+});

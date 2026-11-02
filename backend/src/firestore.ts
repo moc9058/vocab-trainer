@@ -1,3 +1,4 @@
+import { resolveWordRegistrationGroups, type WordRegistrationGroups } from "./word-registration-groups.js";
 import { normalizeWordDefinitions, normalizeWordRecord, normalizeWordSession } from "./word-format.js";
 import { ingestionKey } from './import-ingestions.js';
 import { ImportCheckpointError } from './import-parts.js';
@@ -433,7 +434,7 @@ export async function getWordsForQuizHydration(
 export async function addWord(
   language: string,
   word: Word,
-  opts?: { exampleIds?: string[]; appearsInIds?: string[] },
+  opts?: { exampleIds?: string[]; appearsInIds?: string[]; registrationGroups?: WordRegistrationGroups },
 ): Promise<void> {
   const data: Record<string, unknown> = { ...normalizeWordRecord(word as unknown as Record<string, unknown>), language };
   delete data.id;
@@ -449,20 +450,40 @@ export async function addWord(
     data.appearsInIds = [...appearsSet];
   }
 
-  // The word doc and its word_index entry commit atomically. A crash between
-  // the two used to leave a ghost word invisible to check-terms — the user
-  // would re-add the term and end up with a duplicate doc, with the index
-  // pointing at whichever wrote last.
-  const batch = db.batch();
-  batch.set(words.doc(word.id), data);
-  batch.set(wordIndex.doc(wordIndexDocId(language, word.term)), {
-    language,
-    term: word.term,
-    id: word.id,
-    level: word.level ?? "",
-    transliteration: word.transliteration ?? "",
-  });
-  await batch.commit();
+  const indexRef = wordIndex.doc(wordIndexDocId(language, word.term));
+  const indexData = {
+    language, term: word.term, id: word.id,
+    level: word.level ?? "", transliteration: word.transliteration ?? "",
+  };
+  if (opts?.registrationGroups) {
+    await db.runTransaction(async tx => {
+      // Re-resolve inside the transaction: the latest A group may have changed
+      // while the LLM was running, or an explicitly chosen group may be deleted.
+      const groups = await tx.get(wordGroups.where("language", "==", language));
+      const selected = resolveWordRegistrationGroups(language, groups.docs.map(docToWordGroup), opts.registrationGroups!);
+      const existingIndex = await tx.get(indexRef);
+      if (existingIndex.exists) {
+        const entry = existingIndex.data()! as WordIndexEntry;
+        const existingWord = await tx.get(words.doc(entry.id));
+        if (wordEntryIsLive(entry, existingWord)) throw new DuplicateTermError(`Word '${word.term}' already exists in ${language}`);
+      }
+      const addedAt = new Date().toISOString();
+      tx.set(words.doc(word.id), {
+        ...data, addedToGroupAAt: addedAt,
+        ...(selected.b.length ? { addedToGroupBAt: addedAt } : {}),
+      });
+      tx.set(indexRef, indexData);
+      for (const group of [selected.a, ...selected.b]) {
+        tx.update(wordGroups.doc(group.id), { wordIds: FieldValue.arrayUnion(word.id) });
+      }
+    });
+  } else {
+    // Non-registration maintenance callers retain the existing storage API.
+    const batch = db.batch();
+    batch.set(words.doc(word.id), data);
+    batch.set(indexRef, indexData);
+    await batch.commit();
+  }
 
   await updateLanguageMeta(language);
   invalidateWordFiltersCache(language);
@@ -3096,9 +3117,9 @@ export async function modifyWordGroupMembers(
   // Category B is untouched: a B group is the not-yet-memorized subset drawn ON TOP
   // of A, and several of them may hold the same word.
   //
-  // Every add path in the app (smart-add queue, chips, drafts, the group picker, the
-  // word editor, the article importer) funnels through this one function, which is
-  // why the invariant needs no cooperation from the callers.
+  // Existing-word membership changes (queue recovery, the group picker, the word
+  // editor and article imports) use this function. New smart-add registrations
+  // create exactly one A membership in their word/index/group transaction.
   if (action === "add" && updatedGroup.category !== "B" && uniqueWordIds.length > 0) {
     try {
       await removeWordsFromOtherCategoryAGroups(updatedGroup.language, uniqueWordIds, updatedGroup.id);

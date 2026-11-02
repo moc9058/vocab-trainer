@@ -33,6 +33,7 @@ test("all-language CRUD, legacy inputs, quiz answers and backed-up cleanup", asy
   try {
     for (const language of ["chinese", "english", "japanese", "korean"]) {
       await storage.createLanguage(language);
+      await storage.createWordGroup(language, "Registration A");
       const added = await app.inject({ method: "POST", url: `/api/vocab/${language}/smart-add`, payload: { term: `test-${language}`, flag: true, definitions: [{ partOfSpeech: "noun", text: { ja: "試験" } }] } });
       assert.equal(added.statusCode, 201, added.body);
       const word = added.json();

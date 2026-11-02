@@ -760,3 +760,33 @@ against an isolated emulator. It covers Korean/Japanese anchors, byte-for-byte
 preservation, stored/read language maps, manual edits, draft promotion and rejection
 of incomplete generation before writes. Browser coverage is in
 `frontend/tests/browser/grammar-korean.pw.ts` for grammar and mixed quizzes.
+
+## Word registration A/B targets (2026-11-02)
+
+`POST /api/vocab/:language/smart-add` accepts optional `groupIds` and `groupBIds`
+(each at most 100 IDs). `groupIds` permits one explicit A group plus B groups for
+compatibility with existing clients; `groupBIds` permits B word groups only.
+`word-registration-groups.ts` resolves missing A to the most recently created A
+group (`createdAt` descending, then ID descending), regardless of priority/display
+order. Empty lists and B-only requests also use that A default. No A group,
+multiple A targets, missing/cross-language IDs or A IDs in `groupBIds` return 400.
+No default group is silently created. Existing words are not moved by create/409.
+
+The route validates targets before generation and `addWord` re-resolves them in
+a Firestore transaction before saving the word, its index, selected group arrays
+and A/B addition timestamps. A target deleted during generation fails without
+a partial word/index/group commit. Concurrent duplicate creates serialize on
+the term index; one succeeds and the other returns 409. Shared example resolution
+remains the existing separate process. Non-registration storage callers retain
+their previous behavior. Existing records are not bulk reassigned.
+
+The frontend forwards group targets instead of stripping them. Its queue keeps
+idempotent membership adds for recovery of existing words and older servers;
+these do not reset same-group addition clocks. Safari's request policy also
+allows and validates the two group fields. Explicit UI A selection is respected;
+the UI's priority-based preselection remains distinct from the API's omitted-A
+default. Grammar registration still assigns groups in a separate call.
+
+Emulator regression: from `backend`, run
+`FIRESTORE_EMULATOR_HOST=127.0.0.1:8188 node --experimental-test-module-mocks --import tsx --test scripts/tests/emulator/word-registration-groups.test.ts`.
+See [the external contract](api/chinese-registration.md) for request examples.

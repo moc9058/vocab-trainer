@@ -1,3 +1,4 @@
+import { resolveWordRegistrationGroups, WordRegistrationGroupError } from "../word-registration-groups.js";
 import { normalizeWordDefinitions, normalizeWordRecord } from "../word-format.js";
 import { contextualDefinitions, sourceContextInstructions } from "../import-definitions.js";
 import type { FastifyBaseLogger, FastifyPluginAsync } from "fastify";
@@ -235,6 +236,8 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       examples?: { sentence: string; translation: string }[];
       level?: string;
       notes?: string;
+      groupIds?: string[];
+      groupBIds?: string[];
     };
   }>(
     "/:language/smart-add",
@@ -281,6 +284,8 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             },
             level: { type: "string" },
             notes: { type: "string" },
+            groupIds: { type: "array", maxItems: 100, items: { type: "string", minLength: 1 } },
+            groupBIds: { type: "array", maxItems: 100, items: { type: "string", minLength: 1 } },
           },
         },
       },
@@ -299,6 +304,14 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       const existing = await lookupWordByTerm(language, term);
       if (existing) {
         return reply.conflict(`Word '${term}' already exists in the database`);
+      }
+
+      const registrationGroups = { groupIds: body.groupIds, groupBIds: body.groupBIds };
+      try {
+        resolveWordRegistrationGroups(language, await getWordGroups(language), registrationGroups);
+      } catch (err) {
+        if (err instanceof WordRegistrationGroupError) return reply.badRequest(err.message);
+        throw err;
       }
 
       // Build LLM prompt — definitions are always requested in all four
@@ -641,7 +654,13 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       };
 
       // addWord now defaults appearsInIds to include own exampleIds.
-      await addWord(language, word, { exampleIds });
+      try {
+        await addWord(language, word, { exampleIds, registrationGroups });
+      } catch (err) {
+        if (err instanceof WordRegistrationGroupError) return reply.badRequest(err.message);
+        if (err instanceof DuplicateTermError) return reply.conflict(err.message);
+        throw err;
+      }
 
       // Reverse-link: find existing example sentences where this word appears as a segment.
       // Run fire-and-forget so the 201 response is not blocked by the full collection scan.
