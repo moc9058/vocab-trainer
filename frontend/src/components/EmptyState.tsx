@@ -21,7 +21,6 @@ interface Props {
   onMixedQuiz: () => void;
   onStartNew: () => void;
   onBrowse: () => void;
-  onFlaggedReview: () => void;
   onGrammarQuiz: () => void;
   onBrowseGrammar: () => void;
   /** Opens the article-import screen (the Word & Grammar browse view's import tab). */
@@ -40,7 +39,7 @@ interface Props {
   onAddExpression: () => void;
 }
 
-export default function EmptyState({ language, deferSessionLoad = false, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onResumeMixed, onMixedQuiz, onStartNew, onBrowse, onFlaggedReview, onGrammarQuiz, onBrowseGrammar, onImport, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onStartExpressionRecall, onBrowseExpressions, onAddExpression }: Props) {
+export default function EmptyState({ language, deferSessionLoad = false, onResume, onResumeGrammar, onResumeCombined, onCombinedQuiz, onResumeMixed, onMixedQuiz, onStartNew, onBrowse,  onGrammarQuiz, onBrowseGrammar, onImport, onAddWord, onAddGrammar, onStartTranslation, onResumeTranslation, hasTranslationHistory, onStartSpeakingWriting, onResumeSpeakingWriting, hasSWSession, onStartExpressionQuiz, onStartExpressionRecall, onBrowseExpressions, onAddExpression }: Props) {
   const { t } = useI18n();
   const { settings } = useSettings();
   const isoCode = urlLanguageToIsoCode(language) ?? language;
@@ -212,12 +211,6 @@ export default function EmptyState({ language, deferSessionLoad = false, onResum
                       className="rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
                     >
                       {t("smartAddWord")}
-                    </button>
-                    <button
-                      onClick={onFlaggedReview}
-                      className="sm:col-span-2 rounded-lg border border-gray-600 px-4 py-2.5 text-center text-sm text-gray-300 hover:bg-gray-700 transition-colors"
-                    >
-                      {t("reviewFlagged")}
                     </button>
                   </div>
                 </>

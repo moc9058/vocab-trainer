@@ -1,3 +1,4 @@
+import { normalizeWordDefinitions, normalizeWordRecord } from "../word-format.js";
 import { contextualDefinitions, sourceContextInstructions } from "../import-definitions.js";
 import type { FastifyBaseLogger, FastifyPluginAsync } from "fastify";
 import {
@@ -16,7 +17,6 @@ import {
   deleteLanguage,
   lookupWordByTerm,
   lookupWordsByTerms,
-  flagWord,
   getVocabularyConfig,
   addExampleSentence,
   findExampleByText,
@@ -148,7 +148,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.notFound(`Language '${language}' not found`);
     }
 
-    const { search, topic, category, level, flaggedOnly, groupId } = request.query;
+    const { search, topic, level, groupId } = request.query;
     const searchIn: SearchIn = request.query.searchIn === "meaning" || request.query.searchIn === "both"
       ? request.query.searchIn
       : "term";
@@ -157,7 +157,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
 
     return await getWords(
       language,
-      { search, searchIn, topic, category, level, flaggedOnly: flaggedOnly === "true", groupId },
+      { search, searchIn, topic, level, groupId },
       { page, limit }
     );
   });
@@ -230,12 +230,11 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       term: string;
       sourceContext?: import("../types.js").ImportSourceContext;
       transliteration?: string;
-      definitions?: { partOfSpeech: string; text: Record<string, string> }[];
+      definitions?: { text: Record<string, string> }[];
       topics?: string[];
       examples?: { sentence: string; translation: string }[];
       level?: string;
       notes?: string;
-      flag?: boolean;
     };
   }>(
     "/:language/smart-add",
@@ -260,7 +259,6 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
               items: {
                 type: "object",
                 properties: {
-                  partOfSpeech: { type: "string" },
                   text: { type: "object", additionalProperties: { type: "string" } },
                 },
               },
@@ -283,7 +281,6 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
             },
             level: { type: "string" },
             notes: { type: "string" },
-            flag: { type: "boolean" },
           },
         },
       },
@@ -324,7 +321,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         userInput.transliteration = body.transliteration || null;
       }
       userInput.definitions = (body.definitions && body.definitions.length > 0)
-        ? body.definitions : null;
+        ? normalizeWordDefinitions(body) : null;
       userInput.topics = (body.topics && body.topics.length > 0)
         ? body.topics : null;
       // Empty translations (chip adds send `""`) become null so the LLM
@@ -365,14 +362,16 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // Merge: user-provided fields take priority; definitions & examples get supplemented
-      const userDefs = body.definitions ?? [];
+      const userDefs = normalizeWordDefinitions(body);
       const userDefCount = userDefs.length;
-      const generatedDefs = (llmResult.definitions as { partOfSpeech: string; text: Record<string, string>; pinyins?: string[] }[]) || [];
+      const generatedDefs = (llmResult.definitions ?? []) as (import("../types.js").WordMeaning & {
+        inputDefinitionIndex?: number | null; distinctSenseReason?: string; contrastExample?: string;
+      })[];
       const userExCount = body.examples?.length ?? 0;
       const llmExamples = (llmResult.examples as { sentence: string; translation: string }[]) || [];
 
       const llmDefs = body.sourceContext && userDefs.length > 0
-        ? contextualDefinitions(generatedDefs, userDefs) : generatedDefs;
+        ? contextualDefinitions(generatedDefs, userDefs) : normalizeWordDefinitions(llmResult);
 
       if (body.sourceContext && userDefs.length > 0 && llmDefs.slice(0, userDefs.length).some((def, index) =>
         ALL_DEFINITION_LANGUAGES.some(code => !(def.text?.[code]?.trim() || userDefs[index]?.text?.[code]?.trim())))) {
@@ -393,7 +392,6 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
           ? (userDef as any).pinyins
           : (llmDef?.pinyins && llmDef.pinyins.length > 0 ? llmDef.pinyins : undefined);
         return {
-          partOfSpeech: userDef.partOfSpeech || llmDef?.partOfSpeech || "",
           text: mergedText,
           ...(pinyins ? { pinyins } : {}),
         };
@@ -404,7 +402,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         transliteration: isChinese ? (body.transliteration || (llmResult.transliteration as string) || "") : undefined,
         definitions: userDefCount > 0
           ? [...mergedUserDefs, ...llmDefs.slice(userDefCount)]
-          : llmDefs.length > 0 ? llmDefs : [{ partOfSpeech: "", text: { en: "" } }],
+          : llmDefs.length > 0 ? llmDefs : [{ text: { en: "" } }],
         examples: userExCount > 0
           ? [
               ...body.examples!.map((ex, i) => {
@@ -653,10 +651,6 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
       linkWordToExistingExamples(language, id, merged.term).catch((e) =>
         fastify.log.error({ err: e, wordId: id, term: merged.term }, "linkWordToExistingExamples failed")
       );
-
-      if (body.flag !== false) {
-        await flagWord(language, word.id);
-      }
 
       return reply.status(201).send(word);
     }
@@ -1202,7 +1196,7 @@ const vocabRoutes: FastifyPluginAsync = async (fastify) => {
         // picked in the UI — so a legacy `groups` field is dropped here.
         const { groups: _groups, ...rest } = d as typeof d & { groups?: string[] };
         return {
-          ...rest,
+          ...normalizeWordRecord(rest),
           language,
           createdAt: now,
           ...(existingTerms.has(d.term) ? { duplicate: true } : {}),

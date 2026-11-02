@@ -62,7 +62,7 @@ export default function StudyQuizModal({
           onStart={onStartWord}
           onClose={onClose}
           onPrint={onPrintWord}
-          showFlaggedScope
+          showWeights
         />
       ) : tab === "grammar" ? (
         <GrammarFilterModal

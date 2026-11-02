@@ -3,7 +3,7 @@ import { fetchJson, postJson, putJson, deleteRequest, deleteJson, CREDENTIALS, n
 import type {
   Word,
   WordDraft,
-  Meaning,
+  WordMeaning,
   PaginatedResult,
   WordGroup,
   GroupCategory,
@@ -16,9 +16,7 @@ interface WordFilters {
   search?: string;
   searchIn?: SearchIn;
   topic?: string;
-  category?: string;
   level?: string;
-  flaggedOnly?: boolean;
   groupId?: string;
 }
 
@@ -34,9 +32,7 @@ export async function getWords(
   if (filters?.search) params.set("search", filters.search);
   if (filters?.search && filters?.searchIn) params.set("searchIn", filters.searchIn);
   if (filters?.topic) params.set("topic", filters.topic);
-  if (filters?.category) params.set("category", filters.category);
   if (filters?.level) params.set("level", filters.level);
-  if (filters?.flaggedOnly) params.set("flaggedOnly", "true");
   if (filters?.groupId) params.set("groupId", filters.groupId);
   return fetchJson(`/api/vocab/${encodeURIComponent(language)}?${params}`);
 }
@@ -52,7 +48,7 @@ export function getWordSearchIndex(language: string): Promise<{ items: SearchInd
   return fetchJson(`/api/vocab/${encodeURIComponent(language)}/search-index`);
 }
 
-export function getFilters(language: string): Promise<{ topics: string[]; categories: string[]; levels: string[] }> {
+export function getFilters(language: string): Promise<{ topics: string[];  levels: string[] }> {
   return fetchJson(`/api/vocab/${encodeURIComponent(language)}/filters`);
 }
 
@@ -101,11 +97,10 @@ export function smartAddWord(
     term: string;
     sourceContext?: import("../types").ImportSourceContext;
     transliteration?: string;
-    definitions?: Meaning[];
+    definitions?: WordMeaning[];
     topics?: string[];
     examples?: { sentence: string; translation: string; userSplits?: string[]; segments?: { text: string; transliteration?: string; id?: string }[] }[];
     level?: string;
-    flag?: boolean;
     groupIds?: string[];
   }
 ): Promise<Word & { generatedWords?: Word[] }> {

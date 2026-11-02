@@ -33,10 +33,13 @@ export interface ExampleSentence {
   appearsInGrammarIds?: string[];
 }
 
-export interface Meaning {
-  partOfSpeech: string;
+export interface WordMeaning {
   text: Record<string, string>;
   pinyins?: string[];
+}
+
+export interface Meaning extends WordMeaning {
+  partOfSpeech: string;
 }
 
 export interface HanjaReading {
@@ -49,7 +52,7 @@ export interface Word {
   id: string;
   term: string;
   transliteration?: string;
-  definitions: Meaning[];
+  definitions: WordMeaning[];
   examples: Example[];
   topics: Topic[];
   level?: string;
@@ -150,7 +153,7 @@ export interface WordDraft {
   term: string;
   transliteration?: string;
   /** Usually one language only — smart-add fills the rest when the draft is promoted. */
-  definitions?: Meaning[];
+  definitions?: WordMeaning[];
   /** Inline raw examples — drafts are NOT normalized into example_sentences.
    *  `segments` carries the chip segmentation (Chinese): segment TEXTS in
    *  sentence order (plain strings, unlike Example.segments objects). Becomes
@@ -216,7 +219,7 @@ export interface ProgressFile {
 export interface QuizQuestion {
   wordId: string;
   term: string;
-  definitions: Meaning[];
+  definitions: WordMeaning[];
   transliteration?: string;
   examples?: Example[];
   userCorrect?: boolean;
@@ -252,7 +255,6 @@ export interface QuizSession {
   correctMembership?: string[];
   pendingWordIds?: string[];
   questionTarget?: number;
-  flaggedOnly?: boolean;
 }
 
 export interface PaginatedResult<T> {
@@ -430,7 +432,6 @@ export interface CombinedQuizSession {
   correctWeight?: number;
   /** Word/grammar IDs classified as mastered when the session was built (or on-demand). */
   correctMembership?: { wordIds: string[]; grammarIds: string[] };
-  flaggedOnly?: boolean;
   /**
    * Order the whole session by one uniform shuffle of the word+grammar union instead of
    * merging the two domains by weight. `weightedMerge` picks a BUCKET per draw, so at 1:1

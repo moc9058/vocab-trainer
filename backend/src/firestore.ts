@@ -1,3 +1,4 @@
+import { normalizeWordDefinitions, normalizeWordRecord, normalizeWordSession } from "./word-format.js";
 import { ingestionKey } from './import-ingestions.js';
 import { ImportCheckpointError } from './import-parts.js';
 import { normalizeQuizSitting } from "./quiz-sitting.js";
@@ -12,6 +13,7 @@ import type {
   ExampleSentence,
   Example,
   Meaning,
+  WordMeaning,
   VocabFile,
   LanguageInfo,
   WordIndexEntry,
@@ -65,7 +67,6 @@ const idMaps = db.collection("id_maps");
 const wordIndex = db.collection("word_index");
 const progress = db.collection("progress");
 const quizSessions = db.collection("quiz_sessions");
-const flaggedWords = db.collection("flagged_words");
 const exampleSentences = db.collection("example_sentences");
 const exampleSentenceIndex = db.collection("example_sentence_index");
 const wordGroups = db.collection("word_groups");
@@ -163,10 +164,10 @@ async function searchWordIndex(language: string, searchTerm: string): Promise<st
   return matchingIds;
 }
 
-// Flatten a Meaning[] into the plain text values the meaning-search matches
+// Flatten word or grammar meanings into the plain text values the meaning-search matches
 // against. Tolerates missing/loose data (drafts-era docs, stripped own-language
 // glosses) — an item with no meanings simply can't match a meaning search.
-function flattenMeaningTexts(meanings: Meaning[] | undefined): string[] {
+function flattenMeaningTexts(meanings: WordMeaning[] | undefined): string[] {
   return (meanings ?? []).flatMap((m) =>
     Object.values(m?.text ?? {}).filter((v): v is string => typeof v === "string" && v.length > 0)
   );
@@ -196,12 +197,12 @@ export async function getWordSearchIndex(language: string): Promise<SearchIndexE
     .get();
   return snap.docs.map((doc) => {
     const d = doc.data();
-    const definitions = (d.definitions ?? []) as Meaning[];
+    const definitions = normalizeWordDefinitions(d);
     return {
       id: doc.id,
       label: (d.term as string) ?? "",
       ...(d.transliteration ? { transliteration: d.transliteration as string } : {}),
-      pos: definitions.map((m) => m?.partOfSpeech).filter((p): p is string => !!p),
+      pos: [],
       meanings: flattenMeaningTexts(definitions),
     };
   });
@@ -209,14 +210,11 @@ export async function getWordSearchIndex(language: string): Promise<SearchIndexE
 
 function applyFilters(
   results: Word[],
-  filters: { search?: string; topic?: string; category?: string; level?: string },
+  filters: { search?: string; topic?: string; level?: string },
 ): Word[] {
   if (filters.topic) {
     const t = filters.topic;
     results = results.filter((w) => (w.topics as string[]).includes(t));
-  }
-  if (filters.category) {
-    results = results.filter((w) => w.definitions.some((m) => m.partOfSpeech === filters.category));
   }
   if (filters.level) {
     results = results.filter((w) => w.level === filters.level);
@@ -238,7 +236,7 @@ function paginateResults(results: Word[], page: number, limit: number): Paginate
 
 export async function getWords(
   language: string,
-  filters?: { search?: string; searchIn?: SearchIn; topic?: string; category?: string; level?: string; flaggedOnly?: boolean; groupId?: string },
+  filters?: { search?: string; searchIn?: SearchIn; topic?: string; level?: string; groupId?: string },
   pagination?: { page: number; limit: number }
 ): Promise<PaginatedResult<Word>> {
   const page = pagination?.page ?? 1;
@@ -249,22 +247,9 @@ export async function getWords(
     const group = await getWordGroup(filters.groupId);
     const groupWordIds = group?.wordIds ?? [];
     let results = await getWordsByIds(groupWordIds);
-    if (filters.flaggedOnly) {
-      const flagged = await getFlaggedWords(language);
-      const flaggedWordIds = new Set(flagged.map((f) => f.wordId));
-      results = results.filter((w) => flaggedWordIds.has(w.id));
-    }
-    const { groupId: _g, flaggedOnly: _f, ...rest } = filters;
-    results = applyFilters(results, rest);
-    return paginateResults(results, page, limit);
-  }
 
-  // Flagged-only: fetch only flagged words by ID (avoids full collection scan)
-  if (filters?.flaggedOnly) {
-    const flagged = await getFlaggedWords(language);
-    const flaggedWordIds = flagged.map((f) => f.wordId);
-    let results = await getWordsByIds(flaggedWordIds);
-    results = applyFilters(results, filters);
+    const { groupId: _g, ...rest } = filters;
+    results = applyFilters(results, rest);
     return paginateResults(results, page, limit);
   }
 
@@ -284,8 +269,6 @@ export async function getWords(
     return paginateResults(results, page, limit);
   }
 
-  // Category filter requires client-side filtering (definitions is a nested array),
-  // so when category is active we fetch all and paginate in-memory.
   let query = words.where("language", "==", language) as FirebaseFirestore.Query;
   if (filters?.topic) {
     query = query.where("topics", "array-contains", filters.topic);
@@ -294,14 +277,7 @@ export async function getWords(
     query = query.where("level", "==", filters.level);
   }
 
-  if (filters?.category) {
-    const snap = await query.get();
-    let results = await hydrateWords(snap.docs.map(docToWord));
-    results = applyFilters(results, filters);
-    return paginateResults(results, page, limit);
-  }
-
-  // Server-side pagination when no category filter
+  // Server-side pagination
   query = query.orderBy(FieldPath.documentId());
   const countSnap = await query.count().get();
   const total = countSnap.data().count;
@@ -336,7 +312,7 @@ export async function getAllWordIds(language: string): Promise<string[]> {
 
 export async function getFilteredWords(
   language: string,
-  filters?: { topics?: string[]; categories?: string[]; levels?: string[]; groupIds?: string[]; flaggedOnly?: boolean }
+  filters?: { topics?: string[]; levels?: string[]; groupIds?: string[] }
 ): Promise<Word[]> {
   // Firestore array-contains can only filter on one topic at a time,
   // so we fetch all words and filter client-side for multi-value filters
@@ -344,10 +320,8 @@ export async function getFilteredWords(
   let results = await hydrateWords(snap.docs.map(docToWord));
 
   const hasTopicFilter = filters?.topics && filters.topics.length > 0;
-  const hasCategoryFilter = filters?.categories && filters.categories.length > 0;
   const hasLevelFilter = filters?.levels && filters.levels.length > 0;
   const hasGroupFilter = filters?.groupIds && filters.groupIds.length > 0;
-  const hasFlaggedFilter = !!filters?.flaggedOnly;
 
   // Group filter: resolve all selected groups and compute union of their wordIds
   let groupWordIdSet: Set<string> | null = null;
@@ -360,34 +334,19 @@ export async function getFilteredWords(
     groupWordIdSet = union;
   }
 
-  // Flagged filter: restrict the pool to flagged words (AND with the other filters)
-  let flaggedWordIdSet: Set<string> | null = null;
-  if (hasFlaggedFilter) {
-    const flagged = await getFlaggedWords(language);
-    flaggedWordIdSet = new Set(flagged.map((f) => f.wordId));
-  }
-
-  if (hasTopicFilter || hasCategoryFilter || hasLevelFilter || hasGroupFilter || hasFlaggedFilter) {
+  if (hasTopicFilter || hasLevelFilter || hasGroupFilter) {
     results = results.filter((w) => {
-      // Group acts as a scope limiter (AND with other filters)
       const matchesGroup = !groupWordIdSet || groupWordIdSet.has(w.id);
-      // Flagged acts as a scope limiter (AND with other filters)
-      const matchesFlagged = !flaggedWordIdSet || flaggedWordIdSet.has(w.id);
-      // Level acts as a scope limiter (AND with other filters)
       const matchesLevel = !hasLevelFilter || (!!w.level && filters!.levels!.includes(w.level));
-      // Topics and categories are additive (OR with each other)
-      const matchesContent = !hasTopicFilter && !hasCategoryFilter
-        ? true
-        : (hasTopicFilter && w.topics.some((t) => filters!.topics!.includes(t))) ||
-          (hasCategoryFilter && w.definitions.some((m) => filters!.categories!.includes(m.partOfSpeech)));
-      return matchesGroup && matchesFlagged && matchesLevel && matchesContent;
+      const matchesContent = !hasTopicFilter || w.topics.some((t) => filters!.topics!.includes(t));
+      return matchesGroup && matchesLevel && matchesContent;
     });
   }
 
   return results;
 }
 
-const wordFiltersCache = new Map<string, { data: { topics: Topic[]; categories: string[]; levels: string[] }; ts: number }>();
+const wordFiltersCache = new Map<string, { data: { topics: Topic[]; levels: string[] }; ts: number }>();
 
 export function invalidateWordFiltersCache(language: string): void {
   wordFiltersCache.delete(language);
@@ -395,7 +354,6 @@ export function invalidateWordFiltersCache(language: string): void {
 
 export async function getWordFilters(language: string): Promise<{
   topics: Topic[];
-  categories: string[];
   levels: string[];
 }> {
   const cached = wordFiltersCache.get(language);
@@ -406,9 +364,8 @@ export async function getWordFilters(language: string): Promise<{
   const snap = await words.where("language", "==", language).get();
   const allWords = snap.docs.map(docToWord);
   const topics = [...new Set(allWords.flatMap((w) => w.topics))] as Topic[];
-  const categories = [...new Set(allWords.flatMap((w) => w.definitions.map((m) => m.partOfSpeech)).filter(Boolean))].sort();
   const levels = [...new Set(allWords.map((w) => w.level).filter((l): l is string => !!l))].sort();
-  const data = { topics, categories, levels };
+  const data = { topics, levels };
   wordFiltersCache.set(language, { data, ts: Date.now() });
   return data;
 }
@@ -478,7 +435,7 @@ export async function addWord(
   word: Word,
   opts?: { exampleIds?: string[]; appearsInIds?: string[] },
 ): Promise<void> {
-  const data: Record<string, unknown> = { ...word, language };
+  const data: Record<string, unknown> = { ...normalizeWordRecord(word as unknown as Record<string, unknown>), language };
   delete data.id;
 
   if (opts?.exampleIds) {
@@ -523,6 +480,12 @@ export async function updateWord(
   const oldData = doc.data()!;
   const isNewFormat = Array.isArray(oldData.exampleIds);
   const data: Record<string, unknown> = { ...updates };
+  if (updates.definitions) data.definitions = normalizeWordDefinitions(updates);
+  delete data.partOfSpeech;
+  delete data.flag;
+  delete data.flaggedOnly;
+  delete data.flagWordIds;
+  data.grammaticalCategory = FieldValue.delete();
   delete data.id;
 
   if (isNewFormat) {
@@ -664,7 +627,7 @@ export async function deleteWord(language: string, wordId: string): Promise<bool
 
   // Everything keyed by this word commits in one batch: the word doc, its
   // word_index entry (a crash between the two is exactly the ghost-entry mode
-  // sweep-orphaned-word-index.ts repairs), the flag and progress docs (deletes
+  // sweep-orphaned-word-index.ts repairs), the progress docs (deletes
   // of missing docs are no-ops, so no existence pre-reads), and its membership
   // in every group — member counts render from wordIds.length, so a dangling
   // id inflates them forever. No language filter on the query: word ids carry
@@ -689,7 +652,6 @@ export async function deleteWord(language: string, wordId: string): Promise<bool
   }
   final.delete(words.doc(wordId));
   final.delete(wordIndex.doc(wordIndexDocId(language, term)));
-  final.delete(flaggedWords.doc(`${language}_${wordId}`));
   final.delete(progress.doc(`${language}_${wordId}`));
   await final.commit();
 
@@ -701,22 +663,6 @@ export async function deleteWord(language: string, wordId: string): Promise<bool
 export async function wordIdExists(wordId: string): Promise<boolean> {
   const doc = await words.doc(wordId).get();
   return doc.exists;
-}
-
-/** Normalize old format (definition + grammaticalCategory) to new (definitions: Meaning[]) */
-function normalizeDefinitions(d: Record<string, unknown>): Meaning[] {
-  if (Array.isArray(d.definitions)) {
-    return (d.definitions as any[]).map((def) => ({
-      partOfSpeech: def.partOfSpeech ?? "",
-      text: def.text ?? {},
-      ...(Array.isArray(def.pinyins) && def.pinyins.length > 0 ? { pinyins: def.pinyins } : {}),
-    }));
-  }
-  // Backward compat: old format had definition: Record<string, string> + grammaticalCategory: string
-  if (d.definition && typeof d.definition === "object") {
-    return [{ partOfSpeech: (d.grammaticalCategory as string) || "", text: d.definition as Record<string, string> }];
-  }
-  return [];
 }
 
 function parseExample(ex: any): Example {
@@ -738,7 +684,7 @@ function docToWord(doc: FirebaseFirestore.DocumentSnapshot): WordRaw {
     id: doc.id,
     term: d.term,
     transliteration: d.transliteration,
-    definitions: normalizeDefinitions(d),
+    definitions: normalizeWordDefinitions(d),
     // Old format: parse embedded examples; New format: empty (filled by hydration)
     examples: isNewFormat ? [] : (d.examples ?? []).map(parseExample),
     topics: d.topics ?? [],
@@ -1609,7 +1555,7 @@ export async function mutateQuizSession<T>(
 }
 
 function docToSession(doc: FirebaseFirestore.DocumentSnapshot): QuizSession {
-  const d = doc.data()!;
+  const d = normalizeWordSession(doc.data()!);
   return {
     sessionId: doc.id,
     language: d.language,
@@ -1628,40 +1574,7 @@ function docToSession(doc: FirebaseFirestore.DocumentSnapshot): QuizSession {
     correctMembership: d.correctMembership,
     pendingWordIds: d.pendingWordIds,
     questionTarget: d.questionTarget,
-    flaggedOnly: d.flaggedOnly,
   };
-}
-
-// ========== Flagged Words ==========
-
-export async function getFlaggedWords(language: string): Promise<{ wordId: string; flaggedAt: string }[]> {
-  const snap = await flaggedWords.where("language", "==", language).get();
-  return snap.docs.map((doc) => {
-    const d = doc.data();
-    return { wordId: d.wordId, flaggedAt: d.flaggedAt };
-  });
-}
-
-export async function getFlaggedWordCount(language: string): Promise<number> {
-  const snap = await flaggedWords.where("language", "==", language).get();
-  return snap.size;
-}
-
-export async function flagWord(language: string, wordId: string): Promise<void> {
-  const docId = `${language}_${wordId}`;
-  await flaggedWords.doc(docId).set({
-    language,
-    wordId,
-    flaggedAt: new Date().toISOString(),
-  });
-}
-
-export async function unflagWord(language: string, wordId: string): Promise<boolean> {
-  const docId = `${language}_${wordId}`;
-  const doc = await flaggedWords.doc(docId).get();
-  if (!doc.exists) return false;
-  await flaggedWords.doc(docId).delete();
-  return true;
 }
 
 // ========== Grammar ==========
@@ -1960,7 +1873,7 @@ const wordDrafts = db.collection("word_drafts");
 
 export async function getWordDrafts(language: string): Promise<WordDraft[]> {
   const snap = await wordDrafts.where("language", "==", language).get();
-  const items = snap.docs.map((d) => ({ id: d.id, ...d.data() } as WordDraft));
+  const items = snap.docs.map((d) => ({ id: d.id, ...normalizeWordRecord(d.data()) } as WordDraft));
   // In-memory sort avoids a composite index on language + createdAt.
   // Tiebreak by id: within one upload all drafts share createdAt, and the id
   // encodes ts + zero-padded index (see POST handler), so this keeps upload order.
@@ -1972,14 +1885,14 @@ export async function getWordDrafts(language: string): Promise<WordDraft[]> {
 export async function getWordDraft(draftId: string): Promise<WordDraft | null> {
   const doc = await wordDrafts.doc(draftId).get();
   if (!doc.exists) return null;
-  return { id: doc.id, ...doc.data() } as WordDraft;
+  return { id: doc.id, ...normalizeWordRecord(doc.data()!) } as WordDraft;
 }
 
 export async function addWordDrafts(drafts: WordDraft[]): Promise<void> {
   const batch = db.batch();
   for (const draft of drafts) {
     const { id, ...data } = draft;
-    batch.set(wordDrafts.doc(id), data);
+    batch.set(wordDrafts.doc(id), normalizeWordRecord(data));
   }
   await batch.commit();
 }
@@ -1992,9 +1905,9 @@ export async function updateWordDraft(
   const doc = await ref.get();
   if (!doc.exists) return null;
   const clean = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined));
-  await ref.set(clean, { merge: true });
+  await ref.set({ ...normalizeWordRecord(clean), grammaticalCategory: FieldValue.delete(), partOfSpeech: FieldValue.delete(), flag: FieldValue.delete() }, { merge: true });
   const after = await ref.get();
-  return { id: after.id, ...after.data() } as WordDraft;
+  return { id: after.id, ...normalizeWordRecord(after.data()!) } as WordDraft;
 }
 
 export async function deleteWordDraft(draftId: string): Promise<boolean> {
@@ -2433,7 +2346,7 @@ function slimCombinedQuestions(questions: CombinedQuizSession["questions"]) {
 export async function getCombinedQuizSession(sessionKey: string): Promise<CombinedQuizSession | null> {
   const doc = await combinedQuizSessions.doc(sessionKey).get();
   if (!doc.exists) return null;
-  const d = doc.data()!;
+  const d = normalizeWordSession(doc.data()!);
   return normalizeQuizSitting({
     sessionId: doc.id,
     language: d.language,
@@ -2454,7 +2367,6 @@ export async function getCombinedQuizSession(sessionKey: string): Promise<Combin
     mixedScope: d.mixedScope,
     correctWeight: d.correctWeight,
     correctMembership: d.correctMembership,
-    flaggedOnly: d.flaggedOnly,
     randomOrder: d.randomOrder,
   });
 }
@@ -3350,7 +3262,7 @@ const NORMALIZE_MAX_GROUP_WORD_IDS = 20_000;
  * that does not exist.
  *
  * NO cache invalidation is needed and none should be added: `wordFiltersCache` holds
- * topics/categories/levels read off WORD documents, `updateLanguageMeta` tracks word
+ * topics/levels read off WORD documents, `updateLanguageMeta` tracks word
  * counts, and neither is affected by group membership. Group member counts are not
  * cached anywhere — the UI reads `wordIds.length` off the documents this returns.
  */

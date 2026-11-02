@@ -81,7 +81,7 @@ textbook-content-extractor（ローカルOCRツール）のアウトプットと
       "term": "后悔",
       "transliteration": "hòuhuǐ",
       "definitions": [
-        { "partOfSpeech": "動詞", "text": { "ja": "後悔する" }, "pinyins": ["hòuhuǐ"] }
+        { "text": { "ja": "後悔する" }, "pinyins": ["hòuhuǐ"] }
       ],
       "examples": [
         {
@@ -104,7 +104,7 @@ textbook-content-extractor（ローカルOCRツール）のアウトプットと
 |---|---|---|---|
 | `term` | 必須 | string | 見出し語 |
 | `transliteration` | 任意 | string | 読み（中国語ならピンイン）。省略時は smart-add が生成 |
-| `definitions` | 任意 | Meaning[] | 定義。1言語だけ埋めればよい（4言語補完は smart-add）。省略時は smart-add が全生成 |
+| `definitions` | 任意 | WordMeaning[] | 定義。1言語だけ埋めればよい（4言語補完は smart-add）。省略時は smart-add が全生成 |
 | `examples` | 任意 | {sentence, translation, segments?}[] | 例文。`segments` はチップ（分かち書き）情報：文中の語セグメント**文字列**を文順に並べた配列（中国語のみ有効。`Example.segments` のオブジェクト形式とは別物）。確認モーダルでスペース区切りのチップ表示に復元され、本登録時に smart-add の `userSplits` として渡り `example_sentences.segments`（ピンイン・語ID付き）の生成に使われる。省略時はチップ分割なし（本登録時にLLMが分かち書きを生成） |
 | `level` | 任意 | string | HSK/JLPT等 |
 | `topics` | 任意 | string[] | `Word.topics`（`TOPICS` 定数のいずれか） |
@@ -112,6 +112,7 @@ textbook-content-extractor（ローカルOCRツール）のアウトプットと
 
 ## 型の対応
 
-- `Meaning` = `{ partOfSpeech: string, text: Record<string,string>, pinyins?: string[] }`（`backend/src/types.ts` / `frontend/src/types.ts`）
+- 単語用 `WordMeaning` = `{ text: Record<string,string>, pinyins?: string[] }`。全言語の単語で品詞カテゴリーは廃止。旧JSONの `partOfSpeech` / `grammaticalCategory` は無視し、保存しない。
+- 文法用 `Meaning` = `{ partOfSpeech: string, text: Record<string,string>, pinyins?: string[] }`（`backend/src/types.ts` / `frontend/src/types.ts`）
 - 文法draftは `GrammarDraft`、単語draftは `WordDraft`（`id`/`language`/`createdAt` はサーバー付与のため**ファイルには含めない**）
 - `duplicate` もサーバー付与（ファイルには含めない）。アップロード時に同じ `term`（単語）／`statement`（文法）の生きたレコードが既にDBに存在すると `true` が付き、下書きパネルに「重複」バッジが表示される。重複でも登録は妨げない（確認用のマークのみ）

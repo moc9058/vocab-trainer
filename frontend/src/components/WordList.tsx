@@ -7,7 +7,6 @@ import SearchPreviewInput from "./SearchPreviewInput";
 import { useSearchIndex, invalidateSearchIndex } from "../hooks/useSearchIndex";
 import GroupPickerModal from "./GroupPickerModal";
 import GroupBSelect from "./GroupBSelect";
-import { getFlaggedWords, flagWord as apiFlagWord, unflagWord as apiUnflagWord } from "../api/flagged";
 import RubyText from "./RubyText";
 import WordFormModal from "./WordFormModal";
 import SmartAddWordModal from "./SmartAddWordModal";
@@ -17,11 +16,10 @@ import { urlLanguageToIsoCode } from "../settings/defaults";
 type SmartAddPayload = {
   term: string;
   transliteration?: string;
-  definitions?: { partOfSpeech: string; text: Record<string, string> }[];
+  definitions?: { text: Record<string, string> }[];
   topics?: string[];
   examples?: { sentence: string; translation: string; userSplits?: string[]; segments?: { text: string; transliteration?: string; id?: string }[] }[];
   level?: string;
-  flag?: boolean;
   groupIds?: string[];
 };
 
@@ -66,10 +64,8 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const [previewEnabled, setPreviewEnabled] = useState(false);
   const { entries: previewEntries } = useSearchIndex("word", language, previewEnabled);
   const [topic, setTopic] = useState("");
-  const [category, setCategory] = useState("");
   const [level, setLevel] = useState("");
   const [groupId, setGroupId] = useState("");
-  const [flaggedOnly, setFlaggedOnly] = useState(false);
   const [groups, setGroups] = useState<WordGroup[]>([]);
   // Category-B slice of the same fetches, kept beside the A-only `groups` so no existing
   // A flow changes. Feeds the per-row "B" chip and the remove-from-Group-B action.
@@ -82,7 +78,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const [existingTerms, setExistingTerms] = useState<Map<string, string>>(new Map());
   const [checkingTerms, setCheckingTerms] = useState(false);
   const [busySegments, setBusySegments] = useState<Set<string>>(new Set());
-  const [segmentFlags, setSegmentFlags] = useState<Map<string, boolean>>(new Map());
   // Per-chip group override. Key = chip text; value = groupId, or "" for
   // "no group". Absent key → falls back to the latest-created group.
   const [chipGroupOverrides, setChipGroupOverrides] = useState<Map<string, string>>(new Map());
@@ -92,7 +87,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const [editPinyinIndex, setEditPinyinIndex] = useState<number | null>(null);
   const [filterOptions, setFilterOptions] = useState<{
     topics: string[];
-    categories: string[];
     levels: string[];
   } | null>(null);
   const [showSmartAdd, setShowSmartAdd] = useState(false);
@@ -102,7 +96,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [debouncedSearch, setDebouncedSearch] = useState(initialSearch ?? "");
-  const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
   const isInitialMount = useRef(true);
   const requestIdRef = useRef(0);
   const scrollToExpandedRef = useRef(false);
@@ -266,24 +259,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, loading]);
-
-  // Fetch flagged word IDs on mount and whenever the word queue flushes
-  useEffect(() => {
-    getFlaggedWords(language)
-      .then(({ words }) => setFlaggedIds(new Set(words.map((w) => w.id))))
-      .catch(() => setFlaggedIds(new Set()));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [language, refreshSignal]);
-
-  async function handleToggleFlag(wordId: string) {
-    if (flaggedIds.has(wordId)) {
-      await apiUnflagWord(language, wordId);
-      setFlaggedIds((prev) => { const next = new Set(prev); next.delete(wordId); return next; });
-    } else {
-      await apiFlagWord(language, wordId);
-      setFlaggedIds((prev) => new Set(prev).add(wordId));
-    }
-  }
 
   // Debounce search input
   useEffect(() => {
@@ -535,12 +510,10 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       ? (overrideGroupId ? [overrideGroupId] : [])
       : (expandedId ? groups.filter((group) => group.wordIds.includes(expandedId)).map((group) => group.id) : []);
     if (onQueue) {
-      const flag = segmentFlags.get(term) ?? true;
       const parentEx = result?.items.flatMap((w) => w.examples).find((ex) => ex.sentence === sentence);
       onQueue(term, language, {
         term,
         examples: [{ sentence, translation, segments: parentEx?.segments }],
-        flag,
         groupIds: groupIds.length > 0 ? groupIds : undefined,
       });
       return;
@@ -548,14 +521,12 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
     checkTermsVersionRef.current++; // invalidate any in-flight checkTerms so it won't overwrite
     setBusySegments((prev) => new Set(prev).add(term));
     try {
-      const flag = segmentFlags.get(term) ?? true;
       const parentEx = result?.items
         .flatMap((w) => w.examples)
         .find((ex) => ex.sentence === sentence);
       const { generatedWords: gw, ...word } = await smartAddWord(language, {
         term,
         examples: [{ sentence, translation, segments: parentEx?.segments }],
-        flag,
         groupIds: groupIds.length > 0 ? groupIds : undefined,
       });
       if (groupIds.length > 0) {
@@ -565,9 +536,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       }
       setExistingTerms((prev) => new Map(prev).set(term, word.id));
       invalidateSearchIndex("word", language);
-      if (flag) {
-        setFlaggedIds((prev) => new Set(prev).add(word.id));
-      }
       setResult((prev) => {
         if (!prev) return prev;
         const withNew = [word, ...(gw ?? []), ...prev.items];
@@ -799,9 +767,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
         search: debouncedSearch || undefined,
         searchIn: debouncedSearch ? searchIn : undefined,
         topic: topic || undefined,
-        category: category || undefined,
         level: level || undefined,
-        flaggedOnly: flaggedOnly || undefined,
         groupId: groupId || undefined,
       };
       const data = await getWords(language, filters, page);
@@ -816,7 +782,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
         setLoading(false);
       }
     }
-  }, [language, debouncedSearch, searchIn, topic, category, level, flaggedOnly, groupId, page]);
+  }, [language, debouncedSearch, searchIn, topic, level, groupId, page]);
 
   useEffect(() => {
     fetchData();
@@ -856,7 +822,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
       return;
     }
     setPage(1);
-  }, [debouncedSearch, searchIn, topic, category, level, flaggedOnly, groupId]);
+  }, [debouncedSearch, searchIn, topic, level, groupId]);
 
   // Scroll to a newly added word after fetchData completes
   useEffect(() => {
@@ -872,7 +838,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
   // scoped to the current view, not persisted across navigation.
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [language, debouncedSearch, topic, category, level, flaggedOnly, groupId, page]);
+  }, [language, debouncedSearch, topic, level, groupId, page]);
 
   return (
     <div className="flex h-full flex-col">
@@ -957,16 +923,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                 ))}
               </select>
               <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="rounded-lg border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-              >
-                <option value="">{t("category")}</option>
-                {filterOptions.categories.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-              <select
                 value={level}
                 onChange={(e) => setLevel(e.target.value)}
                 className="rounded-lg border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
@@ -1014,15 +970,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
               + {t("groups")}
             </button>
           )}
-          <label className="flex items-center gap-1.5 rounded-lg border border-gray-600 bg-gray-700 px-3 py-1.5 text-sm text-gray-100 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={flaggedOnly}
-              onChange={(e) => setFlaggedOnly(e.target.checked)}
-              className="accent-amber-500"
-            />
-            {t("flaggedOnly")}
-          </label>
         </div>
       </div>
 
@@ -1195,8 +1142,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                         word={word}
                         expanded={expandedId === word.id}
                         onToggle={() => handleToggleExpand(word)}
-                        isFlagged={flaggedIds.has(word.id)}
-                        onToggleFlag={() => handleToggleFlag(word.id)}
                         onEdit={() => setEditingWord(word)}
                         onDelete={() => setDeletingId(word.id)}
                         onAddToGroup={() => setShowGroupPicker({ wordIds: [word.id], manage: false })}
@@ -1210,8 +1155,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                         busySegments={expandedId === word.id ? busySegments : new Set()}
                         pendingTerms={pendingTerms}
                         succeededTerms={succeededTerms}
-                        segmentFlags={segmentFlags}
-                        onToggleSegmentFlag={(term) => setSegmentFlags((prev) => { const next = new Map(prev); next.set(term, !(prev.get(term) ?? true)); return next; })}
                         wordGroups={groups}
                         getChipGroupId={getChipGroupId}
                         setChipGroupId={setChipGroupId}
@@ -1254,7 +1197,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                         </th>
                         <th className="pb-2 pr-4 font-medium">{t("term")}</th>
                         <th className="pb-2 pr-4 font-medium">{t("definition")}</th>
-                        <th className="pb-2 pr-4 font-medium">{t("category")}</th>
                         <th className="pb-2 font-medium">{t("level")}</th>
                       </tr>
                     </thead>
@@ -1265,8 +1207,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                           word={word}
                           expanded={expandedId === word.id}
                           onToggle={() => handleToggleExpand(word)}
-                          isFlagged={flaggedIds.has(word.id)}
-                          onToggleFlag={() => handleToggleFlag(word.id)}
                           onEdit={() => setEditingWord(word)}
                           onDelete={() => setDeletingId(word.id)}
                           onAddToGroup={() => setShowGroupPicker({ wordIds: [word.id], manage: false })}
@@ -1280,8 +1220,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                           busySegments={expandedId === word.id ? busySegments : new Set()}
                           pendingTerms={pendingTerms}
                           succeededTerms={succeededTerms}
-                          segmentFlags={segmentFlags}
-                          onToggleSegmentFlag={(term) => setSegmentFlags((prev) => { const next = new Map(prev); next.set(term, !(prev.get(term) ?? true)); return next; })}
                           wordGroups={groups}
                           getChipGroupId={getChipGroupId}
                           setChipGroupId={setChipGroupId}
@@ -1334,16 +1272,11 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
             setSearch("");
             setDebouncedSearch("");
             setTopic("");
-            setCategory("");
             setLevel("");
-            setFlaggedOnly(false);
             setPage(1);
             setExpandedId(word.id);
             scrollToExpandedRef.current = true;
             refreshExistingTerms(word);
-            getFlaggedWords(language)
-              .then(({ words: fw }) => setFlaggedIds(new Set(fw.map((w) => w.id))))
-              .catch(() => {});
           }}
           onQueue={onQueue}
           pendingTerms={pendingTerms}
@@ -1354,9 +1287,7 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
             setSearch(term);
             setDebouncedSearch(term);
             setTopic("");
-            setCategory("");
             setLevel("");
-            setFlaggedOnly(false);
             setPage(1);
             setExpandedId(wordId);
             scrollToExpandedRef.current = true;
@@ -1409,9 +1340,6 @@ export default function WordList({ language, onBack, initialExpandId, initialSea
                 setGroups(categoryGroups(gs, "A"));
                 setGroupsB(categoryGroups(gs, "B"));
               })
-              .catch(() => {});
-            getFlaggedWords(language)
-              .then(({ words: fw }) => setFlaggedIds(new Set(fw.map((w) => w.id))))
               .catch(() => {});
           }}
           onJumpToWord={(wordId, term) => {
@@ -1574,8 +1502,6 @@ function WordCard({
   word,
   expanded,
   onToggle,
-  isFlagged,
-  onToggleFlag,
   onEdit,
   onDelete,
   onAddToGroup,
@@ -1589,8 +1515,6 @@ function WordCard({
   busySegments,
   pendingTerms,
   succeededTerms,
-  segmentFlags,
-  onToggleSegmentFlag,
   wordGroups,
   getChipGroupId,
   setChipGroupId,
@@ -1603,8 +1527,6 @@ function WordCard({
   currentIsoCode: string;
   expanded: boolean;
   onToggle: () => void;
-  isFlagged: boolean;
-  onToggleFlag: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onAddToGroup?: () => void;
@@ -1619,8 +1541,6 @@ function WordCard({
   busySegments: Set<string>;
   pendingTerms?: Set<string>;
   succeededTerms?: Set<string>;
-  segmentFlags: Map<string, boolean>;
-  onToggleSegmentFlag: (term: string) => void;
   wordGroups: WordGroup[];
   getChipGroupId: (chipText: string) => string;
   setChipGroupId: (chipText: string, groupId: string) => void;
@@ -1679,11 +1599,6 @@ function WordCard({
               B
             </span>
           )}
-          {word.definitions.map((m, i) => m.partOfSpeech && (
-            <span key={i} className="rounded-full bg-gray-700 px-2 py-0.5 text-xs text-gray-300">
-              {m.partOfSpeech}
-            </span>
-          ))}
           {word.level && (
             <span className="rounded-full bg-blue-900/40 px-2 py-0.5 text-xs text-blue-300">
               {word.level}
@@ -1698,12 +1613,6 @@ function WordCard({
               word runs several screens tall — at the bottom, delete was effectively
               unreachable on a phone. Targets are phone-sized for the same reason. */}
           <div className="mb-3 flex flex-wrap gap-2">
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggleFlag(); }}
-              className={`rounded px-3 py-2 text-sm ${isFlagged ? "bg-amber-600 text-white hover:bg-amber-500" : "bg-gray-600 text-gray-200 hover:bg-gray-500"}`}
-            >
-              {isFlagged ? t("removeFlag") : t("flagForReview")}
-            </button>
             {onAddToGroup && (
               <button
                 onClick={(e) => { e.stopPropagation(); onAddToGroup(); }}
@@ -1783,11 +1692,6 @@ function WordCard({
               <div className="space-y-2">
                 {(showAllDefs ? word.definitions : word.definitions.slice(0, 3)).map((m, i) => (
                   <div key={i} className={`${i > 0 ? "border-t border-gray-600 pt-2" : ""}`}>
-                    {m.partOfSpeech && (
-                      <span className="mr-2 rounded-full bg-gray-600 px-2 py-0.5 text-xs text-gray-300">
-                        {m.partOfSpeech}
-                      </span>
-                    )}
                     {(() => {
                       const py = m.pinyins && m.pinyins.length > 0
                         ? m.pinyins.join(" / ")
@@ -1977,25 +1881,6 @@ function WordCard({
                                   >
                                     {exists ? "✓" : queued ? "⋯" : checking ? "⋯" : "+"} {seg.text}
                                   </button>
-                                  {anyDeactivated && (
-                                    <div className="mt-0.5 h-3.5 flex justify-center items-center">
-                                      {!isSelf && !exists && !queued && !checking && (
-                                        <label
-                                          className={`flex items-center ${busy ? "cursor-default opacity-50" : "cursor-pointer"}`}
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <input
-                                            type="checkbox"
-                                            checked={segmentFlags.get(seg.text) ?? true}
-                                            onChange={() => onToggleSegmentFlag(seg.text)}
-                                            disabled={busy}
-                                            className="accent-amber-500 w-3 h-3"
-                                            aria-label={`Flag ${seg.text} for review`}
-                                          />
-                                        </label>
-                                      )}
-                                    </div>
-                                  )}
                                   {anyDeactivated && wordGroups.length > 0 && (
                                     <div className="mt-0.5 flex justify-center">
                                       {!isSelf && !exists && !queued && !checking ? (
@@ -2077,8 +1962,6 @@ function WordRow({
   word,
   expanded,
   onToggle,
-  isFlagged,
-  onToggleFlag,
   onEdit,
   onDelete,
   onAddToGroup,
@@ -2092,8 +1975,6 @@ function WordRow({
   busySegments,
   pendingTerms,
   succeededTerms,
-  segmentFlags,
-  onToggleSegmentFlag,
   wordGroups,
   getChipGroupId,
   setChipGroupId,
@@ -2106,8 +1987,6 @@ function WordRow({
   currentIsoCode: string;
   expanded: boolean;
   onToggle: () => void;
-  isFlagged: boolean;
-  onToggleFlag: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onAddToGroup?: () => void;
@@ -2122,8 +2001,6 @@ function WordRow({
   busySegments: Set<string>;
   pendingTerms?: Set<string>;
   succeededTerms?: Set<string>;
-  segmentFlags: Map<string, boolean>;
-  onToggleSegmentFlag: (term: string) => void;
   wordGroups: WordGroup[];
   getChipGroupId: (chipText: string) => string;
   setChipGroupId: (chipText: string, groupId: string) => void;
@@ -2181,12 +2058,11 @@ function WordRow({
           )}
         </td>
         <td className="py-2 pr-4 text-gray-300">{defText}</td>
-        <td className="py-2 pr-4 text-gray-400">{[...new Set(word.definitions.map((m) => m.partOfSpeech).filter(Boolean))].join(", ")}</td>
         <td className="py-2 text-gray-400">{word.level ?? "—"}</td>
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={5} className="bg-gray-700 px-4 py-3">
+          <td colSpan={4} className="bg-gray-700 px-4 py-3">
             {settings.showKoreanHanja && word.hanjaReadings && (
               <div className="mb-3">
                 <div className="flex items-center gap-2 mb-3">
@@ -2230,11 +2106,6 @@ function WordRow({
                 <div className="space-y-2">
                   {(showAllDefs ? word.definitions : word.definitions.slice(0, 3)).map((m, i) => (
                     <div key={i} className={`${i > 0 ? "border-t border-gray-600 pt-2" : ""}`}>
-                      {m.partOfSpeech && (
-                        <span className="mr-2 rounded-full bg-gray-600 px-2 py-0.5 text-xs text-gray-300">
-                          {m.partOfSpeech}
-                        </span>
-                      )}
                       {(() => {
                         const py = m.pinyins && m.pinyins.length > 0
                           ? m.pinyins.join(" / ")
@@ -2423,25 +2294,6 @@ function WordRow({
                                     >
                                       {exists ? "✓" : queued ? "⋯" : checking ? "⋯" : "+"} {seg.text}
                                     </button>
-                                    {anyDeactivated && (
-                                      <div className="mt-0.5 h-3.5 flex justify-center items-center">
-                                        {!isSelf && !exists && !queued && !checking && (
-                                          <label
-                                            className={`flex items-center ${busy ? "cursor-default opacity-50" : "cursor-pointer"}`}
-                                            onClick={(e) => e.stopPropagation()}
-                                          >
-                                            <input
-                                              type="checkbox"
-                                              checked={segmentFlags.get(seg.text) ?? true}
-                                              onChange={() => onToggleSegmentFlag(seg.text)}
-                                              disabled={busy}
-                                              className="accent-amber-500 w-3 h-3"
-                                              aria-label={`Flag ${seg.text} for review`}
-                                            />
-                                          </label>
-                                        )}
-                                      </div>
-                                    )}
                                     {anyDeactivated && wordGroups.length > 0 && (
                                       <div className="mt-0.5 flex justify-center">
                                         {!isSelf && !exists && !queued && !checking ? (
@@ -2514,12 +2366,6 @@ function WordRow({
               </div>
             )}
             <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                onClick={(e) => { e.stopPropagation(); onToggleFlag(); }}
-                className={`rounded px-2 py-1 text-xs ${isFlagged ? "bg-amber-600 text-white hover:bg-amber-500" : "bg-gray-600 text-gray-200 hover:bg-gray-500"}`}
-              >
-                {isFlagged ? t("removeFlag") : t("flagForReview")}
-              </button>
               {onAddToGroup && (
                 <button
                   onClick={(e) => { e.stopPropagation(); onAddToGroup(); }}

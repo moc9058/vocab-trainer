@@ -18,7 +18,6 @@ import languagesRoutes from "./routes/languages.js";
 import vocabRoutes from "./routes/vocab.js";
 import quizRoutes from "./routes/quiz.js";
 import progressRoutes from "./routes/progress.js";
-import flaggedRoutes from "./routes/flagged.js";
 import grammarRoutes from "./routes/grammar.js";
 import grammarQuizRoutes from "./routes/grammar-quiz.js";
 import combinedQuizRoutes, {
@@ -115,7 +114,6 @@ await fastify.register(languagesRoutes, { prefix: "/api/languages" });
 await fastify.register(vocabRoutes, { prefix: "/api/vocab" });
 await fastify.register(quizRoutes, { prefix: "/api/quiz" });
 await fastify.register(progressRoutes, { prefix: "/api/progress" });
-await fastify.register(flaggedRoutes, { prefix: "/api/flagged" });
 await fastify.register(grammarRoutes, { prefix: "/api/grammar" });
 await fastify.register(grammarQuizRoutes, { prefix: "/api/grammar-quiz" });
 await fastify.register(combinedQuizRoutes, { prefix: "/api/combined-quiz" });

@@ -1,19 +1,16 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
 import { getGroups } from "../api/vocab";
-import { getFlaggedWordIds } from "../api/flagged";
 import { categoryGroups, type WordGroup } from "../types";
 import { isWeightValid, parseWeightInput, scaleWeightRecord } from "../utils/weightInput";
 
 export interface QuizFilters {
   topics: string[];
-  categories: string[];
   levels: string[];
   groupIds: string[];
   groupWeights: Record<string, number>;
   /** Weight for the "already-correct" (mastered) bucket; undefined = feature off. */
   correctWeight?: number;
-  flaggedOnly: boolean;
 }
 
 interface Props {
@@ -21,12 +18,9 @@ interface Props {
   onStart: (filters: QuizFilters) => void;
   onClose: () => void;
   startLabel?: string;
-  groupCountMode?: "all" | "flagged";
-  flaggedWordIds?: Set<string> | null;
   onPrint?: (filters: QuizFilters, count: number | null) => void;
-  // When true, the modal shows a "flagged only" toggle that scopes the quiz pool to
-  // flagged words (AND-combined with the other filters). Used by the standard quiz.
-  showFlaggedScope?: boolean;
+  // Show group weights and the already-correct bucket for graded quizzes.
+  showWeights?: boolean;
 }
 
 export default function QuizFilterModal({
@@ -34,10 +28,8 @@ export default function QuizFilterModal({
   onStart,
   onClose,
   startLabel,
-  groupCountMode = "all",
-  flaggedWordIds,
   onPrint,
-  showFlaggedScope = false,
+  showWeights = false,
 }: Props) {
   const { t } = useI18n();
   const [allGroups, setAllGroups] = useState<WordGroup[]>([]);
@@ -46,8 +38,6 @@ export default function QuizFilterModal({
   // Blank = feature off (mastered words stay mixed in as usual). A number activates the
   // "already-correct" bucket: 0 excludes mastered words, higher reviews them more.
   const [correctWeightDraft, setCorrectWeightDraft] = useState<string>("");
-  const [flaggedScope, setFlaggedScope] = useState<boolean>(false);
-  const [internalFlaggedIds, setInternalFlaggedIds] = useState<Set<string> | null>(null);
   const [loading, setLoading] = useState(true);
   const [printCount, setPrintCount] = useState<number>(30);
   const [printAllMode, setPrintAllMode] = useState<boolean>(false);
@@ -65,15 +55,6 @@ export default function QuizFilterModal({
       .finally(() => setLoading(false));
   }, [language]);
 
-  // For the standard quiz, fetch flagged word IDs so the "flagged only" toggle can scope
-  // the pool and show flagged-only group counts.
-  useEffect(() => {
-    if (!showFlaggedScope) return;
-    getFlaggedWordIds(language)
-      .then(({ wordIds }) => setInternalFlaggedIds(new Set(wordIds)))
-      .catch(() => setInternalFlaggedIds(new Set()));
-  }, [showFlaggedScope, language]);
-
   function toggle(set: Set<string>, setFn: (s: Set<string>) => void, value: string) {
     const next = new Set(set);
     if (next.has(value)) next.delete(value);
@@ -87,25 +68,18 @@ export default function QuizFilterModal({
 
   const hasSelection = selectedGroupIds.size > 0;
 
-  // When the standard quiz's flagged toggle is on, use the locally-fetched flagged IDs;
-  // otherwise honor the prop-driven mode (used by Flagged Review).
-  const effectiveCountMode = showFlaggedScope ? (flaggedScope ? "flagged" : "all") : groupCountMode;
-  const effectiveFlaggedIds = showFlaggedScope ? internalFlaggedIds : (flaggedWordIds ?? null);
-
   function groupWordCount(group: WordGroup): string | number {
-    if (effectiveCountMode === "flagged") {
-      return effectiveFlaggedIds ? group.wordIds.filter((id) => effectiveFlaggedIds.has(id)).length : "...";
-    }
+
     return group.wordIds.length;
   }
 
-  // Weight inputs only apply to the graded quiz (not Flagged Review); a blank
+  // For graded quizzes, a blank
   // or invalid weight on a selected group blocks quiz generation entirely
   // rather than silently falling back to a default. Decimals are allowed (min 0).
-  const correctWeightActive = showFlaggedScope && correctWeightDraft.trim() !== "";
+  const correctWeightActive = showWeights && correctWeightDraft.trim() !== "";
   const correctWeightInvalid = correctWeightActive && !isWeightValid(correctWeightDraft, 0);
   const hasInvalidGroupWeight =
-    (showFlaggedScope && [...selectedGroupIds].some((id) => !isWeightValid(groupWeights[id], 0))) ||
+    (showWeights && [...selectedGroupIds].some((id) => !isWeightValid(groupWeights[id], 0))) ||
     correctWeightInvalid;
 
   function buildFilters(): QuizFilters {
@@ -117,12 +91,10 @@ export default function QuizFilterModal({
     const scaled = scaleWeightRecord(raws);
     return {
       topics: [],
-      categories: [],
       levels: [],
       groupIds: [...selectedGroupIds],
       groupWeights: Object.fromEntries([...selectedGroupIds].map((id) => [id, scaled[`g:${id}`] ?? 1])),
       ...(correctWeightActive ? { correctWeight: scaled.__correct__ } : {}),
-      flaggedOnly: showFlaggedScope ? flaggedScope : false,
     };
   }
 
@@ -140,7 +112,7 @@ export default function QuizFilterModal({
             {t("selectFilters")}
           </h2>
           <div className="flex items-center gap-2">
-            {showFlaggedScope && (
+            {showWeights && (
               <label
                 className="flex items-center gap-1.5 text-xs text-gray-300"
                 title={t("alreadyCorrectHint")}
@@ -158,20 +130,6 @@ export default function QuizFilterModal({
                   }`}
                 />
               </label>
-            )}
-            {showFlaggedScope && (
-              <button
-                type="button"
-                onClick={() => setFlaggedScope((v) => !v)}
-                aria-pressed={flaggedScope}
-                className={`rounded-md border px-2.5 py-1 text-xs font-medium ${
-                  flaggedScope
-                    ? "border-amber-500 bg-amber-600 text-white"
-                    : "border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600"
-                }`}
-              >
-                ⚑ {t("limitToFlagged")}
-              </button>
             )}
           </div>
         </div>
@@ -208,7 +166,7 @@ export default function QuizFilterModal({
                   </summary>
                   <ul className="space-y-1 md:flex-1 md:overflow-y-auto">
                     {allGroups.map((group) => {
-                      const weightInvalid = showFlaggedScope && selectedGroupIds.has(group.id) && !isWeightValid(groupWeights[group.id], 0);
+                      const weightInvalid = showWeights && selectedGroupIds.has(group.id) && !isWeightValid(groupWeights[group.id], 0);
                       return (
                         <li key={group.id}>
                           <label className="flex items-center gap-2 rounded px-2 py-1 text-sm text-gray-300 hover:bg-gray-700 cursor-pointer">
@@ -219,8 +177,8 @@ export default function QuizFilterModal({
                               className="accent-blue-600"
                             />
                             <span className="flex-1 min-w-0 truncate">{group.name}</span>
-                            {/* Per-group weight applies only to the graded quiz (not Flagged Review). */}
-                            {showFlaggedScope && selectedGroupIds.has(group.id) && (
+                            {/* Per-group weight applies to graded quizzes. */}
+                            {showWeights && selectedGroupIds.has(group.id) && (
                               <input
                                 type="number"
                                 min={0}

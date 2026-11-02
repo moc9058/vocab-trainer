@@ -19,12 +19,10 @@ export function startQuiz(opts: {
   language: string;
   questionCount?: number;
   topics?: string[];
-  categories?: string[];
   levels?: string[];
   groupIds?: string[];
   groupWeights?: Record<string, number>;
   correctWeight?: number;
-  flaggedOnly?: boolean;
   questionType?: string;
 }): Promise<QuizSession> {
   return postJson<QuizSession>("/api/quiz/start", opts);
@@ -47,10 +45,8 @@ export function sampleWords(opts: {
   language: string;
   questionCount?: number;
   topics?: string[];
-  categories?: string[];
   levels?: string[];
   groupIds?: string[];
-  flaggedOnly?: boolean;
 }): Promise<{ words: Word[] }> {
   return postJson<{ words: Word[] }>("/api/quiz/sample", opts);
 }
@@ -72,7 +68,6 @@ export function answerQuestion(opts: {
   sessionId: string;
   wordId: string;
   correct: boolean;
-  flagWordIds?: string[];
 }): Promise<{ session: QuizSession }> {
   return postJson<{ session: QuizSession }>("/api/quiz/answer", opts);
 }

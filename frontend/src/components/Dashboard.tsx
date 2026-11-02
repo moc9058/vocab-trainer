@@ -1,6 +1,6 @@
 import { useCaptureNavigationBlocker } from '../hooks/useCaptureNavigation';
 import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate, useLocation, Navigate } from "react-router-dom";
 import { useI18n } from "../i18n/context";
 import { uiLanguages } from "../i18n/translations";
 import { useSettings } from "../settings/context";
@@ -15,7 +15,6 @@ import {
 import EmptyState from "./EmptyState";
 import QuizTaking from "./QuizTaking";
 import BrowseView from "./BrowseView";
-import FlaggedReview from "./FlaggedReview";
 import GrammarQuizTaking from "./GrammarQuizTaking";
 import CombinedQuizTaking from "./CombinedQuizTaking";
 import QuizRecoveryState from "./QuizRecoveryState";
@@ -197,7 +196,6 @@ export default function Dashboard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subPath, language, recoveryAttempt, quizOutbox.pending]);
 
-
   // Check for translation history scoped to the current language
   useEffect(() => {
     if (!isoCode) return;
@@ -262,12 +260,10 @@ export default function Dashboard() {
       const session = await startQuiz({
         language,
         topics: filters.topics,
-        categories: filters.categories,
         levels: filters.levels,
         groupIds: filters.groupIds,
         groupWeights: filters.groupWeights,
         correctWeight: filters.correctWeight,
-        flaggedOnly: filters.flaggedOnly,
       });
       setStudyQuizTab(null);
       setActiveQuiz(session);
@@ -301,12 +297,10 @@ export default function Dashboard() {
       const session = await startQuiz({
         language,
         topics: filters.topics,
-        categories: filters.categories,
         levels: filters.levels,
         groupIds: filters.groupIds,
         groupWeights: filters.groupWeights,
         correctWeight: filters.correctWeight,
-        flaggedOnly: filters.flaggedOnly,
       });
       setActiveQuiz(session);
       navigate(`/${language}/quiz`);
@@ -370,11 +364,6 @@ export default function Dashboard() {
   async function handleStartQuiz() {
     if (!language) return;
     setStudyQuizTab("word");
-  }
-
-  function handleFlaggedReview() {
-    if (!language) return;
-    navigate(`/${language}/flagged`);
   }
 
   function handleBrowse() {
@@ -731,7 +720,6 @@ export default function Dashboard() {
         <CombinedQuizFilterModal
           language={language}
           groupCategory="AB"
-          showFlaggedToggle={false}
           onStart={handleMixedFiltersSelected}
           onClose={() => setShowMixedSetup(false)}
         />
@@ -909,10 +897,7 @@ export default function Dashboard() {
             onArticleQuiz={handleArticleQuiz}
           />
         ) : subPath === "/flagged" ? (
-          <FlaggedReview
-            language={language ?? ""}
-            onBack={() => navigate(`/${language}`)}
-          />
+          <Navigate to={`/${language}/browse`} replace />
         ) : subPath === "/grammar-quiz" ? (
           activeGrammarQuiz ? (
             <GrammarQuizTaking
@@ -974,7 +959,7 @@ export default function Dashboard() {
         ) : subPath === "/print-worksheet" ? (
           (() => {
             const st = (location.state as {
-              filters?: { topics: string[]; categories: string[]; levels: string[]; groupIds: string[] };
+              filters?: { topics: string[];  levels: string[]; groupIds: string[] };
               count?: number | null;
               sampleLanguage?: string;
             } | null);
@@ -1024,7 +1009,6 @@ export default function Dashboard() {
             onMixedQuiz={handleStartMixedQuiz}
             onStartNew={handleStartQuiz}
             onBrowse={handleBrowse}
-            onFlaggedReview={handleFlaggedReview}
             onGrammarQuiz={handleStartGrammarQuiz}
             onBrowseGrammar={handleBrowseGrammar}
             onImport={() => navigate(`/${language}/import`)}

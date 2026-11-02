@@ -423,7 +423,6 @@ export function validateWord(w: unknown): w is Omit<Word, "id" | "level"> {
   if (typeof obj.transliteration !== "string") return false;
   if (!Array.isArray(obj.definitions) || obj.definitions.length === 0) return false;
   for (const m of obj.definitions as Record<string, unknown>[]) {
-    if (typeof m.partOfSpeech !== "string") return false;
     if (!m.text || typeof m.text !== "object") return false;
     const txt = m.text as Record<string, string>;
     if (Object.keys(txt).length === 0) return false;

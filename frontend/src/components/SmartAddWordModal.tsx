@@ -19,11 +19,10 @@ interface Prefill {
 type SmartAddPayload = {
   term: string;
   transliteration?: string;
-  definitions?: { partOfSpeech: string; text: Record<string, string> }[];
+  definitions?: { text: Record<string, string> }[];
   topics?: string[];
   examples?: { sentence: string; translation: string; userSplits?: string[] }[];
   level?: string;
-  flag?: boolean;
   groupIds?: string[];
 };
 
@@ -86,13 +85,6 @@ function spaceSentenceBySplits(sentence: string, splits?: string[]): string {
   return out.trimEnd();
 }
 
-const CATEGORIES = [
-  "noun", "verb", "adjective", "adverb", "preposition", "conjunction",
-  "particle", "numeral", "classifier", "determiner", "pronoun",
-  "interjection", "idiom", "set phrase", "phrasal verb", "collocation",
-  "proverb", "greeting",
-] as const;
-
 const ALL_TOPICS = [
   "Greetings & Introductions", "Food & Dining", "Shopping & Money",
   "Travel & Transportation", "Weather & Seasons", "Family & Relationships",
@@ -127,7 +119,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     const langSelect = settings.languageOrder[0] ?? "en";
     return [{ langSelect, text: "" }];
   });
-  const [grammaticalCategory, setGrammaticalCategory] = useState(initialItem?.definitions?.[0]?.partOfSpeech ?? "");
   const [level, setLevel] = useState(initialItem?.level ?? "");
   const [topics, setTopics] = useState<string[]>(initialItem?.topics ?? []);
   const [groups, setGroups] = useState<WordGroup[]>([]);
@@ -145,7 +136,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           }))
         : [{ sentence: "", translation: "" }],
   );
-  const [flagForReview, setFlagForReview] = useState(true);
   const [checking, setChecking] = useState(false);
   const [existingWord, setExistingWord] = useState<{ id: string; level: string; transliteration: string } | null>(null);
   const [saving, setSaving] = useState(false);
@@ -160,7 +150,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
   const [existingTerms, setExistingTerms] = useState<Map<string, string>>(new Map());
   const [checkingTerms, setCheckingTerms] = useState(false);
   const [busySegments, setBusySegments] = useState<Set<string>>(new Set());
-  const [segmentFlags, setSegmentFlags] = useState<Map<string, boolean>>(new Map());
   // Terms a *direct-mode* `smartAddWord` (no queue) added this session. Queue-mode
   // adds are tracked authoritatively by the parent's `succeededTerms`.
   const [addedTerms, setAddedTerms] = useState<Set<string>>(new Set());
@@ -267,7 +256,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
       onQueue(chipText, wordLanguage, {
         term: chipText,
         examples: [{ sentence: sentence.replace(/[\s　]+/g, ""), translation }],
-        flag: segmentFlags.get(chipText) ?? true,
         groupIds,
       });
       return;
@@ -277,7 +265,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
       const { generatedWords: _gw, ...addedWord } = await smartAddWord(wordLanguage, {
         term: chipText,
         examples: [{ sentence: sentence.replace(/[\s　]+/g, ""), translation }],
-        flag: segmentFlags.get(chipText) ?? true,
         groupIds,
       });
       if (groupIds && groupIds.length > 0) {
@@ -343,8 +330,8 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
       const key = getDefLangKey(d);
       if (key && d.text.trim()) defObj[key] = d.text.trim();
     }
-    const defs = Object.keys(defObj).length > 0 || grammaticalCategory
-      ? [{ partOfSpeech: grammaticalCategory || "", text: defObj }]
+    const defs = Object.keys(defObj).length > 0
+      ? [{ text: defObj }]
       : undefined;
     const validExamples = examples
       .filter((ex) => ex.sentence.trim())
@@ -366,7 +353,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
       topics: topics.length > 0 ? topics : undefined,
       examples: validExamples.length > 0 ? validExamples : undefined,
       level: level || undefined,
-      flag: flagForReview,
       groupIds: getSelectedGroupIdsPayload(),
     };
   }
@@ -376,7 +362,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
     setTransliteration("");
     const langSelect = settings.languageOrder[0] ?? "en";
     setDefinitions([{ langSelect, text: "" }]);
-    setGrammaticalCategory("");
     setLevel("");
     setTopics([]);
     const defaultGroup = defaultWordGroup(groups);
@@ -700,24 +685,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
             ))}
           </div>
 
-          {/* Grammatical Category (optional) */}
-          <div className="order-2">
-            <label className="mb-1 block text-sm text-gray-400">{t("category")}</label>
-            <select
-              value={grammaticalCategory}
-              onChange={(e) => setGrammaticalCategory(e.target.value)}
-              className="w-full rounded-lg border border-gray-600 bg-gray-700 px-3 py-2 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-            >
-              <option value="">-- LLM will generate --</option>
-              {grammaticalCategory && !(CATEGORIES as readonly string[]).includes(grammaticalCategory) && (
-                <option value={grammaticalCategory}>{grammaticalCategory}</option>
-              )}
-              {CATEGORIES.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-          </div>
-
           {/* Level (optional, non-English languages with defined levels) */}
           {LEVEL_OPTIONS[wordLanguage] && (
             <div className="order-2">
@@ -837,28 +804,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
                               >
                                 {isPunct || isSelf ? chip.text : exists ? `✓ ${chip.text}` : inFlight ? `⋯ ${chip.text}` : `+ ${chip.text}`}
                               </button>
-                              {anyDeactivated && (
-                                <div className="mt-0.5 h-3.5 flex justify-center items-center">
-                                  {!isPunct && !isSelf && !exists && !inFlight && (
-                                    <label
-                                      className="flex items-center cursor-pointer"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={segmentFlags.get(chip.text) ?? true}
-                                        onChange={() => setSegmentFlags((prev) => {
-                                          const next = new Map(prev);
-                                          next.set(chip.text, !(prev.get(chip.text) ?? true));
-                                          return next;
-                                        })}
-                                        className="accent-amber-500 w-3 h-3"
-                                        aria-label={`Flag ${chip.text} for review`}
-                                      />
-                                    </label>
-                                  )}
-                                </div>
-                              )}
                             </div>
                             {pi < chips.length - 1 && (
                               chips[pi + 1].sepIsSpaceOnly ? (
@@ -917,17 +862,6 @@ export default function SmartAddWordModal({ onSave, onClose, prefill, defaultLan
           {segmentAddError && (
             <p className="order-2 text-xs text-red-400">{segmentAddError}</p>
           )}
-
-          {/* Flag for review */}
-          <label className="order-2 flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={flagForReview}
-              onChange={(e) => setFlagForReview(e.target.checked)}
-              className="accent-amber-500"
-            />
-            <span className="text-sm text-gray-300">{t("flagForReview")}</span>
-          </label>
 
           {/* Actions */}
           <div className="order-2 flex justify-end gap-3 pt-2">

@@ -46,11 +46,9 @@ export function startCombinedQuiz(
     randomOrder?: boolean;
     word?: {
       topics?: string[];
-      categories?: string[];
       levels?: string[];
       groupIds?: string[];
       groupWeights?: Record<string, number>;
-      flaggedOnly?: boolean;
       /** Explicit pool, bypassing every other word filter. */
       wordIds?: string[];
     };
@@ -99,7 +97,6 @@ export function answerCombinedQuestion(
     kind: "word" | "grammar";
     refId: string;
     correct: boolean;
-    flagWordIds?: string[];
     removeFromGroupB?: boolean;
     startedAt?: string;
     operationId?: string;

@@ -1,3 +1,4 @@
+import { normalizeWordDefinitions } from "../word-format.js";
 import { registerQuizReviewRoutes, assertLegacyReviewAllowed } from "../quiz-review.js";
 import { finishQuizSitting } from "../quiz-sitting.js";
 import type { FastifyPluginAsync } from "fastify";
@@ -14,7 +15,6 @@ import {
   addWord,
   getNextWordId,
   getNextExampleId,
-  flagWord,
   addExampleSentence,
   findExampleByText,
   linkWordToExistingExamples,
@@ -369,7 +369,7 @@ Return a JSON object with a "words" array:
 [{
   "term": "the word (keep as provided)",
   "transliteration": "keep as provided",
-  "definitions": [{ "partOfSpeech": "noun|verb|adjective|adverb|preposition|conjunction|particle|measure word|pronoun|interjection|idiom|set phrase|phrasal verb|collocation|proverb|greeting", "text": { "ja": "...", "en": "...", "ko": "..." } }],
+  "definitions": [{ "text": { "ja": "...", "en": "...", "ko": "..." } }],
   "topics": ["..."],
   "notes": "brief usage notes or empty string"
 }]
@@ -420,7 +420,7 @@ Allowed topics: ${TOPICS.join(", ")}`;
           id,
           term,
           transliteration: (entry.transliteration as string) || info.pinyin || "",
-          definitions: (entry.definitions as Meaning[]) || [{ partOfSpeech: "", text: { en: "" } }],
+          definitions: normalizeWordDefinitions(entry),
           examples: [{ sentence: info.sentence, translation: info.translation }],
           topics: (topics.length > 0 ? topics : ["Language Fundamentals"]) as Word["topics"],
           level: "Advanced",
@@ -431,7 +431,6 @@ Allowed topics: ${TOPICS.join(", ")}`;
         await addWord(language, newWord, { exampleIds });
         // Reverse-link: find existing examples where this word's term is a segment
         await linkWordToExistingExamples(language, id, term);
-        await flagWord(language, newWord.id);
         addedTerms.add(term);
         added.push(newWord);
       }

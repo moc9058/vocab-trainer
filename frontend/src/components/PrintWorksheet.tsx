@@ -4,28 +4,27 @@ import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP } from "../settings/defaults";
 import { sampleWords } from "../api/quiz";
-import type { Word, Meaning } from "../types";
+import type { Word, WordMeaning } from "../types";
 
 interface Props {
   language: string;
-  filters: { topics: string[]; categories: string[]; levels: string[]; groupIds: string[]; flaggedOnly?: boolean };
+  filters: { topics: string[];  levels: string[]; groupIds: string[]; };
   count: number | null;
   onBack: () => void;
 }
 
-function pickDefinitionText(meaning: Meaning, lang: string): string {
+function pickDefinitionText(meaning: WordMeaning, lang: string): string {
   const text = meaning.text ?? {};
   if (text[lang]) return text[lang];
   const firstKey = Object.keys(text)[0];
   return firstKey ? text[firstKey] : "";
 }
 
-function formatMeaning(meaning: Meaning, lang: string): string {
-  const pos = meaning.partOfSpeech ? `(${meaning.partOfSpeech}) ` : "";
-  return `${pos}${pickDefinitionText(meaning, lang)}`.trim();
+function formatMeaning(meaning: WordMeaning, lang: string): string {
+  return pickDefinitionText(meaning, lang).trim();
 }
 
-function pinyinFor(word: Word, meaning: Meaning, isFirst: boolean): string | undefined {
+function pinyinFor(word: Word, meaning: WordMeaning, isFirst: boolean): string | undefined {
   if (meaning.pinyins && meaning.pinyins.length > 0) return meaning.pinyins.join(" / ");
   if (isFirst) return word.transliteration;
   return undefined;
@@ -45,10 +44,8 @@ export default function PrintWorksheet({ language, filters, count, onBack }: Pro
       language,
       ...(count == null ? {} : { questionCount: count }),
       topics: filters.topics,
-      categories: filters.categories,
       levels: filters.levels,
       groupIds: filters.groupIds,
-      ...(filters.flaggedOnly ? { flaggedOnly: true } : {}),
     })
       .then((res) => {
         if (cancelled) return;
@@ -74,7 +71,6 @@ export default function PrintWorksheet({ language, filters, count, onBack }: Pro
   const filterSummary = [
     filters.levels.length ? `${filters.levels.join(", ")}` : null,
     filters.topics.length ? filters.topics.join(", ") : null,
-    filters.categories.length ? filters.categories.join(", ") : null,
   ]
     .filter(Boolean)
     .join(" · ");

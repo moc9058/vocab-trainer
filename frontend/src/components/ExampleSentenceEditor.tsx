@@ -14,7 +14,6 @@ export interface ExampleFormState {
 export type ExampleSegmentQueuePayload = {
   term: string;
   examples: { sentence: string; translation: string }[];
-  flag: boolean;
   groupIds?: string[];
 };
 
@@ -68,7 +67,6 @@ export default function ExampleSentenceEditor({
   // Terms a *direct-mode* `smartAddWord` (no queue) has added this session.
   // Queue-mode adds are tracked authoritatively by the parent's `succeededTerms`.
   const [addedTerms, setAddedTerms] = useState<Set<string>>(new Set());
-  const [segmentFlags, setSegmentFlags] = useState<Map<string, boolean>>(new Map());
   const [segmentAddError, setSegmentAddError] = useState<string | null>(null);
 
   // Vocab word-groups in the server's PRIORITY order. Used to populate the
@@ -182,7 +180,6 @@ export default function ExampleSentenceEditor({
       onQueue(chipText, language, {
         term: chipText,
         examples: [{ sentence: sentence.replace(/[\s　]+/g, ""), translation }],
-        flag: segmentFlags.get(chipText) ?? true,
         groupIds: groupIds.length > 0 ? groupIds : undefined,
       });
       return;
@@ -192,7 +189,6 @@ export default function ExampleSentenceEditor({
       const { generatedWords: _gw, ...addedWord } = await smartAddWord(language, {
         term: chipText,
         examples: [{ sentence: sentence.replace(/[\s　]+/g, ""), translation }],
-        flag: segmentFlags.get(chipText) ?? true,
         groupIds: groupIds.length > 0 ? groupIds : undefined,
       });
       if (groupIds.length > 0) {
@@ -363,28 +359,6 @@ export default function ExampleSentenceEditor({
                         >
                           {isPunct || isSelf ? chip.text : exists ? `✓ ${chip.text}` : inFlight ? `⋯ ${chip.text}` : `+ ${chip.text}`}
                         </button>
-                        {anyDeactivated && (
-                          <div className="mt-0.5 h-3.5 flex justify-center items-center">
-                            {!isPunct && !isSelf && !exists && !inFlight && (
-                              <label
-                                className="flex items-center cursor-pointer"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={segmentFlags.get(chip.text) ?? true}
-                                  onChange={() => setSegmentFlags((prev) => {
-                                    const next = new Map(prev);
-                                    next.set(chip.text, !(prev.get(chip.text) ?? true));
-                                    return next;
-                                  })}
-                                  className="accent-amber-500 w-3 h-3"
-                                  aria-label={`Flag ${chip.text} for review`}
-                                />
-                              </label>
-                            )}
-                          </div>
-                        )}
                         {anyDeactivated && wordGroups.length > 0 && (
                           <div className="mt-0.5 flex justify-center">
                             {!isPunct && !isSelf && !exists && !inFlight ? (

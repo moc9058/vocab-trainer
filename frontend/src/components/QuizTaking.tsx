@@ -6,7 +6,6 @@ import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
 import { LANG_LABEL_MAP } from "../settings/defaults";
 import { updateQuizWeights } from "../api/quiz";
-import { getFlaggedWordIds, flagWord, unflagWord } from "../api/flagged";
 import { getGroups } from "../api/vocab";
 import RubyText from "./RubyText";
 import QuizLoadState from "./QuizLoadState";
@@ -62,8 +61,6 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
   // Grading is synchronous now, so the old in-flight lock is gone. This only stops a
   // double-tap (or a repeated keypress) from grading the same card twice.
   const gradedIndexRef = useRef(-1);
-  const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
-  const [alreadyFlaggedIds, setAlreadyFlaggedIds] = useState<Set<string>>(new Set());
   const [originalTotal] = useState(() => session.wordIds?.length ?? session.questions.length);
   const [groupNameMap, setGroupNameMap] = useState<Map<string, string>>(new Map());
   const [weightsOpen, setWeightsOpen] = useState(false);
@@ -94,12 +91,6 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     session.questions.map((q) => q.wordId)
   );
   const prefetch = useQuizPrefetch(currentSession.language, prefetchWordIds, EMPTY_IDS);
-
-  useEffect(() => {
-    getFlaggedWordIds(session.language)
-      .then(({ wordIds }) => setAlreadyFlaggedIds(new Set(wordIds)))
-      .catch(() => setAlreadyFlaggedIds(new Set()));
-  }, [session.language]);
 
   useEffect(() => {
     if (!session.groupMembership || Object.keys(session.groupMembership).length === 0) return;
@@ -180,7 +171,6 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
       setCurrentIndex(firstUnanswered === -1 ? updated.questions.length : firstUnanswered);
       setShowingAnswer(false);
       resetExpandedAnswers();
-      setFlaggedIds(new Set());
       setWeightsOpen(false);
     } catch {
       // Keep the panel open so the user can retry.
@@ -193,31 +183,6 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     if (!question) return;
     resetExpandedAnswers();
     setShowingAnswer(true);
-    setFlaggedIds(new Set([question.wordId]));
-  }
-
-  const segmentWords = useMemo(() => {
-    if (!question?.examples) return [];
-    const seen = new Set<string>();
-    const result: { id: string; text: string; transliteration?: string }[] = [];
-    for (const ex of question.examples) {
-      for (const seg of ex.segments ?? []) {
-        if (seg.id && seg.id !== question.wordId && !alreadyFlaggedIds.has(seg.id) && !seen.has(seg.id)) {
-          seen.add(seg.id);
-          result.push({ id: seg.id, text: seg.text, transliteration: seg.transliteration });
-        }
-      }
-    }
-    return result;
-  }, [alreadyFlaggedIds, question]);
-
-  function toggleFlag(id: string) {
-    setFlaggedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   }
 
   /**
@@ -231,25 +196,18 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
     // Do not let an answer race the full-session response from a weights update.
     if (!question || applyingWeights || gradedIndexRef.current === currentIndex) return;
     gradedIndexRef.current = currentIndex;
-    const submittedFlagIds = Array.from(flaggedIds);
 
     outbox.enqueue({
       domain: "word",
       sessionId: currentSession.sessionId,
       wordId: question.wordId,
       correct,
-      ...(submittedFlagIds.length > 0 ? { flagWordIds: submittedFlagIds } : {}),
     });
-
-    if (submittedFlagIds.length > 0) {
-      setAlreadyFlaggedIds((prev) => new Set([...prev, ...submittedFlagIds]));
-    }
 
     setCurrentSession((prev) => applyWordAnswerLocally(prev, question.wordId, correct));
     setCurrentIndex((i) => i + 1);
     setShowingAnswer(false);
     resetExpandedAnswers();
-    setFlaggedIds(new Set());
   }
 
   function endSession() {
@@ -301,23 +259,12 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
       } else if (event.key === "2") {
         event.preventDefault();
         handleGrade(true);
-      } else if (event.key === "3" && question) {
-        event.preventDefault();
-        if (alreadyFlaggedIds.has(question.wordId)) {
-          unflagWord(currentSession.language, question.wordId).catch(() => {});
-          setAlreadyFlaggedIds((prev) => { const next = new Set(prev); next.delete(question.wordId); return next; });
-          setFlaggedIds((prev) => { const next = new Set(prev); next.delete(question.wordId); return next; });
-        } else {
-          flagWord(currentSession.language, question.wordId).catch(() => {});
-          setAlreadyFlaggedIds((prev) => new Set([...prev, question.wordId]));
-          setFlaggedIds((prev) => new Set([...prev, question.wordId]));
-        }
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, sessionReviewIndex, review.pending, review.error]);
+  }, [question, showingAnswer, handleGrade, currentSession.language, sessionReviewActive, sessionReviewIndex, review.pending, review.error]);
 
   // On mobile the whole page scrolls (see min-h-full container note below), so
   // reset scroll to the top when a new question appears — otherwise the user
@@ -417,7 +364,6 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
         <div className="text-center space-y-2">
           {reviewDefinitions.map((m, mi) => (
             <div key={mi}>
-              {m.partOfSpeech && <p className="text-xs text-gray-500 italic">{m.partOfSpeech}</p>}
               {(() => {
                 const py = m.pinyins && m.pinyins.length > 0
                   ? m.pinyins.join(" / ")
@@ -692,7 +638,6 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
           <div className="text-center space-y-2">
             {visibleDefinitions.map((m, mi) => (
               <div key={mi}>
-                {m.partOfSpeech && <p className="text-xs text-gray-500 italic">{m.partOfSpeech}</p>}
                 {(() => {
                   const py = m.pinyins && m.pinyins.length > 0
                     ? m.pinyins.join(" / ")
@@ -741,37 +686,6 @@ export default function QuizTaking({ session, onComplete, onBrowse, onStartNew }
               )}
             </div>
           )}
-
-          <div className="w-full max-w-lg space-y-1">
-            <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={flaggedIds.has(question!.wordId)}
-                onChange={() => toggleFlag(question!.wordId)}
-                className="accent-amber-500 w-4 h-4"
-              />
-              {t("flagForReview")}
-            </label>
-            {segmentWords.length > 0 && (
-              <>
-                <p className="text-xs text-gray-500 mt-2">{t("flagSegmentWords")}</p>
-                {segmentWords.map((seg) => (
-                  <label key={seg.id} className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none pl-4">
-                    <input
-                      type="checkbox"
-                      checked={flaggedIds.has(seg.id)}
-                      onChange={() => toggleFlag(seg.id)}
-                      className="accent-amber-500 w-4 h-4"
-                    />
-                    <span className="text-gray-300">{seg.text}</span>
-                    {seg.transliteration && (
-                      <span className="text-gray-500">({seg.transliteration})</span>
-                    )}
-                  </label>
-                ))}
-              </>
-            )}
-          </div>
 
           <div className="sticky bottom-0 z-10 flex w-full flex-col gap-3 bg-gray-900/95 py-2 sm:static sm:w-auto sm:flex-row sm:gap-4 sm:bg-transparent sm:py-0">
             <button

@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useI18n } from "../i18n/context";
 import { getGroups } from "../api/vocab";
 import { getGrammarGroups } from "../api/grammar";
-import { getFlaggedWordIds } from "../api/flagged";
 import {
   categoryGroups,
   type WordGroup,
@@ -29,11 +28,9 @@ export interface CombinedQuizFilters {
   correctWeight?: number;
   word: {
     topics: string[];
-    categories: string[];
     levels: string[];
     groupIds: string[];
     groupWeights: Record<string, number>;
-    flaggedOnly: boolean;
   };
   grammar: {
     groupIds: string[];
@@ -47,8 +44,6 @@ interface Props {
   onClose: () => void;
   /** Which meta-group bucket(s) to draw the pool from. Default "A" (the normal combined quiz). */
   groupCategory?: QuizGroupScope;
-  /** The Group B quiz has no flag concept — hide the toggle and force `flaggedOnly: false`. */
-  showFlaggedToggle?: boolean;
 }
 
 // Domain weight input: how often this domain (word/grammar) is drawn relative to the other.
@@ -252,7 +247,6 @@ export default function CombinedQuizFilterModal({
   onStart,
   onClose,
   groupCategory = "A",
-  showFlaggedToggle = true,
 }: Props) {
   const { t } = useI18n();
   const [wordWeight, setWordWeight] = useState("1");
@@ -266,8 +260,6 @@ export default function CombinedQuizFilterModal({
   const [wordGroupWeights, setWordGroupWeights] = useState<Record<string, string>>({});
   const [selectedGrammarGroupIds, setSelectedGrammarGroupIds] = useState<Set<string>>(new Set());
   const [grammarGroupWeights, setGrammarGroupWeights] = useState<Record<string, string>>({});
-  const [flaggedScope, setFlaggedScope] = useState(false);
-  const [flaggedIds, setFlaggedIds] = useState<Set<string> | null>(null);
   const [loading, setLoading] = useState(true);
   // Mixed quiz only: how often the two meta-groups are drawn relative to each other.
   // 1:1 already leans hard on B, since B is a small subset of A and empties first.
@@ -307,12 +299,6 @@ export default function CombinedQuizFilterModal({
       .finally(() => setLoading(false));
   }, [language, groupCategory]);
 
-  useEffect(() => {
-    getFlaggedWordIds(language)
-      .then(({ wordIds }) => setFlaggedIds(new Set(wordIds)))
-      .catch(() => setFlaggedIds(new Set()));
-  }, [language]);
-
   function toggle(set: Set<string>, setFn: (s: Set<string>) => void, value: string) {
     const next = new Set(set);
     if (next.has(value)) next.delete(value);
@@ -333,9 +319,6 @@ export default function CombinedQuizFilterModal({
   }
 
   function wordGroupCount(group: WordGroup): string | number {
-    if (flaggedScope) {
-      return flaggedIds ? group.wordIds.filter((id) => flaggedIds.has(id)).length : "...";
-    }
     return group.wordIds.length;
   }
 
@@ -440,7 +423,6 @@ export default function CombinedQuizFilterModal({
       ...(correctWeightActive ? { correctWeight: d.correct } : {}),
       word: {
         topics: [],
-        categories: [],
         levels: [],
         groupIds: orderedIds(allWordGroups, selectedWordGroupIds),
         groupWeights: weightsFor(
@@ -449,7 +431,6 @@ export default function CombinedQuizFilterModal({
           wordGroupWeights,
           folded?.wordGroupWeights ?? null
         ),
-        flaggedOnly: showFlaggedToggle ? flaggedScope : false,
       },
       grammar: {
         groupIds: orderedIds(allGrammarGroups, selectedGrammarGroupIds),
@@ -666,22 +647,6 @@ export default function CombinedQuizFilterModal({
                     weight={wordWeight}
                     onWeightChange={setWordWeight}
                     active={wordDomainActive}
-                    trailing={
-                      showFlaggedToggle && (
-                        <button
-                          type="button"
-                          onClick={() => setFlaggedScope((v) => !v)}
-                          aria-pressed={flaggedScope}
-                          className={`ml-auto rounded-md border px-2.5 py-1 text-xs font-medium ${
-                            flaggedScope
-                              ? "border-amber-500 bg-amber-600 text-white"
-                              : "border-gray-600 bg-gray-700 text-gray-200 hover:bg-gray-600"
-                          }`}
-                        >
-                          ⚑ {t("limitToFlagged")}
-                        </button>
-                      )
-                    }
                   >
                     <GroupChecklist
                       title={t("groups")}

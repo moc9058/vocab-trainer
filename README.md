@@ -59,6 +59,17 @@ See the [mathematics guide](docs/math-category.md) for manifests, limits, API,
 verification and retry behavior. No PDF extraction or automatic textbook publication
 runs during deployment.
 
+## Simplified word records
+
+Words in every language use `definitions: { text: Record<string, string>, pinyins?: string[] }[]`.
+Grammatical categories and review flags have been removed from word forms, lists,
+quizzes, worksheets and storage. Legacy category/flag request fields are ignored.
+Group A/B membership, grammar descriptions, linguistic sentence analysis and normal
+quiz session reviews remain available. Old `/:language/flagged` links redirect to Browse.
+
+See [word data cleanup](docs/word-data-cleanup.md) for the separate backed-up maintenance
+command used to remove existing retired fields and flag records.
+
 ## Group A and Group B
 
 Group A is the main word/grammar library, including items registered in Group B.
@@ -160,7 +171,7 @@ npm run seed:load                # snapshot -> emulator (wipes the emulator firs
 ```
 
 `seed:download` samples ~30 words / 10 grammar items / 20 expressions per language
-(evenly spread, with all referenced example sentences, progress, flags and groups).
+(evenly spread, with all referenced example sentences, progress and groups). Legacy snapshots may still contain retired flag records; current code ignores them.
 Tune it:
 
 ```bash
@@ -375,7 +386,6 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
       "transliteration": "nǐ hǎo",
       "definitions": [
         {
-          "partOfSpeech": "interjection",
           "text": {
             "ja": "こんにちは",
             "en": "hello",
@@ -420,25 +430,6 @@ Vocabulary files are stored as JSON under `backend/DB/`, with one file per langu
 - **`term`** — The vocabulary word in the target language.
 - **`transliteration`** — Optional. Romanized pronunciation, critical for non-Latin scripts (Arabic, Chinese).
 - **`definitions`** — Array of meaning objects. A word may have multiple meanings when there are clear semantic distinctions (e.g., "打" as "to hit" vs. "to play"). Each meaning contains:
-  - **`partOfSpeech`** — The grammatical category for this meaning. Possible values:
-    - `noun` — person, place, thing, or concept (e.g. book, city)
-    - `verb` — action or state (e.g. run, be)
-    - `adjective` — describes a noun (e.g. big, beautiful)
-    - `adverb` — describes a verb, adjective, or other adverb (e.g. quickly, very)
-    - `pronoun` — replaces a noun (e.g. he, they)
-    - `preposition` — shows relationship between words (e.g. in, on, at)
-    - `conjunction` — connects words or clauses (e.g. and, but)
-    - `interjection` — expresses emotion (e.g. hello, wow)
-    - `determiner` — specifies a noun (e.g. the, this, some)
-    - `particle` — grammatical function word with no direct translation (common in Chinese, Japanese, Korean)
-    - `classifier` — measure word used with nouns (common in Chinese, Japanese)
-    - `numeral` — number word (e.g. one, two, three)
-    - `onomatopoeia` — sound-imitating word (e.g. 哗哗, 咚咚, bang)
-    - `set phrase` — fixed, conventionalized expression (e.g. 不客气, "by the way")
-    - `phrasal verb` — verb + particle with non-compositional meaning (e.g. "give up", 放下)
-    - `collocation` — commonly co-occurring word combination (e.g. 不太, "take a shower")
-    - `proverb` — saying, maxim, or proverb (e.g. 三人行必有我师)
-    - `greeting` — social formula phrase (e.g. 你好, おはよう)
   - **`text`** — An object keyed by ISO 639-1 language code (`ja`, `en`, `ko`, etc.), providing the definition in multiple languages.
 - **`examples`** — Array of example sentences with translations.
   - **`sentence`** — The example sentence in the target language.
@@ -512,7 +503,6 @@ vocab-trainer/
 │   │       ├── vocab.ts         # /api/vocab
 │   │       ├── progress.ts      # /api/progress
 │   │       ├── quiz.ts          # /api/quiz
-│   │       ├── flagged.ts       # /api/flagged
 │   │       ├── grammar.ts       # /api/grammar
 │   │       ├── grammar-quiz.ts  # /api/grammar-quiz
 │   │       ├── grammar-progress.ts # /api/grammar-progress
@@ -543,7 +533,6 @@ vocab-trainer/
 │       │   ├── vocab.ts         # Vocabulary API wrappers
 │       │   ├── grammar.ts       # Grammar, grammar settings & grammar quiz API wrappers
 │       │   ├── combined-quiz.ts # Combined word+grammar quiz API wrappers
-│       │   ├── flagged.ts       # Flagged words API wrappers
 │       │   ├── translation.ts   # Translation API wrappers
 │       │   └── speaking-writing.ts # Speaking & writing correction API wrappers
 │       ├── hooks/
@@ -559,7 +548,6 @@ vocab-trainer/
 │       │   ├── QuizFilterModal.tsx
 │       │   ├── WordFormModal.tsx
 │       │   ├── SmartAddWordModal.tsx  # Smart add word with LLM; queue mode via onQueue prop
-│       │   ├── FlaggedReview.tsx      # Review flagged words
 │       │   ├── GrammarList.tsx        # Browse grammar items with groups & search
 │       │   ├── GrammarFilterModal.tsx # Grammar quiz filters
 │       │   ├── GrammarQuizTaking.tsx  # Grammar quiz flashcard UI
@@ -613,11 +601,9 @@ vocab-trainer/
 | ----------- | ------ | ------- | ---------------------------------------------- |
 | `search`    | string | —       | Matches term, transliteration, or definitions  |
 | `topic`     | string | —       | Filter by topic                                |
-| `category`  | string | —       | Filter by grammaticalCategory                  |
 | `level`     | string | —       | Filter by level                                |
 | `page`      | number | 1       | Page number (min 1)                            |
 | `limit`     | number | 50      | Items per page (max 100)                       |
-| `flaggedOnly` | string | —     | When `"true"`, return only flagged words (same as `GET /api/flagged/:language` but paginated) |
 
 **Response:** `PaginatedResult<Word>`
 ```json
@@ -636,7 +622,6 @@ vocab-trainer/
 ```json
 {
   "topics": ["Greetings & Introductions"],
-  "categories": ["interjection", "noun", "verb"],
   "levels": ["HSK1-4", "HSK5"]
 }
 ```
@@ -666,7 +651,7 @@ silently repointed that word's `word_index` entry.
 **Response:** `204 No Content`
 
 The delete cascades in one batch: the word document, its `word_index` entry, its
-`flagged_words` and `progress` documents, and its membership in **every** group that holds it
+`progress` documents, and its membership in **every** group that holds it
 (`word_groups.wordIds`). Example sentences are orphan-deleted first, and only when no other
 word *and* no grammar item still references them. `deleteGrammarItem` mirrors the group half
 for `grammar_groups.grammarIds`.
@@ -776,7 +761,7 @@ Looks up a word by its term using the word_index for fast retrieval.
 
 #### `POST /api/vocab/:language/smart-add` — Smart add word with LLM
 
-Adds a word using the LLM to fill in missing fields. The word is auto-flagged for review. For Chinese, the LLM also generates word-level pinyin segments for each example sentence (linked to existing vocab entries via `segments[].id` when the segment text matches a known word).
+Adds a word using the LLM to fill in missing fields. For Chinese, the LLM also generates word-level pinyin segments for each example sentence (linked to existing vocab entries via `segments[].id` when the segment text matches a known word).
 
 **Body:**
 ```json
@@ -784,7 +769,7 @@ Adds a word using the LLM to fill in missing fields. The word is auto-flagged fo
   "term": "努力",
   "transliteration": "",
   "definitions": [
-    { "partOfSpeech": "verb", "text": { "en": "to work hard" } }
+    { "text": { "en": "to work hard" } }
   ],
   "topics": [],
   "examples": [],
@@ -859,7 +844,6 @@ Overwrites any existing session for the given language.
   "language": "chinese",
   "questionCount": 10,
   "topics": ["Greetings & Introductions"],
-  "categories": ["noun", "verb"],
   "levels": ["HSK1-4"],
   "groupIds": ["chinese_1234abcd"],
   "questionType": "definition"
@@ -935,44 +919,6 @@ See [Quiz sessions and review](#quiz-sessions-and-review) for resume and unsent-
 
 ---
 
-### Flagged Words
-
-Flagged words are marked for review (e.g., words added via smart-add are auto-flagged).
-
-#### `GET /api/flagged/:language` — List flagged words
-
-Returns all flagged words with full word data.
-
-**Response:**
-```json
-{
-  "words": [ /* Word objects */ ],
-  "count": 5
-}
-```
-
-#### `GET /api/flagged/:language/count` — Get flagged word count
-
-**Response:**
-```json
-{
-  "count": 5
-}
-```
-
-#### `POST /api/flagged/:language/:wordId` — Flag a word
-
-Marks a word for review.
-
-**Response:** `201`
-
-#### `DELETE /api/flagged/:language/:wordId` — Unflag a word
-
-Removes the flagged status from a word.
-
-**Response:** `204 No Content`
-
----
 
 ### Grammar
 
@@ -1110,12 +1056,12 @@ flags cannot narrow their B pool. Overlap is assigned to B before A.
 {
   "language": "chinese",
   "domainWeights": { "word": 3, "grammar": 1 },
-  "word": { "groupIds": ["g1"], "groupWeights": { "g1": 2 }, "flaggedOnly": false },
+  "word": { "groupIds": ["g1"], "groupWeights": { "g1": 2 } },
   "grammar": { "groupIds": ["gg1"], "groupWeights": { "gg1": 1 } }
 }
 ```
 
-All fields except `language` are optional. The `word` filter additionally accepts `topics`, `categories`, and `levels` (same semantics as `POST /api/quiz/start`).
+All fields except `language` are optional. The `word` filter additionally accepts `topics` and `levels` (same semantics as `POST /api/quiz/start`).
 
 The mixed quiz also sends `mixWeights` — the A:B ratio, each category's own word:grammar
 ratio, and the original per-group inputs:
@@ -1147,7 +1093,7 @@ required. See [Live Group B](docs/live-group-b-quiz.md) for the full rules.
 
 #### `POST /api/combined-quiz/answer` — Submit an answer
 
-**Body:** `{ "language": "...", "kind": "word" | "grammar", "refId": "<wordId | grammarId>", "correct": true, "flagWordIds": [] }` — dispatches to word vs grammar progress; wrong answers wait until the next sitting; they are not repeated before End session.
+**Body:** `{ "language": "...", "kind": "word" | "grammar", "refId": "<wordId | grammarId>", "correct": true }` — dispatches to word vs grammar progress; wrong answers wait until the next sitting; they are not repeated before End session.
 
 **Response:** `{ session }` — updated session state.
 
@@ -1380,17 +1326,16 @@ The English **study version** is temporarily paused for feature updates. English
 
 | View                    | Description                                                                                                        |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| **Dashboard**           | Main layout at `/:language/*`. Each view has its own URL sub-path (`/browse`, `/quiz`, `/flagged`, `/grammar`, `/grammar-quiz`, `/translation`, `/speaking-writing`) so page refresh stays on the current view. Header shows "Back" button on sub-paths (returns to `/:language`) and "← Languages" on the language home. Quiz and grammar-quiz sub-paths auto-recover the active session on mount and redirect home if none exists. Includes settings gear, dynamic UI language toggle. |
-| **SettingsModal**       | Settings modal with sections for (1) drag-and-drop language display order reordering via @dnd-kit, (2) active UI language checkboxes, (3) displayed definition / example translation language checkboxes (display-only — generation always covers all four), (4) smart-add defaults (`defaultAddWordLanguage`, `defaultDefinitionLanguage`), (5) speaking/writing defaults (`defaultCorrectionMode`, `defaultSpeakingUseCase`, `defaultWritingUseCase`), (6) translation defaults (`defaultTranslationSourceLanguage`, `defaultTranslationTargetLanguages`), and (7) a `showKoreanHanja` checkbox — visible only when the active language is Chinese — that toggles the 🀄 Korean hanja section in word cards, quiz answers, and flagged-review answers. Persisted to localStorage. |
+| **Dashboard**           | Main layout at `/:language/*`. Each view has its own URL sub-path (`/browse`, `/quiz`, `/grammar`, `/grammar-quiz`, `/translation`, `/speaking-writing`) so page refresh stays on the current view. Header shows "Back" button on sub-paths (returns to `/:language`) and "← Languages" on the language home. Quiz and grammar-quiz sub-paths auto-recover the active session on mount and redirect home if none exists. Includes settings gear, dynamic UI language toggle. |
+| **SettingsModal**       | Settings modal with sections for (1) drag-and-drop language display order reordering via @dnd-kit, (2) active UI language checkboxes, (3) displayed definition / example translation language checkboxes (display-only — generation always covers all four), (4) smart-add defaults (`defaultAddWordLanguage`, `defaultDefinitionLanguage`), (5) speaking/writing defaults (`defaultCorrectionMode`, `defaultSpeakingUseCase`, `defaultWritingUseCase`), (6) translation defaults (`defaultTranslationSourceLanguage`, `defaultTranslationTargetLanguages`), and (7) a `showKoreanHanja` checkbox — visible only when the active language is Chinese — that toggles the 🀄 Korean hanja section in word cards and quiz answers. Persisted to localStorage. |
 | **QuizTaking**          | Active quiz interface — displays the current term, and after revealing the answer shows all definitions, transliteration, and example sentences with RubyText annotations. When `showKoreanHanja` is enabled and the word has `hanjaReadings`, a 🀄 Korean Hanja section is shown above the definitions. Wrong answers are deferred until the next sitting after End session and review. Question payloads are prefetched by ID: 24 words in the first request, then background chunks of 150. Each card waits for its own payload. Supports resuming from where the user left off. |
-| **WordList**            | Paginated word browsing with search, topic/category/level/group filters, progress badges, and expandable word details with pinyin displayed via RubyText. Accepts `refreshSignal` (silently re-fetches on change — also re-runs `refreshExistingTerms` on the expanded word so queued segment chips flip to ✓), `onQueue` (enables queue mode in its embedded SmartAddWordModal; segment chip "+" clicks also route through this queue, serializing them instead of firing concurrent HTTP requests), and `pendingTerms` (Set from `useWordQueue`; chips whose term is in-flight show amber "⋯" and are disabled). Expanded details show the first 3 definitions and first 3 examples by default; a "show more / show less" toggle appears when there are additional entries. Segment buttons show amber "⋯" while the activation check is in-flight or the term is queued, green "✓" when already in the DB, and blue "+" when addable; the flag checkbox below each addable segment is hidden while the activation check is running or the term is queued; on expand, any segments found in `word_index` without a `seg.id` are patched locally and persisted via `sync-segment-links`. When clicking a segment "+" button fails (e.g. LLM error), a red error toast appears bottom-right for 3 seconds with the actual backend error message. When `onJumpToWord` fires from an embedded `SmartAddWordModal`, the list filters/expands to the target word and opens it in `WordFormModal` edit mode (passing `onQueue`/`pendingTerms`/`refreshSignal` through). |
-| **SmartAddWordModal**   | Modal to add a word with LLM auto-filling missing fields. Only `term` is required; the LLM generates transliteration, definitions, examples (with translations), and — for Chinese — pinyin segments per example. The LLM **always** generates definitions and example translations in all four supported languages regardless of settings; the settings only control which subset is **displayed** (`displayDefinitionLanguages`, `displayExampleTranslationLanguages`) and which language each form field is **pre-filled** with (`defaultAddWordLanguage` for the outer Language radio, `defaultDefinitionLanguage` for the first definition row). Note that the modal exposes two independent language fields — the outer "word language" (sent as the `:language` route parameter, backend full-name format) and per-row "definition language" (ISO code, used as the key in `definitions[].text`) — easy to confuse. Duplicate detection: shows "⚠ Already in DB" if the term is already in Firestore; shows "⏳ Already queued" (amber) and disables the submit button if the term is in `pendingTerms` (queued but not yet written). For Chinese, uses inline debounced `checkTerms` + `smartAddWord` to show WorldList-style `rounded-full` pill buttons with an amber flag checkbox below each addable segment on space-split example sentences; when `onQueue` is provided, segment chip additions route through the queue (amber "⋯" queued state, `checkTerms` re-runs on `refreshSignal`). When the `onQueue` prop is provided the modal enters **queue mode**: clicking Save enqueues the word instantly (no blocking LLM wait), flashes "✓ Queued", then resets the form so the user can add the next term immediately. Also accepts optional `pendingTerms?: Set<string>` and `refreshSignal?: number` to enable the queued-duplicate detection and chip re-checks. |
-| **FlaggedReview**       | Review interface for flagged words. Allows browsing and unflagging words marked for review. When `showKoreanHanja` is enabled and the word has `hanjaReadings`, a 🀄 Korean Hanja section is shown above the definitions in the revealed answer. |
+| **WordList**            | Paginated word browsing with search, topic/level/group filters, progress badges, and expandable word details with pinyin displayed via RubyText. Accepts `refreshSignal` (silently re-fetches on change — also re-runs `refreshExistingTerms` on the expanded word so queued segment chips flip to ✓), `onQueue` (enables queue mode in its embedded SmartAddWordModal; segment chip "+" clicks also route through this queue, serializing them instead of firing concurrent HTTP requests), and `pendingTerms` (Set from `useWordQueue`; chips whose term is in-flight show amber "⋯" and are disabled). Expanded details show the first 3 definitions and first 3 examples by default; a "show more / show less" toggle appears when there are additional entries. Segment buttons show amber "⋯" while the activation check is in-flight or the term is queued, green "✓" when already in the DB, and blue "+" when addable; on expand, any segments found in `word_index` without a `seg.id` are patched locally and persisted via `sync-segment-links`. When clicking a segment "+" button fails (e.g. LLM error), a red error toast appears bottom-right for 3 seconds with the actual backend error message. When `onJumpToWord` fires from an embedded `SmartAddWordModal`, the list filters/expands to the target word and opens it in `WordFormModal` edit mode (passing `onQueue`/`pendingTerms`/`refreshSignal` through). |
+| **SmartAddWordModal**   | Modal to add a word with LLM auto-filling missing fields. Only `term` is required; the LLM generates transliteration, definitions, examples (with translations), and — for Chinese — pinyin segments per example. The LLM **always** generates definitions and example translations in all four supported languages regardless of settings; the settings only control which subset is **displayed** (`displayDefinitionLanguages`, `displayExampleTranslationLanguages`) and which language each form field is **pre-filled** with (`defaultAddWordLanguage` for the outer Language radio, `defaultDefinitionLanguage` for the first definition row). Note that the modal exposes two independent language fields — the outer "word language" (sent as the `:language` route parameter, backend full-name format) and per-row "definition language" (ISO code, used as the key in `definitions[].text`) — easy to confuse. Duplicate detection: shows "⚠ Already in DB" if the term is already in Firestore; shows "⏳ Already queued" (amber) and disables the submit button if the term is in `pendingTerms` (queued but not yet written). For Chinese, uses inline debounced `checkTerms` + `smartAddWord` to show WorldList-style `rounded-full` pill buttons for each addable segment on space-split example sentences; when `onQueue` is provided, segment chip additions route through the queue (amber "⋯" queued state, `checkTerms` re-runs on `refreshSignal`). When the `onQueue` prop is provided the modal enters **queue mode**: clicking Save enqueues the word instantly (no blocking LLM wait), flashes "✓ Queued", then resets the form so the user can add the next term immediately. Also accepts optional `pendingTerms?: Set<string>` and `refreshSignal?: number` to enable the queued-duplicate detection and chip re-checks. |
 | **LanguageSelectModal** | Modal to pick the target language when starting a new quiz. Lists languages fetched from the API.                  |
 | **LevelSelectModal**    | Modal to select proficiency levels (e.g., HSK1-4–HSK7-9) for filtering. (No longer used in the quiz start flow — levels are now inside QuizFilterModal.) |
-| **QuizFilterModal**     | Multi-panel filter modal shown before starting a word quiz. Covers topics, categories, levels, and word groups (all panels separated by AND dividers). Levels and groups were previously in separate modals and are now consolidated here. Supports "Select All" / "Clear All" per panel. |
+| **QuizFilterModal** | Word quiz setup with Group A selection, subgroup weights and an optional already-correct weight; also supports worksheet generation. |
 | **GroupPickerModal**    | Modal for managing word group membership. Lets users create, rename, and delete groups, and toggle which groups a set of words belongs to. Used from WordList's "Manage Groups" button and per-word "Add to Group" action. |
-| **WordFormModal**       | Modal for adding or editing a word manually with all fields. For Chinese, uses inline debounced `checkTerms` + `smartAddWord` to show WorldList-style `rounded-full` pill buttons with an amber flag checkbox below each addable segment on space-split example sentences. Accepts optional `onQueue?`, `pendingTerms?`, and `refreshSignal?` props — when `onQueue` is provided, segment chip additions route through the queue (amber "⋯" queued state driven by `pendingTerms`) instead of calling `smartAddWord` directly; `checkTerms` re-runs on `refreshSignal` so chips flip to ✓ after the word commits. |
+| **WordFormModal**       | Modal for adding or editing a word manually with all fields. For Chinese, uses inline debounced `checkTerms` + `smartAddWord` to show WorldList-style `rounded-full` pill buttons for each addable segment on space-split example sentences. Accepts optional `onQueue?`, `pendingTerms?`, and `refreshSignal?` props — when `onQueue` is provided, segment chip additions route through the queue (amber "⋯" queued state driven by `pendingTerms`) instead of calling `smartAddWord` directly; `checkTerms` re-runs on `refreshSignal` so chips flip to ✓ after the word commits. |
 | **GrammarList**         | Browse grammar items with search, level/group filters, and inline edit/delete. Example translations render per-language (filtered by the grammar definition-language display setting) when stored as multi-language objects. |
 | **GrammarFilterModal**  | Modal to select grammar groups and question count before starting a grammar quiz. |
 | **GrammarQuizTaking**   | Grammar quiz flashcard UI — displays an example-sentence translation (multi-language translations filtered by the grammar definition-language display setting), reveals the answer, and allows self-grading (correct/incorrect). |
@@ -1408,7 +1353,6 @@ The English **study version** is temporarily paused for feature updates. English
 - **`api/vocab.ts`** — `getWords(language, filters?, page?, limit?)`, `getFilters(language)`, `updateWord(language, wordId, updates)`, `deleteWord(language, wordId)`, `checkTerms(language, terms[])`, `smartAddWord(language, data)` (the LLM always generates definitions and example translations in all four supported codes — the client passes only `term`, optional anchor `definitions`, optional `transliteration`/`topics`/`examples`/`level`).
 - **`api/grammar.ts`** — `getGrammarItems(language, filters, page, limit)`, `createGrammarItem(language, item)`, `smartAddGrammarItem(language, item)`, `updateGrammarItem(language, grammarId, updates)`, `deleteGrammarItem(language, grammarId)`, `getGrammarSettings()` / `updateGrammarSettings(defaultDefinitionLanguage)`, group CRUD (`getGrammarGroups`, `createGrammarGroup`, `renameGrammarGroup`, `deleteGrammarGroup`, `modifyGrammarGroupMembers`), `startGrammarQuiz(opts)`, `answerGrammarQuestion(opts)`, `getCurrentGrammarSession(language)`, `getGrammarProgress(language)`, `resetGrammarProgress(language)`.
 - **`api/combined-quiz.ts`** — `startCombinedQuiz(opts, variant?)`, `answerCombinedQuestion(opts, variant?)`, `getCurrentCombinedSession(language, variant?)`, `updateCombinedQuizWeights(language, weights, variant?)`. Every function takes a trailing `variant?: "combined" | "mixed" | "importA" | "importB"` that selects the route prefix; there is deliberately no hydration helper here (words go through `hydrateQuizQuestions` in `api/quiz.ts`, grammar through `getGrammarItemsByIds` in `api/grammar.ts`).
-- **`api/flagged.ts`** — `getFlaggedWords(language)`, `getFlaggedWordCount(language)`, `flagWord(language, wordId)`, `unflagWord(language, wordId)`.
 - **`api/translation.ts`** — `translate(sourceLanguage, sourceText, targetLanguages, context?)`, `translateStream(sourceLanguage, sourceText, targetLanguages, callbacks, signal?, options?)` (options: `context` situation hint, `decomposition` replay to skip step 1), `getTranslationHistory(page, limit)`, `deleteTranslationHistory()`, `deleteTranslationEntryById(id)`.
 - **`api/speaking-writing.ts`** — `submitCorrection(language, mode, useCase, inputText)`, `submitCorrectionStream(language, mode, useCase, inputText, callbacks, signal?)`, `getSpeakingWritingSession(language)`, `deleteSpeakingWritingSession(language)`.
 - **Dev proxy:** Vite proxies `/api/*` to `http://localhost:3000` so the frontend dev server can reach the backend.
@@ -1444,7 +1388,6 @@ Production data is stored in **Google Cloud Firestore** (database: `vocab-databa
 | `word_index`         | Fast term → {id, level, transliteration} lookup (composite key: `{language}_{term}`) |
 | `word_groups`        | User-defined word groups per language (id, language, name, wordIds[], createdAt, `order?`, `category?: "B"`); used to scope quiz and word list. `order` is the category-A priority (highest first); absent `category` means A |
 | `quiz_sessions`      | One word quiz session per language (keyed by language name)  |
-| `flagged_words`      | Flagged words for review                              |
 | `grammar_chapters`   | Grammar chapter metadata (per language)               |
 | `grammar_items`      | Grammar items (statement + multi-language descriptions, `exampleIds` into `example_sentences`) |
 | `grammar_progress`   | Per-component grammar progress                        |

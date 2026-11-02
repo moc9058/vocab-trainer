@@ -11,7 +11,6 @@ import {
   mutateQuizSession,
   getWordsByIds,
   getWordsForQuizHydration,
-  flagWord,
   getWordGroup,
 } from "../firestore.js";
 import type { QuizSession, QuizQuestion, Word, WordProgress } from "../types.js";
@@ -30,7 +29,6 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       groupIds?: string[];
       groupWeights?: Record<string, number>;
       correctWeight?: number;
-      flaggedOnly?: boolean;
       questionType?: string;
     };
   }>(
@@ -49,17 +47,16 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
             groupIds: { type: "array", items: { type: "string" } },
             groupWeights: { type: "object", additionalProperties: { type: "number" } },
             correctWeight: { type: "number", minimum: 0 },
-            flaggedOnly: { type: "boolean" },
             questionType: { type: "string" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { language, questionCount, topics, categories, levels, groupIds, groupWeights, correctWeight, flaggedOnly, questionType } = request.body;
+      const { language, questionCount, topics, levels, groupIds, groupWeights, correctWeight, questionType } = request.body;
       const [exists, pool] = await Promise.all([
         languageExists(language),
-        getFilteredWords(language, { topics, categories, levels, groupIds, flaggedOnly }),
+        getFilteredWords(language, { topics, levels, groupIds }),
       ]);
 
       if (!exists) {
@@ -140,7 +137,6 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
         ...(groupMembership ? { groupMembership } : {}),
         ...(correctWeight !== undefined ? { correctWeight } : {}),
         ...(correctMembership ? { correctMembership } : {}),
-        ...(flaggedOnly ? { flaggedOnly } : {}),
       };
 
       await createQuizSession(session);
@@ -165,7 +161,6 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       categories?: string[];
       levels?: string[];
       groupIds?: string[];
-      flaggedOnly?: boolean;
     };
   }>(
     "/sample",
@@ -181,16 +176,15 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
             categories: { type: "array", items: { type: "string" } },
             levels: { type: "array", items: { type: "string" } },
             groupIds: { type: "array", items: { type: "string" } },
-            flaggedOnly: { type: "boolean" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { language, questionCount, topics, categories, levels, groupIds, flaggedOnly } = request.body;
+      const { language, questionCount, topics, levels, groupIds } = request.body;
       const [exists, pool] = await Promise.all([
         languageExists(language),
-        getFilteredWords(language, { topics, categories, levels, groupIds, flaggedOnly }),
+        getFilteredWords(language, { topics, levels, groupIds }),
       ]);
       if (!exists) return reply.notFound(`Language '${language}' not found`);
       if (pool.length === 0) return reply.badRequest("No words match the given filters");
@@ -251,7 +245,7 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
 
   // Submit answer
   fastify.post<{
-    Body: { sessionId: string; wordId: string; correct: boolean; flagWordIds?: string[] };
+    Body: { sessionId: string; wordId: string; correct: boolean; };
   }>(
     "/answer",
     {
@@ -263,13 +257,12 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
             sessionId: { type: "string" },
             wordId: { type: "string" },
             correct: { type: "boolean" },
-            flagWordIds: { type: "array", items: { type: "string" } },
           },
         },
       },
     },
     async (request) => {
-      const { sessionId, wordId, correct, flagWordIds } = request.body;
+      const { sessionId, wordId, correct,  } = request.body;
       const session = await mutateQuizSession(sessionId, (current) => {
         if (!current) throw fastify.httpErrors.notFound(`Session '${sessionId}' not found`);
         if (current.reviewState?.status === "active") throw fastify.httpErrors.conflict("Finish the active review first");
@@ -310,12 +303,6 @@ const quizRoutes: FastifyPluginAsync = async (fastify) => {
       wp.lastReviewed = new Date().toISOString();
       await updateWordProgress(session.language, wordId, wp);
 
-      // Flag words if requested
-      if (flagWordIds && flagWordIds.length > 0) {
-        await Promise.all(
-          flagWordIds.map((id) => flagWord(session.language, id).catch(() => {}))
-        );
-      }
 
       return { session, wordProgress: wp };
     }

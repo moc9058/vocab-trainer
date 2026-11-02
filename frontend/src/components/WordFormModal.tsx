@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
 import { useI18n } from "../i18n/context";
 import { getFilters, smartAddWord, getGroups } from "../api/vocab";
-import { categoryGroups, displayTranslation, type Word, type Meaning, type WordGroup } from "../types";
+import { categoryGroups, displayTranslation, type Word, type WordMeaning, type WordGroup } from "../types";
 import ExampleSentenceEditor, { type ExampleFormState } from "./ExampleSentenceEditor";
 import PinyinInput from "./PinyinInput";
 
 interface MeaningFormState {
-  partOfSpeech: string;
   translations: { lang: string; text: string }[];
   pinyinsRaw?: string;
 }
@@ -32,12 +31,11 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
   const [meanings, setMeanings] = useState<MeaningFormState[]>(() => {
     if (word?.definitions && word.definitions.length > 0) {
       return word.definitions.map((m) => ({
-        partOfSpeech: m.partOfSpeech,
         translations: Object.entries(m.text || {}).map(([lang, text]) => ({ lang, text })),
         pinyinsRaw: m.pinyins?.join(", ") ?? "",
       }));
     }
-    return [{ partOfSpeech: "", translations: [{ lang: "en", text: "" }], pinyinsRaw: "" }];
+    return [{  translations: [{ lang: "en", text: "" }], pinyinsRaw: "" }];
   });
   const [topics, setTopics] = useState<Set<string>>(new Set(word?.topics ?? []));
   const [level, setLevel] = useState(word?.level ?? "");
@@ -103,8 +101,8 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
       });
   }, [language, word?.id]);
 
-  function buildDefinitions(): Meaning[] {
-    const result: Meaning[] = [];
+  function buildDefinitions(): WordMeaning[] {
+    const result: WordMeaning[] = [];
     for (const m of meanings) {
       const text: Record<string, string> = {};
       for (const tr of m.translations) {
@@ -114,7 +112,7 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
         const pinyins = m.pinyinsRaw
           ? m.pinyinsRaw.split(",").map((s) => s.trim()).filter(Boolean)
           : undefined;
-        result.push({ partOfSpeech: m.partOfSpeech.trim(), text, ...(pinyins?.length ? { pinyins } : {}) });
+        result.push({  text, ...(pinyins?.length ? { pinyins } : {}) });
       }
     }
     return result;
@@ -331,7 +329,7 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
               <label className="text-sm text-gray-400">{t("definition")} *</label>
               <button
                 type="button"
-                onClick={() => setMeanings([...meanings, { partOfSpeech: "", translations: [{ lang: "en", text: "" }], pinyinsRaw: "" }])}
+                onClick={() => setMeanings([...meanings, {  translations: [{ lang: "en", text: "" }], pinyinsRaw: "" }])}
                 className="text-xs text-blue-400 hover:text-blue-300"
               >
                 + {t("addDefinition")}
@@ -340,13 +338,6 @@ export default function WordFormModal({ language, word, onSave, onClose, onQueue
             {meanings.map((meaning, mi) => (
               <div key={mi} className="mb-3 rounded-lg border border-gray-600 bg-gray-700 p-3">
                 <div className="mb-2 flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={meaning.partOfSpeech}
-                    onChange={(e) => updateMeaning(mi, { partOfSpeech: e.target.value })}
-                    placeholder={t("category")}
-                    className="flex-1 rounded border border-gray-600 bg-gray-800 px-2 py-1 text-sm text-gray-100 focus:border-blue-400 focus:outline-none"
-                  />
                   {meanings.length > 1 && (
                     <button
                       type="button"

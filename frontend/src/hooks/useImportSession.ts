@@ -660,7 +660,7 @@ export function useImportSession({
               ...(item.meaning?.trim()
                 ? {
                     definitions: [
-                      { partOfSpeech: "", text: { [item.explanationLanguage ?? (item.origin === "llm" ? "ja" : descriptionLanguage)]: item.meaning.trim() } },
+                      { text: { [item.explanationLanguage ?? (item.origin === "llm" ? "ja" : descriptionLanguage)]: item.meaning.trim() } },
                     ],
                   }
                 : {}),

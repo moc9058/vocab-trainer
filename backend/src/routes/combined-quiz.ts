@@ -12,7 +12,6 @@ import {
   getWordProgress,
   updateWordProgress,
   getProgressForLanguage,
-  flagWord,
   getWordGroup,
   getWordGroups,
   getGrammarGroups,
@@ -43,7 +42,6 @@ interface WordFilterBody {
   levels?: string[];
   groupIds?: string[];
   groupWeights?: Record<string, number>;
-  flaggedOnly?: boolean;
   /**
    * An explicit pool, bypassing every other word filter. The caller has already decided
    * which words belong — the article quizzes resolve that client-side, where the import
@@ -141,7 +139,6 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
                 levels: { type: "array", items: { type: "string" } },
                 groupIds: { type: "array", items: { type: "string" } },
                 groupWeights: { type: "object", additionalProperties: { type: "number" } },
-                flaggedOnly: { type: "boolean" },
                 wordIds: { type: "array", items: { type: "string" } },
               },
             },
@@ -222,10 +219,8 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
           ? await getWordsByIds(word.wordIds)
           : await getFilteredWords(language, {
               topics: word?.topics,
-              categories: word?.categories,
               levels: word?.levels,
               groupIds: word?.groupIds,
-              flaggedOnly: word?.flaggedOnly,
             });
         let freshPool = pool;
         if (useCorrect) {
@@ -360,7 +355,6 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
               },
             }
           : {}),
-        ...(word?.flaggedOnly ? { flaggedOnly: true } : {}),
         ...(randomOrder ? { randomOrder: true } : {}),
       };
 
@@ -407,7 +401,6 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       kind: "word" | "grammar";
       refId: string;
       correct: boolean;
-      flagWordIds?: string[];
       removeFromGroupB?: boolean;
       startedAt?: string;
       operationId?: string;
@@ -424,7 +417,6 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
             kind: { type: "string", enum: ["word", "grammar"] },
             refId: { type: "string" },
             correct: { type: "boolean" },
-            flagWordIds: { type: "array", items: { type: "string" } },
             removeFromGroupB: { type: "boolean" },
             startedAt: { type: "string" },
             operationId: { type: "string", pattern: "^[a-zA-Z0-9-]{1,100}$" },
@@ -433,7 +425,7 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
       },
     },
     async (request, reply) => {
-      const { language, kind, refId, correct, flagWordIds } = request.body;
+      const { language, kind, refId, correct,  } = request.body;
       if (opts.liveGroupB && (request.body.operationId || request.body.removeFromGroupB)) {
         const { startedAt, operationId, removeFromGroupB } = request.body;
         if (!startedAt || !operationId) return reply.badRequest("Session and operation IDs are required");
@@ -510,10 +502,6 @@ function makeCombinedQuizRoutes(opts: { sessionKey: (language: string) => string
         gp.correctRate = gp.timesCorrect / gp.timesSeen;
         gp.lastReviewed = new Date().toISOString();
         await updateGrammarComponentProgress(language, refId, gp);
-      }
-
-      if (flagWordIds && flagWordIds.length > 0) {
-        await Promise.all(flagWordIds.map((id) => flagWord(language, id).catch(() => {})));
       }
 
       return { session };

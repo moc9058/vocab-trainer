@@ -51,7 +51,6 @@ export type PendingAnswer =
       sessionId: string;
       wordId: string;
       correct: boolean;
-      flagWordIds?: string[];
     }
   | {
       domain: "grammar";
@@ -69,7 +68,6 @@ export type PendingAnswer =
       removeFromGroupB?: boolean;
       startedAt?: string;
       operationId?: string;
-      flagWordIds?: string[];
     }
   | { domain: "combinedRemoval"; language: string; kind: "word" | "grammar"; refId: string; startedAt: string; operationId: string }
   | {
@@ -153,7 +151,6 @@ function send(item: PendingAnswer): Promise<unknown> {
         sessionId: item.sessionId,
         wordId: item.wordId,
         correct: item.correct,
-        ...(item.flagWordIds?.length ? { flagWordIds: item.flagWordIds } : {}),
       });
     case "grammar":
       return answerGrammarQuestion({
@@ -171,7 +168,6 @@ function send(item: PendingAnswer): Promise<unknown> {
           removeFromGroupB: item.removeFromGroupB,
           startedAt: item.startedAt,
           operationId: item.operationId,
-          ...(item.flagWordIds?.length ? { flagWordIds: item.flagWordIds } : {}),
         },
         item.variant
       );

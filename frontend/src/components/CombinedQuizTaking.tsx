@@ -15,7 +15,6 @@ import {
 } from "../api/combined-quiz";
 import { getGroups } from "../api/vocab";
 import { getGrammarGroups } from "../api/grammar";
-import { getFlaggedWordIds, flagWord, unflagWord } from "../api/flagged";
 import { isWeightValid, parseWeightInput, scaleWeightRecord } from "../utils/weightInput";
 import RubyText from "./RubyText";
 import GrammarDescriptionsPanel from "./GrammarDescriptionsPanel";
@@ -76,8 +75,7 @@ interface Props {
   onComplete: () => void;
   onBrowse: () => void;
   onStartNew: () => void;
-  /** The mixed quiz swaps the "3" key from flag to
-   *  "remove from Group B". Default "combined". */
+  /** The mixed quiz uses the "3" key for "remove from Group B". Default "combined". */
   variant?: CombinedQuizVariant;
 }
 
@@ -144,12 +142,7 @@ function ExamplesHeader({ showPinyin, onToggle }: { showPinyin: boolean; onToggl
 }
 
 export default function CombinedQuizTaking({ session, onComplete, onBrowse, onStartNew, variant = "combined" }: Props) {
-  // The Group B and mixed A+B quizzes both bind "3" to "retire this from Group B" — the
-  // productive gesture once an item is memorized. Only the plain Group A quiz uses "3" to
-  // flag a word, so flagging is skipped entirely in the other two.
-  // The article quizzes ("importA"/"importB") are deliberately NOT in this list: they are
-  // specified to match the plain Group A quiz, keeping the flag key and offering no
-  // remove-from-Group-B, even for the Group B article drill.
+  // Only the mixed quiz offers the Group B removal control and its "3" shortcut.
   const usesGroupBControls = variant === "mixed";
   const { t } = useI18n();
   const { settings, displayDefEntries, displayGrammarDefEntries } = useSettings();
@@ -173,8 +166,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     });
   // Grading is synchronous now; this only stops a double-tap grading the same card twice.
   const gradedIndexRef = useRef(-1);
-  const [flaggedIds, setFlaggedIds] = useState<Set<string>>(new Set());
-  const [alreadyFlaggedIds, setAlreadyFlaggedIds] = useState<Set<string>>(new Set());
   // Mark now, commit with grading (or end-sitting) through the serial outbox.
   // Removed IDs hide the control locally; the sync badge reports pending/failed commits.
   const [pendingRemoveBIds, setPendingRemoveBIds] = useState<Set<string>>(new Set());
@@ -243,14 +234,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     return [wordIds, grammarIds];
   });
   const prefetch = useQuizPrefetch(currentSession.language, prefetchWordIds, prefetchGrammarIds);
-
-  useEffect(() => {
-    // The Group B and mixed variants have no flag concept — skip the fetch entirely.
-    if (usesGroupBControls) return;
-    getFlaggedWordIds(session.language)
-      .then(({ wordIds }) => setAlreadyFlaggedIds(new Set(wordIds)))
-      .catch(() => setAlreadyFlaggedIds(new Set()));
-  }, [session.language, usesGroupBControls]);
 
   // One groups fetch, three consumers: the names behind the per-group progress badges, the
   // A/B category of each group (which drives the per-category progress and the mixed weights
@@ -697,7 +680,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       setCurrentIndex(firstUnanswered === -1 ? updated.questions.length : firstUnanswered);
       setShowingAnswer(false);
       resetExpandedAnswers();
-      setFlaggedIds(new Set());
       setWeightsOpen(false);
     } catch {
       // Keep the panel open so the user can retry.
@@ -710,31 +692,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     if (!question) return;
     resetExpandedAnswers();
     setShowingAnswer(true);
-    setFlaggedIds(question.kind === "word" ? new Set([question.wordId]) : new Set());
-  }
-
-  const segmentWords = useMemo(() => {
-    if (!wordQuestion?.examples) return [];
-    const seen = new Set<string>();
-    const result: { id: string; text: string; transliteration?: string }[] = [];
-    for (const ex of wordQuestion.examples) {
-      for (const seg of ex.segments ?? []) {
-        if (seg.id && seg.id !== wordQuestion.wordId && !alreadyFlaggedIds.has(seg.id) && !seen.has(seg.id)) {
-          seen.add(seg.id);
-          result.push({ id: seg.id, text: seg.text, transliteration: seg.transliteration });
-        }
-      }
-    }
-    return result;
-  }, [alreadyFlaggedIds, wordQuestion]);
-
-  function toggleFlag(id: string) {
-    setFlaggedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
   }
 
   /** Unknown membership (`groupBIds === null`) counts as "in B" so the control never
@@ -794,7 +751,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     gradedIndexRef.current = currentIndex;
     const refId = question.kind === "word" ? question.wordId : question.grammarId;
     const removeFromGroupB = pendingRemoveBIds.has(bKey(question.kind, refId));
-    const submittedFlagIds = !usesGroupBControls && question.kind === "word" ? Array.from(flaggedIds) : [];
 
     outbox.enqueue({
       domain: "combined",
@@ -804,12 +760,7 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
       refId,
       correct,
       ...(variant === "mixed" ? { removeFromGroupB, startedAt: session.startedAt, operationId: crypto.randomUUID() } : {}),
-      ...(submittedFlagIds.length > 0 ? { flagWordIds: submittedFlagIds } : {}),
     });
-
-    if (submittedFlagIds.length > 0) {
-      setAlreadyFlaggedIds((prev) => new Set([...prev, ...submittedFlagIds]));
-    }
 
     // Grading is "moving on" — commit a deferred Group B removal marked on this card.
     const gradedKey = bKey(question.kind, refId);
@@ -829,7 +780,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
     setCurrentIndex((i) => i + 1);
     setShowingAnswer(false);
     resetExpandedAnswers();
-    setFlaggedIds(new Set());
   }
 
   function endSession() {
@@ -910,24 +860,12 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
         // and the key must not do what the button declines to offer.
         if (!isInGroupB(refId, question.kind)) return;
         togglePendingRemoveFromB(refId, question.kind);
-      } else if (event.key === "3" && !usesGroupBControls && question?.kind === "word") {
-        event.preventDefault();
-        const wordId = question.wordId;
-        if (alreadyFlaggedIds.has(wordId)) {
-          unflagWord(currentSession.language, wordId).catch(() => {});
-          setAlreadyFlaggedIds((prev) => { const next = new Set(prev); next.delete(wordId); return next; });
-          setFlaggedIds((prev) => { const next = new Set(prev); next.delete(wordId); return next; });
-        } else {
-          flagWord(currentSession.language, wordId).catch(() => {});
-          setAlreadyFlaggedIds((prev) => new Set([...prev, wordId]));
-          setFlaggedIds((prev) => new Set([...prev, wordId]));
-        }
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [question, showingAnswer, handleGrade, alreadyFlaggedIds, currentSession.language, sessionReviewActive, sessionReviewIndex, review.pending, review.error, usesGroupBControls, groupBIds, pendingRemoveBIds, removedFromBIds]);
+  }, [question, showingAnswer, handleGrade, currentSession.language, sessionReviewActive, sessionReviewIndex, review.pending, review.error, usesGroupBControls, groupBIds, pendingRemoveBIds, removedFromBIds]);
 
   if (review.pending || review.error) return <SessionReviewStatus review={review} />;
 
@@ -1040,7 +978,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
           <div className="text-center space-y-2">
             {reviewDefs.map((m, mi) => (
               <div key={mi}>
-                {m.partOfSpeech && <p className="text-xs text-gray-500 italic">{m.partOfSpeech}</p>}
                 {(() => {
                   const py = m.pinyins && m.pinyins.length > 0
                     ? m.pinyins.join(" / ")
@@ -1656,7 +1593,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
           <div className="text-center space-y-2">
             {visibleDefinitions.map((m, mi) => (
               <div key={mi}>
-                {m.partOfSpeech && <p className="text-xs text-gray-500 italic">{m.partOfSpeech}</p>}
                 {(() => {
                   const py = m.pinyins && m.pinyins.length > 0
                     ? m.pinyins.join(" / ")
@@ -1711,39 +1647,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
             </div>
           )}
 
-
-          <div className={`w-full max-w-lg space-y-1 ${usesGroupBControls ? "hidden" : ""}`}>
-            <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={flaggedIds.has(wordQuestion.wordId)}
-                onChange={() => toggleFlag(wordQuestion.wordId)}
-                className="accent-amber-500 w-4 h-4"
-              />
-              {t("flagForReview")}
-            </label>
-            {segmentWords.length > 0 && (
-              <>
-                <p className="text-xs text-gray-500 mt-2">{t("flagSegmentWords")}</p>
-                {segmentWords.map((seg) => (
-                  <label key={seg.id} className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer select-none pl-4">
-                    <input
-                      type="checkbox"
-                      checked={flaggedIds.has(seg.id)}
-                      onChange={() => toggleFlag(seg.id)}
-                      className="accent-amber-500 w-4 h-4"
-                    />
-                    <span className="text-gray-300">{seg.text}</span>
-                    {seg.transliteration && (
-                      <span className="text-gray-500">({seg.transliteration})</span>
-                    )}
-                  </label>
-                ))}
-              </>
-            )}
-          </div>
-
-
         </>
       ) : (
         <>
@@ -1779,8 +1682,6 @@ export default function CombinedQuizTaking({ session, onComplete, onBrowse, onSt
               ))}
             </div>
           )}
-
-
 
         </>
       )}

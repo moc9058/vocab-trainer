@@ -1,29 +1,29 @@
-import type { ImportSourceContext, Meaning } from "./types.js";
+import type { ImportSourceContext, WordMeaning } from "./types.js";
 
-type GeneratedMeaning = Meaning & { inputDefinitionIndex?: number | null; distinctSenseReason?: string; contrastExample?: string };
+type GeneratedWordMeaning = WordMeaning & { inputDefinitionIndex?: number | null; distinctSenseReason?: string; contrastExample?: string };
 
 /** Keep input alignment explicit and require evidence before appending a new sense. */
-export function contextualDefinitions(generated: GeneratedMeaning[], supplied: Meaning[]): GeneratedMeaning[] {
+export function contextualDefinitions(generated: GeneratedWordMeaning[], supplied: WordMeaning[]): GeneratedWordMeaning[] {
   const mapped = generated.some(def => def.inputDefinitionIndex !== undefined);
   const anchors = supplied.map((_, index) => mapped
-    ? generated.find(def => def.inputDefinitionIndex === index) ?? { partOfSpeech: "", text: {} }
-    : generated[index] ?? { partOfSpeech: "", text: {} });
+    ? generated.find(def => def.inputDefinitionIndex === index) ?? { text: {} }
+    : generated[index] ?? { text: {} });
   const canonical = (text: string) => text.trim().replace(/\s+/gu, " ").toLocaleLowerCase();
-  const sameGloss = (a: Meaning, b: Meaning) => {
+  const sameGloss = (a: WordMeaning, b: WordMeaning) => {
     const shared = Object.entries(a.text ?? {}).filter(([lang, value]) => value.trim() && b.text?.[lang]?.trim());
     return shared.length > 0 && shared.every(([lang, value]) => canonical(value) === canonical(b.text[lang])) &&
       // Different contextual readings must not be thrown away as same-spelling senses.
       (!(a.pinyins?.length && b.pinyins?.length) || a.pinyins.some(p => b.pinyins!.includes(p)));
   };
-  const extras: GeneratedMeaning[] = [];
+  const extras: GeneratedWordMeaning[] = [];
   for (const def of generated) {
     if ((mapped ? def.inputDefinitionIndex !== null : anchors.includes(def)) ||
         !def.distinctSenseReason?.trim() || !def.contrastExample?.trim()) continue;
     if ([...supplied, ...anchors, ...extras].some(other => sameGloss(def, other))) continue;
     extras.push(def);
   }
-  // Internal rationale must never become persisted Meaning fields.
-  return [...anchors, ...extras].map(({ partOfSpeech, text, pinyins }) => ({ partOfSpeech, text, ...(pinyins?.length ? { pinyins } : {}) }));
+  // Internal rationale must never become persisted WordMeaning fields.
+  return [...anchors, ...extras].map(({ text, pinyins }) => ({ text, ...(pinyins?.length ? { pinyins } : {}) }));
 }
 
 export function sourceContextInstructions(context: ImportSourceContext): string {

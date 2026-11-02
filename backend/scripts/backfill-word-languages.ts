@@ -162,7 +162,6 @@ async function backfillWord(word: Word, gaps: WordGaps): Promise<BackfillRespons
     transliteration: word.transliteration ?? null,
     definitions: word.definitions.map((d, i) => ({
       index: i,
-      partOfSpeech: d.partOfSpeech,
       existingText: d.text,
       missingLanguages: gaps.defGaps.get(i) ?? [],
     })),
@@ -188,7 +187,6 @@ async function backfillWord(word: Word, gaps: WordGaps): Promise<BackfillRespons
 
 function mergeBackfill(word: Word, result: BackfillResponse): { definitions: Meaning[]; examples: Example[] } {
   const definitions: Meaning[] = word.definitions.map((d) => ({
-    partOfSpeech: d.partOfSpeech,
     text: { ...(d.text || {}) },
   }));
   for (const fill of result.definitionsBackfill) {
