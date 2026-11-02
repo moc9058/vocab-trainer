@@ -1,3 +1,4 @@
+import { completeGrammarDescriptions } from "../services/grammar-registration.js";
 import { GRAMMAR_DEFINITION_LANGUAGES, mergeGrammarDescriptions, IncompleteGrammarDescriptionsError } from "../grammar-descriptions.js";
 import type { FastifyPluginAsync } from "fastify";
 import {
@@ -364,39 +365,12 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
       const { language } = request.params;
       const body = request.body;
 
-      // Complete Japanese/Korean descriptions while preserving every authored language.
-      const defLangStr = GRAMMAR_DEFINITION_LANGUAGES.map((l) => `"${l}": "..."`).join(", ");
-      const promptTemplate = grammarConfig.smartAddPrompts[language]
-        ?? grammarConfig.smartAddPrompts["default"];
-      const systemPrompt = fillPlaceholders(promptTemplate, {
-        LANGUAGE: language,
-        DEFINITION_LANGUAGES: defLangStr,
-      });
-
-      const userPrompt = JSON.stringify({
-        statement: body.statement,
-        descriptions: body.descriptions,
-      }, null, 2);
-
-      let llmResult: Record<string, unknown>;
-      try {
-        const raw = await callLLM({ system: systemPrompt, user: userPrompt, schema: grammarConfig.smartAddSchema, route: "grammar/smart-add" });
-        llmResult = JSON.parse(stripMarkdownFences(raw));
-      } catch (err) {
+      let mergedDescs: Meaning[];
+      try { mergedDescs = await completeGrammarDescriptions(language, body.statement, body.descriptions); }
+      catch (err) {
+        if (err instanceof IncompleteGrammarDescriptionsError) return reply.badGateway("Generated grammar descriptions did not include Japanese and Korean. Please retry.");
         fastify.log.error({ err, statement: body.statement }, "LLM call failed for grammar smart-add");
         return reply.internalServerError("Failed to enrich grammar descriptions");
-      }
-
-      const llmDescs = (llmResult.descriptions as Meaning[] | undefined) ?? [];
-
-      let mergedDescs: Meaning[];
-      try {
-        mergedDescs = mergeGrammarDescriptions(body.descriptions, llmDescs);
-      } catch (err) {
-        if (err instanceof IncompleteGrammarDescriptionsError) {
-          return reply.badGateway("Generated grammar descriptions did not include Japanese and Korean. Please retry.");
-        }
-        throw err;
       }
 
       // Statement pinyin. Only the manual form has a field for it, so every

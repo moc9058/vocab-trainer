@@ -22,6 +22,14 @@ server {
     gzip_types application/json application/javascript text/css text/plain image/svg+xml;
     gzip_vary on;
 
+    location /.well-known/ {
+        set $backend ${BACKEND_URL};
+        proxy_pass $backend;
+        proxy_ssl_server_name on;
+        proxy_set_header Host $proxy_host;
+        proxy_cache off;
+    }
+
     location /api/ {
         set $backend ${BACKEND_URL};
         proxy_pass $backend;

@@ -7,8 +7,9 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 - [AGENTS.md](AGENTS.md): shared instructions for coding agents.
 - [CLAUDE.md](CLAUDE.md): Claude Code entry point to the shared instructions.
 - [Chinese registration API](docs/api/chinese-registration.md): request fields and JSON Schemas for AI/external word and grammar registration.
-- [ChatGPT integration progress](docs/chatgpt-integration-progress.md): implemented foundations and remaining end-to-end integration work.
-- [ChatGPT CRUD implementation plan](docs/chatgpt-vocab-crud-plan.md): proposed MCP/OAuth integration, CRUD contracts, durable operations and acceptance checks (not yet implemented).
+- [ChatGPT integration](docs/chatgpt-integration.md): MCP connection using existing Google login, Chinese CRUD, durable jobs and verification.
+- [ChatGPT integration progress](docs/chatgpt-integration-progress.md): implementation history, tested behavior and account-level verification boundary.
+- [ChatGPT CRUD implementation plan](docs/chatgpt-vocab-crud-plan.md): original MCP/OAuth design, CRUD contracts and acceptance checks.
 - [Development reference](docs/development-reference.md): detailed architecture and operations.
 - [Mathematics category](docs/math-category.md): textbook publishing and mathematics tests.
 - [Mathematics assessment proposal](docs/math-assessment-design.md): historical difficulty proposal and anchors.

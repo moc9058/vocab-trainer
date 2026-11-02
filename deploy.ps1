@@ -186,6 +186,8 @@ if ($Uploads.Count -gt 0) {
 
 node backend/scripts/check-import-jobs.mjs $ProjectId $Region
 if ($LASTEXITCODE -ne 0) { throw "Import worker prerequisite check failed" }
+node backend/scripts/check-integration-jobs.mjs $ProjectId $Region
+if ($LASTEXITCODE -ne 0) { throw "Integration worker deployment preflight failed" }
 
 # Deploy backend to Cloud Run
 Write-Host "==> Deploying backend to Cloud Run..."

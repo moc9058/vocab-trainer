@@ -1,0 +1,20 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "vocab-trainer",
+  "version": "1.0.0",
+  "description": "Manage the connected Vocab Trainer Chinese word and grammar library with authenticated CRUD tools.",
+  "author": { "name": "Vocab Trainer" },
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Vocab Trainer",
+        "shortDescription": "Chinese words and grammar",
+        "longDescription": "Register, find, edit and delete Chinese words and grammar in your Vocab Trainer library. Google login approves a scoped connection. Track durable operations and manage Group A/B memberships.",
+        "developerName": "Vocab Trainer",
+        "category": "Education & Research",
+        "capabilities": ["Interactive"],
+        "defaultPrompt": "중국어 단어와 문법을 Vocab Trainer에 등록하고 관리해줘."
+      }
+    }
+  }
+}

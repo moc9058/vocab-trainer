@@ -66,7 +66,8 @@ export function createIntegrationMcp(principal: IntegrationPrincipal, dispatcher
         return { structuredContent: result, content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
       } catch (error) {
         const invalid = error instanceof Error && 'code' in error && error.code === 'VALIDATION_ERROR';
-        return { isError: true, structuredContent: { error: { code: invalid ? 'VALIDATION_ERROR' : 'TEMPORARILY_UNAVAILABLE' } },
+        const code = error instanceof Error && 'code' in error && typeof error.code === 'string' && /^[A-Z_]+$/.test(error.code) ? error.code : 'TEMPORARILY_UNAVAILABLE';
+        return { isError: true, structuredContent: { error: { code } },
           content: [{ type: 'text' as const, text: invalid ? 'Invalid request.' : 'Request failed. Check operation status before retrying.' }] };
       }
     });

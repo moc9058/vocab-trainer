@@ -1,3 +1,4 @@
+import { integrationRoutes, integrationPublicPath } from "./routes/integrations.js";
 import extensionAuthRoutes from './routes/extension-auth.js';
 import { extensionToken } from './extension-auth.js';
 import { extensionAllows } from './extension-scope.js';
@@ -82,6 +83,7 @@ await fastify.register(sensible);
 const PUBLIC_PATH_PREFIXES = ["/api/auth/"];
 
 fastify.addHook("onRequest", async (request, reply) => {
+  if (integrationPublicPath(request.method, request.url.split("?")[0])) return; // Dedicated scoped OAuth/OIDC hooks own these exact surfaces.
   if (request.method === "POST" && ["/internal/import-analysis/run", "/internal/import-analysis/reconcile"].includes(request.url.split("?")[0])) return; // Dedicated OIDC hook, never an unauthenticated worker.
   const cfg = getAuthConfig();
   if (!cfg && request.headers.authorization?.startsWith("Bearer ext_")) return reply.code(503).send({ error: "Extension authentication unavailable" });
@@ -106,6 +108,7 @@ fastify.addHook('preHandler', async (request, reply) => {
     && (request.body as { action?: string } | undefined)?.action !== 'add') return reply.code(403).send({ error: 'Extension can only add membership' });
 });
 
+await fastify.register(integrationRoutes);
 await fastify.register(mathRoutes, { prefix: "/api/math" });
 await fastify.register(authRoutes, { prefix: "/api/auth" });
 await fastify.register(extensionAuthRoutes, { prefix: "/api/auth/extension" });

@@ -495,8 +495,9 @@ export async function updateWord(
   updates: Partial<Word>,
   opts?: { exampleIds?: string[]; appearsInIds?: string[] },
 ): Promise<Word | null> {
-  const doc = await words.doc(wordId).get();
-  if (!doc.exists) return null;
+  const changed = await db.runTransaction(async tx => {
+  const doc = await tx.get(words.doc(wordId));
+  if (!doc.exists) return false;
 
   const oldData = doc.data()!;
   const isNewFormat = Array.isArray(oldData.exampleIds);
@@ -546,60 +547,38 @@ export async function updateWord(
     });
   }
 
-  // Term-rename collision check MUST precede the doc write. When it lived in
-  // the index-sync block below, the doc update had already committed by the
-  // time the check threw — the word carried the stolen term while both index
-  // entries still described the old world, so the "409, nothing changed"
-  // contract was a lie (caught live: the renamed doc kept the other word's
-  // term). Refuses only a LIVE entry owned by another word; stale/orphaned
-  // entries stay overwritable, same semantics as sweep-orphaned-word-index.ts.
   if (updates.term && updates.term !== (oldData.term as string)) {
-    const newDoc = await wordIndex.doc(wordIndexDocId(language, updates.term)).get();
+    const newDoc = await tx.get(wordIndex.doc(wordIndexDocId(language, updates.term)));
     if (newDoc.exists && newDoc.data()!.id !== wordId) {
       const d = newDoc.data()!;
       const entry: WordIndexEntry = { term: d.term, id: d.id, level: d.level, transliteration: d.transliteration ?? d.pinyin };
-      const otherWord = await words.doc(entry.id).get();
+      const otherWord = await tx.get(words.doc(entry.id));
       if (wordEntryIsLive(entry, otherWord)) {
         throw new DuplicateTermError(`Word '${updates.term}' already exists in ${language}`);
       }
     }
   }
 
-  await words.doc(wordId).update(data);
-
-  const updated = await words.doc(wordId).get();
-  if (updates.topics || updates.level || updates.definitions) {
-    await updateLanguageMeta(language);
-    invalidateWordFiltersCache(language);
-  }
-
-  // Sync word_index on term/level/pinyin change
-  if (updates.term || updates.level !== undefined || updates.transliteration !== undefined) {
-    const oldTerm = oldData.term as string;
-    const newTerm = updates.term ?? oldTerm;
-    const termChanged = Boolean(updates.term) && updates.term !== oldTerm;
-
-    // Old-entry delete + new-entry set commit atomically — a crash between the
-    // two left the term unfindable. The rename collision check ran BEFORE the
-    // doc write above; a concurrent rename to the same term can still slip
-    // past it, and sweep-orphaned-word-index.ts repairs that.
-    const updatedWord = docToWord(updated);
-    const batch = db.batch();
-    if (termChanged) {
-      batch.delete(wordIndex.doc(wordIndexDocId(language, oldTerm)));
+    tx.update(words.doc(wordId), data);
+    if (updates.term || updates.level !== undefined || updates.transliteration !== undefined) {
+      const oldTerm = oldData.term as string;
+      const newTerm = updates.term ?? oldTerm;
+      if (newTerm !== oldTerm) tx.delete(wordIndex.doc(wordIndexDocId(language, oldTerm)));
+      tx.set(wordIndex.doc(wordIndexDocId(language, newTerm)), {
+        language, term: newTerm, id: wordId,
+        level: updates.level ?? oldData.level ?? '',
+        transliteration: updates.transliteration ?? oldData.transliteration ?? '',
+      });
     }
-    batch.set(wordIndex.doc(wordIndexDocId(language, newTerm)), {
-      language,
-      term: newTerm,
-      id: wordId,
-      level: updatedWord.level ?? "",
-      transliteration: updatedWord.transliteration ?? "",
-    });
-    await batch.commit();
+    return true;
+  });
+  if (!changed) return null;
+  const updated = await words.doc(wordId).get();
+  if (!updated.exists) return null;
+  if (updates.topics || updates.level || updates.definitions) {
+    await updateLanguageMeta(language); invalidateWordFiltersCache(language);
   }
-
-  const raw = docToWord(updated);
-  const [hydrated] = await hydrateWords([raw]);
+  const [hydrated] = await hydrateWords([docToWord(updated)]);
   return hydrated;
 }
 
@@ -2067,6 +2046,8 @@ export async function modifyGrammarGroupMembers(
     const current: string[] = doc.data()!.grammarIds ?? [];
     let next: string[];
     if (action === "add") {
+      const items = await Promise.all([...new Set(grammarIds)].map(id => tx.get(grammarItems.doc(id))));
+      if (items.some(d => !d.exists || d.data()!.language !== doc.data()!.language)) throw new GroupNotFoundError('Grammar item not found in group language');
       const toAdd = new Set(current);
       for (const id of grammarIds) toAdd.add(id);
       next = [...toAdd];
@@ -3080,11 +3061,11 @@ export async function modifyWordGroupMembers(
       const current: string[] = data.wordIds ?? [];
       const { next, newlyAdded } = applyWordGroupMemberAction(current, chunk, action);
 
-      // Read before any writes. Invalid/dangling ids retain the historical group API
-      // behavior, but never create ghost word documents just to hold a timestamp.
+      // Validate live members inside the transaction so deletion cannot race a membership add.
       const wordDocs = newlyAdded.length > 0
         ? await Promise.all(newlyAdded.map((id) => tx.get(words.doc(id))))
         : [];
+      if (action === 'add' && wordDocs.some(d => !d.exists || d.data()!.language !== data.language)) throw new GroupNotFoundError('Word not found in group language');
       tx.update(ref, { wordIds: next });
       if (action === "add" && newlyAdded.length > 0) {
         const timestampField = data.category === "B" ? "addedToGroupBAt" : "addedToGroupAAt";
@@ -3607,4 +3588,10 @@ export async function mutateImportSession(
     tx.set(ref, data);
     return next;
   });
+}
+
+/** Refresh derived library metadata after an external transaction has committed. */
+export async function refreshWordLibraryMetadata(language: string): Promise<void> {
+  await updateLanguageMeta(language);
+  invalidateWordFiltersCache(language);
 }

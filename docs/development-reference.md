@@ -790,3 +790,16 @@ default. Grammar registration still assigns groups in a separate call.
 Emulator regression: from `backend`, run
 `FIRESTORE_EMULATOR_HOST=127.0.0.1:8188 node --experimental-test-module-mocks --import tsx --test scripts/tests/emulator/word-registration-groups.test.ts`.
 See [the external contract](api/chinese-registration.md) for request examples.
+
+## ChatGPT MCP integration (2026-11-02)
+
+[ChatGPT integration](chatgpt-integration.md) documents the Streamable HTTP endpoint,
+built-in OAuth issuer approved with existing Google login, exact Chinese CRUD
+scopes and durable integration operations. Core writes and receipts share a
+Firestore transaction. A dedicated Cloud Tasks queue, OIDC worker and recovery
+scheduler execute accepted operations. External mutations preserve shared examples
+and retain detached examples with an explicit warning. Word and grammar LLM
+preparation are shared with the existing routes; word rename/index updates now
+commit in one transaction. Existing extension/mobile capabilities are unchanged.
+The infrastructure setup and account-level ChatGPT verification are separate from
+code deployment. No textbook publication or bulk learning-data migration is needed.

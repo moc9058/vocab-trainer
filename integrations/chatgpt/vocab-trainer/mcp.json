@@ -1,0 +1,18 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "vocab-trainer": {
+      "type": "streamable-http",
+      "url": "https://vocab-trainer-frontend-olncevthqa-an.a.run.app/api/integrations/mcp",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": { "mode": "dcr" },
+            "defaultScopes": ["vocab.read", "vocab.write", "vocab.delete", "grammar.read", "grammar.write", "grammar.delete", "groups.read", "groups.write"]
+          }
+        }
+      }
+    }
+  }
+}

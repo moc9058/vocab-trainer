@@ -28,7 +28,8 @@
     "math:evaluate": "tsx scripts/evaluate-math-assessment.ts",
     "math:evaluate:subjects": "tsx scripts/evaluate-math-subjects.ts",
     "test:integration": "tsx --test src/integration-auth.test.ts src/integration-contracts.test.ts src/integration-mcp.test.ts",
-    "test:integration:emulator": "node --import tsx --test scripts/tests/emulator/integration-operations.test.ts"
+    "test:integration:emulator": "node --experimental-test-module-mocks --import tsx --test scripts/tests/emulator/integration-operations.test.ts scripts/tests/emulator/integration-crud.test.ts scripts/tests/emulator/integration-legacy-concurrency.test.ts",
+    "dev:integration-worker": "tsx src/integrations/local-worker.ts"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",

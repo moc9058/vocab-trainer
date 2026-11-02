@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import type { Firestore, Transaction } from '@google-cloud/firestore';
+import { FieldValue, type Firestore, type Transaction } from '@google-cloud/firestore';
 import { parseToolInput, requestHash, type ToolName } from './contracts.js';
 import type { IntegrationPrincipal } from './mcp.js';
 
@@ -10,6 +10,7 @@ export interface IntegrationOperation {
   status: OperationStatus; stage: 'validating' | 'enriching' | 'committing' | 'reconciling';
   attempt: number; generation: number; leaseUntil: number; coreCommitted: boolean;
   createdAt: number; updatedAt: number; expiresAt: number;
+  checkpoint?: unknown;
   result?: Record<string, unknown>; error?: { code: string; retryable: boolean };
 }
 export class OperationConflict extends Error {
@@ -42,7 +43,11 @@ export class IntegrationOperationStore {
         if (old.expiresAt <= timestamp) throw new OperationConflict('OPERATION_EXPIRED');
         return old;
       }
-      tx.create(ref, candidate);
+      const countRef = this.db.collection('integration_active_counts').doc(identity(principal.id, 'active'));
+      const count = (await tx.get(countRef)).data()?.count ?? 0;
+      if (count >= 5) throw new OperationConflict('RATE_LIMITED');
+      tx.set(countRef, { count: count + 1 });
+      tx.create(ref, { ...candidate, redactionAt: timestamp + 30 * 86400000, cleanupAt: new Date(timestamp + 90 * 86400000) });
       tx.create(this.db.collection('integration_dispatch_outbox').doc(ref.id), {
         operationRef: ref.path, generation: 0, nextWakeAt: timestamp, createdAt: timestamp,
       });
@@ -84,8 +89,62 @@ export class IntegrationOperationStore {
     await this.db.runTransaction(async tx => {
       const value = (await tx.get(ref)).data() as IntegrationOperation | undefined;
       if (!value || value.generation !== generation || value.status !== 'running' || !value.coreCommitted || value.leaseUntil <= this.now()) throw new OperationConflict('LEASE_LOST');
+      const countRef = this.db.collection('integration_active_counts').doc(identity(principal.id, 'active'));
+      const count = (await tx.get(countRef)).data()?.count ?? 1;
+      tx.set(countRef, { count: Math.max(0, count - 1) });
       tx.update(ref, { status: 'succeeded', leaseUntil: 0, updatedAt: this.now() });
       tx.delete(this.db.collection('integration_dispatch_outbox').doc(ref.id));
     });
   }
+  async saveCheckpoint(principal: IntegrationPrincipal, operationId: string, generation: number, checkpoint: unknown) {
+    const ref = this.ref(principal, operationId);
+    if (Buffer.byteLength(JSON.stringify(checkpoint)) > 250000) throw new OperationConflict('OPERATION_TOO_LARGE');
+    await this.db.runTransaction(async tx => {
+      const value = (await tx.get(ref)).data() as IntegrationOperation | undefined;
+      if (!value || value.generation !== generation || value.status !== 'running' || value.leaseUntil <= this.now()) throw new OperationConflict('LEASE_LOST');
+      tx.update(ref, { checkpoint, stage: 'committing', updatedAt: this.now() });
+    });
+  }
+  async fail(principal: IntegrationPrincipal, operationId: string, generation: number, code: string, retryable: boolean) {
+    const ref = this.ref(principal, operationId);
+    await this.db.runTransaction(async tx => {
+      const value = (await tx.get(ref)).data() as IntegrationOperation | undefined;
+      if (!value || value.generation !== generation || value.status !== 'running') return;
+      const countRef = this.db.collection('integration_active_counts').doc(identity(principal.id, 'active'));
+      const count = (await tx.get(countRef)).data()?.count ?? 1;
+      tx.set(countRef, { count: Math.max(0,count-1) });
+      tx.update(ref, { status: 'failed', error: { code, retryable }, leaseUntil: 0, updatedAt: this.now() });
+    });
+  }
+  async retry(principal: IntegrationPrincipal, operationId: string) {
+    const ref = this.ref(principal, operationId);
+    await this.db.runTransaction(async tx => {
+      const value = (await tx.get(ref)).data() as IntegrationOperation | undefined;
+      if (!value || value.expiresAt <= this.now()) throw new OperationConflict('NOT_FOUND');
+      if (value.status !== 'failed') return;
+      if (!value.error?.retryable) throw new OperationConflict('NOT_RETRYABLE');
+      const countRef = this.db.collection('integration_active_counts').doc(identity(principal.id, 'active'));
+      const count = (await tx.get(countRef)).data()?.count ?? 0;
+      if (count >= 5) throw new OperationConflict('RATE_LIMITED');
+      tx.set(countRef, { count: count+1 });
+      tx.update(ref, { status: 'queued', leaseUntil: 0, updatedAt: this.now() });
+      tx.set(this.db.collection('integration_dispatch_outbox').doc(ref.id), { operationRef: ref.path, nextWakeAt: this.now() });
+    });
+  }
+
+  async reapExpired() {
+    const due = await this.db.collection('integration_operations').where('redactionAt','<=',this.now()).limit(25).get();
+    for (const doc of due.docs) await this.db.runTransaction(async tx => {
+      const op = (await tx.get(doc.ref)).data() as IntegrationOperation | undefined;
+      if (!op || op.expiresAt > this.now()) return;
+      const countRef = this.db.collection('integration_active_counts').doc(identity(op.principalId,'active'));
+      const active = op.status === 'queued' || op.status === 'running';
+      const count = active ? (await tx.get(countRef)).data()?.count ?? 1 : 0;
+      if (active) tx.set(countRef,{ count:Math.max(0,count-1) });
+      tx.update(doc.ref,{ input:FieldValue.delete(), checkpoint:FieldValue.delete(), redactionAt:Number.MAX_SAFE_INTEGER,
+        ...(active ? {status:'failed',error:{code:'OPERATION_EXPIRED',retryable:false},leaseUntil:0} : {}) });
+      tx.delete(this.db.collection('integration_dispatch_outbox').doc(doc.id));
+    });
+  }
+
 }
