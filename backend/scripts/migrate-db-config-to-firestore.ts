@@ -2,9 +2,11 @@
  * Migration script: uploads DB config and archive data to Firestore.
  *
  * Usage:
- *   cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts [--prompts] [--archives] [--vocabulary-only]
+ *   cd backend && npx tsx scripts/migrate-db-config-to-firestore.ts [--prompts] [--archives] [--vocabulary-only | --grammar-only]
  *
  *   --prompts   Migrate speaking&writing/ + translation/ config
+ *   --vocabulary-only  Upload only config/vocabulary
+ *   --grammar-only     Upload only config/grammar
  *   --archives  Migrate backup/ + original/ archive data
  *   (no flags)  Run both
  */
@@ -350,6 +352,10 @@ async function main(): Promise<void> {
   const args = process.argv.slice(2);
   if (args.includes("--vocabulary-only")) {
     await migrateVocabulary();
+    return;
+  }
+  if (args.includes("--grammar-only")) {
+    await migrateGrammar();
     return;
   }
   const runPrompts = args.length === 0 || args.includes("--prompts");

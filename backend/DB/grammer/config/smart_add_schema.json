@@ -3,14 +3,19 @@
   "strict": false,
   "schema": {
     "type": "object",
-    "required": ["descriptions"],
+    "required": [
+      "descriptions"
+    ],
     "properties": {
       "descriptions": {
         "type": "array",
         "description": "Enriched descriptions with full language coverage. Same length, order, and partOfSpeech as the user input.",
         "items": {
           "type": "object",
-          "required": ["partOfSpeech", "text"],
+          "required": [
+            "partOfSpeech",
+            "text"
+          ],
           "properties": {
             "partOfSpeech": {
               "type": "string",
@@ -19,12 +24,30 @@
             "pinyins": {
               "type": "array",
               "description": "Preserved verbatim from the user input (Chinese only).",
-              "items": { "type": "string" }
+              "items": {
+                "type": "string"
+              }
             },
             "text": {
               "type": "object",
-              "description": "Description text keyed by language code. MUST contain an entry for every required language code.",
-              "additionalProperties": { "type": "string" }
+              "description": "Description text keyed by language code. Japanese (ja) and Korean (ko) are required and must express the same meaning as the supplied description.",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "required": [
+                "ja",
+                "ko"
+              ],
+              "properties": {
+                "ja": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "ko": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
             }
           }
         }

@@ -1,3 +1,4 @@
+import { GRAMMAR_DEFINITION_LANGUAGES, mergeGrammarDescriptions, IncompleteGrammarDescriptionsError } from "../grammar-descriptions.js";
 import type { FastifyPluginAsync } from "fastify";
 import {
   getGrammarItems,
@@ -47,10 +48,6 @@ import {
 } from "../exampleTranslations.js";
 
 type ExampleSegment = { text: string; transliteration?: string; id?: string };
-
-// Unlike vocab (which enriches definitions to ALL_DEFINITION_LANGUAGES),
-// grammar descriptions are Japanese-only by design.
-const GRAMMAR_DEFINITION_LANGUAGES = ["ja"] as const;
 
 function fillPlaceholders(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
@@ -367,9 +364,7 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
       const { language } = request.params;
       const body = request.body;
 
-      // Grammar descriptions are Japanese-only by design (unlike vocab, which
-      // enriches to all of ALL_DEFINITION_LANGUAGES) — only "ja" is ever
-      // requested from or accepted out of the LLM here.
+      // Complete Japanese/Korean descriptions while preserving every authored language.
       const defLangStr = GRAMMAR_DEFINITION_LANGUAGES.map((l) => `"${l}": "..."`).join(", ");
       const promptTemplate = grammarConfig.smartAddPrompts[language]
         ?? grammarConfig.smartAddPrompts["default"];
@@ -394,25 +389,15 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
 
       const llmDescs = (llmResult.descriptions as Meaning[] | undefined) ?? [];
 
-      // Merge: keep user's text for the language(s) they supplied, fill missing
-      // codes from the LLM's same-index description.
-      const mergedDescs: Meaning[] = body.descriptions.map((userDesc, i) => {
-        const llmDesc = llmDescs[i];
-        const mergedText: Record<string, string> = {};
-        for (const lang of GRAMMAR_DEFINITION_LANGUAGES) {
-          const userText = userDesc.text?.[lang];
-          if (userText && userText.trim()) {
-            mergedText[lang] = userText;
-          } else if (llmDesc?.text?.[lang]) {
-            mergedText[lang] = llmDesc.text[lang];
-          }
+      let mergedDescs: Meaning[];
+      try {
+        mergedDescs = mergeGrammarDescriptions(body.descriptions, llmDescs);
+      } catch (err) {
+        if (err instanceof IncompleteGrammarDescriptionsError) {
+          return reply.badGateway("Generated grammar descriptions did not include Japanese and Korean. Please retry.");
         }
-        return {
-          partOfSpeech: userDesc.partOfSpeech,
-          text: mergedText,
-          ...(userDesc.pinyins?.length ? { pinyins: userDesc.pinyins } : {}),
-        };
-      });
+        throw err;
+      }
 
       // Statement pinyin. Only the manual form has a field for it, so every
       // queue-driven create (article import, drafts, segment chips) would

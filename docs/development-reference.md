@@ -733,7 +733,30 @@ encoding, the collection allowlist and concurrency protection.
 
 [Chinese registration API](api/chinese-registration.md) defines the current external-client
 request profiles for word and grammar smart-add, with versioned JSON Schemas under
-`docs/api/`. It documents the Japanese-only grammar description constraint, separate
+`docs/api/`. It documents the Japanese/Korean grammar description completion, separate
 group membership calls, existing extension-token capabilities and duplicate/retry
 behavior. These are documentation artifacts; they do not install runtime validation
 or a new endpoint. Update the document and schemas together when these APIs change.
+
+## Korean grammar descriptions (2026-11-02)
+
+Grammar smart-add accepts Korean-only or Japanese-only anchors, preserves all
+nonempty user-authored language entries verbatim and fills missing `ja`/`ko` from
+the same-index generated description. `grammar-descriptions.ts` enforces both
+required languages before storage; incomplete model output returns 502 without
+creating an item or resolving its examples. Description order, part of speech and
+pinyin metadata are preserved. Manual create/edit and drafts retain language maps
+as supplied. Existing records are not bulk translated; grammar display-language
+preferences continue to control which stored descriptions appear.
+
+The prompt/schema live in `backend/DB/grammer/config/`. Upload only that configuration
+from `backend` with `npx tsx scripts/migrate-db-config-to-firestore.ts --grammar-only`,
+then deploy services with `./deploy.sh` from the root. The external request schemas
+and examples under `docs/api/` now accept either `ko` or `ja` as an anchor.
+
+Emulator regression: from `backend`, run
+`FIRESTORE_EMULATOR_HOST=127.0.0.1:8188 node --experimental-test-module-mocks --import tsx --test scripts/tests/emulator/grammar-descriptions.test.ts`
+against an isolated emulator. It covers Korean/Japanese anchors, byte-for-byte
+preservation, stored/read language maps, manual edits, draft promotion and rejection
+of incomplete generation before writes. Browser coverage is in
+`frontend/tests/browser/grammar-korean.pw.ts` for grammar and mixed quizzes.

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://vocab-trainer.local/schemas/chinese-grammar-create.v1.schema.json",
   "title": "Chinese grammar smart-add request v1",
-  "description": "Recommended external-client request profile for POST /api/grammar/chinese/smart-add. Current grammar descriptions persist Japanese only. IDs are assigned by the client; reusing an existing ID can overwrite that record.",
+  "description": "Recommended external-client request profile for POST /api/grammar/chinese/smart-add. Korean-only or Japanese-only descriptions are accepted. Supplied language entries are preserved and missing Japanese/Korean descriptions are generated. IDs are assigned by the client; reusing an existing ID can overwrite that record.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -44,16 +44,19 @@
           "text": {
             "type": "object",
             "additionalProperties": false,
-            "required": [
-              "ja"
-            ],
             "properties": {
               "ja": {
                 "type": "string",
                 "minLength": 1,
                 "pattern": "\\S"
+              },
+              "ko": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
               }
-            }
+            },
+            "minProperties": 1
           },
           "pinyins": {
             "type": "array",
@@ -135,7 +138,7 @@
         {
           "partOfSpeech": "",
           "text": {
-            "ja": "対象を「把」で動詞の前に置き、その対象に対する処置や結果を表す。"
+            "ko": "목적어를 把 뒤, 동사 앞에 놓아 그 대상에 대한 처리나 결과를 나타낸다."
           }
         }
       ]
@@ -148,7 +151,7 @@
         {
           "partOfSpeech": "",
           "text": {
-            "ja": "対象を「把」で動詞の前に置き、その対象に対する処置や結果を表す。"
+            "ko": "목적어를 把 뒤, 동사 앞에 놓아 그 대상에 대한 처리나 결과를 나타낸다."
           }
         }
       ],

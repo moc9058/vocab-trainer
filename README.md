@@ -957,7 +957,13 @@ See [Quiz sessions and review](#quiz-sessions-and-review) for resume and unsent-
 
 #### `POST /api/grammar/:language/smart-add` — Add grammar item with LLM enrichment
 
-Same body as `POST /items`; the LLM fills `descriptions[].text` for all four definition languages (`en`/`ja`/`ko`/`zh`), keeping user-provided texts.
+Grammar descriptions accept a Korean (`ko`) or Japanese (`ja`) anchor. Smart-add
+preserves authored language entries and fills missing Japanese/Korean descriptions;
+incomplete generation returns 502 before creating the item. Grammar display-language
+settings control which stored descriptions are shown. See the
+[external request contract](docs/api/chinese-registration.md).
+
+Same body as `POST /items`; the LLM fills missing `ja`/`ko` descriptions, keeping user-provided text in every supplied language.
 
 **Response:** `201` with the created `Grammar`.
 

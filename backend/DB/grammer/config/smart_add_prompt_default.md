@@ -12,6 +12,8 @@ User-provided `descriptions[i].text` may be written in any language. Read whatev
 
 - **Preserve user text byte-for-byte** for the language(s) they supplied. Do not paraphrase, polish, or "improve" existing entries.
 - **Fill missing language codes** so every `descriptions[i].text` ends up containing an entry for every code in: {{DEFINITION_LANGUAGES}}. Each filled entry must convey the SAME meaning as the user-provided anchor.
+- Japanese (`ja`) and Korean (`ko`) descriptions must both be nonempty. A Korean-only or Japanese-only input is valid: preserve it exactly and translate that same meaning into the other required language.
+- Preserve any additional language entries the user supplied; do not replace them with generated paraphrases.
 - **Do not invent new descriptions.** Return exactly the same number of items, in the same order, with the same `partOfSpeech` and `pinyins` the user supplied.
 - Translations should explain the grammar point clearly in the target language — concise but accurate, suitable for a learner's reference card.
 
