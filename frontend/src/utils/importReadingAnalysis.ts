@@ -1,5 +1,6 @@
 import type { ImportConstruction, ImportItem, ImportOccurrence, ImportSentence, ImportSession, ImportWordItem } from "../types";
 import { convertedConstruction } from "./importWordLinks";
+import { wordRepairRange } from './importWordRepair';
 import { termOccurrences } from "./importSession";
 
 // Optional meaning units validate separately at display/projection time. A corrupt
@@ -38,7 +39,8 @@ export function readingOccurrences(sentence: ImportSentence, items: ImportItem[]
     // A later sentence-only explanation is independent of old untouched review rows.
     if (original.length && !edited(row)) continue;
     const term = row.term.trim();
-    const starts = row.range && row.sourceTerm === term && row.surface && sentence.text.slice(row.range.start, row.range.end) === row.surface
+    const gapRange = row.origin === 'gap' ? wordRepairRange(sentence.text, row) : undefined;
+    const starts = gapRange ? [gapRange.start] : row.origin === 'gap' ? [] : row.range && row.sourceTerm === term && row.surface && sentence.text.slice(row.range.start, row.range.end) === row.surface
       ? [row.range.start] : termOccurrences(sentence.text, term);
     for (const start of starts) {
       const verified = original.find(word => word.range.start === start && word.surface === term && word.lemma === term);
@@ -181,7 +183,7 @@ export function reconcileReadingSession(session: ImportSession): ImportSession {
 
 export function readingWordCandidate(sentence: ImportSentence, word: ImportOccurrence, items: ImportItem[]): ImportWordItem {
   const existing = items.find((item): item is ImportWordItem => item.kind === "word" && item.sentenceIndex === sentence.index && item.status !== "skipped" && !item.hiddenByRevision
-    && (item.range ? item.range.start === word.range.start && item.range.end === word.range.end && (item.surface ?? item.term) === word.surface : item.term === word.lemma));
+    && (item.range ? item.range.start === word.range.start && item.range.end === word.range.end && (item.surface ?? item.term) === word.surface : item.order === word.range.start && item.term === word.lemma));
   return existing ?? { id: `reading-word-${sentence.index}-${word.id}`, kind: "word", sentenceIndex: sentence.index, order: word.range.start,
     origin: "llm", status: "pending", term: word.lemma, surface: word.surface, sourceTerm: word.lemma, range: word.range,
     occurrenceId: word.id, meaning: word.contextualMeaning, transliteration: word.transliteration, explanationLanguage: word.explanationLanguage };

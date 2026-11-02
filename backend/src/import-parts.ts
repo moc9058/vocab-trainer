@@ -80,7 +80,7 @@ export function appendImportPart(session: ImportSession, expected: number, analy
       if (gap && start < 0) start = at;
       if (!gap && start >= 0) {
         additions.push({ id: `wi-${randomUUID()}`, kind: "word", status: "pending", origin: "gap", sentenceIndex: index + base,
-          order: start, term: text.slice(start, at) }); start = -1;
+          order: start, term: text.slice(start, at), range: { start, end: at }, surface: text.slice(start, at), sourceTerm: text.slice(start, at) }); start = -1;
       }
     }
   }

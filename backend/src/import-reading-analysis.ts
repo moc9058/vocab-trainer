@@ -61,6 +61,9 @@ export function normalizeReadingSentence(
     if (start === undefined) return;
     const key = `${start}:${start + surface.length}`;
     if (used.has(key)) return;
+    // A wrong substring ordinal can point 跌 at 跌幅 instead of the later 齐跌.
+    // Keep the first verified span; leave the uncertain occurrence for manual repair.
+    if (reading.occurrences.some(o => o.range.start < start + surface.length && start < o.range.end)) return;
     used.add(key);
     const id = `s${sentenceIndex}-o${i}`;
     byRawIndex.set(i, id);

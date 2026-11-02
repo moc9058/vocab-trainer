@@ -83,3 +83,31 @@ npm run test:import:emulator --prefix backend
 
 
 2026-10-19の単語変換改善では、backend unit 110件、import API/dispatch 9件、frontend unit 104件、ブラウザー回帰51件、Firestore emulator 14件が成功した。backend build・frontend TypeScript/buildと `git diff --check` も成功。Docker＋エミュレーター＋実LLMで「任何」のmini生成、構文の `x` 化、変換済み単語の更新、再取得、取り消しを確認した。確認用のローカル記事は削除済み。本番記事の一括再解析・migrationと設定アップロードは不要。
+
+
+## Chinese word reading repair (2026-11-02)
+
+Repeated Chinese substrings count even inside longer words when resolving the
+model's occurrence ordinal: 跌 in 大跌 and 跌幅 precedes 跌 in 齐跌. Initial
+normalization keeps the first verified span and drops overlapping occurrences
+without guessing their intended position. Other valid analysis remains available;
+uncovered lexical spans become word rows anchored to their exact source offsets.
+The application does not automatically regenerate the whole article for a missing
+word reading.
+
+Sentence and Full text modes flag missing Chinese readings and overlapping word
+positions. Select a flagged word to review its original location, optionally generate
+a contextual reading and meaning with the existing small-model word assistant,
+explicitly use the suggestion, and save. Ordinary words and gap rows support this
+flow as well as words converted from grammar. Existing item IDs, library references
+and A/B registration receipts are preserved; repair does not update dictionary
+entries or repeat membership writes. Pending registrations and active analysis lock
+repairs, and stale content revisions return 409. Word repairs update the matching
+reading occurrence without reclassifying grammar patterns. Legacy gap rows use their
+stored source offset instead of claiming every matching substring.
+
+The API endpoints and request shape are unchanged. `word-assist` revisions and
+`candidate-conversions` now also accept ordinary live word candidates. Word terms
+remain fixed; ordinary source positions may be explicitly corrected to another
+matching surface, while gap and converted-word positions remain fixed. Existing
+revision history, retry and undo behavior applies.

@@ -809,3 +809,16 @@ HTTPS URL does not make that registration web/mobile compatible. The integration
 guide distinguishes imported packages from remote app registration and records
 pending native-mobile acceptance. The selected migration uses the existing server
 through the developer portal, with no separate proxy or public publication.
+
+
+## Chinese import reading repair (2026-11-02)
+
+Initial occurrence normalization rejects overlapping spans while preserving valid
+partial analysis. The model is instructed to count substring ordinals inside
+compounds too. Gap rows carry exact source ranges; legacy gap `order` values are
+resolved as offsets rather than broadcasting the row across all matching words.
+Chinese review diagnostics flag missing pinyin and overlapping positions in both
+reader modes. Existing word-assist revisions and candidate-conversions also support
+ordinary word/gap repairs, preserving IDs, registrations and library data while
+synchronizing the matching reading occurrence. Generation remains explicit and
+suggestions require confirmation before save. See [source revisions](source-revisions.md#chinese-word-reading-repair-2026-11-02).

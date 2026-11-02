@@ -70,3 +70,21 @@ test('durable compact batches retain grammar slot links and suppress fixed word 
   assert.deepEqual(added.filter(item => item.kind === 'word').map(item => item.kind === 'word' ? item.term : ''), ['该', '公司', '采取', '行动']);
   assert.ok(added.some(item => item.kind === 'grammar' && item.constructionId === 's1-c0' && item.fixedElements?.length === 2));
 });
+
+
+test('partial Chinese checkpoint anchors omitted and mispositioned words for explicit repair', () => {
+  const text = '大跌，最大跌幅，齐跌。';
+  const result = normalizeAnalysis(JSON.stringify({ paragraphs: [{ sentences: [{ text, explanationLanguage: 'ja', words: [
+    { term: '大跌', surface: '大跌', occurrence: 0, transliteration: 'dàdiē' },
+    { term: '最', surface: '最', occurrence: 0, transliteration: 'zuì' },
+    { term: '跌幅', surface: '跌幅', occurrence: 0, transliteration: 'diēfú' },
+    { term: '齐', surface: '齐', occurrence: 0, transliteration: 'qí' },
+    { term: '跌', surface: '跌', occurrence: 1, transliteration: 'diē' },
+  ], grammar: [] }] }] }), 'chinese').analysis;
+  const next = appendImportPart(session(), 0, result, {}, {});
+  const gaps = next.items.filter(w => w.kind === 'word' && w.origin === 'gap');
+  assert.deepEqual(gaps.map(w => w.kind === 'word' && [w.term, w.range]), [
+    ['大', { start: 4, end: 5 }], ['跌', { start: 9, end: 10 }],
+  ]);
+  assert.equal(next.analysisProgress!.nextChunk, 1);
+});

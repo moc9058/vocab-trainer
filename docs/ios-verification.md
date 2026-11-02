@@ -255,3 +255,30 @@ backendのAPI変更・設定アップロード・データ移行はなく、合�
 - 起動は更新後も同じSecurityエラー。Developer ModeはEnabled。端末側の開発者信頼・検証を本人へ依頼した。起動成功や画像選択の実機確認はこの時点で未完了。
 - 旧bundleの期限切れ拒否を実確認。署名検査の回帰テスト5件（正常・期限切れ・対象端末違い・権限追加・証明書違い）が成功。
 - 手順は[個人用iOSガイド](ios-personal-app.md#署名エラーの復旧と検査付き更新)に追記。Personal Teamの7日制限は変更していない。
+
+
+## Chinese article word reading repair (2026-11-02)
+
+- Fixed substring ordinal overlaps, exact gap positions and ordinary-word reading
+  repair in Sentence and Full text modes. Existing registration receipts are kept.
+- Backend build passed; Node 24 Docker tests: 161 unit, 9 import route and 18
+  isolated Firestore emulator tests passed. Frontend: 121 unit and 33 import browser
+  tests passed, including mobile ordinary-word repair, cancel, suggestion adoption,
+  reload and receipt preservation. Web build and iOS type-check/build/sync passed.
+- Both Docker images built. Synthetic nginx → backend → Firestore checks returned
+  HTTP 200 for HTML, language list and source list; no real LLM was used.
+- The affected production article's two gap rows (大 / 跌) and mispositioned 跌
+  occurrence were repaired with a full snapshot comparison transaction. All 16
+  registration records, including an unrelated queued registration, were preserved.
+  Read-back matched the proposed document; the article has no remaining word-reading
+  diagnostics. Backup and patch are ignored files in
+  `backend/data/reading-repair/pinyin-2026-11-02/`.
+- Production assets were synced and the signed generic iOS Debug build succeeded.
+  Signature, certificate, profile, entitlements and MOON_iPhone UDID checks passed;
+  profile expiry is 2026-11-08 14:57:43 UTC.
+- `ios:install --device 00008140-001259403EDB801C` could not find the unavailable
+  physical destination (xcodebuild exit 70). Device installation and launch remain
+  pending until MOON_iPhone is connected and unlocked. The existing app was not
+  deleted. This does not indicate a signing failure.
+- `AGENTS.md` now requires production asset sync, signed build, overwrite installation
+  and launch checks after every update, with separate reporting for unavailable devices.

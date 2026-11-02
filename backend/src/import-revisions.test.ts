@@ -128,3 +128,42 @@ test('compact conversions change only the selected repeated fixed token; add mod
   assert.equal(added.items[0].hiddenByRevision, undefined);
   assert.equal(added.paragraphs[0].sentences[0].readingAnalysis!.constructions[0].statement, '与 + n + 再无 + 任何 + n');
 });
+
+
+test('repairing a registered legacy gap preserves receipts, anchors only its occurrence and respects edit guards', () => {
+  const s = fixture();
+  const text = '大跌，最大跌幅，齐跌。';
+  s.paragraphs[0].sentences[0] = { index: 0, text, readingAnalysis: {
+    version: 1, sourceText: text, explanationLanguage: 'ja', overview: '', ambiguityNotes: [], occurrences: [], constructions: [],
+  } };
+  s.items.push({ id: 'gap', kind: 'word', term: '跌', sentenceIndex: 0, order: 9, origin: 'gap',
+    status: 'registered', existingWordId: 'library-word', registrations: { B: { status: 'registered', groupIds: ['b'] } } });
+  const input = { itemId: 'gap', start: 9, end: 10, term: '跌', meaning: '下落する', transliteration: 'diē', explanationLanguage: 'ja', mode: 'replace' as const };
+  const next = convertCandidate(s, 'repair', input, 0);
+  const word = next.items.find(i => i.id === 'gap')!;
+  assert.equal(word.status, 'registered');
+  assert.deepEqual(word.registrations, s.items.at(-1)!.registrations);
+  assert.ok(word.kind === 'word'); assert.equal(word.existingWordId, 'library-word');
+  assert.deepEqual(word.range, { start: 9, end: 10 });
+  assert.equal(next.paragraphs[0].sentences[0].readingAnalysis!.occurrences[0].transliteration, 'diē');
+  assert.deepEqual(next.items[0], s.items[0]);
+  assert.throws(() => convertCandidate(s, 'wrong', { ...input, start: 1, end: 2 }, 0), /original source position/);
+  assert.throws(() => convertCandidate(next, 'stale', input, 0), /article changed/);
+  assert.throws(() => convertCandidate({ ...s, activeRevisionId: 'busy' }, 'busy', input, 0), /running/);
+});
+
+
+test('ordinary occurrence relocation keeps its grammar links at the corrected source location', () => {
+  const s = fixture();
+  s.paragraphs[0].sentences[0] = { index: 0, text: '还还', readingAnalysis: {
+    version: 1, sourceText: '还还', explanationLanguage: 'ja', overview: '', ambiguityNotes: [],
+    occurrences: [{ id: 'o', range: { start: 0, end: 1 }, surface: '还', lemma: '还', transliteration: 'hái', contextualMeaning: '', explanationLanguage: 'ja', partOfSpeech: '', role: '', reasoning: '', contrast: '', senseKey: '', constructionIds: ['c'] }],
+    constructions: [{ id: 'c', statement: '还+v', meaning: '', roleInSentence: '', ranges: [{ start: 0, end: 1 }], elements: [{ occurrenceIds: ['o'], role: 'slot', explanation: '', fixed: false }] }],
+  } };
+  s.items.push({ id: 'w', kind: 'word', term: '还', sentenceIndex: 0, order: 0, origin: 'llm', status: 'pending', occurrenceId: 'o', range: { start: 0, end: 1 }, surface: '还' });
+  const next = convertCandidate(s, 'move', { itemId: 'w', start: 1, end: 2, term: '还', meaning: '返す', transliteration: 'huán', explanationLanguage: 'ja', mode: 'replace' }, 0);
+  const reading = next.paragraphs[0].sentences[0].readingAnalysis!;
+  assert.equal(reading.occurrences[0].transliteration, 'huán');
+  assert.deepEqual(reading.constructions[0].ranges, [{ start: 1, end: 2 }]);
+  assert.equal(reading.constructions[0].statement, '还+v');
+});

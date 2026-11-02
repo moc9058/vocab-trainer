@@ -3,9 +3,14 @@ import fixture from '../../src/utils/__fixtures__/import-context.json';
 import { syncConvertedWordReading } from '../../src/utils/importWordLinks';
 import { buildImportItems } from '../../src/utils/importSession';
 
-async function setup(page: Page, lostAcceptance = false) {
+async function setup(page: Page, lostAcceptance = false, missingWord = false) {
   let session: any = { id: 'article', language: 'chinese', title: 'Revision example', text: fixture.paragraphs.map(p => p.sentences.map(s => s.text).join('')).join('\n'), paragraphs: structuredClone(fixture.paragraphs),
     items: buildImportItems(fixture as any, {}, {}, 'chinese'), contentRevision: 0, groupBNames: [], status: 'in-progress', focusedSentenceIndex: 0, createdAt: '', updatedAt: '' };
+  if (missingWord) {
+    const w = session.items.find((i: any) => i.kind === 'word' && i.term === '该');
+    delete w.transliteration; w.status = 'registered'; w.existingWordId = 'keep-word';
+    w.registrations = { B: { status: 'registered', groupIds: ['keep-b'] } };
+  }
   let original = structuredClone(session), calls = 0, conversions = 0, request: any;
   const revisions = new Map<string, any>();
   await page.route(url => url.pathname.startsWith('/api/'), async route => {
@@ -56,7 +61,7 @@ async function setup(page: Page, lostAcceptance = false) {
       else r.state = 'rejected';
       await route.fulfill({ json: { session, revision: r } }); return;
     }
-    if (path.endsWith('/check-terms')) { await route.fulfill({ json: { existing: {} } }); return; }
+    if (path.endsWith('/check-terms')) { await route.fulfill({ json: { existing: missingWord ? { 该: 'keep-word' } : {} } }); return; }
     await route.fulfill({ json: [] });
   });
   await page.goto('/tests/browser/harness.html?mode=import-review');
@@ -134,7 +139,7 @@ test('converted words can generate and save reading and meaning again, with link
   await page.getByRole('button', { name: 'Treat as a word', exact: true }).first().click();
   await page.getByRole('dialog').getByRole('button', { name: 'Save word candidate' }).click();
   const length = state.saved().items.length;
-  await page.getByRole('button', { name: 'Edit reading and meaning', exact: true }).click();
+  await page.locator('[data-word-id="converted-word"]').click();
   const dialog = page.getByRole('dialog', { name: 'Edit reading and meaning' });
   await expect(dialog.getByLabel('Word / dictionary form')).toBeDisabled();
   await dialog.getByRole('button', { name: 'Suggest reading and meaning' }).click();
@@ -156,4 +161,32 @@ test('converted words can generate and save reading and meaning again, with link
   await detail.getByText('Structure and roles', { exact: true }).click();
   const part = page.getByTestId('import-construction-parts').locator('div').filter({ has: page.locator('span', { hasText: /^该$/ }) }).first();
   await expect(part).toContainText('gāi');
+});
+
+
+test('an ordinary registered word can be repaired explicitly from either view without duplicate registration', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const state = await setup(page, false, true);
+  const warning = page.getByTestId('import-reading-warnings').first();
+  await expect(warning).toContainText('missing readings');
+  await warning.getByRole('button', { name: '该 · Repair reading and meaning', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Edit reading and meaning' });
+  await expect(dialog.getByLabel('First character')).toHaveValue('0');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(state.calls()).toBe(0); expect(state.conversions()).toBe(0);
+  await page.getByRole('button', { name: 'Sentence mode', exact: true }).click();
+  await page.getByTestId('import-reading-warnings').getByRole('button', { name: '该 · Repair reading and meaning', exact: true }).click();
+  const initialMeaning = await dialog.getByLabel('Meaning here', { exact: true }).inputValue();
+  await dialog.getByRole('button', { name: 'Suggest reading and meaning' }).click();
+  await expect(dialog.getByRole('button', { name: 'Use this suggestion' })).toBeVisible();
+  await expect(dialog.getByLabel('Meaning here', { exact: true })).toHaveValue(initialMeaning);
+  await dialog.getByRole('button', { name: 'Use this suggestion' }).click();
+  await dialog.getByRole('button', { name: 'Save word candidate' }).click();
+  await expect(dialog).not.toBeVisible();
+  const repaired = state.saved().items.find((i: any) => i.kind === 'word' && i.term === '该');
+  expect(repaired.existingWordId).toBe('keep-word');
+  expect(repaired.registrations.B.groupIds).toEqual(['keep-b']);
+  expect(repaired.transliteration).toBe('gāi');
+  await page.reload();
+  await expect(page.getByTestId('import-reading-warnings')).toHaveCount(0);
 });

@@ -118,3 +118,29 @@ test('word assistance freezes and calls the small model, enriches an existing co
   const restored = await store.actOnRevision('chinese', s.id, saved.revision.id, 'undo', 2);
   assert.equal(restored.session.items.at(-1)!.kind === 'word' && restored.session.items.at(-1)!.meaning, '');
 });
+
+
+test('ordinary registered gap can request a proposal, save once, reload and undo without losing B receipts', async () => {
+  const s = await make();
+  const ref = db.doc(`import_sessions/${s.id}`);
+  const gap = { id: 'gap', kind: 'word', origin: 'gap', status: 'registered', sentenceIndex: 0, order: 1,
+    term: '倒是', existingWordId: 'keep-word', registrations: { B: { status: 'registered', groupIds: ['keep-b'] } } };
+  await ref.update({ items: [gap] });
+  const input: any = { itemId: 'gap', start: 1, end: 3, term: '倒是', meaning: '', transliteration: '', explanationLanguage: 'ja', mode: 'replace' };
+  const r = await store.startRevision('chinese', s.id, { ...request('repair'), kind: 'word-assist', conversion: input });
+  await run(s.id, r.id);
+  const proposed = await store.getRevision('chinese', s.id, r.id);
+  assert.equal(proposed.state, 'proposed');
+  assert.equal((await ref.get()).data()!.items[0].transliteration, undefined);
+  const filled = { ...input, meaning: proposed.assistedWord!.meaning, transliteration: proposed.assistedWord!.transliteration };
+  const saved = await store.convertWord('chinese', s.id, filled, 0, 'save-repair');
+  const replay = await store.convertWord('chinese', s.id, filled, 0, 'save-repair');
+  assert.equal(replay.session.contentRevision, saved.session.contentRevision);
+  const word = (await ref.get()).data()!.items[0];
+  assert.equal(word.id, 'gap'); assert.equal(word.existingWordId, 'keep-word');
+  assert.deepEqual(word.registrations, gap.registrations); assert.equal(word.transliteration, 'dào shì');
+  assert.deepEqual(word.range, { start: 1, end: 3 });
+  await assert.rejects(store.convertWord('chinese', s.id, filled, 0, 'stale-repair'), /article changed/);
+  const undone = await store.actOnRevision('chinese', s.id, saved.revision.id, 'undo', 1);
+  assert.deepEqual(undone.session.items[0], gap);
+});

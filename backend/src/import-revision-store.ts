@@ -214,7 +214,10 @@ export async function runRevisionTask(payload: ImportTaskPayload): Promise<void>
       if (revision.kind === 'word-assist') {
         const word = JSON.parse(stripMarkdownFences(raw));
         if (typeof word.term !== 'string' || !word.term.trim() || typeof word.meaning !== 'string' || !word.meaning.trim() || typeof word.transliteration !== 'string' || (worker.language === 'chinese' && !word.transliteration.trim())) throw new Error('Invalid word schema');
-        result = { assistedWord: { term: word.term, meaning: word.meaning, transliteration: worker.language === 'chinese' ? toneMarkNumberedPinyin(word.transliteration.trim()) : word.transliteration.trim() } };
+        const reading = worker.language === 'chinese' ? toneMarkNumberedPinyin(word.transliteration.trim()) : word.transliteration.trim();
+        if (worker.language === 'chinese' && /\p{Script=Han}/u.test(revision.request.conversion!.term)
+          && (!/\p{Script=Latin}/u.test(reading) || /\p{Script=Han}/u.test(reading))) throw new Error('Invalid Chinese word reading');
+        result = { assistedWord: { term: word.term, meaning: word.meaning, transliteration: reading } };
       } else {
         const analysis = normalizeAnalysis(stripMarkdownFences(raw), worker.language).analysis;
         if (analysis.paragraphs.flatMap(p => p.sentences).length !== 1 || analysis.paragraphs[0].sentences[0].text !== worker.chunks[worker.nextBatch] || !analysis.paragraphs[0].sentences[0].readingAnalysis?.comprehension) throw new Error('IMPORT_SOURCE_MISMATCH: Missing sentence comprehension');

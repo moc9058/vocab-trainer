@@ -101,3 +101,21 @@ test('whole sentence nuance evidence must be an exact nonempty source excerpt', 
   assert.equal(valid.reading.comprehension!.nuances[0].evidence, '倒是');
   assert.throws(() => normalizeReadingSentence({ ...raw, comprehension: { ...raw.comprehension, nuances: [{ ...raw.comprehension.nuances[0], evidence: '不存在' }] } }, 0, () => [], s => s), /evidence/);
 });
+
+
+test('wrong substring ordinals never overlap a compound or suppress its real later gap', () => {
+  const text = '大跌，最大跌幅，齐跌。';
+  const { reading, words } = normalizeReadingSentence({ text, words: [
+    { term: '大跌', surface: '大跌', occurrence: 0, transliteration: 'dàdiē' },
+    { term: '最', surface: '最', occurrence: 0, transliteration: 'zuì' },
+    { term: '跌幅', surface: '跌幅', occurrence: 0, transliteration: 'diēfú' },
+    { term: '齐', surface: '齐', occurrence: 0, transliteration: 'qí' },
+    { term: '跌', surface: '跌', occurrence: 1, transliteration: 'diē' },
+  ] }, 0, termOccurrences, lowercaseGrammarAbbreviations);
+  assert.equal(words.some(w => w.term === '跌'), false);
+  assert.deepEqual(reading.occurrences.map(o => o.surface), ['大跌', '最', '跌幅', '齐']);
+  const correct = normalizeReadingSentence({ text, words: [
+    { term: '跌', surface: '跌', occurrence: 2, transliteration: 'diē' },
+  ] }, 0, termOccurrences, lowercaseGrammarAbbreviations);
+  assert.equal(correct.words[0].range?.start, 9);
+});

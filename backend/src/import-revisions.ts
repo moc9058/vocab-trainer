@@ -106,27 +106,43 @@ export function applyRevision(session: ImportSession, revision: ImportRevision, 
 }
 export function convertCandidate(session: ImportSession, id: string, input: ImportConversionInput, expected: number): ImportSession {
   assertEditable(session, expected);
-  const source = session.items.find(i => i.id === input.itemId && (i.kind === 'grammar' || !!i.convertedFromGrammarId) && visible(i));
-  if (!source) throw new ImportCheckpointError(404, 'Grammar or converted word candidate not found.');
-  if (source.kind === 'word' && (source.range?.start !== input.start || source.range.end !== input.end || source.term !== input.term.trim())) throw new ImportCheckpointError(400, 'Keep the converted word and its original range.');
+  const source = session.items.find(i => i.id === input.itemId && visible(i));
+  if (!source) throw new ImportCheckpointError(404, 'Word or grammar candidate not found.');
+  if (source.kind === 'word' && (source.term !== input.term.trim() || (source.convertedFromGrammarId && source.range && (source.range.start !== input.start || source.range.end !== input.end)))) throw new ImportCheckpointError(400, 'Keep the converted word and its original range.');
   const sentence = session.paragraphs.flatMap(p => p.sentences).find(s => s.index === source.sentenceIndex)!;
   const { start, end } = input;
   if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end <= start || end > sentence.text.length || /[\uD800-\uDBFF]$/.test(sentence.text.slice(0, start)) || /[\uD800-\uDBFF]$/.test(sentence.text.slice(0, end)) || !/\p{L}/u.test(sentence.text.slice(start, end)) || !input.term.trim()) throw new ImportCheckpointError(400, 'Select a complete word in the original sentence.');
   const surface = sentence.text.slice(start, end);
+  if (source.kind === 'word' && !source.convertedFromGrammarId && (surface !== (source.surface ?? source.term.trim()) ||
+    (source.origin === 'gap' && start !== source.order))) throw new ImportCheckpointError(400, 'Select this word at its original source position.');
   const duplicate = session.items.find(i => i.id !== source.id && i.kind === 'word' && visible(i) && !i.suppressedByGrammar && i.sentenceIndex === source.sentenceIndex && i.range?.start === start && i.range.end === end);
   if (duplicate) throw new ImportCheckpointError(409, `A word candidate already exists at this position (${duplicate.id}). Edit that candidate instead.`);
   const word: ImportItem = source.kind === 'word'
-    ? { ...source, meaning: input.meaning.trim(), transliteration: input.transliteration.trim(), explanationLanguage: input.explanationLanguage, edited: true }
+    ? { ...source, range: { start, end }, surface, sourceTerm: source.term, order: start,
+      meaning: input.meaning.trim(), transliteration: input.transliteration.trim(), explanationLanguage: input.explanationLanguage, edited: true }
     : { id: `${id}-word`, kind: 'word', sentenceIndex: source.sentenceIndex, order: start, origin: 'manual', edited: true, status: 'pending',
       term: input.term.trim(), sourceTerm: input.term.trim(), surface, range: { start, end }, meaning: input.meaning.trim(), transliteration: input.transliteration.trim(), explanationLanguage: input.explanationLanguage,
       sourceIds: [source.id], convertedFromGrammarId: source.id, revisionId: id };
   let items = session.items.map(i => i.id === word.id ? word : (i.id === source.id && input.mode === 'replace') || (i.kind === 'word' && i.suppressedByGrammar && i.sentenceIndex === source.sentenceIndex && i.range?.start === start && i.range.end === end) ? { ...i, hiddenByRevision: id } : i);
   if (source.kind === 'grammar') items.push(word);
-  const paragraphs = session.paragraphs.map(p => ({ ...p, sentences: p.sentences.map(s => s.index === source.sentenceIndex ? syncConvertedWordReading(s, items) : s) }));
+  const paragraphs = session.paragraphs.map(p => ({ ...p, sentences: p.sentences.map(s => {
+    if (s.index !== source.sentenceIndex) return s;
+    if (source.kind !== 'word' || source.convertedFromGrammarId) return syncConvertedWordReading(s, items);
+    const reading = s.readingAnalysis;
+    if (!reading || reading.sourceText !== s.text) return s;
+    const existing = reading.occurrences.find(o => o.id === source.occurrenceId)
+      ?? reading.occurrences.find(o => o.range.start === start && o.range.end === end && o.surface === surface);
+    const occurrence = { ...(existing ?? { id: `repair-${source.id}`, partOfSpeech: '', role: '', reasoning: '', contrast: '', senseKey: '', constructionIds: [] }),
+      range: { start, end }, surface, lemma: source.term, contextualMeaning: input.meaning.trim(), transliteration: input.transliteration.trim(), explanationLanguage: input.explanationLanguage };
+    const occurrences = [...reading.occurrences.filter(o => o.id !== occurrence.id), occurrence].sort((a, b) => a.range.start - b.range.start);
+    const constructions = reading.constructions.map(point => point.elements.some(e => e.occurrenceIds.includes(occurrence.id))
+      ? { ...point, ranges: occurrences.filter(o => point.elements.some(e => e.occurrenceIds.includes(o.id))).map(o => o.range) } : point);
+    return { ...s, readingAnalysis: { ...reading, occurrences, constructions } };
+  }) }));
   // Changed article patterns get fresh candidates; library identities and receipts stay on the historical rows.
   const replacements: ImportGrammarItem[] = [];
   items = items.map(item => {
-    if (item.kind !== 'grammar' || !visible(item) || item.sentenceIndex !== sentence.index) return item;
+    if ((source.kind === 'word' && !source.convertedFromGrammarId) || item.kind !== 'grammar' || !visible(item) || item.sentenceIndex !== sentence.index) return item;
     const reading = sentence.readingAnalysis?.sourceText === sentence.text ? sentence.readingAnalysis : undefined;
     const original = reading?.constructions.find(c => c.id === item.constructionId || c.statement === item.statement);
     const fixed = (item.fixedElements ?? []).filter(e => sentence.text.slice(e.range.start, e.range.end) === e.surface);

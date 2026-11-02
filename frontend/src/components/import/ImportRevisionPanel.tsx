@@ -4,6 +4,7 @@ import { convertImportGrammar, createImportRevision, getImportRevision, getImpor
 import type { ImportConversionInput, ImportGrammarItem, ImportWordItem, ImportRevision, ImportRevisionRequest, ImportSession } from '../../types';
 import PinyinInput from '../PinyinInput';
 import ImportComprehension from './ImportComprehension';
+import { wordRepairRange } from '../../utils/importWordRepair';
 
 const control = 'w-full min-w-0 rounded-lg border border-gray-600 bg-gray-950 p-2 text-sm text-gray-100 disabled:opacity-40';
 const button = 'rounded-lg border border-indigo-600 px-3 py-2 text-sm text-indigo-100 disabled:opacity-40';
@@ -55,7 +56,7 @@ export default function ImportRevisionPanel({ session, prepare, accept, onBusy, 
     setExplanations(r.request.update === 'grammar' ? [] : r.sentences.map(s => s.index));
     if (r.assistedWord) {
       setAssisted(r.assistedWord);
-      const source = session.items.find((i): i is ImportGrammarItem | ImportWordItem => (i.kind === 'grammar' || !!i.convertedFromGrammarId) && i.id === r.request.conversion?.itemId && !i.hiddenByRevision && i.status !== 'skipped');
+      const source = session.items.find((i): i is ImportGrammarItem | ImportWordItem => i.id === r.request.conversion?.itemId && !i.hiddenByRevision && i.status !== 'skipped');
       if (source) onOpenConversion(source);
     }
   }
@@ -86,8 +87,9 @@ export default function ImportRevisionPanel({ session, prepare, accept, onBusy, 
     if (!s) return;
     const first = conversion.kind === 'grammar' ? conversion.fixedElements?.[0] : undefined;
     const excerpt = first?.surface ?? (conversion.kind === 'grammar' && conversion.excerpt && s.text.includes(conversion.excerpt) ? conversion.excerpt : '');
-    const at = (conversion.kind === 'word' ? conversion.range?.start : undefined) ?? first?.range.start ?? (excerpt ? s.text.indexOf(excerpt) : 0);
-    const to = (conversion.kind === 'word' ? conversion.range?.end : undefined) ?? first?.range.end ?? at + (excerpt?.length || [...s.text][0]?.length || 1);
+    const repairRange = conversion.kind === 'word' ? wordRepairRange(s.text, conversion) : undefined;
+    const at = repairRange?.start ?? first?.range.start ?? (conversion.kind === 'word' ? -1 : excerpt ? s.text.indexOf(excerpt) : 0);
+    const to = repairRange?.end ?? first?.range.end ?? at + (excerpt?.length || [...s.text][0]?.length || 1);
     const occurrence = s.readingAnalysis?.occurrences.find(o => o.range.start === at && o.range.end === to);
     const existing = conversion.kind === 'word' ? conversion : undefined;
     setWord({ itemId: conversion.id, start: at, end: to, term: existing?.term ?? occurrence?.lemma ?? s.text.slice(at, to), meaning: existing?.meaning ?? occurrence?.contextualMeaning ?? first?.meaning ?? '', transliteration: existing?.transliteration ?? occurrence?.transliteration ?? first?.transliteration ?? '', explanationLanguage: existing?.explanationLanguage ?? occurrence?.explanationLanguage ?? 'ja', mode: 'replace' });
@@ -177,14 +179,14 @@ export default function ImportRevisionPanel({ session, prepare, accept, onBusy, 
         <p className="break-words text-lg leading-relaxed" data-testid="import-conversion-source">{conversionSentence.text.slice(0, word.start)}<mark className="bg-indigo-800 text-white">{conversionSentence.text.slice(word.start, word.end)}</mark>{conversionSentence.text.slice(word.end)}</p>
         <fieldset disabled={busy || running} className="space-y-3">
           <p className="text-xs text-gray-400">{t('importWordRangeHint')}</p>
-          <div className="grid grid-cols-2 gap-3">{(['start', 'end'] as const).map(k => <label key={k} className="text-sm">{t(k === 'start' ? 'importWordStart' : 'importWordEnd')}<select disabled={conversion?.kind === 'word'} aria-label={t(k === 'start' ? 'importWordStart' : 'importWordEnd')} className={control} value={word[k]} onChange={e => { const value = +e.target.value; const from = k === 'start' ? value : word.start, to = k === 'end' ? value : word.end; setWord({ ...word, [k]: value, term: conversionSentence.text.slice(from, to), meaning: '', transliteration: '' }); setAssisted(undefined); }}>{[...conversionSentence.text].map((ch, i, chars) => { const offset = chars.slice(0, i).join('').length + (k === 'end' ? ch.length : 0); return <option key={offset} value={offset}>{offset + (k === 'start' ? 1 : 0)}: {ch}</option>; })}</select></label>)}</div>
+          <div className="grid grid-cols-2 gap-3">{(['start', 'end'] as const).map(k => <label key={k} className="text-sm">{t(k === 'start' ? 'importWordStart' : 'importWordEnd')}<select disabled={conversion?.kind === 'word' && (!!conversion.convertedFromGrammarId || conversion.origin === 'gap')} aria-label={t(k === 'start' ? 'importWordStart' : 'importWordEnd')} className={control} value={word[k]} onChange={e => { const value = +e.target.value; const from = k === 'start' ? value : word.start, to = k === 'end' ? value : word.end; setWord({ ...word, [k]: value, term: conversion?.kind === 'word' ? word.term : conversionSentence.text.slice(from, to), meaning: '', transliteration: '' }); setAssisted(undefined); }}>{word[k] < 0 && <option value={-1}>—</option>}{[...conversionSentence.text].map((ch, i, chars) => { const offset = chars.slice(0, i).join('').length + (k === 'end' ? ch.length : 0); return <option key={offset} value={offset}>{offset + (k === 'start' ? 1 : 0)}: {ch}</option>; })}</select></label>)}</div>
           {(['term', 'transliteration', 'meaning'] as const).map(k => {
             const label = t(k === 'term' ? 'importWordLemma' : k === 'meaning' ? 'importContextMeaning' : 'importReading');
             return <label key={k} className="block text-sm">{label}{k === 'transliteration' && session.language === 'chinese'
               ? <PinyinInput aria-label={label} className={control} value={word.transliteration} onChange={value => setWord({ ...word, transliteration: value })} disabled={busy || running} />
               : <input aria-label={label} disabled={k === 'term' && conversion?.kind === 'word'} className={control} value={word[k]} onChange={e => setWord({ ...word, [k]: e.target.value })} />}</label>;
           })}
-          <button type="button" className={button} onClick={() => void generate(true)} disabled={word.end <= word.start || !word.term.trim()}>{t('importAssistWord')}</button><p className="text-xs text-gray-400">{t('importAssistWordMiniHint')}</p>
+          <button type="button" className={button} onClick={() => void generate(true)} disabled={word.start < 0 || word.end <= word.start || !word.term.trim()}>{t('importAssistWord')}</button><p className="text-xs text-gray-400">{t('importAssistWordMiniHint')}</p>
           <label className="block text-sm">{t('importExplanationLanguage')}<select className={control} value={word.explanationLanguage} onChange={e => setWord({ ...word, explanationLanguage: e.target.value })}><option value="ja">日本語</option><option value="en">English</option><option value="ko">한국어</option><option value="zh">中文</option></select></label>
           {conversion?.kind === 'grammar' && <label className="block text-sm">{t('importConversionMode')}<select className={control} value={word.mode} onChange={e => setWord({ ...word, mode: e.target.value as typeof word.mode })}><option value="replace">{t('importConvertToWord')}</option><option value="add">{t('importAlsoAddWord')}</option></select></label>}
           <p className="text-xs text-gray-400">{t('importConversionLibraryHint')}</p>
@@ -193,7 +195,7 @@ export default function ImportRevisionPanel({ session, prepare, accept, onBusy, 
         {assisted && <div className="rounded-lg border border-indigo-600 p-3 text-sm"><p>{assisted.term} · {assisted.transliteration}</p><p>{assisted.meaning}</p><button type="button" className={`${button} mt-2`} disabled={running || busy} onClick={() => { setWord({ ...word, ...assisted, term: conversion?.kind === 'word' ? word.term : assisted.term }); setAssisted(undefined); }}>{t('importUseWordSuggestion')}</button></div>}
         {error && <p role="alert" className="break-words text-sm text-red-300">{error}</p>}
         <p role="status" className="text-xs text-indigo-200">{running ? t('importRevisionGenerating') : ''}</p>
-        <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-gray-700 bg-gray-900 py-2"><button type="button" className={button} disabled={busy || running || word.end <= word.start || !word.term.trim()} onClick={() => void saveConversion()}>{t('importSaveWordCandidate')}</button><button type="button" className={button} disabled={busy || running} onClick={onCloseConversion}>{t('cancel')}</button></div>
+        <div className="sticky bottom-0 flex flex-wrap gap-2 border-t border-gray-700 bg-gray-900 py-2"><button type="button" className={button} disabled={busy || running || word.start < 0 || word.end <= word.start || !word.term.trim()} onClick={() => void saveConversion()}>{t('importSaveWordCandidate')}</button><button type="button" className={button} disabled={busy || running} onClick={onCloseConversion}>{t('cancel')}</button></div>
       </div>}
     </dialog>
   </section>;

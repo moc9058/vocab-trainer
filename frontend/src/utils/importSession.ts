@@ -742,6 +742,7 @@ export function addWordItem(
   const trimmed = term.trim();
   const existingRow = items.find(
     (i) => isLive(i) && i.kind === "word" && i.sentenceIndex === sentenceIndex && i.term === trimmed
+      && (opts.origin !== 'gap' || (i.range?.start ?? i.order) === opts.order)
   );
   if (trimmed && existingRow) return items; // already on screen — don't duplicate
   const created: ImportWordItem = {
@@ -752,6 +753,9 @@ export function addWordItem(
     status: "pending",
     origin: opts.origin ?? "manual",
     term: trimmed,
+    ...(opts.origin === 'gap' && opts.order !== undefined ? {
+      range: { start: opts.order, end: opts.order + trimmed.length }, surface: trimmed, sourceTerm: trimmed,
+    } : {}),
   };
   return [...items, created];
 }

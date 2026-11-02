@@ -6,6 +6,7 @@ import type { ConstructionPart } from "../../utils/importReadingAnalysis";
 import type { ImportGrammarItem, ImportItem, ImportWordItem, ImportSession } from "../../types";
 import ImportComprehension from "./ImportComprehension";
 import RubyText from "../RubyText";
+import ImportReadingWarnings from './ImportReadingWarnings';
 
 const BOUNDARIES_KEY = "importShowTextBoundaries";
 const SLOT_STYLES = [
@@ -165,6 +166,8 @@ export default function ImportFullTextReader({ session, sourceView, openSentence
   }, [selected?.sentenceIndex, selected?.occurrenceId, session.id, reading, busy]);
 
   return <div className={`min-w-0 ${selected ? "lg:pr-[26rem]" : ""}`} data-testid="import-full-text-reader">
+    {session.paragraphs.flatMap(p => p.sentences).map(s => <ImportReadingWarnings key={s.index} sentence={s} items={session.items}
+      language={session.language} onAssist={onAssistWord} locked={revisionLocked || busy} />)}
     <div className="mb-5 space-y-2 text-xs text-gray-400">
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" aria-pressed={showBoundaries}
@@ -255,7 +258,7 @@ export default function ImportFullTextReader({ session, sourceView, openSentence
           {word.role && <p><strong>{t("importElementRole")}: </strong>{word.role}</p>}
           {word.reasoning && <p><strong>{t("importInterpretationReason")}: </strong>{word.reasoning}</p>}
           {word.contrast && <p><strong>{t("importUsageContrast")}: </strong>{word.contrast}</p>}
-          {(() => { const candidate = readingWordCandidate(sentence, word, session.items); return candidate.convertedFromGrammarId && <button type="button" disabled={revisionLocked || candidate.status === 'queued'} onClick={() => { onAssistWord?.(candidate); close(); }} className="rounded border border-indigo-700 px-3 py-2 text-indigo-200 disabled:opacity-40">{t('importEditConvertedWord')}</button>; })()}
+          {(() => { const candidate = readingWordCandidate(sentence, word, session.items); return session.items.some(i => i.id === candidate.id) && <button type="button" disabled={revisionLocked || candidate.status === 'queued'} onClick={() => { onAssistWord?.(candidate); close(); }} className="rounded border border-indigo-700 px-3 py-2 text-indigo-200 disabled:opacity-40">{t('importEditConvertedWord')}</button>; })()}
           <button type="button" onClick={() => setSelected({ sentenceIndex: sentence.index })} className="text-indigo-300 underline">{t("importSentenceExplanation")}</button>
         </div>}
         {relatedConstructions.length > 0 && <div className="mb-3 text-xs">

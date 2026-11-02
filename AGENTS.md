@@ -156,6 +156,15 @@ available, and report any verification that could not be performed.
   user which branch to use instead of switching, merging or guessing. Never force-push.
 - Treat push and deploy as distinct outcomes: do not claim either one succeeded until
   its command completes, and report a failure or unavailable prerequisite precisely.
+- After every update, also update the user's iPhone app: run the production asset
+  sync, signed build and signature/profile checks, then overwrite-install and launch
+  on the existing MOON_iPhone using `npm run ios:install --prefix frontend -- --device <UDID>`.
+  Discover the device with Xcode's `devicectl`; use the existing Team and Bundle ID.
+  Do not delete the app. Web deployment alone does not update its bundled UI.
+  Report asset/build, installation and launch outcomes separately. If the phone is
+  unavailable or requires unlock/trust, finish all available work and explicitly
+  report the remaining device step; never claim installation succeeded without it.
+  See [the iPhone guide](docs/ios-personal-app.md) for the supported update procedure.
 - The production command is `./deploy.sh`; defaults target
   `vocab-trainer-490014` in `asia-northeast1`. Windows uses `.\deploy.ps1`.
   Both services deploy to Cloud Run.

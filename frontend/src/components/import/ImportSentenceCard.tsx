@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useI18n } from "../../i18n/context";
 import PinyinInput from "../PinyinInput";
+import ImportReadingWarnings from './ImportReadingWarnings';
 import {
   addGrammarItem,
   addWordItem,
@@ -224,6 +225,7 @@ export default function ImportSentenceCard({
 
   return (
     <div className="min-w-0 rounded-xl border border-indigo-800/50 bg-gray-800/60 p-3 sm:p-4">
+      <ImportReadingWarnings sentence={sentence} items={items} language={language} onAssist={onAssistWord} />
       {/*
         The sentence is PINNED to the top of the card while its rows scroll under it.
         Extraction is exhaustive — every character of the sentence gets a word row —
@@ -386,7 +388,7 @@ export default function ImportSentenceCard({
             <WordRow
               key={word.id}
               word={word}
-              onAssist={word.convertedFromGrammarId ? () => onAssistWord?.(word) : undefined}
+              onAssist={onAssistWord && word.term.trim() ? () => onAssistWord(word) : undefined}
               byId={byId}
               isChinese={language === "chinese"}
               // Merging with the row below is the whole of the common case — two
@@ -588,7 +590,7 @@ function WordRow({
           : "bg-gray-900/50"
       }`}
     >
-      {onAssist && <button type="button" disabled={word.status === 'queued'} onClick={onAssist} className="mb-2 rounded border border-indigo-700 px-2 py-1 text-xs text-indigo-200 disabled:opacity-40">{t('importEditConvertedWord')}</button>}
+      {onAssist && <button type="button" data-word-id={word.id} disabled={word.status === 'queued'} onClick={onAssist} className="mb-2 rounded border border-indigo-700 px-2 py-1 text-xs text-indigo-200 disabled:opacity-40">{t('importEditConvertedWord')}</button>}
       <div className="sm:flex sm:items-center sm:gap-2">
         <div className="flex items-start gap-2 sm:min-w-0 sm:flex-1 sm:items-center">
           <input
