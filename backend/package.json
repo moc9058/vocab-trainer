@@ -26,7 +26,9 @@
     "textbook:validate": "tsx scripts/validate-textbook-curriculum.ts",
     "textbook:prepare": "tsx scripts/prepare-textbook-curriculum.ts",
     "math:evaluate": "tsx scripts/evaluate-math-assessment.ts",
-    "math:evaluate:subjects": "tsx scripts/evaluate-math-subjects.ts"
+    "math:evaluate:subjects": "tsx scripts/evaluate-math-subjects.ts",
+    "test:integration": "tsx --test src/integration-auth.test.ts src/integration-contracts.test.ts src/integration-mcp.test.ts",
+    "test:integration:emulator": "node --import tsx --test scripts/tests/emulator/integration-operations.test.ts"
   },
   "devDependencies": {
     "@types/node": "^25.3.5",
@@ -39,9 +41,12 @@
     "@fastify/sensible": "^6.0.4",
     "@google-cloud/firestore": "^8.3.0",
     "@google-cloud/tasks": "^7.3.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "dotenv": "^17.3.1",
     "fastify": "^5.8.2",
     "google-auth-library": "^11.3.1",
-    "openai": "^6.29.0"
+    "jose": "^6.2.15",
+    "openai": "^6.29.0",
+    "zod": "^4.6.7"
   }
 }
