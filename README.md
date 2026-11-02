@@ -6,6 +6,7 @@ A vocabulary testing tool that helps users memorize vocabularies and view exampl
 
 - [AGENTS.md](AGENTS.md): shared instructions for coding agents.
 - [CLAUDE.md](CLAUDE.md): Claude Code entry point to the shared instructions.
+- [Chinese registration API](docs/api/chinese-registration.md): request fields and JSON Schemas for AI/external word and grammar registration.
 - [Development reference](docs/development-reference.md): detailed architecture and operations.
 - [Mathematics category](docs/math-category.md): textbook publishing and mathematics tests.
 - [Mathematics assessment proposal](docs/math-assessment-design.md): historical difficulty proposal and anchors.

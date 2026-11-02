@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vocab-trainer.local/schemas/chinese-word-create.v1.schema.json",
+  "title": "Chinese word smart-add request v1",
+  "description": "Recommended external-client request profile for POST /api/vocab/chinese/smart-add. A documentation artifact, not a new runtime validator. Category and review-flag fields are not part of this contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "term"
+  ],
+  "properties": {
+    "term": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "description": "Chinese word or expression; send its trimmed form. The server assigns its ID."
+    },
+    "transliteration": {
+      "type": "string",
+      "description": "Word pronunciation in pinyin with tone marks. Omit to generate."
+    },
+    "definitions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": false,
+            "properties": {
+              "en": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "ja": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              },
+              "ko": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "\\S"
+              }
+            }
+          },
+          "pinyins": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "description": "Pronunciations for this particular meaning, including tone marks."
+          }
+        }
+      }
+    },
+    "examples": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Example"
+      }
+    },
+    "topics": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "pattern": "\\S"
+      },
+      "description": "Optional existing TOPICS values from backend/src/types.ts. Prefer omitting rather than guessing labels."
+    },
+    "level": {
+      "type": "string",
+      "enum": [
+        "HSK1-4",
+        "HSK5",
+        "HSK6",
+        "HSK7-9",
+        "Advanced"
+      ]
+    },
+    "notes": {
+      "type": "string"
+    },
+    "sourceContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sentence",
+        "surface",
+        "contextualMeaning",
+        "explanationLanguage"
+      ],
+      "properties": {
+        "sentence": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "maxLength": 8000
+        },
+        "surface": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "contextualMeaning": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "maxLength": 2000
+        },
+        "explanationLanguage": {
+          "type": "string",
+          "enum": [
+            "en",
+            "ja",
+            "ko",
+            "zh"
+          ]
+        }
+      }
+    }
+  },
+  "$defs": {
+    "Example": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sentence",
+        "translation"
+      ],
+      "properties": {
+        "sentence": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "Chinese example sentence, preserving the original text."
+        },
+        "translation": {
+          "description": "A translation string or ISO-code-keyed translations. Empty string asks the server to fill missing translations.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "userSplits": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "\\S"
+          },
+          "description": "Optional word segmentation as ordered surface texts. Preserve the sentence exactly; the server fills readings and references."
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "term": "后悔"
+    },
+    {
+      "term": "后悔",
+      "transliteration": "hòuhuǐ",
+      "definitions": [
+        {
+          "text": {
+            "ko": "후회하다"
+          },
+          "pinyins": [
+            "hòuhuǐ"
+          ]
+        }
+      ],
+      "examples": [
+        {
+          "sentence": "现在后悔也来不及了。",
+          "translation": {
+            "ko": "이제 후회해도 늦었다."
+          }
+        }
+      ]
+    }
+  ]
+}

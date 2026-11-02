@@ -728,3 +728,12 @@ Publish only changed vocabulary configuration using
 then roll services with `./deploy.sh` from the repository root. See
 [word data cleanup](word-data-cleanup.md) for separate dry-run/apply commands, backup
 encoding, the collection allowlist and concurrency protection.
+
+## Chinese registration request contract
+
+[Chinese registration API](api/chinese-registration.md) defines the current external-client
+request profiles for word and grammar smart-add, with versioned JSON Schemas under
+`docs/api/`. It documents the Japanese-only grammar description constraint, separate
+group membership calls, existing extension-token capabilities and duplicate/retry
+behavior. These are documentation artifacts; they do not install runtime validation
+or a new endpoint. Update the document and schemas together when these APIs change.
