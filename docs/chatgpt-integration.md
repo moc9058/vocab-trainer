@@ -28,6 +28,9 @@ The first Safari consent POST returned 403. The authorization page used
 Safari. It now uses `same-origin` so same-origin approval retains provenance
 without disclosing OAuth query parameters across origins. Exact Origin, signed
 cookie, one-use CSRF and consent checks remain required; null origins are rejected.
+Safari also applies CSP form-action to the approval POST's 302 redirect. The
+policy permits only self plus the existing registered ChatGPT origins
+(`https://chatgpt.com` and `https://chat.openai.com`), matching the issuer allowlist.
 
 ### Register the existing remote server
 

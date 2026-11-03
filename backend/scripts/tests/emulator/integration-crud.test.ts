@@ -104,6 +104,7 @@ test('OAuth PKCE and full word/grammar CRUD preserve membership, translations an
       const consentQuery = new URLSearchParams({client_id:client.client_id,redirect_uri:client.redirect_uris[0] as string,response_type:'code',resource:oauth.resource,scope:'vocab.read',state:'http-state',code_challenge:digest(verifier),code_challenge_method:'S256'});
       const consentPage = await fetch(`${address}/api/integrations/oauth/authorize?${consentQuery}`,{headers:{Cookie:cookieValue}});
       assert.equal(consentPage.headers.get('referrer-policy'),'same-origin');
+      assert.ok(consentPage.headers.get('content-security-policy')?.includes("form-action 'self' https://chatgpt.com https://chat.openai.com;"));
       const html = await consentPage.text();
       assert.equal(consentPage.status,200,html);
       assert.ok(html.includes('name="id"'),html);

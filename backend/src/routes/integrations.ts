@@ -43,7 +43,7 @@ export const integrationRoutes: FastifyPluginAsync = async app => {
       return reply.code(201).send(await oauth.register(req.body));
     });
     api.get<{ Querystring: Record<string,unknown> }>('/oauth/authorize',async (req,reply) => {
-      reply.header('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
+      reply.header('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com https://chat.openai.com; frame-ancestors 'none'; base-uri 'none'");
       // Safari can send Origin: null on form POSTs under no-referrer.
       // Preserve same-origin form provenance while hiding OAuth query data
       // from cross-origin navigation; approve still requires the exact origin.
