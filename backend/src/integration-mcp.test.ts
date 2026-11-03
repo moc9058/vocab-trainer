@@ -9,7 +9,7 @@ test('MCP negotiates schemas, enforces authorization per call and hides internal
   let calls = 0;
   const server = createIntegrationMcp({ id: 'owner', connectionId: 'conn', scopes: ['vocab.read'] }, {
     authorize: async (_principal, scopes) => allowed && scopes.every(scope => scope === 'vocab.read'),
-    execute: async (_name, input) => { calls++; if ((input as { itemId: string }).itemId === 'bad') throw new Error('secret'); return { id: 'zh-001' }; },
+    execute: async (_name, input) => { calls++; if ((input as { itemId: string }).itemId === 'limited') throw Object.assign(new Error('secret'),{code:'RATE_LIMITED'}); if ((input as { itemId: string }).itemId === 'bad') throw new Error('secret'); return { id: 'zh-001' }; },
   });
   const client = new Client({ name: 'integration-test', version: '1.0.0' });
   const [a, b] = InMemoryTransport.createLinkedPair();
@@ -27,6 +27,12 @@ test('MCP negotiates schemas, enforces authorization per call and hides internal
     const error = await client.callTool({ name: 'get_word', arguments: { itemId: 'bad' } });
     assert.equal(error.isError, true);
     assert.ok(!JSON.stringify(error).includes('secret'));
+    const limited = await client.callTool({ name: 'get_word', arguments: { itemId: 'limited' } });
+    assert.equal(limited.isError,true);
+    const text = limited.content as {type:string;text:string}[];
+    assert.deepEqual(JSON.parse(text[0].text),limited.structuredContent);
+    assert.equal((limited.structuredContent as any).error.code,'RATE_LIMITED');
+    assert.equal((limited.structuredContent as any).error.retryAfterMs,60000);
     allowed = false;
     assert.equal((await client.callTool({ name: 'get_word', arguments: { itemId: 'zh-001' } })).isError, true);
   } finally { await client.close(); await server.close(); }

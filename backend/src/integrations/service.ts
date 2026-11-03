@@ -7,6 +7,11 @@ import { parseToolInput, type ToolName } from './contracts.js';
 import { DomainError, versionOf } from './domain.js';
 import type { LibraryOAuth } from './oauth.js';
 type Data = Record<string, any>;
+export function integrationRequestLimit(name: ToolName) {
+  if (name === 'get_operation' || name === 'list_operations') return { bucket: 'status', max: 180 };
+  if (/^(get_|search_|list_)/.test(name)) return { bucket: 'read', max: 120 };
+  return { bucket: 'write', max: 60 };
+}
 export function operationScopes(action: ToolName, input: Data): string[] {
   const scopes = requiredScopes(action);
   if (action === 'create_group' || action === 'change_item_groups') scopes.push(`${input.kind === 'word' ? 'vocab' : 'grammar'}.read`, `${input.kind === 'word' ? 'vocab' : 'grammar'}.write`);
@@ -24,6 +29,11 @@ export class LibraryIntegrationService implements IntegrationDispatcher {
     const live = await this.oauth.principal(principal.connectionId);
     return !!live && live.id === principal.id && scopes.every(s => principal.scopes.includes(s) && live.scopes.includes(s));
   }
+  private async dispatchAccepted() {
+    // Acceptance already committed an outbox entry. Dispatch failure must not
+    // turn a durable accepted operation into an ambiguous tool-call error.
+    try { await this.dispatch(); } catch { /* The scheduled reconciler retries the outbox. */ }
+  }
   private cursor(value: string | undefined, context: unknown): number {
     if (!value) return 0;
     const [offset, signature] = value.split('.');
@@ -37,14 +47,15 @@ export class LibraryIntegrationService implements IntegrationDispatcher {
   async execute(name: ToolName, raw: unknown, principal: IntegrationPrincipal): Promise<Record<string,unknown>> {
     const input = parseToolInput(name,raw) as Data;
     if (!await this.authorize(principal,operationScopes(name,input))) throw new DomainError('FORBIDDEN');
-    await this.oauth.limit(`principal:${principal.id}:${name.startsWith('create_') ? 'create' : 'read'}`,name.startsWith('create_') ? 10 : 60);
+    const limit = integrationRequestLimit(name);
+    await this.oauth.limit(`principal:${principal.id}:${limit.bucket}`,limit.max);
     let result: Record<string,unknown>;
     if (name === 'get_connection_profile') result = { library: 'Vocab Trainer shared library', language: 'chinese', connectionId: principal.connectionId };
     else if (name === 'get_operation' || name === 'retry_operation') {
       const op = await this.operations.get(principal,input.operationId);
       if (!op) throw new DomainError('NOT_FOUND');
       if (!await this.authorize(principal,operationScopes(op.action,op.input as Data))) throw new DomainError('FORBIDDEN');
-      if (name === 'retry_operation') { await this.operations.retry(principal,input.operationId); await this.dispatch(); }
+      if (name === 'retry_operation') { await this.operations.retry(principal,input.operationId); await this.dispatchAccepted(); }
       result = operationResult((await this.operations.get(principal,input.operationId))!);
     } else if (name === 'list_operations') {
       const context = [principal.id,name,input.status ?? null]; const offset = this.cursor(input.cursor,context);
@@ -102,7 +113,7 @@ export class LibraryIntegrationService implements IntegrationDispatcher {
         nextCursor: more ? `${offset+input.limit}.${this.sign(offset+input.limit,context)}` : null };
     } else {
       const op = await this.operations.accept(principal,name,input);
-      await this.dispatch(); result = operationResult(op);
+      await this.dispatchAccepted(); result = operationResult(op);
     }
     if (Buffer.byteLength(JSON.stringify(result)) > 90000) throw new DomainError('RESPONSE_TOO_LARGE');
     return result;

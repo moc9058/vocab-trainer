@@ -93,6 +93,37 @@ test('OAuth PKCE and full word/grammar CRUD preserve membership, translations an
     assert.equal(grammar.data.descriptions[0].text.ja,'生成説明');
     await mutation('delete_grammar',{itemId:grammarId,expectedVersion:grammar.version});
     assert.equal((await db.doc(`grammar_groups/${ga}`).get()).data()!.grammarIds.length,0);
+    // A common word's reference fan-out must not prevent a membership-only write.
+    const { versionOf } = await import('../../../src/integrations/domain.js');
+    const common = db.doc('words/common');
+    const content = {language:'chinese',term:'在',exampleIds:Array.from({length:151},(_,i) => `owned-${i}`),
+      appearsInIds:Array.from({length:284},(_,i) => `reference-${i}`),examples:[{sentence:'legacy content'}],notes:'preserve'};
+    await common.set(content);
+    await db.doc(`word_groups/${a}`).update({wordIds:['common']});
+    const index = db.doc(`word_index/${wordIndexDocId('chinese','在')}`);
+    await index.set({id:'common',term:'在',language:'chinese',extra:'preserve'});
+    const dispatchFailure = new LibraryIntegrationService(db,oauth,'cursor-secret',async () => { throw new Error('dispatch unavailable'); });
+    const acceptedId = randomUUID();
+    const accepted = await dispatchFailure.execute('change_item_groups',{operationId:acceptedId,kind:'word',itemId:'common',
+      expectedVersion:versionOf(await common.get()),addBIds:[b]},principal);
+    assert.equal(accepted.status,'queued');
+    const receipt = (await db.collection('integration_operations').where('operationId','==',acceptedId).get()).docs[0];
+    await runIntegrationOperation(db,oauth,receipt.id,logger);
+    assert.equal((await receipt.ref.get()).data()!.status,'succeeded');
+    const {addedToGroupBAt,...preserved} = (await common.get()).data()!;
+    assert.ok(addedToGroupBAt);
+    assert.deepEqual(preserved,content);
+    assert.deepEqual((await index.get()).data(),{id:'common',term:'在',language:'chinese',extra:'preserve'});
+    assert.ok((await db.doc(`word_groups/${a}`).get()).data()!.wordIds.includes('common'));
+    assert.ok((await db.doc(`word_groups/${b}`).get()).data()!.wordIds.includes('common'));
+    await mutation('change_item_groups',{kind:'word',itemId:'common',expectedVersion:versionOf(await common.get()),removeBIds:[b]});
+    assert.ok(!(await db.doc(`word_groups/${b}`).get()).data()!.wordIds.includes('common'));
+    assert.deepEqual((await common.get()).data(),{...content,addedToGroupBAt});
+    // Status remains available when unrelated reads and mutation submissions exhaust their budgets.
+    for (const bucket of ['read','write']) await db.doc(`integration_limits/${digest(`principal:${principal.id}:${bucket}:${Math.floor(Date.now()/60000)}`)}`).set({count:1000});
+    await assert.rejects(service.execute('get_word',{itemId:'common'},principal),{code:'RATE_LIMITED'});
+    assert.equal((await service.execute('get_operation',{operationId:acceptedId},principal)).status,'succeeded');
+    assert.ok(Array.isArray((await service.execute('list_operations',{},principal)).items));
     const { integrationRoutes } = await import('../../../src/routes/integrations.js');
     const { default: cookie } = await import('@fastify/cookie');
     const http = Fastify(); await http.register(cookie); await http.register(integrationRoutes);
@@ -122,6 +153,11 @@ test('OAuth PKCE and full word/grammar CRUD preserve membership, translations an
       assert.equal(initialize.status,200,await initialize.clone().text());
       const list = await fetch(`${address}/api/integrations/mcp`,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json, text/event-stream',Authorization:`Bearer ${token.access_token}`,'MCP-Protocol-Version':'2025-03-26'},body:JSON.stringify({jsonrpc:'2.0',id:2,method:'tools/list'})});
       assert.equal(list.status,200); assert.equal((await list.json() as any).result.tools.length,17);
+      // Discovery/polling traffic must not hit the old shared 60/IP ceiling.
+      for (let i=0;i<65;i++) {
+        const response = await fetch(`${address}/api/integrations/mcp`,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json, text/event-stream',Authorization:`Bearer ${token.access_token}`},body:JSON.stringify({jsonrpc:'2.0',id:i+3,method:'tools/list'})});
+        assert.equal(response.status,200); await response.text();
+      }
       const internal = await fetch(`${address}/internal/integration-operations/reconcile`,{method:'POST'}); assert.equal(internal.status,401);
     } finally { await http.close(); }
     const rotated = await oauth.exchange({grant_type:'refresh_token',client_id:client.client_id,resource:oauth.resource,refresh_token:token.refresh_token});

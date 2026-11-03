@@ -158,6 +158,15 @@ export async function commitMutation(db: Firestore, tx: Transaction, op: Integra
       }
     }
   }
+  // Membership changes never touch content, indexes or example references. Common
+  // words can have hundreds of references without making this transaction large.
+  if (op.action === 'change_item_groups') {
+    const timestamps = Object.fromEntries(['addedToGroupAAt', 'addedToGroupBAt']
+      .filter(key => after[key] !== before[key]).map(key => [key, after[key]]));
+    writes.set(ref, { language: 'chinese', ...timestamps }, true);
+    writes.flush(tx);
+    return { kind: word ? 'word' : 'grammar', itemId: id, deleted: false, warnings: [] };
+  }
   // Serialize term/statement competitors across new integrations; word index is also shared with legacy writers.
   if (word) {
     const term = after.term;

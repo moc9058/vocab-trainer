@@ -125,6 +125,13 @@ registration, a tool scan or Cloud Run deployment has succeeded.
 - Mutations return queued operations. Poll `get_operation` until succeeded or
   failed; never claim that queued means registered. `list_operations` can find
   unfinished work if a conversation is interrupted.
+- Keep at most five mutations unfinished at once. Prefer one `list_operations`
+  call for multiple jobs and respect `pollAfterMs` (3 seconds). Per-minute budgets
+  are separate: 60 mutation requests, 120 library reads and 180 status reads.
+  MCP transport has a separate 600-request/IP ceiling; OAuth routes retain their
+  60-request/IP ceiling. Rate errors include a 60-second retry delay and the actual
+  error code in both text and structured tool results. Accepted jobs retain their
+  queued receipt if immediate dispatch fails; the durable outbox retries dispatch.
 - Reuse the same UUID operationId for the same request. Changing its payload
   yields an idempotency conflict. Retry a retryable failed operation with
   `retry_operation`; GET never starts it again.
@@ -138,10 +145,12 @@ registration, a tool scan or Cloud Run deployment has succeeded.
   Detached example documents are retained for safe garbage collection rather than
   physically deleted during these external mutations. Operation warnings disclose
   this retention. No production cleanup or bulk migration is performed.
-- An item with more than 150 owned examples, 200 referenced examples, or operations
+- Content mutations on an item with more than 150 owned examples, 200 referenced examples, or operations
   spanning more than 350 writes is rejected without a partial core commit.
   At most 250 groups per domain are handled by a mutation. These are explicit
   implementation limits, not ChatGPT limits.
+- Membership-only changes preserve content, indexes and example references and
+  do not apply example-count limits. The group and write limits still apply.
 - No arbitrary Firestore access, settings changes, quiz grading, progress reset,
   whole-library deletion, or textbook publication is exposed.
 

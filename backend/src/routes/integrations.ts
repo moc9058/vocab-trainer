@@ -31,7 +31,14 @@ export const integrationRoutes: FastifyPluginAsync = async app => {
     api.addHook('onRequest',async (req,reply) => {
       reply.header('Cache-Control','no-store').header('X-Content-Type-Options','nosniff');
       if (!enabled) return reply.code(503).send({ error:'Integration unavailable' });
-      try { await oauth.limit(`ip:${req.ip}`,60); } catch { return reply.code(429).send({ error:'rate_limited' }); }
+      // MCP is authenticated and has separate per-principal tool budgets. Its
+      // transport ceiling includes initialization/discovery and status polling.
+      const mcp = req.url.split('?')[0] === '/api/integrations/mcp';
+      try { await oauth.limit(`${mcp ? 'mcp-ip' : 'ip'}:${req.ip}`,mcp ? 600 : 60); }
+      catch (error) {
+        if (!(error instanceof DomainError) || error.code !== 'RATE_LIMITED') throw error;
+        return reply.code(429).header('Retry-After','60').send({ error:'rate_limited',retryAfterMs:60000 });
+      }
     });
     api.setErrorHandler((error,_req,reply) => {
       const code = error instanceof DomainError ? error.code : 'TEMPORARILY_UNAVAILABLE';

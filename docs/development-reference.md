@@ -800,6 +800,13 @@ See [the external contract](api/chinese-registration.md) for request examples.
 
 ## ChatGPT MCP integration (2026-11-02)
 
+Bulk-request fix (2026-11-03): membership-only transactions bypass content/example
+rewrites and example-count limits. MCP transport permits 600 requests/IP/minute;
+principal budgets are 60 writes, 120 library reads and 180 operation-status reads
+per minute, with at most five active mutations. Error codes and retry delays are
+included in text as well as structured MCP results. Dispatch failure after durable
+acceptance returns the saved operation receipt; the outbox remains recoverable.
+
 [ChatGPT integration](chatgpt-integration.md) documents the Streamable HTTP endpoint,
 built-in OAuth issuer approved with existing Google login, exact Chinese CRUD
 scopes and durable integration operations. Core writes and receipts share a
