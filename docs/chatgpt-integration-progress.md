@@ -71,3 +71,31 @@ package, registration, hosting or production data was changed for this attempt.
 Follow the registration and acceptance checklist in the integration guide when
 access is restored. Do not replace these pending outcomes with earlier server
 protocol/emulator test results.
+
+
+## Personal cloud connection (2026-11-03)
+
+ChatGPT web now exposes Plugins → Add → Add custom MCP server for this account.
+Created **Vocab Trainer Cloud** directly against the existing canonical endpoint:
+
+- Plugin: `plugin_asdk_app_6ae9ac3ed1d88191ac1da64a2222238d`.
+- App: `asdk_app_6ae9ac3ed1d88191ac1da64a2222238d`.
+- Link: https://chatgpt.com/plugins/plugin_asdk_app_6ae9ac3ed1d88191ac1da64a2222238d
+- Web displays **Your cloud plugin**; the original Desktop Only package remains.
+- Existing Google login and user-approved eight CRUD/group scopes completed OAuth.
+- ChatGPT displayed nine write and eight read tools.
+- Actual web conversation successfully called `get_connection_profile` and
+  `search_words` (exact 后悔 → `zh-000632`), with no library mutation.
+- Evidence conversation: https://chatgpt.com/c/6ae9af4b-ace4-83ee-a7c0-897859495616
+- Native iPhone ChatGPT displays the new plugin in its installed list. Mobile
+  invocation and full word/grammar CRUD acceptance are still pending.
+
+Two Safari consent problems were fixed: no-referrer caused the exact-Origin check
+to fail; form-action self then blocked the successful 302 back to ChatGPT. The
+page now uses Referrer-Policy same-origin and permits form navigation only to self
+and the two ChatGPT origins already accepted by OAuth client registration. Null
+and foreign origins remain rejected, and cookie/one-use CSRF checks remain.
+Backend build, 161 unit tests and isolated emulator integration tests passed.
+Both fixes were pushed to master and deployed through deploy.sh. The iPhone app's
+production asset sync, signed build, profile/device checks, overwrite installation
+and launch also succeeded. No portal draft or public submission was needed.
