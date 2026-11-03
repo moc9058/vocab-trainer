@@ -16,13 +16,14 @@ Do not present the original installation link as a web/mobile connection.
 The selected approach preserves the existing Cloud Run backend, Firestore and
 Google-approved OAuth connection. No Sites bridge or separate proxy is authorized.
 Web OAuth, discovery of all 17 tools and actual profile/word lookup succeeded on
-2026-11-03. Native mobile invocation and full CRUD acceptance remain pending;
+2026-11-03. Native mobile profile invocation also succeeded; full CRUD acceptance remains pending;
 server deployment alone does not establish those outcomes.
 On 2026-11-03, Safari's ChatGPT Plugins → Add menu exposed **Add custom MCP
 server**. The direct OAuth connection was started as **Vocab Trainer Cloud**,
 using the existing canonical endpoint. Prefer this personal connection path;
 portal submission is not required for private use. OAuth completed and actual web read tools ran successfully. The native iPhone
-installed list also includes this cloud plugin. See the dated
+installed list includes this cloud plugin, and its profile call returned the
+same connection ID as web. See the dated
 [verification record](chatgpt-integration-progress.md#personal-cloud-connection-2026-11-03).
 
 The first Safari consent POST returned 403. The authorization page used

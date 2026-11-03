@@ -87,8 +87,11 @@ Created **Vocab Trainer Cloud** directly against the existing canonical endpoint
 - Actual web conversation successfully called `get_connection_profile` and
   `search_words` (exact 后悔 → `zh-000632`), with no library mutation.
 - Evidence conversation: https://chatgpt.com/c/6ae9af4b-ace4-83ee-a7c0-897859495616
-- Native iPhone ChatGPT displays the new plugin in its installed list. Mobile
-  invocation and full word/grammar CRUD acceptance are still pending.
+- Native iPhone ChatGPT displays the new plugin in its installed list and
+  successfully called `get_connection_profile`, returning the same connection ID
+  as web. Full word/grammar create/update/delete acceptance and testing with the
+  desktop app completely quit remain pending; production library mutations were
+  not performed.
 
 Two Safari consent problems were fixed: no-referrer caused the exact-Origin check
 to fail; form-action self then blocked the successful 302 back to ChatGPT. The
