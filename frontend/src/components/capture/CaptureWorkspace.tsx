@@ -1,3 +1,4 @@
+import ImportInputForm from '../import/ImportInputForm';
 import { useCaptureNavigationBlocker } from '../../hooks/useCaptureNavigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useI18n } from '../../i18n/context';
@@ -9,13 +10,15 @@ import CaptureImage from './CaptureImage';
 
 export interface CaptureSelection { capture: LocalCapture; blockId: string; blockIds: string[]; text: string; origin: ImportSourceOrigin; draft: CaptureDraft }
 
-export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onConfirm, onResume, onClose, renderOptions, source = NativeCapture }: {
+export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onConfirm, onResume, onClose, renderOptions, renderTextOptions, source = NativeCapture }: {
   source?: NativeCapturePlugin; captureId?: string; launchId?: string; sourceUrl?: string;
   onConfirm: (selection: CaptureSelection) => void | Promise<void>;
   onResume: (capture: LocalCapture, blockId: string) => void | Promise<void>; onClose: () => void;
+  renderTextOptions?: (draft: CaptureDraft, update: (patch: Partial<CaptureDraft>) => void) => ReactNode;
   renderOptions?: (draft: CaptureDraft, update: (patch: Partial<CaptureDraft>) => void) => ReactNode;
 }) {
   const { t } = useI18n();
+  const [textInput, setTextInput] = useState(!!launchId);
   const [capture, setCapture] = useState<LocalCapture | null>(null);
   const [draft, setDraft] = useState<CaptureDraft>(emptyCaptureDraft);
   const [busy, setBusy] = useState(false);
@@ -72,8 +75,9 @@ export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onCon
     return task;
   }
 
-  async function load(id?: string) {
+  async function load(id?: string, forceText = false) {
     const current = ++generation.current;
+    setTextInput(!!launchId || forceText);
     setReady(false); setBusy(!!id); setError(''); setSaveError(false); setCapture(null);
     setDraft({ ...emptyCaptureDraft(), sourceUrl: sourceUrl ?? '' });
     latest.current = null; currentCapture.current = null; discarded.current = false;
@@ -81,6 +85,7 @@ export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onCon
       if (id) {
         let value = await source.load({ id });
         if (current !== generation.current) return;
+        setTextInput(value.inputKind === 'text');
         setCapture(value);
         if (value.inputKind === 'image') value = { ...value, ...(await source.recognize({ id })) };
         if (current !== generation.current) return;
@@ -159,6 +164,20 @@ export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onCon
   }
   useCaptureNavigationBlocker(busy || saveError);
   const kind = captureTextKind(draft.text);
+  if (textInput) return <ImportInputForm text={draft.text} onTextChange={text => update({ text })}
+    onCancel={() => { void (async () => {
+      try { if (latest.current) await persist({ ...latest.current, capture: currentCapture.current }); onClose(); }
+      catch { setSaveError(true); }
+    })(); }}
+    onSubmit={() => { if (previous) void onResume(capture!, blockId); else void confirm(); }}
+    disabled={busy || !ready || (!previous && (kind !== 'text' || !validCaptureUrl(draft.sourceUrl)))}
+    cancelDisabled={busy}
+    readOnly={busy || !!previous || !ready}
+    submitLabel={previous ? t('captureResumeSource') : undefined}
+    options={<><fieldset disabled={busy || !!previous || !ready}>{renderTextOptions?.(draft, update)}</fieldset>{previous && <button type="button" disabled={busy} className="min-h-11 text-sm text-indigo-200" onClick={() => update({ blockId: `text:${crypto.randomUUID()}` })}>{t('captureStartAgain')}</button>}</>}
+    error={busy || error || saveError || kind === 'url' || (!draft.text && !!sourceUrl) ? <>{busy && <p role="status">{t('captureWorking')}</p>}{error && <p role="alert">{error} <button type="button" onClick={() => void load(capture?.id ?? captureId, true)}>{t('retry')}</button></p>}
+      {saveError && <p role="alert">{t('captureDraftError')} <button type="button" onClick={() => { if (latest.current) void persist({ ...latest.current, capture: currentCapture.current }).catch(() => {}); }}>{t('retry')}</button></p>}
+      {(kind === 'url' || (!draft.text && !!sourceUrl)) && <p role="status">{t('captureUrlOnly')}</p>}</> : undefined} />;
   return <section className="mx-auto max-w-4xl space-y-5 px-3 pt-4 pb-36 text-gray-100 sm:p-6" data-testid="capture-workspace">
     <header className="flex items-start justify-between gap-3"><div><h2 className="text-lg font-semibold">{t('captureTitle')}</h2><p className="mt-1 text-sm text-gray-400">{t('captureIntro')}</p></div><button type="button" disabled={busy} onClick={async () => {
       try { if (latest.current) await persist({ ...latest.current, capture: currentCapture.current }); onClose(); } catch { setSaveError(true); }
@@ -194,7 +213,7 @@ export default function CaptureWorkspace({ captureId, launchId, sourceUrl, onCon
     {previous && <button type="button" disabled={busy} className="ml-3 min-h-11 rounded-lg border border-indigo-700 px-3 text-sm" onClick={() => update({ blockId: `${draft.selected.join('_') || 'text'}:${crypto.randomUUID()}` })}>{t('captureStartAgain')}</button>}
     </div>
     <details className="rounded-xl border border-gray-700 p-3"><summary className="min-h-8 cursor-pointer text-indigo-200">{t('captureOtherInput')}</summary><p className="my-3 text-sm text-gray-400">{t('captureInputRequired')}</p><button type="button" disabled={busy} onClick={() => void pick()} className="min-h-11 rounded-lg border border-indigo-700 px-4">{t('capturePickImage')}</button><button type="button" disabled={busy} onClick={async () => {
-      try { if (latest.current) await persist({ ...latest.current, capture: currentCapture.current }); await load(); } catch (err) { report(err); }
+      try { if (latest.current) await persist({ ...latest.current, capture: currentCapture.current }); await load(undefined, true); } catch (err) { report(err); }
     }} className="ml-3 min-h-11 rounded-lg border border-indigo-700 px-4">{t('captureEnterText')}</button></details>
     {capture && <button type="button" disabled={busy} onClick={async () => {
       if (!window.confirm(t('captureDiscardConfirm'))) return;

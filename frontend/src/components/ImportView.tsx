@@ -15,6 +15,7 @@ import {
   listImportSessions,
 } from "../api/import";
 import { getGrammarSettings } from "../api/grammar";
+import ImportInputForm from './import/ImportInputForm';
 import ImportAnalysisProgress from "./import/ImportAnalysisProgress";
 import ImportDestinationRail from "./import/ImportDestinationRail";
 import ImportReview from "./import/ImportReview";
@@ -42,11 +43,8 @@ interface Props {
 
 type Phase = "sessions" | "input" | "analyzing" | "review" | "capture";
 
-const MAX_TEXT = 8000;
 /** Stable identity so the pool memo doesn't re-run on every render before the fetch lands. */
 const EMPTY_POOL: ImportQuizPool = { wordIds: [], grammarIds: [] };
-/** Long sources get a reminder that completed parts are saved and can be resumed. */
-const LONG_TEXT_WARNING = 1500;
 
 /** Phase router for the article importer; all session state lives in `useImportSession`. */
 export default function ImportView({ language, onQueue, onGrammarQueue, onArticleQuiz, captureSource }: Props) {
@@ -181,7 +179,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
         if (!prior) await source.recordOperation({ id: capture.id, blockId: selection.blockId, request });
         current = await create(input, controller.signal);
         await source.recordOperation({ id: capture.id, blockId: selection.blockId, request, sessionId: current.id });
-        setCaptureImage({ ...capture, blocks: capture.blocks?.filter(b => selection.blockIds.includes(b.id)) });
+        setCaptureImage(capture.inputKind === 'image' ? { ...capture, blocks: capture.blocks?.filter(b => selection.blockIds.includes(b.id)) } : null);
       } else current = await create({
         title: text.trim().slice(0, 40), text: text.trim(), paragraphs: [], items: [], analyzeAsJob: true,
         ...draftDestination, focusedSentenceIndex: 0, status: "in-progress",
@@ -246,7 +244,7 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
       const saved = operation.sessionId ? await getImportSession(language, operation.sessionId) : await create(input);
       if (!operation.sessionId) await source.recordOperation({ id: capture.id, blockId, request: operation.request, sessionId: saved.id });
       const selected = capture.draft?.blockId === blockId ? capture.draft.selected : blockId.split(':')[0].split('_');
-      setCaptureImage({ ...capture, blocks: capture.blocks?.filter(b => selected.includes(b.id)) });
+      setCaptureImage(capture.inputKind === 'image' ? { ...capture, blocks: capture.blocks?.filter(b => selected.includes(b.id)) } : null);
       await handleResume(saved.id);
       setOpenSentence({ index: saved.paragraphs[0]?.sentences[0]?.index ?? 0, sequence: Date.now() });
       // Creation may have succeeded immediately before the app was terminated.
@@ -264,6 +262,8 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
     {launchId && !launches.some(l => l.id === launchId) ? <div className="space-y-3 p-3"><p role="status">{t(inboxError || inboxLoaded ? 'captureLoadError' : 'captureWorking')}</p><button type="button" className="min-h-11 rounded border border-gray-600 px-3" onClick={() => { setSearchParams({}, { replace: true }); launchRef.current = undefined; }}>{t('cancel')}</button><button type="button" className="ml-3 min-h-11 underline" onClick={() => void refreshCaptures()}>{t('retry')}</button></div> : <CaptureWorkspace source={source} captureId={captureId} launchId={launchId} sourceUrl={launches.find(l => l.id === launchId)?.sourceUrl}
       onConfirm={selection => handleAnalyze(undefined, selection)} onResume={resumeCapture}
       onClose={() => { launchRef.current = undefined; setPhase('sessions'); setSearchParams({}, { replace: true }); void refreshCaptures(); }}
+      renderTextOptions={(draft, update) => <ImportDestinationRail language={language} allWordGroups={groups.wordGroups} allGrammarGroups={groups.grammarGroups}
+        wordGroupId={draft.wordGroupId} grammarGroupId={draft.grammarGroupId} groupBNames={draft.groupBNames} onChange={update} />}
       renderOptions={(draft, update) => <>
         <p className="text-sm text-gray-300">{t('captureExplanationLanguage')}: 日本語</p>
         <ImportDestinationRail language={language} allWordGroups={groups.wordGroups} allGrammarGroups={groups.grammarGroups}
@@ -344,75 +344,11 @@ export default function ImportView({ language, onQueue, onGrammarQueue, onArticl
   // ===== INPUT =====
   if (phase === "input") {
     return (
-      <div className="h-full overflow-y-auto overflow-x-hidden">
-        <div className="mx-auto max-w-5xl px-3 py-4 sm:p-6">
-          <header className="mb-5 flex items-start gap-3">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-base font-bold text-gray-100 sm:text-lg">{t("importNewSession")}</h2>
-              <p className="mt-1 text-xs text-gray-400 sm:text-sm">{t("importDescription")}</p>
-            </div>
-            <button
-              onClick={() => setPhase("sessions")}
-              className="shrink-0 rounded-lg border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:border-gray-500 hover:text-gray-200 sm:text-sm"
-            >
-              {t("cancel")}
-            </button>
-          </header>
-
-          {error && (
-            <p className="mb-4 rounded-lg border border-red-700 bg-red-950/40 px-3 py-2 text-sm text-red-300">
-              {error}
-            </p>
-          )}
-
-          <div className="grid gap-4 lg:grid-cols-[1fr_19rem] lg:gap-5">
-            <div>
-              {/* `text-base` keeps iOS from zooming the viewport on focus — the
-                  usual cause of a page that suddenly scrolls sideways. */}
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                maxLength={MAX_TEXT}
-                rows={16}
-                placeholder={t("importPastePlaceholder")}
-                className="h-48 w-full resize-y rounded-2xl border border-gray-700 bg-gray-800/60 px-3 py-3 text-base leading-relaxed text-gray-100 placeholder-gray-600 focus:border-indigo-500 focus:outline-none sm:h-auto sm:px-4 sm:text-[15px]"
-              />
-              <p
-                className={`mt-1 text-right text-xs ${
-                  text.length > LONG_TEXT_WARNING ? "text-amber-500/90" : "text-gray-600"
-                }`}
-              >
-                {text.length} / {MAX_TEXT}
-              </p>
-              {text.length > LONG_TEXT_WARNING && (
-                <p className="mt-1 rounded-lg border border-amber-700/50 bg-amber-950/25 px-3 py-2 text-[11px] leading-snug text-amber-200/90">
-                  {t("importLongTextWarning")}
-                </p>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              <ImportDestinationRail
-                language={language}
-                allWordGroups={groups.wordGroups}
-                allGrammarGroups={groups.grammarGroups}
-                wordGroupId={draftDestination.wordGroupId}
-                grammarGroupId={draftDestination.grammarGroupId}
-                groupBNames={draftDestination.groupBNames}
-                onChange={(p) => setDraftDestination((prev) => ({ ...prev, ...p }))}
-                autoSelectLatest
-              />
-              <button
-                onClick={() => void handleAnalyze()}
-                disabled={!text.trim() || text.length > MAX_TEXT}
-                className="w-full rounded-xl bg-indigo-600 px-5 py-3 font-medium text-white transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {t("importAnalyze")}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ImportInputForm text={text} onTextChange={setText} onCancel={() => setPhase('sessions')}
+        onSubmit={() => void handleAnalyze()} error={error}
+        options={<ImportDestinationRail language={language} allWordGroups={groups.wordGroups} allGrammarGroups={groups.grammarGroups}
+          wordGroupId={draftDestination.wordGroupId} grammarGroupId={draftDestination.grammarGroupId} groupBNames={draftDestination.groupBNames}
+          onChange={p => setDraftDestination(prev => ({ ...prev, ...p }))} autoSelectLatest />} />
     );
   }
 

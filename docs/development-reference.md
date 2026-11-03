@@ -569,7 +569,14 @@ text capture. Frozen operation requests remain immutable and are restored before
 retries. URL-only/empty/over-limit input cannot start analysis. Chinese OCR support
 is checked before recognition, preserving traditional and simplified source text.
 
-The confirmation workspace now includes the shared destination rail and starts the
+Text intake uses `ImportInputForm`, shared with ordinary external-source input,
+including its editable passage, character count and destination rail. Capture-only
+setup instructions and source settings are omitted for text; existing source metadata
+is retained in the local draft and frozen request. Text results use the normal
+`ImportReview` source rendering without `sourceView` or `openSentence` overrides.
+Image intake retains its selection workspace and image-specific result rendering.
+
+The confirmation workspace includes the shared destination rail and starts the
 existing durable import directly. Navigation notices wait for pending answers,
 registration queues, modal edits and source saves; other active screens require an
 explicit leave confirmation. New inputs never replace the active passage. Native

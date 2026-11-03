@@ -1518,7 +1518,10 @@ touches production. See [Local Development & Verification](#local-development--v
 The iPhone app can receive screenshots or selected text through Shortcuts. In
 Chinese → External sources → Read from a screen, images open a passage selector after on-device OCR. Tap passages to select or
 deselect them, check the editable text, then press **Analyze selected text**. Only
-that passage is sent. Shared or pasted text also retains confirmation. Text buttons appear on the
+that passage is sent. Shared or pasted text opens the ordinary external-source input form,
+with the received text ready to edit and destination groups available before analysis.
+Its results use the ordinary full-text review, without a capture-specific source panel
+or an automatically opened sentence explanation. Text buttons appear on the
 captured still image inside Vocab Trainer. See the [screen reading guide](docs/screen-reading-import.md)
 for Control Center setup, supported OS versions and device checks still required.
 
