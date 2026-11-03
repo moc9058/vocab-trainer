@@ -17,12 +17,27 @@ The selected approach preserves the existing Cloud Run backend, Firestore and
 Google-approved OAuth connection. No Sites bridge or separate proxy is authorized.
 Web and native ChatGPT mobile acceptance are still pending; server deployment and
 successful discovery responses do not establish either platform's availability.
-The user reports that ChatGPT's web plus/add-custom-MCP menu is absent, but the
-[developer portal](https://platform.openai.com/plugins) shows a registration button.
+On 2026-11-03, Safari's ChatGPT Plugins → Add menu exposed **Add custom MCP
+server**. The direct OAuth connection was started as **Vocab Trainer Cloud**,
+using the existing canonical endpoint. Prefer this personal connection path;
+portal submission is not required for private use. Connection and platform
+acceptance remain pending until OAuth completes and actual tools run.
+
+The first Safari consent POST returned 403. The authorization page used
+`Referrer-Policy: no-referrer`, which can suppress the form POST's Origin in
+Safari. It now uses `same-origin` so same-origin approval retains provenance
+without disclosing OAuth query parameters across origins. Exact Origin, signed
+cookie, one-use CSRF and consent checks remain required; null origins are rejected.
 
 ### Register the existing remote server
 
-Follow the portal's [remote MCP registration procedure](https://developers.openai.com/plugins/deploy/submission):
+For personal use, open ChatGPT Plugins → Add → Add custom MCP server, name it
+Vocab Trainer Cloud, enter the canonical URL below and select OAuth. Leave
+client credentials empty for dynamic registration, then complete consent.
+Preserve the original Desktop Only package while verifying the new connection.
+See the [official quickstart](https://developers.openai.com/plugins/quickstart).
+
+If that menu is unavailable, inspect the portal as a fallback. Follow the portal's [remote MCP registration procedure](https://developers.openai.com/plugins/deploy/submission):
 
 1. Inspect existing Vocab Trainer apps/drafts in the selected organization before
    creating anything. Preserve the existing private package until a replacement

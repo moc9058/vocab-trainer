@@ -103,6 +103,7 @@ test('OAuth PKCE and full word/grammar CRUD preserve membership, translations an
       const cookieValue = `vt_session=${authModule.signSession({email:'owner@test'},authConfig.sessionSecret)}`;
       const consentQuery = new URLSearchParams({client_id:client.client_id,redirect_uri:client.redirect_uris[0] as string,response_type:'code',resource:oauth.resource,scope:'vocab.read',state:'http-state',code_challenge:digest(verifier),code_challenge_method:'S256'});
       const consentPage = await fetch(`${address}/api/integrations/oauth/authorize?${consentQuery}`,{headers:{Cookie:cookieValue}});
+      assert.equal(consentPage.headers.get('referrer-policy'),'same-origin');
       const html = await consentPage.text();
       assert.equal(consentPage.status,200,html);
       assert.ok(html.includes('name="id"'),html);
@@ -110,6 +111,8 @@ test('OAuth PKCE and full word/grammar CRUD preserve membership, translations an
       const csrf = html.match(/name="csrf" value="([^"]+)"/)![1];
       const rejected = await fetch(`${address}/api/integrations/oauth/approve`,{method:'POST',headers:{Cookie:cookieValue,Origin:'https://evil.test','Content-Type':'application/json'},body:JSON.stringify({id,csrf}),redirect:'manual'});
       assert.equal(rejected.status,403);
+      const opaque = await fetch(`${address}/api/integrations/oauth/approve`,{method:'POST',headers:{Cookie:cookieValue,Origin:'null','Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id,csrf}),redirect:'manual'});
+      assert.equal(opaque.status,403);
       const approved = await fetch(`${address}/api/integrations/oauth/approve`,{method:'POST',headers:{Cookie:cookieValue,Origin:'https://library.test','Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({id,csrf}),redirect:'manual'});
       assert.equal(approved.status,302); assert.equal(new URL(approved.headers.get('location')!).origin,'https://chatgpt.com');
       const unauthorized = await fetch(`${address}/api/integrations/mcp`,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'});

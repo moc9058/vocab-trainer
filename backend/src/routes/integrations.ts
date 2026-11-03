@@ -44,7 +44,10 @@ export const integrationRoutes: FastifyPluginAsync = async app => {
     });
     api.get<{ Querystring: Record<string,unknown> }>('/oauth/authorize',async (req,reply) => {
       reply.header('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
-      reply.header('Referrer-Policy','no-referrer');
+      // Safari can send Origin: null on form POSTs under no-referrer.
+      // Preserve same-origin form provenance while hiding OAuth query data
+      // from cross-origin navigation; approve still requires the exact origin.
+      reply.header('Referrer-Policy','same-origin');
       const user = cookieUser(req);
       const page = (body: string) => reply.type('text/html; charset=utf-8').send(`<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Vocab Trainer connection</title><body style="font:18px system-ui;max-width:42rem;margin:3rem auto;padding:1rem"><h1>Vocab Trainer ↔ ChatGPT</h1>${body}</body></html>`);
       if (!user) return page(`<p>Sign in / ログイン / 로그인</p><p><a href="/api/auth/login" target="_blank" rel="noopener">Google login</a></p><p>After signing in, return here and reload.<br>로그인 후 이 화면으로 돌아와 새로고침하세요。<br>ログイン後、この画面を再読み込みしてください。</p><a href="${escape(req.url)}">Reload / 再読み込み / 새로고침</a>`);

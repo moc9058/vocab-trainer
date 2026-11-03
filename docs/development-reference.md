@@ -814,8 +814,10 @@ code deployment. No textbook publication or bulk learning-data migration is need
 The original imported Vocab Trainer private package is Desktop Only; a remote
 HTTPS URL does not make that registration web/mobile compatible. The integration
 guide distinguishes imported packages from remote app registration and records
-pending native-mobile acceptance. The selected migration uses the existing server
-through the developer portal, with no separate proxy or public publication.
+pending native-mobile acceptance. On 2026-11-03 the web Add custom MCP server menu became available; the personal
+connection now takes priority over portal registration. OAuth consent pages use
+Referrer-Policy same-origin for Safari form provenance; exact Origin, cookie and
+CSRF validation remain enforced. No separate proxy or public publication is needed.
 
 
 ## Chinese import reading repair (2026-11-02)
