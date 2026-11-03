@@ -24,7 +24,7 @@
     },
     "transliteration": {
       "type": "string",
-      "description": "Statement pinyin: lowercase without tones for Chinese pieces; preserve +, …, punctuation and non-Chinese placeholders. Omit to let the server generate."
+      "description": "Statement pinyin: lowercase with tone marks for Chinese pieces (neutral-tone syllables remain unmarked); preserve +, …, punctuation and non-Chinese placeholders. Omit to let the server generate."
     },
     "descriptions": {
       "type": "array",
@@ -146,7 +146,7 @@
     {
       "id": "grammar-chinese-f6c2e6bc-3189-42e1-93e9-93aefda6c915",
       "statement": "把+O+V",
-      "transliteration": "ba+O+V",
+      "transliteration": "bǎ+O+V",
       "descriptions": [
         {
           "partOfSpeech": "",
