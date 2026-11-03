@@ -807,6 +807,14 @@ per minute, with at most five active mutations. Error codes and retry delays are
 included in text as well as structured MCP results. Dispatch failure after durable
 acceptance returns the saved operation receipt; the outbox remains recoverable.
 
+MCP `create_word` reuses an exact existing Chinese term and moves its A home to
+the requested group, defaulting to the newest A group. It adds requested B
+memberships while preserving existing B memberships, content, examples and
+progress. Existing terms skip enrichment; commit resolves the term again through
+the shared index with a query fallback and repairs a stale/missing index.
+Concurrent registrations converge on one item. The operation receipt exposes
+`reusedExisting` and `groupAIds`; REST duplicate handling is unchanged.
+
 [ChatGPT integration](chatgpt-integration.md) documents the Streamable HTTP endpoint,
 built-in OAuth issuer approved with existing Google login, exact Chinese CRUD
 scopes and durable integration operations. Core writes and receipts share a

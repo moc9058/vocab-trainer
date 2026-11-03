@@ -33,8 +33,12 @@ export async function runIntegrationOperation(db: Firestore, oauth: LibraryOAuth
       const principal = await oauth.principal(op.connectionId);
       const scopes = operationScopes(op.action,op.input as Record<string,unknown>);
       if (!principal || principal.id !== op.principalId || scopes.some(s => !principal.scopes.includes(s))) throw new DomainError('FORBIDDEN');
-      const prepared = op.checkpoint as PreparedMutation | undefined ?? await withLLMBudget(540000,undefined,() => prepareMutation(op,db,log));
-      if (!op.checkpoint) await store.saveCheckpoint(identity,op.operationId,op.generation,prepared);
+      const checkpoint = op.checkpoint as PreparedMutation | undefined;
+      // A membership-only create checkpoint depends on the term still existing.
+      // Reprepare it on retry so a deleted/renamed word can be created normally.
+      const reusable = checkpoint && (op.action !== 'create_word' || checkpoint.data);
+      const prepared = reusable ? checkpoint! : await withLLMBudget(540000,undefined,() => prepareMutation(op,db,log));
+      if (!reusable) await store.saveCheckpoint(identity,op.operationId,op.generation,prepared);
       await store.commitCore(identity,op.operationId,op.generation,async tx => {
         const conn = (await tx.get(db.collection('integration_connections').doc(op.connectionId))).data();
         if (!conn?.enabled || conn.principalId !== op.principalId || conn.expiresAt <= Date.now() || !oauth.allowed(conn.email) || scopes.some(s => !conn.scopes.includes(s))) throw new DomainError('FORBIDDEN');

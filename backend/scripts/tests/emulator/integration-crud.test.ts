@@ -119,6 +119,63 @@ test('OAuth PKCE and full word/grammar CRUD preserve membership, translations an
     await mutation('change_item_groups',{kind:'word',itemId:'common',expectedVersion:versionOf(await common.get()),removeBIds:[b]});
     assert.ok(!(await db.doc(`word_groups/${b}`).get()).data()!.wordIds.includes('common'));
     assert.deepEqual((await common.get()).data(),{...content,addedToGroupBAt});
+    const destination = (await mutation('create_group',{kind:'word',category:'A',name:'Destination'})).result!.itemId;
+    const secondB = (await mutation('create_group',{kind:'word',category:'B',name:'Second article'})).result!.itemId;
+    await db.doc(`word_groups/${b}`).update({wordIds:['common']});
+    const beforeMove = (await common.get()).data()!;
+    const moved = await mutation('create_word',{word:{term:' 在 ',notes:'must not overwrite',definitions:[{text:{ko:'must not overwrite'}}]},
+      targets:{groupAIds:[destination],groupBIds:[secondB]}});
+    assert.equal(moved.result!.itemId,'common'); assert.equal(moved.result!.reusedExisting,true);
+    assert.deepEqual(moved.result!.groupAIds,[destination]);
+    assert.ok(!(await db.doc(`word_groups/${a}`).get()).data()!.wordIds.includes('common'));
+    for (const group of [destination,b,secondB]) assert.ok((await db.doc(`word_groups/${group}`).get()).data()!.wordIds.includes('common'));
+    const {addedToGroupAAt:_a,addedToGroupBAt:_b,...afterMove} = (await common.get()).data()!;
+    const {addedToGroupAAt:_oldA,addedToGroupBAt:_oldB,...beforeContent} = beforeMove;
+    assert.deepEqual(afterMove,beforeContent);
+    assert.equal((await db.collection('words').where('term','==','在').get()).size,1);
+    assert.equal((await db.doc(`words/${moved.allocatedItemId}`).get()).exists,false);
+    await mutation('create_word',{word:{term:'在'},targets:{groupAIds:[a]}});
+    const replayMove = await service.execute('create_word',moved.input,principal);
+    assert.equal(replayMove.status,'succeeded');
+    assert.ok((await db.doc(`word_groups/${a}`).get()).data()!.wordIds.includes('common'));
+    assert.ok(!(await db.doc(`word_groups/${destination}`).get()).data()!.wordIds.includes('common'));
+    const beforeInvalid = (await common.get()).data();
+    await mutation('create_word',{word:{term:'在'},targets:{groupAIds:['missing']}},'failed');
+    assert.deepEqual((await common.get()).data(),beforeInvalid);
+    // Missing indexes still find the existing term; omitted A selects newest A.
+    await index.delete();
+    const defaultMove = await mutation('create_word',{word:{term:'在'},targets:{groupBIds:[b]}});
+    assert.equal(defaultMove.result!.itemId,'common'); assert.deepEqual(defaultMove.result!.groupAIds,[destination]);
+    assert.equal((await index.get()).data()!.id,'common');
+    // Duplicate registrations prepared before either commit serialize to one word.
+    const { commitMutation } = await import('../../../src/integrations/domain.js');
+    const concurrent = await Promise.all([1,2].map(async () => {
+      const job = await service.operations.accept(principal,'create_word',{operationId:randomUUID(),word:{term:'并发词'},targets:{groupAIds:[destination],groupBIds:[b]}});
+      const running = await service.operations.claim(principal,job.operationId); assert.ok(running);
+      await service.operations.commitCore(principal,job.operationId,running.generation,tx => commitMutation(db,tx,running,
+        {data:{term:'并发词',definitions:[{text:{ko:'동시 등록'}}]},examples:[]}));
+      await service.operations.complete(principal,job.operationId,running.generation);
+      return (await service.operations.get(principal,job.operationId))!;
+    }));
+    assert.equal(concurrent[0].result!.itemId,concurrent[1].result!.itemId);
+    assert.equal(concurrent.filter(job => job.result!.reusedExisting).length,1);
+    assert.equal((await db.collection('words').where('term','==','并发词').get()).size,1);
+    // If a reused term disappears after preparation, retry must discard the
+    // empty checkpoint and enrich a new word rather than save an empty record.
+    const disappearing = await service.operations.accept(principal,'create_word',{operationId:randomUUID(),word:{term:'消失词'}});
+    await db.doc('words/disappearing').set({language:'chinese',term:'消失词'});
+    const disappearingRun = await service.operations.claim(principal,disappearing.operationId); assert.ok(disappearingRun);
+    await service.operations.saveCheckpoint(principal,disappearing.operationId,disappearingRun.generation,{});
+    await db.doc('words/disappearing').delete();
+    await assert.rejects(service.operations.commitCore(principal,disappearing.operationId,disappearingRun.generation,
+      tx => commitMutation(db,tx,disappearingRun,{})),{code:'TEMPORARILY_UNAVAILABLE',retryable:true});
+    await service.operations.fail(principal,disappearing.operationId,disappearingRun.generation,'TEMPORARILY_UNAVAILABLE',true);
+    await service.operations.retry(principal,disappearing.operationId);
+    const disappearingDoc = (await db.collection('integration_operations').where('operationId','==',disappearing.operationId).get()).docs[0];
+    await runIntegrationOperation(db,oauth,disappearingDoc.id,logger);
+    const recovered = (await service.operations.get(principal,disappearing.operationId))!;
+    assert.equal(recovered.status,'succeeded',JSON.stringify(recovered.error));
+    assert.equal((await db.doc(`words/${recovered.result!.itemId}`).get()).data()!.definitions[0].text.ko,'후회하다');
     // Status remains available when unrelated reads and mutation submissions exhaust their budgets.
     for (const bucket of ['read','write']) await db.doc(`integration_limits/${digest(`principal:${principal.id}:${bucket}:${Math.floor(Date.now()/60000)}`)}`).set({count:1000});
     await assert.rejects(service.execute('get_word',{itemId:'common'},principal),{code:'RATE_LIMITED'});

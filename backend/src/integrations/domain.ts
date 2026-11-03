@@ -20,8 +20,18 @@ export interface PreparedMutation { data?: RecordData; examples?: RecordData[]; 
 export async function prepareMutation(op: IntegrationOperation, db: Firestore, log: FastifyBaseLogger): Promise<PreparedMutation> {
   const input = op.input as RecordData;
   if (op.action === 'create_word') {
-    const prepared = await prepareWordRegistration('chinese', { ...input.word,
-      groupIds: input.targets?.groupAIds, groupBIds: input.targets?.groupBIds }, log);
+    // Existing terms only need a membership move, with no enrichment or content edit.
+    const existing = await db.collection('words').where('language','==','chinese').where('term','==',input.word.term).limit(1).get();
+    if (!existing.empty) return {};
+    let prepared: Awaited<ReturnType<typeof prepareWordRegistration>>;
+    try {
+      prepared = await prepareWordRegistration('chinese', { ...input.word,
+        groupIds: input.targets?.groupAIds, groupBIds: input.targets?.groupBIds }, log);
+    } catch (error) {
+      // A competing registration can win between the lookup and shared preparation.
+      if ((error as {statusCode?:number}).statusCode === 409) return {};
+      throw error;
+    }
     if (prepared.merged.definitions.some(d => ['ko','ja','en'].some(code => !d.text?.[code]?.trim()))) throw new DomainError('ENRICHMENT_FAILED',true);
     return clean({ data: { ...prepared.merged, examples: undefined, ...(prepared.hanjaReadings ? { hanjaReadings: prepared.hanjaReadings } : {}) },
       examples: await prepareExamples(prepared.examplesWithSegments.slice(0, 10)) });
@@ -120,13 +130,35 @@ export async function commitMutation(db: Firestore, tx: Transaction, op: Integra
   }
   const create = op.action.startsWith('create_');
   const deleting = op.action.startsWith('delete_');
-  const id = create ? op.allocatedItemId : input.itemId;
+  let id = create ? op.allocatedItemId : input.itemId;
+  let reusedExisting = false;
+  if (op.action === 'create_word') {
+    // Read the shared index to serialize with legacy creates/renames as well as
+    // other MCP workers. The query also covers missing or stale legacy indexes.
+    const index = await tx.get(db.collection('word_index').doc(wordIndexDocId('chinese',input.word.term)));
+    const indexed = index.data()?.id ? await tx.get(collection.doc(index.data()!.id)) : undefined;
+    if (indexed?.exists && indexed.data()!.language === 'chinese' && indexed.data()!.term === input.word.term) {
+      id = indexed.id; reusedExisting = true;
+    } else {
+      const matches = await tx.get(collection.where('language','==','chinese').where('term','==',input.word.term).limit(2));
+      if (matches.size > 1) throw new DomainError('DUPLICATE_ITEM');
+      if (!matches.empty) {
+        const existing = matches.docs[0];
+        id = existing.id; reusedExisting = true;
+        writes.set(index.ref, { language: 'chinese', term: input.word.term, id,
+          level: existing.data().level ?? '', transliteration: existing.data().transliteration ?? '' });
+      }
+    }
+    // A word found before preparation may have been deleted or renamed. Retry
+    // with fresh preparation rather than creating a record without its content.
+    if (!reusedExisting && !prepared.data) throw new DomainError('TEMPORARILY_UNAVAILABLE',true);
+  }
   const ref = collection.doc(id);
   const current = await tx.get(ref);
-  if (create && current.exists) throw new DomainError('ID_CONFLICT');
+  if (create && !reusedExisting && current.exists) throw new DomainError('ID_CONFLICT');
   if (!create) { requireChinese(current); if (versionOf(current) !== input.expectedVersion) throw new DomainError('VERSION_CONFLICT'); }
   const before = current.data() ?? {};
-  const after = { ...before, ...prepared.data, language: 'chinese' } as RecordData;
+  const after = { ...before, ...(!reusedExisting ? prepared.data : {}), language: 'chinese' } as RecordData;
   if (word && after.definitions) after.definitions = normalizeWordDefinitions(after);
   const targets = input.targets ?? {};
   const select = (ids: string[], category: 'A' | 'B') => ids.map(id => {
@@ -158,14 +190,15 @@ export async function commitMutation(db: Firestore, tx: Transaction, op: Integra
       }
     }
   }
-  // Membership changes never touch content, indexes or example references. Common
+  // Membership-only writes never rewrite content or example references. Common
   // words can have hundreds of references without making this transaction large.
-  if (op.action === 'change_item_groups') {
+  if (op.action === 'change_item_groups' || reusedExisting) {
     const timestamps = Object.fromEntries(['addedToGroupAAt', 'addedToGroupBAt']
       .filter(key => after[key] !== before[key]).map(key => [key, after[key]]));
     writes.set(ref, { language: 'chinese', ...timestamps }, true);
     writes.flush(tx);
-    return { kind: word ? 'word' : 'grammar', itemId: id, deleted: false, warnings: [] };
+    return { kind: word ? 'word' : 'grammar', itemId: id, deleted: false, warnings: [],
+      ...(reusedExisting ? { reusedExisting: true, groupAIds: selectedA.map(g => g.id) } : {}) };
   }
   // Serialize term/statement competitors across new integrations; word index is also shared with legacy writers.
   if (word) {

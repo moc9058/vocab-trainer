@@ -15,7 +15,7 @@ const descriptions: Record<ToolName, string> = {
   get_connection_profile: 'Identify the connected Vocab Trainer account and shared library.',
   search_words: 'Search Chinese vocabulary. Use exact matching before creating an item.',
   get_word: 'Read a Chinese word, its current version, and owned versus referenced examples.',
-  create_word: 'Submit Chinese word registration. Reuse operationId for retries; queued does not mean saved.',
+  create_word: 'Register a Chinese word. If the exact term exists, move that word to the requested A group (newest A by default), add requested B groups and preserve its content and other B memberships. Reuse operationId for retries; queued does not mean saved.',
   update_word: 'Submit a partial word edit using the version returned by get_word. Preserve unspecified languages.',
   delete_word: 'Delete a word from the library, including its group memberships. This is not removal from Group B.',
   search_grammar: 'Search Chinese grammar. Resolve ambiguous matches before editing or deleting.',

@@ -122,6 +122,14 @@ registration, a tool scan or Cloud Run deployment has succeeded.
 - Registration assigns a real A home, defaulting to the newest A group, plus
   requested B memberships. Words have one A home; grammar may have several.
   No A group is silently created. Word and grammar group IDs are distinct.
+- `create_word` with an exact existing Chinese term reuses its ID and moves it
+  to the requested A group (or newest A group when omitted). Existing content,
+  examples, progress and other B memberships are preserved; requested B groups
+  are added. No LLM enrichment is needed for an already existing word. The
+  receipt reports `reusedExisting: true` and the resulting `groupAIds`.
+  Concurrent creates resolve the term again inside the commit transaction so
+  they cannot create a second word. This behavior is specific to MCP
+  `create_word`; the shared REST registration API still returns 409 on duplicates.
 - Mutations return queued operations. Poll `get_operation` until succeeded or
   failed; never claim that queued means registered. `list_operations` can find
   unfinished work if a conversation is interrupted.
