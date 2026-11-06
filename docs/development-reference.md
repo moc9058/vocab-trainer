@@ -801,10 +801,11 @@ See [the external contract](api/chinese-registration.md) for request examples.
 ## ChatGPT MCP integration (2026-11-02)
 
 Bulk-request fix (2026-11-03): membership-only transactions bypass content/example
-rewrites and example-count limits. MCP transport permits 600 requests/IP/minute;
-principal budgets are 60 writes, 120 library reads and 180 operation-status reads
-per minute, with at most five active mutations. Error codes and retry delays are
-included in text as well as structured MCP results. Dispatch failure after durable
+rewrites and example-count limits. As of 2026-11-06, MCP transport and authenticated
+tool calls have no per-minute request limits or active-mutation cap. The durable
+worker queue still controls processing concurrency; OAuth and connection-management
+request limits remain enabled. Existing counters require no migration. Error codes
+are included in text as well as structured MCP results. Dispatch failure after durable
 acceptance returns the saved operation receipt; the outbox remains recoverable.
 
 MCP `create_word` reuses an exact existing Chinese term and moves its A home to

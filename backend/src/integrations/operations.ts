@@ -43,9 +43,9 @@ export class IntegrationOperationStore {
         if (old.expiresAt <= timestamp) throw new OperationConflict('OPERATION_EXPIRED');
         return old;
       }
+      // Retain accounting across rolling revisions; it no longer gates acceptance.
       const countRef = this.db.collection('integration_active_counts').doc(identity(principal.id, 'active'));
       const count = (await tx.get(countRef)).data()?.count ?? 0;
-      if (count >= 5) throw new OperationConflict('RATE_LIMITED');
       tx.set(countRef, { count: count + 1 });
       tx.create(ref, { ...candidate, redactionAt: timestamp + 30 * 86400000, cleanupAt: new Date(timestamp + 90 * 86400000) });
       tx.create(this.db.collection('integration_dispatch_outbox').doc(ref.id), {
@@ -126,7 +126,6 @@ export class IntegrationOperationStore {
       if (!value.error?.retryable) throw new OperationConflict('NOT_RETRYABLE');
       const countRef = this.db.collection('integration_active_counts').doc(identity(principal.id, 'active'));
       const count = (await tx.get(countRef)).data()?.count ?? 0;
-      if (count >= 5) throw new OperationConflict('RATE_LIMITED');
       tx.set(countRef, { count: count+1 });
       tx.update(ref, { status: 'queued', leaseUntil: 0, updatedAt: this.now() });
       tx.set(this.db.collection('integration_dispatch_outbox').doc(ref.id), { operationRef: ref.path, nextWakeAt: this.now() });

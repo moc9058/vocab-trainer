@@ -176,9 +176,11 @@ test('OAuth PKCE and full word/grammar CRUD preserve membership, translations an
     const recovered = (await service.operations.get(principal,disappearing.operationId))!;
     assert.equal(recovered.status,'succeeded',JSON.stringify(recovered.error));
     assert.equal((await db.doc(`words/${recovered.result!.itemId}`).get()).data()!.definitions[0].text.ko,'후회하다');
-    // Status remains available when unrelated reads and mutation submissions exhaust their budgets.
-    for (const bucket of ['read','write']) await db.doc(`integration_limits/${digest(`principal:${principal.id}:${bucket}:${Math.floor(Date.now()/60000)}`)}`).set({count:1000});
-    await assert.rejects(service.execute('get_word',{itemId:'common'},principal),{code:'RATE_LIMITED'});
+    // Legacy exhausted budgets must not block authenticated library/status calls.
+    for (const bucket of ['read','write','status']) await db.doc(`integration_limits/${digest(`principal:${principal.id}:${bucket}:${Math.floor(Date.now()/60000)}`)}`).set({count:1000});
+    assert.equal((await service.execute('get_word',{itemId:'common'},principal)).id,'common');
+    const unlimited = await service.execute('create_word',{operationId:randomUUID(),word:{term:'无限制'}},principal);
+    assert.equal(unlimited.status,'queued');
     assert.equal((await service.execute('get_operation',{operationId:acceptedId},principal)).status,'succeeded');
     assert.ok(Array.isArray((await service.execute('list_operations',{},principal)).items));
     const { integrationRoutes } = await import('../../../src/routes/integrations.js');
@@ -210,11 +212,15 @@ test('OAuth PKCE and full word/grammar CRUD preserve membership, translations an
       assert.equal(initialize.status,200,await initialize.clone().text());
       const list = await fetch(`${address}/api/integrations/mcp`,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json, text/event-stream',Authorization:`Bearer ${token.access_token}`,'MCP-Protocol-Version':'2025-03-26'},body:JSON.stringify({jsonrpc:'2.0',id:2,method:'tools/list'})});
       assert.equal(list.status,200); assert.equal((await list.json() as any).result.tools.length,17);
-      // Discovery/polling traffic must not hit the old shared 60/IP ceiling.
+      // Exhausted legacy MCP transport counters must not block requests.
+      await db.doc(`integration_limits/${digest(`mcp-ip:127.0.0.1:${Math.floor(Date.now()/60000)}`)}`).set({count:10000});
+      await db.doc(`integration_limits/${digest(`ip:127.0.0.1:${Math.floor(Date.now()/60000)}`)}`).set({count:10000});
       for (let i=0;i<65;i++) {
         const response = await fetch(`${address}/api/integrations/mcp`,{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json, text/event-stream',Authorization:`Bearer ${token.access_token}`},body:JSON.stringify({jsonrpc:'2.0',id:i+3,method:'tools/list'})});
         assert.equal(response.status,200); await response.text();
       }
+      const protectedConnection = await fetch(`${address}/api/integrations/connections`,{headers:{Cookie:cookieValue}});
+      assert.equal(protectedConnection.status,429);
       const internal = await fetch(`${address}/internal/integration-operations/reconcile`,{method:'POST'}); assert.equal(internal.status,401);
     } finally { await http.close(); }
     const rotated = await oauth.exchange({grant_type:'refresh_token',client_id:client.client_id,resource:oauth.resource,refresh_token:token.refresh_token});

@@ -133,13 +133,13 @@ registration, a tool scan or Cloud Run deployment has succeeded.
 - Mutations return queued operations. Poll `get_operation` until succeeded or
   failed; never claim that queued means registered. `list_operations` can find
   unfinished work if a conversation is interrupted.
-- Keep at most five mutations unfinished at once. Prefer one `list_operations`
-  call for multiple jobs and respect `pollAfterMs` (3 seconds). Per-minute budgets
-  are separate: 60 mutation requests, 120 library reads and 180 status reads.
-  MCP transport has a separate 600-request/IP ceiling; OAuth routes retain their
-  60-request/IP ceiling. Rate errors include a 60-second retry delay and the actual
-  error code in both text and structured tool results. Accepted jobs retain their
-  queued receipt if immediate dispatch fails; the durable outbox retries dispatch.
+- Authenticated MCP calls have no per-minute request limit or active-mutation cap.
+  Accepted mutations wait in the durable worker queue, whose processing concurrency
+  remains controlled. Prefer one `list_operations` call for multiple jobs and
+  respect `pollAfterMs` (3 seconds). OAuth and connection-management routes retain
+  their 60-request/IP/minute ceiling and OAuth registration protections.
+  Accepted jobs retain their queued receipt if immediate dispatch fails; the
+  durable outbox retries dispatch. Existing request counters do not block MCP calls.
 - Reuse the same UUID operationId for the same request. Changing its payload
   yields an idempotency conflict. Retry a retryable failed operation with
   `retry_operation`; GET never starts it again.

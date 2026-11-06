@@ -31,10 +31,11 @@ export const integrationRoutes: FastifyPluginAsync = async app => {
     api.addHook('onRequest',async (req,reply) => {
       reply.header('Cache-Control','no-store').header('X-Content-Type-Options','nosniff');
       if (!enabled) return reply.code(503).send({ error:'Integration unavailable' });
-      // MCP is authenticated and has separate per-principal tool budgets. Its
-      // transport ceiling includes initialization/discovery and status polling.
+      // MCP calls authenticate below and use the durable worker queue for throughput.
+      // Keep request limits on OAuth and connection-management endpoints only.
       const mcp = req.url.split('?')[0] === '/api/integrations/mcp';
-      try { await oauth.limit(`${mcp ? 'mcp-ip' : 'ip'}:${req.ip}`,mcp ? 600 : 60); }
+      if (mcp) return;
+      try { await oauth.limit(`ip:${req.ip}`,60); }
       catch (error) {
         if (!(error instanceof DomainError) || error.code !== 'RATE_LIMITED') throw error;
         return reply.code(429).header('Retry-After','60').send({ error:'rate_limited',retryAfterMs:60000 });

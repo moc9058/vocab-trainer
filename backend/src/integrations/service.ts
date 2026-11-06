@@ -7,11 +7,6 @@ import { parseToolInput, type ToolName } from './contracts.js';
 import { DomainError, versionOf } from './domain.js';
 import type { LibraryOAuth } from './oauth.js';
 type Data = Record<string, any>;
-export function integrationRequestLimit(name: ToolName) {
-  if (name === 'get_operation' || name === 'list_operations') return { bucket: 'status', max: 180 };
-  if (/^(get_|search_|list_)/.test(name)) return { bucket: 'read', max: 120 };
-  return { bucket: 'write', max: 60 };
-}
 export function operationScopes(action: ToolName, input: Data): string[] {
   const scopes = requiredScopes(action);
   if (action === 'create_group' || action === 'change_item_groups') scopes.push(`${input.kind === 'word' ? 'vocab' : 'grammar'}.read`, `${input.kind === 'word' ? 'vocab' : 'grammar'}.write`);
@@ -47,8 +42,6 @@ export class LibraryIntegrationService implements IntegrationDispatcher {
   async execute(name: ToolName, raw: unknown, principal: IntegrationPrincipal): Promise<Record<string,unknown>> {
     const input = parseToolInput(name,raw) as Data;
     if (!await this.authorize(principal,operationScopes(name,input))) throw new DomainError('FORBIDDEN');
-    const limit = integrationRequestLimit(name);
-    await this.oauth.limit(`principal:${principal.id}:${limit.bucket}`,limit.max);
     let result: Record<string,unknown>;
     if (name === 'get_connection_profile') result = { library: 'Vocab Trainer shared library', language: 'chinese', connectionId: principal.connectionId };
     else if (name === 'get_operation' || name === 'retry_operation') {

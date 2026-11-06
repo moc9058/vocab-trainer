@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { createHash, randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
 import { Firestore } from '@google-cloud/firestore';
 import { IntegrationOperationStore } from '../../../src/integrations/operations.js';
@@ -46,6 +47,23 @@ test('durable receipt and domain commit survive duplicate acceptance, lease expi
     assert.equal((await db.collection('integration_dispatch_outbox').get()).size,0);
     await restarted.retry(principal,failedId);
     assert.equal((await db.collection('integration_dispatch_outbox').get()).size,1);
+    // More than five queued jobs and legacy high counters must allow acceptance/retry.
+    const bulkPrincipal = { ...principal, id: 'bulk-owner' };
+    const bulkStore = new IntegrationOperationStore(db, () => now);
+    const countId = createHash('sha256').update(JSON.stringify([bulkPrincipal.id, 'active'])).digest('hex');
+    const countRef = db.collection('integration_active_counts').doc(countId);
+    await countRef.set({ count: 1000 });
+    const jobs = [];
+    for (let i = 0; i < 7; i++) jobs.push(await bulkStore.accept(bulkPrincipal, 'create_word', { ...input, operationId: randomUUID() }));
+    assert.ok(jobs.every(job => job.status === 'queued'));
+    const failedJob = jobs[0];
+    const claimedJob = await bulkStore.claim(bulkPrincipal, failedJob.operationId);
+    assert.ok(claimedJob);
+    await bulkStore.fail(bulkPrincipal, failedJob.operationId, claimedJob.generation, 'TEMPORARILY_UNAVAILABLE', true);
+    await bulkStore.retry(bulkPrincipal, failedJob.operationId);
+    assert.equal((await bulkStore.get(bulkPrincipal, failedJob.operationId))?.status, 'queued');
+    await bulkStore.accept(bulkPrincipal, 'create_word', { ...input, operationId: failedJob.operationId });
+    assert.equal((await countRef.get()).data()?.count, 1007);
     now += 31*86400000;
     await restarted.reapExpired();
     assert.equal(await restarted.get(principal,failedId),null);
