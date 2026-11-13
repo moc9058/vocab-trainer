@@ -321,14 +321,22 @@ const grammarRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { language } = request.params;
       const body = request.body;
-      // The one LLM call on this otherwise LLM-free route, and only when the
-      // caller sent no reading — the field has no other way to get filled.
+      // Manual registrations also complete missing Korean before writing examples/items.
+      let descriptions = body.descriptions;
+      if (!descriptions.length) return reply.badRequest("At least one grammar description is required");
+      if (descriptions.some(d => typeof d.text?.ko !== "string" || !d.text.ko.trim())) {
+        try { descriptions = await completeGrammarDescriptions(language, body.statement, descriptions); }
+        catch (err) {
+          fastify.log.error({ err, statement: body.statement }, "Failed to complete Korean grammar descriptions");
+          return reply.badGateway("Generated grammar descriptions did not include Korean. Please retry.");
+        }
+      }
       const [transliteration, exampleIds] = await Promise.all([
         resolveTransliteration(language, body.statement, body.transliteration),
         resolveExamplesToIds(language, body.examples),
       ]);
       const { examples: _legacy, ...rest } = body;
-      const item: Grammar = { ...rest, language, transliteration };
+      const item: Grammar = { ...rest, language, descriptions, transliteration };
       await addGrammar(item, { exampleIds });
       return reply.status(201).send({ ...item, exampleIds });
     }

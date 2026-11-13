@@ -10,13 +10,14 @@ process.env.FIRESTORE_DATABASE_ID = "vocab-database";
 const db = new Firestore({ projectId: process.env.FIRESTORE_PROJECT, databaseId: "vocab-database" });
 const actualLLM = await import("../../../src/llm.js");
 let llmCalls = 0;
+let missingKorean = false;
 let duringGeneration: (() => Promise<void>) | undefined;
 mock.module("../../../src/llm.js", { namedExports: {
   ...actualLLM,
   callLLM: async () => {
     llmCalls++;
     await duringGeneration?.();
-    return JSON.stringify({ transliteration: "test", definitions: [{ text: { en: "test", ko: "테스트" } }], examples: [], topics: ["Education"], notes: "" });
+    return JSON.stringify({ transliteration: "test", definitions: [{ text: { en: "test", ...(missingKorean ? {} : { ko: "테스트" }) } }], examples: [], topics: ["Education"], notes: "" });
   },
 } });
 await db.doc("config/vocabulary").set({ smartAddSchema: {}, smartAddPrompts: { default: "Generate word definitions" }, segmentPrompt: "", segmentSchema: {} });
@@ -83,6 +84,17 @@ test("registration chooses a required A home and atomically attaches requested B
     assert.equal((await db.collection("words").get()).size, beforeWords);
     assert.equal(await storage.lookupWordByTerm("chinese", "deleted-group"), null);
     duringGeneration = undefined;
+    // Missing Korean is rejected before word/index/example writes.
+    missingKorean = true;
+    const missingKo = await create("missing-korean");
+    assert.equal(missingKo.statusCode, 502, missingKo.body);
+    assert.equal(await storage.lookupWordByTerm("chinese", "missing-korean"), null);
+    missingKorean = false;
+    await storage.createLanguage("korean");
+    await seed("korean-a", "2026-11-01", "A", "korean");
+    const korean = await app.inject({ method: "POST", url: "/api/vocab/korean/smart-add", payload: { term: "시험" } });
+    assert.equal(korean.statusCode, 201, korean.body);
+    assert.equal(korean.json().definitions[0].text.ko, "테스트");
     // Concurrent creation of one term commits exactly one word and A/B membership.
     const duplicates = await Promise.all([create("same-term", { groupBIds: ["b1"] }), create("same-term", { groupBIds: ["b1"] })]);
     assert.deepEqual(duplicates.map(response => response.statusCode).sort(), [201, 409]);

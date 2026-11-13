@@ -1688,3 +1688,23 @@ review the suggestion, then save. Existing registrations are preserved. See
 [Chinese word reading repair](docs/source-revisions.md#chinese-word-reading-repair-2026-11-02).
 Every completed update also includes the [iPhone build and installation procedure](docs/ios-personal-app.md#署名エラーの復旧と検査付き更新);
 Cloud Run deployment alone does not replace the app's bundled UI.
+
+
+## Quiz buttons and required Korean meanings (2026-11-13)
+
+The Chinese mixed A+B quiz is displayed as **Quiz** (퀴즈 / クイズ).
+Home Group A start/resume and source-article Group A/B quiz buttons are hidden
+by `frontend/src/utils/quizAvailability.ts`. Their handlers, routes, sessions,
+translations and existing documentation remain available for later restoration.
+Word-only and grammar-only drills remain unchanged. The previously removed
+standalone Group B route remains retired; article quiz APIs are still supported.
+
+Every new registered word sense requires nonempty `text.ko`, including Korean
+vocabulary. Smart-add preserves supplied Korean text, generates missing Korean
+meanings, and rejects incomplete generation before example/item writes. The
+legacy grammar-quiz batch word registration validates the full generated batch
+before writes. Manual grammar creation now completes missing Korean descriptions;
+smart-add and ChatGPT MCP share the same completion services. Display-language
+preferences do not control generation. Existing records are not bulk translated;
+MCP exact-term reuse still preserves existing content and only adjusts membership.
+No prompt/config upload or data migration is required.

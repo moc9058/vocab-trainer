@@ -1,3 +1,4 @@
+import { SHOW_LEGACY_GROUP_QUIZZES } from "../../utils/quizAvailability";
 import { useI18n } from "../../i18n/context";
 import type { ImportSessionSummary } from "../../types";
 
@@ -68,7 +69,7 @@ export default function ImportSessionList({
           {/* Review, not intake — so it is separated from "new import" by a rule. The pool
               spans every article below, which is why one pair of buttons sits here rather
               than a pair on each row. */}
-          {onQuiz && (
+          {SHOW_LEGACY_GROUP_QUIZZES && onQuiz && (
             <div className="mt-4 border-t border-gray-700/70 pt-3">
               <p className="mb-2 text-[11px] text-gray-500">{t("importQuizHint")}</p>
               <div className="flex gap-2">

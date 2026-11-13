@@ -48,6 +48,12 @@ test("Korean-only and Japanese-only descriptions survive create, read, edit and 
       id: "manual", statement: "S+V", transliteration: "S+V", descriptions: [{ partOfSpeech: "", text: { ko: "직접 등록" } }],
     } });
     assert.equal(manual.statusCode, 201, manual.body);
+    const translatedManual = await app.inject({ method: "POST", url: `${root}/items`, payload: {
+      id: "manual-ja", statement: "S+O+V", transliteration: "S+O+V", descriptions: [{ partOfSpeech: "", text: { ja: "手入力の説明" } }],
+    } });
+    assert.equal(translatedManual.statusCode, 201, translatedManual.body);
+    assert.equal(translatedManual.json().descriptions[0].text.ko, "생성된 한국어");
+    assert.equal(translatedManual.json().descriptions[0].text.ja, "手入力の説明");
     const edit = await app.inject({ method: "PUT", url: `${root}/items/manual`, payload: {
       descriptions: [{ partOfSpeech: "", text: { ja: "説明", ko: "수정한 설명" } }],
     } });
@@ -66,6 +72,12 @@ test("Korean-only and Japanese-only descriptions survive create, read, edit and 
     const failed = await post("incomplete", { ja: "説明" });
     assert.equal(failed.statusCode, 502, failed.body);
     assert.equal((await db.doc("grammar_items/incomplete").get()).exists, false);
+    const failedManual = await app.inject({ method: "POST", url: `${root}/items`, payload: {
+      id: "manual-incomplete", statement: "S+V", transliteration: "S+V", descriptions: [{ partOfSpeech: "", text: { ja: "説明" } }],
+      examples: [{ sentence: "not saved", translation: "저장 안 됨" }],
+    } });
+    assert.equal(failedManual.statusCode, 502, failedManual.body);
+    assert.equal((await db.doc("grammar_items/manual-incomplete").get()).exists, false);
     assert.equal((await db.collection("example_sentences").get()).empty, true);
   } finally {
     await app.close();

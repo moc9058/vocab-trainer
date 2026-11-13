@@ -6,7 +6,9 @@ See [AGENTS.md](../AGENTS.md) for repository working instructions,
 
 Group A is the main word/grammar library, including Group B items. Group B is an
 additional, contextual grouping. The standalone Group B quiz has been removed;
-old `/group-b-quiz` bookmarks redirect to `/mixed-quiz`. Article quizzes are unchanged.
+old `/group-b-quiz` bookmarks redirect to `/mixed-quiz`. Article quiz APIs remain supported.
+Since 2026-11-13, home Group A and article Group A/B buttons are hidden while their
+implementations and sessions are retained. The mixed quiz is labeled **Quiz**.
 
 The mixed quiz always reads **all** current category-B word and grammar groups on
 start, resume and weight updates. The client cannot restrict B by subgroup, explicit

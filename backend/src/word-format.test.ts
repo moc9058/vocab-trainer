@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { normalizeWordDefinitions, normalizeWordRecord, normalizeWordSession } from "./word-format.js";
+import { requireKoreanDefinitions, normalizeWordDefinitions, normalizeWordRecord, normalizeWordSession } from "./word-format.js";
 import { cleanRetiredWordData, retiredWordDataChanged } from "./retired-word-data.js";
 
 for (const language of ["chinese", "english", "japanese", "korean"]) {
@@ -41,4 +41,13 @@ test("maintenance only alters allowlisted collections and is idempotent", () => 
   }
   for (const collection of ["grammar_items", "grammar_drafts", "import_sessions", "archive_backups"]) assert.deepEqual(cleanRetiredWordData(collection, data), data);
   assert.equal(cleanRetiredWordData("flagged_words", { wordId: "a" }), null);
+});
+
+test("new registrations require Korean in every sense without changing authored text", () => {
+  const definitions = [{ text: { ko: "  뜻  ", en: "meaning" } }];
+  requireKoreanDefinitions(definitions);
+  assert.equal(definitions[0].text.ko, "  뜻  ");
+  for (const defs of [[], [{ text: { ja: "意味" } }], [{ text: { ko: " " } }], [...definitions, { text: { en: "second" } }]]) {
+    assert.throws(() => requireKoreanDefinitions(defs), /Korean/);
+  }
 });

@@ -28,3 +28,7 @@ test("blank entries are completed; missing or malformed translations fail before
     assert.throws(() => mergeGrammarDescriptions(supplied, generated), IncompleteGrammarDescriptionsError);
   }
 });
+
+test("empty grammar descriptions cannot bypass required Korean coverage", () => {
+  assert.throws(() => mergeGrammarDescriptions([], []), IncompleteGrammarDescriptionsError);
+});

@@ -1,4 +1,4 @@
-import { normalizeWordDefinitions } from "../word-format.js";
+import { normalizeWordDefinitions, requireKoreanDefinitions } from "../word-format.js";
 import { registerQuizReviewRoutes, assertLegacyReviewAllowed } from "../quiz-review.js";
 import { finishQuizSitting } from "../quiz-sitting.js";
 import type { FastifyPluginAsync } from "fastify";
@@ -383,6 +383,13 @@ Allowed topics: ${TOPICS.join(", ")}`;
       const raw = await callLLM({ system: systemPrompt, user: `Generate entries for these words:\n\n${userPrompt}`, route: "grammar-quiz/batch-add" });
       const parsed = JSON.parse(stripMarkdownFences(raw));
       const generated: unknown[] = parsed.words ?? [];
+
+      // Validate the whole generated batch before any word/example writes.
+      for (const entry of generated) {
+        if (entry && typeof entry === "object" && words.some(w => w.term === (entry as Record<string, unknown>).term)) {
+          requireKoreanDefinitions(normalizeWordDefinitions(entry));
+        }
+      }
 
       const added: Word[] = [];
       const addedTerms = new Set<string>();

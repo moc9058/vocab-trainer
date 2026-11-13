@@ -1,3 +1,4 @@
+import { SHOW_LEGACY_GROUP_QUIZZES } from "../utils/quizAvailability";
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n/context";
 import { useSettings } from "../settings/context";
@@ -77,7 +78,7 @@ export default function EmptyState({ language, deferSessionLoad = false, onResum
         const [vocabResult, grammarResult, combinedResult, mixedResult] = await Promise.allSettled([
           getCurrentSession(language),
           getCurrentGrammarSession(language),
-          getCurrentCombinedSession(language),
+          SHOW_LEGACY_GROUP_QUIZZES ? getCurrentCombinedSession(language) : Promise.resolve(null),
           // The mixed quiz is Chinese-only, so don't spend a request looking for a session
           // that can never exist elsewhere.
           showMixed ? getCurrentCombinedSession(language, "mixed") : Promise.resolve(null),
@@ -121,7 +122,7 @@ export default function EmptyState({ language, deferSessionLoad = false, onResum
               </h3>
               {/* Combined quiz spans both domains, so it sits above the word/grammar tabs. */}
               <div className="mb-3 space-y-2">
-                {!loading && combinedSession && (
+                {SHOW_LEGACY_GROUP_QUIZZES && !loading && combinedSession && (
                   <button
                     onClick={() => onResumeCombined(combinedSession)}
                     className="w-full rounded-lg border border-indigo-700 bg-indigo-900/30 px-4 py-3 text-left hover:border-indigo-500 hover:bg-indigo-800/40 transition-colors"
@@ -133,12 +134,12 @@ export default function EmptyState({ language, deferSessionLoad = false, onResum
                     </p>
                   </button>
                 )}
-                <button
+                {SHOW_LEGACY_GROUP_QUIZZES && <button
                   onClick={onCombinedQuiz}
                   className="w-full rounded-lg bg-indigo-600 px-5 py-3 text-center font-medium text-white hover:bg-indigo-500 transition-colors"
                 >
                   {t("combinedQuiz")}
-                </button>
+                </button>}
                 {/* Group A+B — one session spanning both meta-groups. Chinese only for now. */}
                 {showMixed && (
                   <>

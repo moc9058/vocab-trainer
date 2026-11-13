@@ -6,7 +6,7 @@ export async function completeGrammarDescriptions(language: string, statement: s
   const config = await getGrammarConfig();
   const template = config.smartAddPrompts[language] ?? config.smartAddPrompts.default;
   const variables: Record<string,string> = { LANGUAGE: language, DEFINITION_LANGUAGES: GRAMMAR_DEFINITION_LANGUAGES.map(l => `"${l}": "..."`).join(', ') };
-  const system = template.replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] ?? '');
+  const system = template.replace(/\{\{(\w+)\}\}/g, (_, key) => variables[key] ?? '') + '\nEvery description must include a nonempty Korean (ko) meaning. Preserve supplied text and translate the same meaning into Korean when missing.';
   const raw = await callLLM({ system, user: JSON.stringify({ statement, descriptions }, null, 2), schema: config.smartAddSchema, route: 'grammar/smart-add' });
   return mergeGrammarDescriptions(descriptions, JSON.parse(stripMarkdownFences(raw)).descriptions ?? []);
 }

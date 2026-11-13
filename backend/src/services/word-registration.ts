@@ -1,5 +1,5 @@
 import { resolveWordRegistrationGroups, WordRegistrationGroupError } from '../word-registration-groups.js';
-import { normalizeWordDefinitions } from '../word-format.js';
+import { normalizeWordDefinitions, requireKoreanDefinitions } from '../word-format.js';
 import { contextualDefinitions, sourceContextInstructions } from '../import-definitions.js';
 import { languageExists, createLanguage, lookupWordByTerm, lookupWordsByTerms, getWordGroups, getVocabularyConfig } from '../firestore.js';
 import { TOPICS, type Example, type HanjaReading } from '../types.js';
@@ -123,6 +123,7 @@ const vocabConfig = await getVocabularyConfig();
         LEVELS_LINE: langLevels ? `\nAllowed levels: ${langLevels.join(", ")}` : "",
       });
 
+      systemPrompt += "\nEvery definition must include a nonempty Korean (ko) meaning, including Korean vocabulary. Preserve supplied meanings and translate each missing Korean meaning.";
       if (body.sourceContext) systemPrompt += sourceContextInstructions(body.sourceContext);
       const userPrompt = JSON.stringify(userInput, null, 2);
 
@@ -206,6 +207,9 @@ const vocabConfig = await getVocabularyConfig();
         notes: body.notes || (llmResult.notes as string) || "",
       };
 
+      try { requireKoreanDefinitions(merged.definitions); }
+      catch { throw new PreparationError(502, "Generated word meanings did not include Korean. Please retry."); }
+
       // Ensure at least one valid topic
       if (merged.topics.length === 0) {
         merged.topics = ["Language Fundamentals"];
@@ -268,8 +272,8 @@ const vocabConfig = await getVocabularyConfig();
         }
       }
 
-      // Strip the source language from example translations and definitions:
-      // a same-language translation/definition is redundant for the word's own language.
+      // Strip the source language from example translations and definitions,
+      // except Korean definitions: every new meaning must retain its Korean gloss.
       if (sourceLangCode) {
         for (const ex of examplesWithSegments) {
           if (ex.translation && typeof ex.translation === "object") {
@@ -285,7 +289,7 @@ const vocabConfig = await getVocabularyConfig();
             const hasOther = Object.entries(def.text).some(
               ([lang, text]) => lang !== sourceLangCode && text && text.trim() !== "",
             );
-            if (hasOther) delete def.text[sourceLangCode];
+            if (hasOther && sourceLangCode !== "ko") delete def.text[sourceLangCode];
           }
         }
       }

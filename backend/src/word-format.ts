@@ -32,3 +32,10 @@ export function normalizeWordSession<T extends Record<string, unknown>>(data: T)
   }
   return result as T;
 }
+
+/** New registrations require a Korean gloss for every sense, regardless of display settings. */
+export function requireKoreanDefinitions(definitions: WordMeaning[]): void {
+  if (!definitions.length || definitions.some(def => typeof def.text?.ko !== "string" || !def.text.ko.trim())) {
+    throw new Error("Every word meaning must include a nonempty Korean definition");
+  }
+}

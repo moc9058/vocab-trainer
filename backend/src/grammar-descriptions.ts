@@ -6,6 +6,7 @@ export class IncompleteGrammarDescriptionsError extends Error {}
 
 /** Preserve authored descriptions; supplement the same-index meaning in Japanese/Korean. */
 export function mergeGrammarDescriptions(supplied: Meaning[], generated: Meaning[]): Meaning[] {
+  if (!supplied.length) throw new IncompleteGrammarDescriptionsError("At least one grammar description is required");
   return supplied.map((description, index) => {
     const text = { ...description.text };
     for (const language of GRAMMAR_DEFINITION_LANGUAGES) {

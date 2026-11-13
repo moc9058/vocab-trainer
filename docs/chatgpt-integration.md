@@ -252,3 +252,12 @@ The implementation follows [OpenAI MCP connection guidance](https://developers.o
 and [MCP server guidance](https://developers.openai.com/plugins/build/mcp-server).
 The original [implementation plan](chatgpt-vocab-crud-plan.md) records the intended
 scope; this guide documents the implemented choices and limits.
+
+
+### Required Korean meanings (2026-11-13)
+
+New `create_word` and `create_grammar` records always include Korean (`ko`) for
+every meaning/description through the shared server preparation services.
+Supplied Korean is preserved and missing Korean is generated; incomplete
+responses fail before registration. This is independent of display preferences.
+Exact existing-word reuse remains a membership operation and preserves content.
