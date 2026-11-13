@@ -1,3 +1,4 @@
+import { SHOW_LEGACY_GROUP_QUIZZES } from "../utils/quizAvailability";
 import { useState } from "react";
 import { useI18n } from "../i18n/context";
 import QuizFilterModal, { type QuizFilters } from "./QuizFilterModal";
@@ -47,14 +48,14 @@ export default function StudyQuizModal({
         >
           {t("sectionGrammar")}
         </button>
-        <button
+        {SHOW_LEGACY_GROUP_QUIZZES && <button
           onClick={() => setTab("combined")}
           className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${
             tab === "combined" ? "bg-indigo-600 text-white" : "text-gray-400 hover:text-gray-200"
           }`}
         >
           {t("combinedQuiz")}
-        </button>
+        </button>}
       </div>
       {tab === "word" ? (
         <QuizFilterModal
