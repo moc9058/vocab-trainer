@@ -1,5 +1,6 @@
 import { useSessionReview } from "../hooks/useSessionReview";
 import SessionReviewStatus from "./SessionReviewStatus";
+import SessionReviewSyncStatus from "./SessionReviewSyncStatus";
 import { normalizeQuizSitting } from "../utils/quizSitting";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useI18n } from "../i18n/context";
@@ -180,6 +181,7 @@ export default function ExpressionRecallTaking({
       const sessionCorrect = sessionLog.filter((q) => q.userCorrect).length;
       return (
         <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+          <SessionReviewSyncStatus syncing={review.syncing} complete />
           <h2 className="text-xl font-bold text-gray-100 sm:text-2xl">
             {t("sessionReviewComplete")}
           </h2>
@@ -187,6 +189,7 @@ export default function ExpressionRecallTaking({
             {sessionCorrect} / {sessionLog.length}
           </p>
           <button
+            disabled={review.syncing}
             onClick={isComplete ? onStartNew : returnToQuiz}
             className="rounded-lg bg-amber-600 px-6 py-2 text-white hover:bg-amber-500"
           >
@@ -201,6 +204,7 @@ export default function ExpressionRecallTaking({
     }
     return (
       <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+        <SessionReviewSyncStatus syncing={review.syncing} />
         <p className="text-sm text-gray-400">
           {sessionReviewIndex + 1} / {sessionLog.length}
         </p>

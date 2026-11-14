@@ -19,6 +19,8 @@ export interface ReviewOperation {
   operationId: string;
   revision: number;
   fromAnsweredCount: number;
+  /** Optional client shuffle, allowing a review to start while offline. */
+  questionOrder?: number[];
 }
 
 export class QuizReviewError extends Error {
@@ -40,10 +42,16 @@ export function applyReviewOperation<S extends ReviewSession>(session: S, input:
     const from = session.reviewedQuestionCount ?? answered;
     if (input.fromAnsweredCount !== from || input.revision !== 0) conflict("The review boundary has changed");
     if (answered <= from) conflict("No answers to review");
+    const count = answered - from;
+    const order = input.questionOrder;
+    if (order && (order.length !== count || new Set(order).size !== count ||
+        order.some(index => !Number.isInteger(index) || index < 0 || index >= count))) {
+      throw new QuizReviewError(400, "Invalid review question order");
+    }
     return { ...session, reviewState: {
       reviewId: input.reviewId, status: "active", fromAnsweredCount: from,
       toAnsweredCount: answered, cursor: 0, revision: 0, lastOperationId: input.operationId,
-      questionOrder: shuffle(Array.from({ length: answered - from }, (_, index) => index)),
+      questionOrder: order ? [...order] : shuffle(Array.from({ length: count }, (_, index) => index)),
     } };
   }
   if (!state || state.reviewId !== input.reviewId) return conflict("The review has been replaced");
@@ -75,6 +83,7 @@ export function registerQuizReviewRoutes<S extends ReviewSession>(
           operationId: { type: "string", minLength: 1, maxLength: 128 },
           revision: { type: "integer", minimum: 0 },
           fromAnsweredCount: { type: "integer", minimum: 0 },
+          questionOrder: { type: "array", items: { type: "integer", minimum: 0 }, uniqueItems: true },
         },
       } },
     }, async request => ({ session: await mutate(request.params.language, async session => {

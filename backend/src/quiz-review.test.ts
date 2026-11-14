@@ -15,6 +15,16 @@ const start: ReviewOperation = { action: "start", startedAt: "test", reviewId: "
   revision: 0, fromAnsweredCount: 1, operationId: "start" };
 const next = (revision: number): ReviewOperation => ({ ...start, action: "next", revision, operationId: `next-${revision}` });
 
+test("offline starts preserve the client's order, reject invalid permutations, and keep replays idempotent", () => {
+  const input = { ...start, questionOrder: [1, 0] };
+  const active = applyReviewOperation(fixture(), input);
+  assert.deepEqual(active.reviewState!.questionOrder, [1, 0]);
+  assert.deepEqual(applyReviewOperation(active, input), active);
+  for (const questionOrder of [[0], [0, 0], [0, 2], [-1, 0], [0, 0.5]]) {
+    assert.throws(() => applyReviewOperation(fixture(), { ...start, questionOrder }), /Invalid review question order/);
+  }
+});
+
 test("review snapshots attempts, persists progress, and releases retries only at the end", () => {
   const original = fixture();
   const active = applyReviewOperation(original, start);
@@ -91,8 +101,11 @@ test("review route validates input and keeps quiz namespaces separate", async ()
     for (const name of stored.keys()) {
       const url = `/${name}/session/language/chinese/review`;
       assert.equal((await app.inject({ method: "PUT", url, payload: { ...start, revision: -1 } })).statusCode, 400);
-      let response = await app.inject({ method: "PUT", url, payload: start });
+      assert.equal((await app.inject({ method: "PUT", url, payload: { ...start, questionOrder: [0, 0] } })).statusCode, 400);
+      assert.equal((await app.inject({ method: "PUT", url, payload: { ...start, questionOrder: [0, 2] } })).statusCode, 400);
+      let response = await app.inject({ method: "PUT", url, payload: { ...start, questionOrder: [1, 0] } });
       assert.equal(response.statusCode, 200, response.body);
+      assert.deepEqual(response.json().session.reviewState.questionOrder, [1, 0]);
       response = await app.inject({ method: "PUT", url, payload: next(0) });
       assert.equal(response.statusCode, 200, response.body);
       assert.equal(response.json().session.reviewState.cursor, 1);

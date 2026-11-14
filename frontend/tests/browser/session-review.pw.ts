@@ -33,11 +33,13 @@ async function mount(page: Page, config: typeof cases[number], completed = false
   let answerCalls = 0;
   let conflict = false;
   let reviewWrites = 0;
+  let disconnected = false;
   await page.route(url => url.pathname.startsWith('/api/'), async route => {
     const path = new URL(route.request().url()).pathname;
     if (path === `${config.base}/answer`) answerCalls++;
     if (path === `${config.base}/session/language/${config.language}/review`) {
       reviewWrites++;
+      if (disconnected) { await route.abort("internetdisconnected"); return; }
       const input = route.request().postDataJSON();
       if (conflict) {
         conflict = false;
@@ -73,7 +75,9 @@ async function mount(page: Page, config: typeof cases[number], completed = false
   const url = `/tests/browser/harness.html?mode=${owner ? "recall-view" : config.mode}&variant=${'variant' in config ? config.variant : ''}`;
   await page.goto(url);
   return { get saved() { return saved; }, get writes() { return reviewWrites; }, get answerCalls() { return answerCalls; },
-    loseResponse: (action: "start" | "next" = "next") => { lostAction = action; }, conflict: () => { conflict = true; } };
+    disconnect: () => { disconnected = true; }, reconnect: async () => {
+      disconnected = false; await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    }, loseResponse: (action: "start" | "next" = "next") => { lostAction = action; }, conflict: () => { conflict = true; } };
 }
 
 for (const config of cases) {
@@ -81,6 +85,7 @@ for (const config of cases) {
     const server = await mount(page, config);
     await page.getByRole('button', { name: /End Session/i }).click();
     await expect(page.getByText('1 / 10', { exact: true })).toBeVisible();
+    await expect.poll(() => server.saved.reviewState?.cursor).toBe(0);
     const order: number[] = [...server.saved.reviewState.questionOrder];
     expect([...order].sort((a, b) => a - b)).toEqual(Array.from({ length: 10 }, (_, i) => i));
     const heading = (index: number) => `${config.mode === 'grammar' ? 'Grammar' : config.mode === 'recall' ? 'Phrase' : 'Word'} ${order[index] + 1}`;
@@ -90,6 +95,7 @@ for (const config of cases) {
       await expect(page.getByText(`${i + 1} / 10`, { exact: true })).toBeVisible();
       await expect(page.getByRole('heading', { name: heading(i), exact: true })).toBeVisible();
     }
+    await expect.poll(() => server.saved.reviewState?.cursor).toBe(4);
     expect(server.saved.reviewedQuestionCount).toBe(0);
     expect(server.saved.score.correct).toBe(9);
     expect(server.saved.questions.length).toBe(11);
@@ -102,7 +108,7 @@ for (const config of cases) {
       await page.getByRole('button', { name: 'Next', exact: true }).click();
       if (i < 10) await expect(page.getByText(`${i + 1} / 10`, { exact: true })).toBeVisible();
     }
-    await expect(page.getByRole('button', { name: 'Return to Quiz', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Return to Quiz', exact: true })).toBeEnabled();
     expect(server.saved.reviewedQuestionCount).toBe(10);
     expect(server.saved.questions.length).toBe(12); // one Wrong retry, once
     await page.getByRole('button', { name: 'Return to Quiz', exact: true }).click();
@@ -118,6 +124,7 @@ test('completed quiz review survives a lost response and never reopens the test'
   server.loseResponse();
   await page.getByRole('button', { name: 'Next', exact: true }).click();
   await expect(page.getByText('2 / 10', { exact: true })).toBeVisible();
+  await expect(page.getByRole('status')).toHaveCount(0);
   expect(server.saved.reviewState.cursor).toBe(1);
   await page.reload();
   await expect(page.getByText('2 / 10', { exact: true })).toBeVisible();
@@ -126,7 +133,7 @@ test('completed quiz review survives a lost response and never reopens the test'
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     if (i < 10) await expect(page.getByText(`${i + 1} / 10`, { exact: true })).toBeVisible();
   }
-  await expect(page.getByRole('button', { name: 'Start New', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Start New', exact: true })).toBeEnabled();
   await expect(page.getByRole('button', { name: 'Return to Quiz', exact: true })).toHaveCount(0);
   expect(server.saved.status).toBe('completed');
   expect(server.saved.questions.length).toBe(10);
@@ -152,18 +159,72 @@ test('recall owner stays mounted while review operations drain', async ({ page }
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     if (i < 10) await expect(page.getByText(`${i + 1} / 10`, { exact: true })).toBeVisible();
   }
-  await expect(page.getByRole('button', { name: 'Return to Quiz', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Return to Quiz', exact: true })).toBeEnabled();
   expect(server.saved.reviewedQuestionCount).toBe(10);
 });
 
-test('keyboard grading is blocked while review start is awaiting confirmation', async ({ page }) => {
+test('keyboard review movement never grades the main test while review saves are pending', async ({ page }) => {
   const server = await mount(page, cases[0]);
   await page.getByRole('button', { name: /Show.*Answer/ }).click();
   server.loseResponse('start');
   await page.getByRole('button', { name: /End Session/i }).click();
   await page.keyboard.press('1');
   await page.keyboard.press('2');
-  await expect(page.getByText('1 / 10', { exact: true })).toBeVisible();
+  await expect(page.getByText('3 / 10', { exact: true })).toBeVisible();
   expect(server.answerCalls).toBe(0);
   expect(server.saved.score.correct).toBe(9);
+});
+
+for (const config of cases) {
+  test(`${config.base}: reviews every cached card offline and syncs in order on reconnect`, async ({ page }) => {
+    const server = await mount(page, config);
+    // Hydration has completed before losing connectivity.
+    await expect(page.getByRole('button', { name: /Show.*Answer/ })).toBeVisible();
+    server.disconnect();
+    await page.getByRole('button', { name: /End Session/i }).click();
+    await expect(page.getByText('1 / 10', { exact: true })).toBeVisible();
+    const headings: string[] = [];
+    for (let i = 1; i <= 10; i++) {
+      headings.push(await page.getByRole('heading').innerText());
+      await page.getByRole('button', { name: 'Next', exact: true }).click();
+      if (i < 10) await expect(page.getByText(`${i + 1} / 10`, { exact: true })).toBeVisible();
+    }
+    expect(new Set(headings).size).toBe(10);
+    await expect(page.getByText('Session Review Complete', { exact: true })).toBeVisible();
+    const resume = page.getByRole('button', { name: 'Return to Quiz', exact: true });
+    await expect(resume).toBeDisabled();
+    expect(server.saved.reviewState).toBeUndefined();
+    expect(server.saved.reviewedQuestionCount).toBe(0);
+    await server.reconnect();
+    await expect(resume).toBeEnabled();
+    expect(server.saved.reviewState.cursor).toBe(10);
+    expect(server.saved.reviewState.revision).toBe(10);
+    expect(server.saved.reviewedQuestionCount).toBe(10);
+    expect(server.saved.questions.length).toBe(12);
+    const prefix = config.mode === 'grammar' ? 'Grammar' : config.mode === 'recall' ? 'Phrase' : 'Word';
+    expect(server.saved.reviewState.questionOrder.map((i: number) => `${prefix} ${i + 1}`)).toEqual(headings);
+    await resume.click();
+    await expect(page.getByRole('button', { name: /Show.*Answer/ })).toBeVisible();
+  });
+}
+
+test('a connection loss mid-review keeps advancing without old responses rewinding the cursor', async ({ page }) => {
+  const server = await mount(page, cases[0]);
+  await page.getByRole('button', { name: /End Session/i }).click();
+  await expect.poll(() => server.saved.reviewState?.cursor).toBe(0);
+  server.disconnect();
+  for (let i = 1; i <= 4; i++) {
+    await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await expect(page.getByText(`${i + 1} / 10`, { exact: true })).toBeVisible();
+  }
+  const heading = await page.getByRole('heading').innerText();
+  expect(server.saved.reviewState.cursor).toBe(0);
+  await server.reconnect();
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await expect(page.getByText('5 / 10', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
+  expect(server.saved.reviewState.cursor).toBe(4);
+  await page.reload();
+  await expect(page.getByText('5 / 10', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
 });

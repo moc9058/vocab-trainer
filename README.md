@@ -113,10 +113,13 @@ The expression writing quiz also stops repeating Wrong within its test.
 Session reviews save their fixed answer range and current position in Firestore.
 Each newly started review shuffles its questions and saves that order too; resuming
 an unfinished review keeps its order and position. Older active reviews keep their existing order.
-Each **Next** waits for confirmation before advancing; opening the test again, including
-on another device, resumes an active review at the first unfinished card. Review cards
+Each **Next** advances immediately, including while offline, and queues progress for
+background saving in order. Reconnection retries automatically. Opening the test again,
+including on another device, resumes at the last server-confirmed card. Review cards
 continue to show their answers. Only finishing the review advances the sitting boundary
-and releases retries. A completed test remains completed. Conflicting updates from another
+and releases retries. The completion screen remains usable offline; **Return to Quiz**
+and **Start New** wait for the final save so retry admission and mixed ordering stay
+consistent. A completed test remains completed. Conflicting updates from another
 tab require reloading the saved review rather than overwriting it. Pending review writes
 use the same queue and close-tab warning as answers; a hard reload can lose unsent writes,
 so recovery uses the last server-confirmed position. Older sessions gain this state lazily;

@@ -41,6 +41,7 @@ export interface ReviewOperation {
   operationId: string;
   revision: number;
   fromAnsweredCount: number;
+  questionOrder?: number[];
 }
 
 export type PendingAnswer =
@@ -242,7 +243,19 @@ async function drain(): Promise<void> {
       // every answer behind it.
       console.error("Dropping unsyncable quiz answer", item, err);
       queue.shift();
-      if (item.domain === "review") item.reject(err);
+      if (item.domain === "review") {
+        item.reject(err);
+        // Later optimistic moves depend on this exact review revision. A conflict must
+        // reload the saved review, never send its remaining stale operations.
+        for (let i = queue.length - 1; i >= 0; i--) {
+          const later = queue[i];
+          if (later.domain === "review" && later.path === item.path &&
+              later.operation.reviewId === item.operation.reviewId) {
+            queue.splice(i, 1);
+            later.reject(err);
+          }
+        }
+      }
       else failed += 1;
       attempt = 0;
       emit();

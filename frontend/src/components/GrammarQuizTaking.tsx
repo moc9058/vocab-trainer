@@ -1,5 +1,6 @@
 import { useSessionReview } from "../hooks/useSessionReview";
 import SessionReviewStatus from "./SessionReviewStatus";
+import SessionReviewSyncStatus from "./SessionReviewSyncStatus";
 import { normalizeQuizSitting } from "../utils/quizSitting";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useI18n } from "../i18n/context";
@@ -186,11 +187,13 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
       const sessionCorrect = sessionLog.filter((q) => q.userCorrect).length;
       return (
         <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+          <SessionReviewSyncStatus syncing={review.syncing} complete />
           <h2 className="text-xl sm:text-2xl font-bold text-gray-100">{t("sessionReviewComplete")}</h2>
           <p className="text-2xl sm:text-4xl font-semibold text-emerald-400">
             {sessionCorrect} / {sessionLog.length}
           </p>
           <button
+            disabled={review.syncing}
             onClick={isComplete ? () => { onComplete(); onStartNew(); } : returnToQuiz}
             className="rounded-lg bg-emerald-600 px-6 py-2 text-white hover:bg-emerald-500"
           >
@@ -206,6 +209,7 @@ export default function GrammarQuizTaking({ session, onComplete, onStartNew }: P
     const reviewGrammar = prefetch.grammar.get(reviewQuestion.grammarId);
     return (
       <div className="flex min-h-full flex-col items-center justify-center gap-6 p-4 sm:p-8">
+        <SessionReviewSyncStatus syncing={review.syncing} />
         <p className="text-sm text-gray-400">
           {sessionReviewIndex + 1} / {sessionLog.length}
         </p>

@@ -80,11 +80,12 @@ try {
     ] });
     const reviewUrl = `/${c.route}/session/language/chinese/review`;
     const startInput = { action: 'start', startedAt: 'smoke', reviewId: `review-${c.route}`,
-      operationId: 'start', revision: 0, fromAnsweredCount: 0 };
+      operationId: 'start', revision: 0, fromAnsweredCount: 0, questionOrder: [2, 0, 1] };
     let response = await app.inject({ method: 'PUT', url: reviewUrl, payload: startInput });
     assert.equal(response.statusCode, 200, response.body);
     assert.equal(response.json().session.reviewState.toAnsweredCount, 3);
     const questionOrder = response.json().session.reviewState.questionOrder;
+    assert.deepEqual(questionOrder, startInput.questionOrder);
     assert.deepEqual([...questionOrder].sort(), [0, 1, 2]);
     const blockedAnswer = await app.inject({ method: 'POST', url: `/${c.route}/answer`,
       payload: { ...c.body('b'), correct: true, ...(c.route === 'mixed' ? { startedAt: 'smoke', operationId: 'blocked-grade' } : {}) } });

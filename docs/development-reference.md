@@ -227,7 +227,9 @@ fixed range. The cursor indexes this saved order; resume and operation retries n
 reshuffle it or alter the underlying answer history. Older reviews without the field
 continue in their original order, preserving their saved cursor without a migration.
 `PUT …/session/language/:language/review` accepts `start` / `next` operations with
-`startedAt`, `reviewId`, `operationId`, `revision` and `fromAnsweredCount`. The shared
+`startedAt`, `reviewId`, `operationId`, `revision` and `fromAnsweredCount`, plus an optional
+`questionOrder` permutation on start. The server validates that it covers the fixed range
+exactly; older clients still receive a server shuffle. The shared
 `quiz-review.ts` transition runs in the session's Firestore transaction; final progress
 also calls `finishQuizSitting` in that transaction. Main-test answers are rejected while
 a review is active. Replaying the last operation is idempotent, stale revisions return
@@ -237,7 +239,13 @@ review. Existing sessions without `reviewState` keep the legacy boundary fallbac
 no production rewrite is needed.
 
 The four Taking components share `useSessionReview`, which puts review writes behind
-answers/removals on `answerOutbox` and displays each next card after server confirmation.
+answers/removals on `answerOutbox` and advances review cards immediately using local
+review state. Offline starts choose their shuffle once and send it with the queued start;
+all retries retain operation IDs and order. Intermediate responses never replace the
+local session or rewind its cursor. Completion is also shown immediately, but Return to
+Quiz / Start New wait for the final confirmed session, which releases retries and applies
+the mixed weighted draw. Permanent review failures cancel queued dependent moves before
+showing the reload state. A nonblocking status explains pending background saves.
 It restores active reviews before the main test, including completed tests awaiting review,
 and shows retry/reload states for save trouble or conflicts. Deleted items can be skipped,
 while hydration transport failures remain retryable. Review answers are always visible,
